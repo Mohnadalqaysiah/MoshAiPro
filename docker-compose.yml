@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: moshapi_postgres
+    environment:
+      POSTGRES_USER: moshuser
+      POSTGRES_PASSWORD: moshpass
+      POSTGRES_DB: moshaiprodb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - moshnet
+
+  # Redis Cache (Optional)
+  redis:
+    image: redis:7-alpine
+    container_name: moshapi_redis
+    ports:
+      - "6379:6379"
+    networks:
+      - moshnet
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: moshapi_backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      - DATABASE_URL=postgresql://moshuser:moshpass@postgres:5432/moshaiprodb
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./backend:/app
+    networks:
+      - moshnet
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Frontend (React)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: moshapi_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - moshnet
+    command: npm run dev
+
+  # Telegram Bot
+  telegram_bot:
+    build:
+      context: ./telegram-bot
+      dockerfile: Dockerfile
+    container_name: moshapi_telegram
+    environment:
+      - API_URL=http://backend:8000
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+    depends_on:
+      - backend
+    volumes:
+      - ./telegram-bot:/app
+    networks:
+      - moshnet
+    command: python bot.py
+
+volumes:
+  postgres_data:
+
+networks:
+  moshnet:
+    driver: bridge
