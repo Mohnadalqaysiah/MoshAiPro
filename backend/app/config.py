@@ -80,6 +80,7 @@ class Settings(BaseSettings):
 
     # ----- SaaS / Payments -----
     TELEGRAM_BOT_USERNAME: str = "MoshAiProBot"
+    BOT_SECRET: str = "mosh-bot-secret-change-me"
     USDT_WALLET_ADDRESS: str = "TQoS5ZjkMpMRp3DHd5sSxxxxxxxYOUR_WALLET"
     USDT_NETWORK: str = "TRC20"
     TRIAL_ANALYSES: int = 10

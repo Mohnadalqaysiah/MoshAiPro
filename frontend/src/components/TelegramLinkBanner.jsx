@@ -1,72 +1,89 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
-import { Send, X, Copy, CheckCircle } from 'lucide-react'
+import { Send, X, Copy, CheckCircle, ExternalLink } from 'lucide-react'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 export default function TelegramLinkBanner() {
   const { user } = useAuth()
-  const [link, setLink]       = useState('')
-  const [loading, setLoading] = useState(false)
-  const [copied, setCopied]   = useState(false)
-  const [dismissed, setDismissed] = useState(false)
+  const [link, setLink]           = useState('')
+  const [dismissed, setDismissed] = useState(
+    () => localStorage.getItem('tg_banner_dismissed') === '1'
+  )
+  const [copied, setCopied] = useState(false)
 
-  // لا تعرض إذا مرتبط مسبقاً أو مُخفي
+  // لا تعرض إذا مرتبط أو مُخفي
   if (!user || user.telegram_linked || dismissed) return null
 
-  const fetchLink = async () => {
-    setLoading(true)
-    try {
-      const r = await axios.get(`${API}/api/v1/auth/telegram-link`)
-      setLink(r.data.link)
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false)
-    }
-  }
+  // جلب الرابط عند أول ظهور
+  useEffect(() => {
+    axios.get(`${API}/api/v1/auth/telegram-link`)
+      .then(r => setLink(r.data.link))
+      .catch(() => {})
+  }, [])
 
   const copyLink = () => {
+    if (!link) return
     navigator.clipboard.writeText(link)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
 
-  return (
-    <div className="bg-indigo-900/25 border-b border-indigo-700/40 px-4 py-2 flex items-center justify-between text-xs" dir="rtl">
-      <div className="flex items-center gap-3 text-gray-300">
-        <Send size={13} className="text-indigo-400 flex-shrink-0" />
-        <span>ربط حسابك بـ Telegram لتلقي إشعارات الإشارات مباشرة</span>
+  const dismiss = () => {
+    localStorage.setItem('tg_banner_dismissed', '1')
+    setDismissed(true)
+  }
 
-        {!link ? (
-          <button
-            onClick={fetchLink}
-            disabled={loading}
-            className="bg-indigo-600 hover:bg-indigo-500 text-white px-2.5 py-0.5 rounded-md font-semibold text-xs"
-          >
-            {loading ? '...' : 'احصل على الرابط'}
-          </button>
-        ) : (
-          <div className="flex items-center gap-1.5">
+  return (
+    <div
+      className="bg-indigo-950/60 border-b border-indigo-700/40 px-4 py-2.5 flex items-center justify-between gap-3 text-xs"
+      dir="rtl"
+    >
+      {/* أيقونة + نص */}
+      <div className="flex items-center gap-2 text-indigo-300 min-w-0">
+        <Send size={13} className="flex-shrink-0" />
+        <span className="truncate">
+          🔗 اربط حسابك بـ Telegram لتلقي إشارات مباشرة
+        </span>
+      </div>
+
+      {/* أزرار الرابط */}
+      <div className="flex items-center gap-2 flex-shrink-0">
+        {link ? (
+          <>
             <a
               href={link}
               target="_blank"
               rel="noreferrer"
-              className="bg-indigo-600 hover:bg-indigo-500 text-white px-2.5 py-0.5 rounded-md font-semibold text-xs"
+              className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded-lg font-semibold transition-colors"
             >
-              فتح البوت
+              <ExternalLink size={11} />
+              افتح البوت
             </a>
-            <button onClick={copyLink} className="text-gray-400 hover:text-white">
-              {copied ? <CheckCircle size={13} className="text-green-400" /> : <Copy size={13} />}
+            <button
+              onClick={copyLink}
+              title="نسخ الرابط"
+              className="text-indigo-400 hover:text-white transition-colors"
+            >
+              {copied
+                ? <CheckCircle size={14} className="text-green-400" />
+                : <Copy size={14} />
+              }
             </button>
-          </div>
+          </>
+        ) : (
+          <span className="text-indigo-500 animate-pulse text-xs">جاري التحميل...</span>
         )}
-      </div>
 
-      <button onClick={() => setDismissed(true)} className="text-gray-500 hover:text-gray-300 mr-2">
-        <X size={13} />
-      </button>
+        <button
+          onClick={dismiss}
+          title="إخفاء"
+          className="text-indigo-600 hover:text-indigo-400 transition-colors mr-1"
+        >
+          <X size={13} />
+        </button>
+      </div>
     </div>
   )
 }

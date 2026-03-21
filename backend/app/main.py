@@ -10,7 +10,7 @@ import sys
 
 from app.config import get_settings
 from app.database import init_db
-from app.api import signals, markets, analytics, chat, auth, subscription, admin
+from app.api import signals, markets, analytics, chat, auth, subscription, admin, bot
 from app.services.gemini_engine import gemini_engine
 from app.services.rate_limiter import twelvedata_client
 
@@ -97,6 +97,7 @@ async def system_status():
 
 # Include routers
 app.include_router(auth.router,         prefix="/api/v1/auth",         tags=["Auth"])
+app.include_router(bot.router,          prefix="/api/v1/bot",           tags=["Bot"])
 app.include_router(subscription.router, prefix="/api/v1/subscription",  tags=["Subscription"])
 app.include_router(admin.router,        prefix="/api/v1/admin",         tags=["Admin"])
 app.include_router(signals.router,      prefix="/api/v1/signals",       tags=["Signals"])

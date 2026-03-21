@@ -15,9 +15,13 @@ from telegram.ext import (
 from loguru import logger
 
 # ─── Config ───────────────────────────────────────────────────────────────────
-API_URL    = os.getenv("API_URL", "http://backend:8000")
-BOT_TOKEN  = os.getenv("TELEGRAM_BOT_TOKEN", "")
+API_URL      = os.getenv("API_URL", "http://backend:8000")
+BOT_TOKEN    = os.getenv("TELEGRAM_BOT_TOKEN", "")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+BOT_SECRET   = os.getenv("BOT_SECRET", "mosh-bot-secret-2026")
+
+# Header ترسله لكل طلب للـ API
+BOT_HEADERS  = {"X-Bot-Secret": BOT_SECRET}
 
 MARKETS = ["XAUUSD", "BTCUSD", "EURUSD", "GBPUSD", "USDJPY", "USDCHF"]
 TIMEFRAMES = ["15m", "1h", "4h", "1day"]
@@ -103,27 +107,44 @@ def format_analysis(data: dict, symbol: str, timeframe: str) -> str:
     return msg
 
 
-async def fetch_analysis(symbol: str, timeframe: str, bot_token: str = None) -> dict:
-    """جلب التحليل — بدون auth (البوت يستخدم admin token)"""
+async def fetch_analysis(symbol: str, timeframe: str, telegram_id: str = "") -> dict:
+    """جلب التحليل عبر bot endpoint المحمي بـ BOT_SECRET"""
     try:
-        headers = {}
-        if bot_token:
-            headers["Authorization"] = f"Bearer {bot_token}"
+        params = {"symbol": symbol, "timeframe": timeframe}
+        if telegram_id:
+            params["telegram_id"] = telegram_id
         async with aiohttp.ClientSession() as session:
-            params = {"symbol": symbol, "timeframe": timeframe, "advanced_mode": "true"}
             async with session.post(
-                f"{API_URL}/api/v1/signals/analyze",
+                f"{API_URL}/api/v1/bot/analyze",
                 params=params,
-                headers=headers,
+                headers=BOT_HEADERS,
                 timeout=aiohttp.ClientTimeout(total=40)
             ) as resp:
+                data = await resp.json()
                 if resp.status == 200:
-                    return (await resp.json()).get("data", {})
+                    return data.get("data", {})
                 elif resp.status == 403:
-                    logger.warning(f"Bot auth needed for analyze endpoint")
+                    return {"_error": data.get("detail", "غير مصرح")}
     except Exception as e:
         logger.error(f"fetch_analysis error: {e}")
     return {}
+
+
+async def get_user_status(telegram_id: str) -> dict:
+    """يجلب حالة المستخدم من API"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"{API_URL}/api/v1/bot/user-status",
+                params={"telegram_id": str(telegram_id)},
+                headers=BOT_HEADERS,
+                timeout=aiohttp.ClientTimeout(total=10)
+            ) as resp:
+                if resp.status == 200:
+                    return await resp.json()
+    except Exception as e:
+        logger.error(f"get_user_status error: {e}")
+    return {"linked": False}
 
 
 async def fetch_latest_signals() -> list:
@@ -165,17 +186,18 @@ async def verify_telegram_link(token: str, telegram_id: str, telegram_username: 
 
 
 async def get_expiring_users() -> list:
-    """جلب المستخدمين الذين اشتراكهم ينتهي خلال يومين"""
+    """جلب المستخدمين الذين اشتراكهم ينتهي قريباً"""
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(
-                f"{API_URL}/api/v1/admin/expiring-soon",
+                f"{API_URL}/api/v1/bot/expiring-soon",
+                headers=BOT_HEADERS,
                 timeout=aiohttp.ClientTimeout(total=10)
             ) as resp:
                 if resp.status == 200:
                     return (await resp.json()).get("users", [])
-    except:
-        pass
+    except Exception as e:
+        logger.error(f"get_expiring_users error: {e}")
     return []
 
 
@@ -361,8 +383,46 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 رجوع", callback_data="menu_analyze")]]))
             return
 
+        # تحقق من ارتباط الحساب أولاً
+        status = await get_user_status(str(uid))
+        if not status.get("linked"):
+            await query.edit_message_text(
+                "🔗 *ربط الحساب مطلوب*\n\n"
+                "لاستخدام التحليلات، يجب ربط حسابك في المنصة أولاً.\n\n"
+                "📌 الخطوات:\n"
+                "1️⃣ افتح المنصة وسجّل دخول\n"
+                "2️⃣ اضغط على 'احصل على الرابط' في شريط الربط\n"
+                "3️⃣ افتح الرابط وسيتم الربط تلقائياً\n\n"
+                "✅ بعد الربط، ستتمكن من الحصول على جميع التحليلات هنا!",
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🌐 فتح المنصة", url=FRONTEND_URL)],
+                    [InlineKeyboardButton("🔙 رجوع", callback_data="menu_back")],
+                ]))
+            return
+
+        if not status.get("allowed"):
+            reason = status.get("reason", "الاشتراك منتهي")
+            await query.edit_message_text(
+                f"⛔ *{reason}*\n\n"
+                f"جدد اشتراكك للاستمرار في الحصول على التحليلات.",
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("💳 تجديد الاشتراك", url=f"{FRONTEND_URL}/pricing")],
+                    [InlineKeyboardButton("🔙 رجوع", callback_data="menu_back")],
+                ]))
+            return
+
         await query.edit_message_text(f"⏳ جاري تحليل {MARKET_NAMES.get(market, market)}...")
-        result = await fetch_analysis(market, timeframe)
+        result = await fetch_analysis(market, timeframe, telegram_id=str(uid))
+
+        # خطأ من API
+        if result.get("_error"):
+            await query.edit_message_text(
+                f"⚠️ {result['_error']}",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 رجوع", callback_data="menu_back")]]))
+            return
+
         msg = format_analysis(result, market, timeframe)
         kb = [
             [InlineKeyboardButton("🔄 تحديث", callback_data=f"analyze_{market}_{timeframe}"),
@@ -463,8 +523,8 @@ async def monitor_markets(app: Application):
                                 pass
                         continue
 
-                    result = await fetch_analysis(symbol, tf)
-                    if not result or result.get("error"):
+                    result = await fetch_analysis(symbol, tf, telegram_id=str(uid))
+                    if not result or result.get("error") or result.get("_error"):
                         continue
 
                     rec  = result.get("recommendation", "WATCH")
