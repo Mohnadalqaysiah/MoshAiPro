@@ -84,23 +84,49 @@ def format_analysis(data: dict, symbol: str, timeframe: str) -> str:
         msg += f"✅ *هدف {i}:* `{tp}`\n"
     if rr:     msg += f"\n⚖️ *R/R:* `{float(rr):.2f}x`\n"
 
-    ob = data.get("order_blocks", {})
+    ob      = data.get("order_blocks", {})
     wyckoff = data.get("wyckoff", {})
-    pd_z = data.get("premium_discount", {})
-    liq  = data.get("liquidity", {})
+    pd_z    = data.get("premium_discount", {})
+    liq     = data.get("liquidity", {})
 
-    if ob.get("bullish_obs"):
-        msg += f"🟢 OB دعم: `{ob['bullish_obs'][0]}`\n"
-    if ob.get("bearish_obs"):
-        msg += f"🔴 OB مقاومة: `{ob['bearish_obs'][0]}`\n"
-    if liq.get("nearest_ssl"):
-        msg += f"🧲 سيولة تحت: `{liq['nearest_ssl']}`\n"
-    if liq.get("nearest_bsl"):
-        msg += f"🧲 سيولة فوق: `{liq['nearest_bsl']}`\n"
-    if wyckoff.get("phase"):
-        msg += f"📐 Wyckoff: `{wyckoff['phase']}`\n"
-    if pd_z.get("zone"):
-        msg += f"💹 Zone: `{pd_z['zone']}`\n"
+    def fmt_ob(o):
+        """تحويل dict الـ OB إلى نص مقروء"""
+        if isinstance(o, dict):
+            low  = o.get("low",  "")
+            high = o.get("high", "")
+            mid  = o.get("mid",  "")
+            strength = o.get("strength", "")
+            if low and high:
+                return f"{low} — {high}" + (f" (وسط: {round(float(mid),2)})" if mid else "") + (f" [{strength}]" if strength else "")
+        return str(o)
+
+    bull_obs = ob.get("bullish_obs") or []
+    bear_obs = ob.get("bearish_obs") or []
+
+    if bull_obs:
+        msg += f"🟢 *OB دعم:* `{fmt_ob(bull_obs[0])}`\n"
+    if bear_obs:
+        msg += f"🔴 *OB مقاومة:* `{fmt_ob(bear_obs[0])}`\n"
+
+    ssl = liq.get("nearest_ssl")
+    bsl = liq.get("nearest_bsl")
+    if ssl:
+        msg += f"🧲 *سيولة تحت:* `{ssl}`\n"
+    if bsl:
+        msg += f"🧲 *سيولة فوق:* `{bsl}`\n"
+
+    phase = wyckoff.get("phase") if isinstance(wyckoff, dict) else None
+    zone  = pd_z.get("zone")    if isinstance(pd_z, dict)    else None
+    if phase:
+        phase_ar = {
+            "ACCUMULATION": "تراكم", "DISTRIBUTION": "توزيع",
+            "ACCUMULATION_START": "بداية تراكم", "DISTRIBUTION_START": "بداية توزيع",
+            "MARKUP": "صعود", "MARKDOWN": "هبوط", "RE_ACCUMULATION": "إعادة تراكم",
+        }.get(phase, phase)
+        msg += f"📐 *Wyckoff:* `{phase_ar}`\n"
+    if zone:
+        zone_ar = {"PREMIUM": "منطقة مرتفعة", "DISCOUNT": "منطقة منخفضة", "EQUILIBRIUM": "توازن"}.get(zone, zone)
+        msg += f"💹 *Zone:* `{zone_ar}`\n"
 
     msg += "\n━━━━━━━━━━━━━━━━━━\n"
     msg += "⚠️ _للمعلومات فقط، ليس توصية استثمارية._"

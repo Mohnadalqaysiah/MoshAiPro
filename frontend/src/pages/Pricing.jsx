@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
@@ -6,7 +6,7 @@ import { Check, Zap, Star, Copy, CheckCircle, AlertCircle } from 'lucide-react'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
-const PLANS = [
+const DEFAULT_PLANS = [
   {
     key: 'weekly',
     name: 'الأسبوعية',
@@ -35,9 +35,17 @@ export default function Pricing() {
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
   const [copied, setCopied]     = useState(false)
+  const [WALLET, setWallet]     = useState('')
+  const PLANS = DEFAULT_PLANS
 
-  // مؤقت - ستجيء من API
-  const WALLET = 'TQoS5ZjkMpMRp3DHd5sSxxxxxxxxxxxxx'
+  useEffect(() => {
+    axios.get(`${API}/api/v1/subscription/plans`)
+      .then(r => {
+        if (r.data.wallet) setWallet(r.data.wallet)
+        if (r.data.network) setNetwork(r.data.network)
+      })
+      .catch(() => setWallet('TQoS5ZjkMpMRp3DHd5sS1a2b3c4d5e6f7g8h'))
+  }, [])
 
   const copyWallet = () => {
     navigator.clipboard.writeText(WALLET)

@@ -37,7 +37,7 @@ export default function TelegramLinkBanner() {
 
   return (
     <div
-      className="bg-indigo-950/70 border-b border-indigo-600/50 px-4 py-2.5 flex items-center justify-between gap-3"
+      className="bg-indigo-900/80 border-b-2 border-indigo-500 px-4 py-3 flex items-center justify-between gap-3"
       dir="rtl"
     >
       {/* نص */}

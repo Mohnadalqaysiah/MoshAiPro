@@ -1,22 +1,33 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import axios from 'axios'
-import { TrendingUp, TrendingDown, Activity, Zap, AlertCircle, RefreshCw } from 'lucide-react'
+import { TrendingUp, TrendingDown, Activity, Zap, AlertCircle, RefreshCw, Send, ExternalLink, Copy, CheckCircle } from 'lucide-react'
+import { useAuth } from '../contexts/AuthContext'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 const MARKETS = ['XAUUSD', 'BTCUSD', 'EURUSD', 'GBPUSD']
 
 export default function Dashboard() {
-  const [signals, setSignals] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [analyzing, setAnalyzing] = useState(null)
-  const [error, setError]       = useState(null)
+  const { user } = useAuth()
+  const [signals, setSignals]       = useState([])
+  const [analyzing, setAnalyzing]   = useState(null)
+  const [error, setError]           = useState(null)
   const [limitReached, setLimitReached] = useState(false)
+  const [tgLink, setTgLink]     = useState('')
+  const [tgCopied, setTgCopied] = useState(false)
 
+  // جلب آخر الإشارات
+  useEffect(() => { fetchSignals() }, [])
+
+  // جلب رابط Telegram عند تحميل المستخدم
   useEffect(() => {
-    fetchSignals()
-  }, [])
+    if (user && !user.telegram_linked) {
+      axios.get(`${API}/api/v1/auth/telegram-link`)
+        .then(r => setTgLink(r.data.link || ''))
+        .catch(() => {})
+    }
+  }, [user?.id])
 
   const fetchSignals = async () => {
     try {
@@ -47,6 +58,13 @@ export default function Dashboard() {
     }
   }
 
+  const copyTgLink = () => {
+    if (!tgLink) return
+    navigator.clipboard.writeText(tgLink)
+    setTgCopied(true)
+    setTimeout(() => setTgCopied(false), 2000)
+  }
+
   const getSignalColor = (rec) => {
     if (rec === 'BUY') return 'text-green-400'
     if (rec === 'SELL') return 'text-red-400'
@@ -64,6 +82,8 @@ export default function Dashboard() {
     if (rec === 'SELL') return 'بيع'
     return 'مراقبة'
   }
+
+  const showTgCard = user && !user.telegram_linked
 
   return (
     <div className="space-y-6">
@@ -93,6 +113,45 @@ export default function Dashboard() {
               اشترك الآن
             </Link>
           )}
+        </div>
+      )}
+
+      {/* Telegram Linking Card */}
+      {showTgCard && (
+        <div className="bg-indigo-950/60 border border-indigo-500/70 rounded-xl p-5" dir="rtl">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-indigo-600/40 flex items-center justify-center flex-shrink-0">
+              <Send size={18} className="text-indigo-300" />
+            </div>
+            <div>
+              <h3 className="text-white font-semibold">اربط حسابك مع Telegram</h3>
+              <p className="text-indigo-300 text-sm mt-0.5">استقبل الإشارات والتنبيهات مباشرة على هاتفك عبر @ai_hybridbot</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 mt-4 flex-wrap">
+            {tgLink ? (
+              <>
+                <a
+                  href={tgLink}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white px-5 py-2.5 rounded-lg font-semibold text-sm transition-all"
+                >
+                  <ExternalLink size={15} />
+                  ربط مع @ai_hybridbot
+                </a>
+                <button
+                  onClick={copyTgLink}
+                  className="flex items-center gap-1.5 text-indigo-400 hover:text-white border border-indigo-700 hover:border-indigo-400 px-3 py-2.5 rounded-lg text-sm transition-all"
+                >
+                  {tgCopied ? <CheckCircle size={14} className="text-green-400" /> : <Copy size={14} />}
+                  {tgCopied ? 'تم النسخ' : 'نسخ الرابط'}
+                </button>
+              </>
+            ) : (
+              <span className="text-indigo-400 text-sm animate-pulse">⏳ جاري تحميل الرابط...</span>
+            )}
+          </div>
         </div>
       )}
 
