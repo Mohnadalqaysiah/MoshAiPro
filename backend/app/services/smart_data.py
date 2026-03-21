@@ -1,0 +1,345 @@
+"""
+Mosh AI Pro v5 - Smart Data Provider
+Primary: yfinance (free, unlimited)
+Secondary: TwelveData (paid, for real-time)
+
+يجلب بيانات OHLCV حقيقية مع fallback تلقائي
+"""
+
+import asyncio
+import pandas as pd
+import numpy as np
+from datetime import datetime, timedelta
+from typing import Optional, Dict
+from loguru import logger
+import requests
+
+try:
+    import yfinance as yf
+    YFINANCE_AVAILABLE = True
+except ImportError:
+    YFINANCE_AVAILABLE = False
+    logger.warning("yfinance not installed - using TwelveData only")
+
+from app.config import get_settings
+
+settings = get_settings()
+
+# ─── Symbol Maps ──────────────────────────────────────────────────────────────
+
+YFINANCE_MAP = {
+    "XAUUSD": "GC=F",       # Gold Futures
+    "BTCUSD": "BTC-USD",    # Bitcoin
+    "ETHUSD": "ETH-USD",    # Ethereum
+    "EURUSD": "EURUSD=X",   # Euro/Dollar
+    "GBPUSD": "GBPUSD=X",   # Pound/Dollar
+    "USDJPY": "USDJPY=X",   # Dollar/Yen
+    "USDCHF": "USDCHF=X",   # Dollar/Franc
+    "AUDUSD": "AUDUSD=X",
+    "USDCAD": "USDCAD=X",
+    "NZDUSD": "NZDUSD=X",
+}
+
+TWELVEDATA_MAP = {
+    "XAUUSD": "XAU/USD",
+    "BTCUSD": "BTC/USD",
+    "ETHUSD": "ETH/USD",
+    "EURUSD": "EUR/USD",
+    "GBPUSD": "GBP/USD",
+    "USDJPY": "USD/JPY",
+    "USDCHF": "USD/CHF",
+    "AUDUSD": "AUD/USD",
+    "USDCAD": "USD/CAD",
+    "NZDUSD": "NZD/USD",
+}
+
+# yfinance interval map
+YF_INTERVAL_MAP = {
+    "1m":  "1m",
+    "5m":  "5m",
+    "15m": "15m",
+    "30m": "30m",
+    "1h":  "1h",
+    "4h":  "1h",   # resample from 1h
+    "1d":  "1d",
+    "1day": "1d",
+    "1w":  "1wk",
+}
+
+# yfinance period map (how far back to fetch)
+YF_PERIOD_MAP = {
+    "1m":  "1d",
+    "5m":  "5d",
+    "15m": "5d",
+    "30m": "30d",
+    "1h":  "60d",
+    "4h":  "60d",
+    "1d":  "1y",
+    "1day": "1y",
+    "1w":  "5y",
+}
+
+TD_INTERVAL_MAP = {
+    "15m": "15min", "30m": "30min",
+    "1h": "1h", "4h": "4h",
+    "1d": "1day", "1day": "1day",
+}
+
+
+class SmartDataProvider:
+    """
+    مزود البيانات الذكي:
+    - يجرب yfinance أولاً (مجاني، بلا حدود)
+    - إذا فشل → يجرب TwelveData
+    - يحسب المؤشرات التقنية الكاملة
+    """
+
+    def __init__(self):
+        self.td_key = settings.TWELVEDATA_API_KEY
+        self.td_base = "https://api.twelvedata.com"
+        self._cache: Dict[str, tuple] = {}
+
+    # ─── Public: fetch OHLCV ───────────────────────────────────────────────
+
+    async def get_ohlcv(self, symbol: str, timeframe: str = "1h", bars: int = 150) -> Optional[pd.DataFrame]:
+        """
+        جلب بيانات OHLCV مع fallback تلقائي وحساب المؤشرات
+        """
+        cache_key = f"{symbol}_{timeframe}"
+        ttl = self._get_ttl(timeframe)
+
+        # Cache check
+        if cache_key in self._cache:
+            df_cached, ts = self._cache[cache_key]
+            if (datetime.now() - ts).total_seconds() < ttl:
+                logger.debug(f"📦 Cache hit: {symbol} {timeframe}")
+                return df_cached
+
+        # Try yfinance first
+        df = None
+        if YFINANCE_AVAILABLE:
+            df = await asyncio.get_event_loop().run_in_executor(
+                None, self._fetch_yfinance, symbol, timeframe, bars
+            )
+
+        # Fallback to TwelveData
+        if df is None and self.td_key:
+            df = await self._fetch_twelvedata(symbol, timeframe, bars)
+
+        if df is None or len(df) < 30:
+            logger.error(f"❌ Failed to fetch data for {symbol}")
+            return None
+
+        # Add technical indicators
+        df = self._add_indicators(df)
+
+        self._cache[cache_key] = (df, datetime.now())
+        logger.success(f"✅ {symbol} {timeframe}: {len(df)} bars fetched")
+        return df
+
+    # ─── yfinance ─────────────────────────────────────────────────────────
+
+    def _fetch_yfinance(self, symbol: str, timeframe: str, bars: int) -> Optional[pd.DataFrame]:
+        try:
+            yf_symbol = YFINANCE_MAP.get(symbol.upper(), symbol)
+            yf_interval = YF_INTERVAL_MAP.get(timeframe, "1h")
+            yf_period = YF_PERIOD_MAP.get(timeframe, "60d")
+
+            ticker = yf.Ticker(yf_symbol)
+            df = ticker.history(period=yf_period, interval=yf_interval, auto_adjust=True)
+
+            if df is None or len(df) < 10:
+                logger.warning(f"⚠️ yfinance returned no data for {yf_symbol}")
+                return None
+
+            # Normalize columns
+            df = df.rename(columns={
+                "Open": "open", "High": "high",
+                "Low": "low", "Close": "close", "Volume": "volume"
+            })
+            df.index = pd.to_datetime(df.index)
+            df = df[["open", "high", "low", "close", "volume"]].copy()
+            df = df.dropna(subset=["open", "high", "low", "close"])
+
+            # Resample 1h → 4h if needed
+            if timeframe == "4h":
+                df = df.resample("4h").agg({
+                    "open": "first", "high": "max",
+                    "low": "min", "close": "last", "volume": "sum"
+                }).dropna()
+
+            df = df.tail(bars).reset_index()
+            df = df.rename(columns={"index": "datetime", "Datetime": "datetime", "Date": "datetime"})
+
+            if "volume" not in df.columns:
+                df["volume"] = 0.0
+            df["volume"] = df["volume"].fillna(0.0)
+
+            for col in ["open", "high", "low", "close"]:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+
+            logger.info(f"📊 yfinance: {yf_symbol} → {len(df)} bars")
+            return df
+
+        except Exception as e:
+            logger.warning(f"⚠️ yfinance error for {symbol}: {e}")
+            return None
+
+    # ─── TwelveData ───────────────────────────────────────────────────────
+
+    async def _fetch_twelvedata(self, symbol: str, timeframe: str, bars: int) -> Optional[pd.DataFrame]:
+        try:
+            td_symbol = TWELVEDATA_MAP.get(symbol.upper(), symbol)
+            td_interval = TD_INTERVAL_MAP.get(timeframe, timeframe)
+
+            url = f"{self.td_base}/time_series"
+            params = {
+                "symbol": td_symbol,
+                "interval": td_interval,
+                "outputsize": bars,
+                "apikey": self.td_key,
+                "format": "JSON"
+            }
+
+            resp = await asyncio.get_event_loop().run_in_executor(
+                None, lambda: requests.get(url, params=params, timeout=15)
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+            if "values" not in data:
+                logger.error(f"❌ TwelveData no values: {data.get('message', '')}")
+                return None
+
+            df = pd.DataFrame(data["values"])
+            df["datetime"] = pd.to_datetime(df["datetime"])
+            df = df.sort_values("datetime").reset_index(drop=True)
+
+            for col in ["open", "high", "low", "close"]:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+            if "volume" in df.columns:
+                df["volume"] = pd.to_numeric(df["volume"], errors="coerce").fillna(0.0)
+            else:
+                df["volume"] = 0.0
+
+            logger.info(f"📡 TwelveData: {td_symbol} → {len(df)} bars")
+            return df
+
+        except Exception as e:
+            logger.error(f"❌ TwelveData error for {symbol}: {e}")
+            return None
+
+    # ─── Technical Indicators ──────────────────────────────────────────────
+
+    def _add_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
+        """يضيف المؤشرات التقنية المهمة"""
+        try:
+            c = df["close"]
+            h = df["high"]
+            l = df["low"]
+
+            # ATR (14)
+            tr = pd.concat([
+                h - l,
+                (h - c.shift()).abs(),
+                (l - c.shift()).abs()
+            ], axis=1).max(axis=1)
+            df["atr"] = tr.rolling(14).mean()
+
+            # RSI (14)
+            delta = c.diff()
+            gain = delta.clip(lower=0).rolling(14).mean()
+            loss = (-delta.clip(upper=0)).rolling(14).mean()
+            rs = gain / loss.replace(0, np.nan)
+            df["rsi"] = 100 - (100 / (1 + rs))
+
+            # EMA
+            df["ema_20"] = c.ewm(span=20, adjust=False).mean()
+            df["ema_50"] = c.ewm(span=50, adjust=False).mean()
+            df["ema_200"] = c.ewm(span=200, adjust=False).mean()
+
+            # MACD
+            ema12 = c.ewm(span=12, adjust=False).mean()
+            ema26 = c.ewm(span=26, adjust=False).mean()
+            df["macd"] = ema12 - ema26
+            df["macd_signal"] = df["macd"].ewm(span=9, adjust=False).mean()
+            df["macd_hist"] = df["macd"] - df["macd_signal"]
+
+            # Bollinger Bands (20, 2)
+            ma20 = c.rolling(20).mean()
+            std20 = c.rolling(20).std()
+            df["bb_upper"] = ma20 + 2 * std20
+            df["bb_lower"] = ma20 - 2 * std20
+            df["bb_mid"] = ma20
+
+            # Stochastic (14,3)
+            low14 = l.rolling(14).min()
+            high14 = h.rolling(14).max()
+            df["stoch_k"] = 100 * (c - low14) / (high14 - low14 + 1e-10)
+            df["stoch_d"] = df["stoch_k"].rolling(3).mean()
+
+            # Candle body size
+            df["body"] = (c - df["open"]).abs()
+            df["is_bullish"] = c > df["open"]
+
+            df = df.fillna(method="bfill").fillna(0)
+
+        except Exception as e:
+            logger.warning(f"⚠️ Indicator calculation partial error: {e}")
+
+        return df
+
+    def _get_ttl(self, timeframe: str) -> int:
+        """Cache TTL بالثواني حسب الإطار الزمني"""
+        ttls = {
+            "1m": 30, "5m": 60, "15m": 180,
+            "30m": 300, "1h": 600, "4h": 1800,
+            "1d": 3600, "1day": 3600, "1w": 7200
+        }
+        return ttls.get(timeframe, 300)
+
+    def get_current_price(self, symbol: str) -> Optional[float]:
+        """السعر الحالي من yfinance"""
+        try:
+            if YFINANCE_AVAILABLE:
+                yf_symbol = YFINANCE_MAP.get(symbol.upper(), symbol)
+                ticker = yf.Ticker(yf_symbol)
+                data = ticker.history(period="1d", interval="1m")
+                if data is not None and len(data) > 0:
+                    return float(data["Close"].iloc[-1])
+        except Exception as e:
+            logger.warning(f"Price fetch error: {e}")
+
+        # Fallback TwelveData
+        try:
+            td_symbol = TWELVEDATA_MAP.get(symbol.upper(), symbol)
+            resp = requests.get(
+                f"{self.td_base}/price",
+                params={"symbol": td_symbol, "apikey": self.td_key},
+                timeout=5
+            )
+            data = resp.json()
+            if "price" in data:
+                return float(data["price"])
+        except Exception:
+            pass
+
+        return None
+
+    def is_market_open(self, symbol: str) -> bool:
+        """فحص إذا السوق مفتوح"""
+        crypto = {"BTCUSD", "ETHUSD", "BNBUSD"}
+        if symbol.upper() in crypto:
+            return True
+        now = datetime.utcnow()
+        # Forex/Gold: مغلق السبت والأحد
+        if now.weekday() >= 5:
+            return False
+        # مغلق بعد 22:00 UTC جمعة وقبل 22:00 UTC أحد
+        if now.weekday() == 4 and now.hour >= 22:
+            return False
+        return True
+
+
+# Singleton
+smart_data = SmartDataProvider()
