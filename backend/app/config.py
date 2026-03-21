@@ -77,7 +77,14 @@ class Settings(BaseSettings):
     # ----- Rate Limits -----
     TWELVEDATA_RATE_LIMIT: int = 8
     FINNHUB_RATE_LIMIT: int = 60
-    
+
+    # ----- SaaS / Payments -----
+    USDT_WALLET_ADDRESS: str = "TQoS5ZjkMpMRp3DHd5sSxxxxxxxYOUR_WALLET"
+    USDT_NETWORK: str = "TRC20"
+    TRIAL_ANALYSES: int = 10
+    TRIAL_CHAT: int = 20
+    TRIAL_DAYS: int = 7
+
     class Config:
         env_file = ".env"
         case_sensitive = True

@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import axios from 'axios'
 import { TrendingUp, TrendingDown, Activity, Zap, AlertCircle, RefreshCw } from 'lucide-react'
 
-const API = 'http://localhost:8000'
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 const MARKETS = ['XAUUSD', 'BTCUSD', 'EURUSD', 'GBPUSD']
 
@@ -10,7 +11,8 @@ export default function Dashboard() {
   const [signals, setSignals] = useState([])
   const [loading, setLoading] = useState(false)
   const [analyzing, setAnalyzing] = useState(null)
-  const [error, setError] = useState(null)
+  const [error, setError]       = useState(null)
+  const [limitReached, setLimitReached] = useState(false)
 
   useEffect(() => {
     fetchSignals()
@@ -28,12 +30,18 @@ export default function Dashboard() {
   const analyzeMarket = async (symbol) => {
     setAnalyzing(symbol)
     setError(null)
+    setLimitReached(false)
     try {
       const res = await axios.post(`${API}/api/v1/signals/analyze?symbol=${symbol}&timeframe=1h&advanced_mode=true`)
       const data = res.data.data
       setSignals(prev => [{ ...data, market: symbol, id: Date.now() }, ...prev.slice(0, 9)])
     } catch (e) {
-      setError(`فشل تحليل ${symbol}: ${e.message}`)
+      if (e.response?.status === 403) {
+        setLimitReached(true)
+        setError(e.response.data.detail)
+      } else {
+        setError(`فشل تحليل ${symbol}: ${e.response?.data?.detail || e.message}`)
+      }
     } finally {
       setAnalyzing(null)
     }
@@ -75,9 +83,16 @@ export default function Dashboard() {
       </div>
 
       {error && (
-        <div className="flex items-center gap-2 p-3 bg-red-900/30 border border-red-700 rounded-lg text-red-400 text-sm">
-          <AlertCircle size={16} />
-          {error}
+        <div className="flex items-center justify-between gap-2 p-3 bg-red-900/30 border border-red-700 rounded-lg text-red-400 text-sm">
+          <div className="flex items-center gap-2">
+            <AlertCircle size={16} />
+            {error}
+          </div>
+          {limitReached && (
+            <Link to="/pricing" className="flex-shrink-0 bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded-lg text-xs font-semibold">
+              اشترك الآن
+            </Link>
+          )}
         </div>
       )}
 

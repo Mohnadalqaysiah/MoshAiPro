@@ -4,12 +4,13 @@ Mosh AI Pro v5 - Signals API Routes
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
 from loguru import logger
 
 from app.database import get_db
 from app.services.ai_engine_v5 import mosh_ai_engine_v5
 from app.models import Signal
+from app.models.user import User, PlanType
+from app.services.auth_service import get_current_user, check_subscription, deduct_trial
 
 router = APIRouter()
 
@@ -18,23 +19,40 @@ router = APIRouter()
 async def analyze_market(
     symbol: str,
     timeframe: str = "1h",
-    advanced_mode: bool = True
+    advanced_mode: bool = True,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
-    """
-    Perform AI analysis on a market
-    """
+    """تحليل السوق مع فحص الصلاحية"""
+    status = check_subscription(user, db)
+    if not status["allowed"]:
+        raise HTTPException(status_code=403, detail=status["reason"])
+
+    if user.plan == PlanType.TRIAL and user.trial_analyses_left <= 0:
+        raise HTTPException(
+            status_code=403,
+            detail="استهلكت تحليلات التجربة المجانية. اشترك للمتابعة."
+        )
+
     try:
         analysis = await mosh_ai_engine_v5.analyze_market(
             symbol=symbol,
             timeframe=timeframe,
             advanced_mode=advanced_mode
         )
-        
-        return {
-            "success": True,
-            "data": analysis
-        }
-    
+
+        # Deduct trial analysis credit
+        if user.plan == PlanType.TRIAL:
+            deduct_trial(user, db, kind="analysis")
+        else:
+            user.analyses_total += 1
+            user.analyses_used_today += 1
+            db.commit()
+
+        return {"success": True, "data": analysis}
+
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"❌ Error in analysis endpoint: {e}")
         raise HTTPException(status_code=500, detail=str(e))
