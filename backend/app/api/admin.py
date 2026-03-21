@@ -319,6 +319,58 @@ def toggle_market(
     return {"symbol": m.symbol, "is_active": m.is_active}
 
 
+# ─── Expiring Soon (for Bot) ──────────────────────────────────────────────────
+
+@router.get("/expiring-soon")
+def get_expiring_users(
+    days: int = 2,
+    db: Session = Depends(get_db)
+):
+    """
+    يرجع المستخدمين الذين اشتراكهم ينتهي خلال X أيام
+    (بدون auth لأن البوت يستخدمه مباشرة)
+    """
+    now = datetime.now(timezone.utc)
+    deadline = now + timedelta(days=days)
+
+    # اشتراك مدفوع ينتهي قريباً
+    paid_expiring = db.query(User).filter(
+        User.plan.in_([PlanType.WEEKLY, PlanType.MONTHLY]),
+        User.subscription_ends_at != None,
+        User.subscription_ends_at <= deadline,
+        User.telegram_id != None,
+        User.is_active == True,
+    ).all()
+
+    # تجربة منتهية
+    trial_expired = db.query(User).filter(
+        User.plan == PlanType.TRIAL,
+        User.trial_ends_at != None,
+        User.trial_ends_at <= now,
+        User.telegram_id != None,
+        User.is_active == True,
+    ).all()
+
+    result = []
+    for u in paid_expiring + trial_expired:
+        days_left = 0
+        if u.plan in [PlanType.WEEKLY, PlanType.MONTHLY] and u.subscription_ends_at:
+            delta = u.subscription_ends_at - now
+            days_left = max(0, delta.days)
+        elif u.trial_ends_at:
+            delta = u.trial_ends_at - now
+            days_left = max(0, delta.days)
+
+        result.append({
+            "telegram_id": u.telegram_id,
+            "full_name":   u.full_name or u.email,
+            "plan":        u.plan,
+            "days_left":   days_left,
+        })
+
+    return {"users": result, "count": len(result)}
+
+
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 def _user_info(u: User) -> dict:

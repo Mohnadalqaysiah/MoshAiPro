@@ -51,6 +51,9 @@ class User(Base):
     trial_analyses_left   = Column(Integer, default=10)
     trial_chat_left       = Column(Integer, default=20)
 
+    # Telegram link token (for bot linking)
+    telegram_link_token   = Column(String, unique=True, nullable=True, index=True)
+
     # Preferences
     language              = Column(String, default="ar")
     notifications_enabled = Column(Boolean, default=True)

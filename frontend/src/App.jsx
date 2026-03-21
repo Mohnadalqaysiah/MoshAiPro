@@ -11,6 +11,7 @@ import Admin      from './pages/Admin'
 import Navbar     from './components/Navbar'
 import ChatBot    from './components/ChatBot'
 import TrialBanner from './components/TrialBanner'
+import TelegramLinkBanner from './components/TelegramLinkBanner'
 import './App.css'
 
 // صفحات تحتاج تسجيل دخول
@@ -48,6 +49,7 @@ function AppRoutes() {
           <div className="min-h-screen bg-gray-900 text-gray-100">
             <Navbar />
             <TrialBanner />
+            <TelegramLinkBanner />
             <main className="container mx-auto px-4 py-6">
               <Routes>
                 <Route path="/"          element={<Dashboard />} />
