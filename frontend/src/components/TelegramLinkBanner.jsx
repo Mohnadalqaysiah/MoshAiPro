@@ -4,24 +4,29 @@ import { useAuth } from '../contexts/AuthContext'
 import { Send, X, Copy, CheckCircle, ExternalLink } from 'lucide-react'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const DISMISS_KEY = 'mosh_tg_dismissed'
 
 export default function TelegramLinkBanner() {
   const { user } = useAuth()
-  const [link, setLink]           = useState('')
-  const [dismissed, setDismissed] = useState(
-    () => localStorage.getItem('tg_banner_dismissed') === '1'
-  )
-  const [copied, setCopied] = useState(false)
+  const [link, setLink]       = useState('')
+  const [dismissed, setDismissed] = useState(false)
+  const [copied, setCopied]   = useState(false)
 
-  // لا تعرض إذا مرتبط أو مُخفي
-  if (!user || user.telegram_linked || dismissed) return null
-
-  // جلب الرابط عند أول ظهور
+  // جلب الرابط فوراً عند وجود المستخدم — لازم قبل أي return
   useEffect(() => {
-    axios.get(`${API}/api/v1/auth/telegram-link`)
-      .then(r => setLink(r.data.link))
-      .catch(() => {})
-  }, [])
+    // مسح أي dismiss قديم إذا المستخدم مش مرتبط
+    if (user && !user.telegram_linked) {
+      localStorage.removeItem(DISMISS_KEY)
+      setDismissed(false)
+      // جلب الرابط
+      axios.get(`${API}/api/v1/auth/telegram-link`)
+        .then(r => setLink(r.data.link))
+        .catch(() => {})
+    }
+  }, [user?.id, user?.telegram_linked])
+
+  // إخفاء لمدة الجلسة فقط (مش localStorage)
+  if (!user || user.telegram_linked || dismissed) return null
 
   const copyLink = () => {
     if (!link) return
@@ -30,25 +35,20 @@ export default function TelegramLinkBanner() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const dismiss = () => {
-    localStorage.setItem('tg_banner_dismissed', '1')
-    setDismissed(true)
-  }
-
   return (
     <div
-      className="bg-indigo-950/60 border-b border-indigo-700/40 px-4 py-2.5 flex items-center justify-between gap-3 text-xs"
+      className="bg-indigo-950/70 border-b border-indigo-600/50 px-4 py-2.5 flex items-center justify-between gap-3"
       dir="rtl"
     >
-      {/* أيقونة + نص */}
-      <div className="flex items-center gap-2 text-indigo-300 min-w-0">
-        <Send size={13} className="flex-shrink-0" />
-        <span className="truncate">
-          🔗 اربط حسابك بـ Telegram لتلقي إشارات مباشرة
+      {/* نص */}
+      <div className="flex items-center gap-2 text-xs min-w-0">
+        <Send size={13} className="text-indigo-400 flex-shrink-0" />
+        <span className="text-indigo-200">
+          اربط حسابك بـ Telegram لتلقي إشارات وتنبيهات مباشرة
         </span>
       </div>
 
-      {/* أزرار الرابط */}
+      {/* أزرار */}
       <div className="flex items-center gap-2 flex-shrink-0">
         {link ? (
           <>
@@ -56,15 +56,15 @@ export default function TelegramLinkBanner() {
               href={link}
               target="_blank"
               rel="noreferrer"
-              className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded-lg font-semibold transition-colors"
+              className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white text-xs px-3 py-1.5 rounded-lg font-semibold transition-all"
             >
               <ExternalLink size={11} />
-              افتح البوت
+              ربط مع @ai_hybridbot
             </a>
             <button
               onClick={copyLink}
               title="نسخ الرابط"
-              className="text-indigo-400 hover:text-white transition-colors"
+              className="text-indigo-400 hover:text-white transition-colors p-1"
             >
               {copied
                 ? <CheckCircle size={14} className="text-green-400" />
@@ -73,13 +73,13 @@ export default function TelegramLinkBanner() {
             </button>
           </>
         ) : (
-          <span className="text-indigo-500 animate-pulse text-xs">جاري التحميل...</span>
+          <span className="text-indigo-500 text-xs animate-pulse">⏳ جاري التحميل...</span>
         )}
 
         <button
-          onClick={dismiss}
-          title="إخفاء"
-          className="text-indigo-600 hover:text-indigo-400 transition-colors mr-1"
+          onClick={() => setDismissed(true)}
+          title="إخفاء مؤقتاً"
+          className="text-indigo-600 hover:text-indigo-300 transition-colors p-1"
         >
           <X size={13} />
         </button>

@@ -79,7 +79,7 @@ class Settings(BaseSettings):
     FINNHUB_RATE_LIMIT: int = 60
 
     # ----- SaaS / Payments -----
-    TELEGRAM_BOT_USERNAME: str = "MoshAiProBot"
+    TELEGRAM_BOT_USERNAME: str = "ai_hybridbot"
     BOT_SECRET: str = "mosh-bot-secret-change-me"
     USDT_WALLET_ADDRESS: str = "TQoS5ZjkMpMRp3DHd5sSxxxxxxxYOUR_WALLET"
     USDT_NETWORK: str = "TRC20"
