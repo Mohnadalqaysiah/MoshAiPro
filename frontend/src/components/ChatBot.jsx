@@ -1,179 +1,259 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import axios from 'axios'
-import { MessageCircle, X, Send, BarChart2, FileText, Sparkles, Trash2 } from 'lucide-react'
-import { createChart } from 'lightweight-charts'
+import {
+  MessageCircle, X, Send, BarChart2, FileText,
+  Sparkles, Trash2, TrendingUp, TrendingDown, Minus
+} from 'lucide-react'
 
-const API = 'http://localhost:8000'
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
-function CandlesChart({ candles }) {
-  const containerRef = useRef(null)
+// ─── Candlestick Chart ────────────────────────────────────────────────────────
+function CandlesChart({ candles, symbol, timeframe }) {
+  const ref = useRef(null)
   const chartRef = useRef(null)
-  const seriesRef = useRef(null)
 
   useEffect(() => {
-    if (!containerRef.current) return
+    if (!ref.current || !candles?.length) return
 
-    if (!chartRef.current) {
-      chartRef.current = createChart(containerRef.current, {
-        layout: {
-          background: { color: 'transparent' },
-          textColor: '#e5e7eb',
-        },
-        grid: {
-          vertLines: { color: 'rgba(55, 65, 81, 0.3)' },
-          horzLines: { color: 'rgba(55, 65, 81, 0.3)' },
-        },
-        width: containerRef.current.clientWidth,
-        height: 220,
-        crosshair: {
-          mode: 0,
-        },
-        rightPriceScale: {
-          borderColor: 'rgba(107, 114, 128, 0.4)',
-        },
-        timeScale: {
-          borderColor: 'rgba(107, 114, 128, 0.4)',
-        },
-      })
-      seriesRef.current = chartRef.current.addCandlestickSeries({
-        upColor: '#22c55e',
-        downColor: '#ef4444',
-        borderDownColor: '#ef4444',
-        borderUpColor: '#22c55e',
-        wickDownColor: '#ef4444',
-        wickUpColor: '#22c55e',
-      })
-    }
+    const init = async () => {
+      try {
+        const { createChart } = await import('lightweight-charts')
+        if (chartRef.current) {
+          chartRef.current.remove()
+          chartRef.current = null
+        }
 
-    if (seriesRef.current && candles?.length) {
-      const formatted = candles.map(c => ({
-        time: Math.floor(new Date(c.time).getTime() / 1000),
-        open: c.open,
-        high: c.high,
-        low: c.low,
-        close: c.close,
-      }))
-      seriesRef.current.setData(formatted)
-      chartRef.current.timeScale().fitContent()
-    }
-
-    const handleResize = () => {
-      if (containerRef.current && chartRef.current) {
-        chartRef.current.applyOptions({
-          width: containerRef.current.clientWidth,
+        const chart = createChart(ref.current, {
+          layout: { background: { color: '#111827' }, textColor: '#9ca3af' },
+          grid: {
+            vertLines: { color: 'rgba(55,65,81,0.3)' },
+            horzLines: { color: 'rgba(55,65,81,0.3)' },
+          },
+          width: ref.current.clientWidth,
+          height: 200,
+          rightPriceScale: { borderColor: 'rgba(75,85,99,0.4)' },
+          timeScale: { borderColor: 'rgba(75,85,99,0.4)', timeVisible: true },
         })
+
+        const series = chart.addCandlestickSeries({
+          upColor: '#22c55e', downColor: '#ef4444',
+          borderUpColor: '#22c55e', borderDownColor: '#ef4444',
+          wickUpColor: '#22c55e', wickDownColor: '#ef4444',
+        })
+
+        const formatted = candles
+          .map(c => ({
+            time: Math.floor(new Date(c.time).getTime() / 1000),
+            open: +c.open, high: +c.high, low: +c.low, close: +c.close,
+          }))
+          .filter(c => c.time && !isNaN(c.open))
+          .sort((a, b) => a.time - b.time)
+
+        // deduplicate by time
+        const seen = new Set()
+        const deduped = formatted.filter(c => {
+          if (seen.has(c.time)) return false
+          seen.add(c.time)
+          return true
+        })
+
+        series.setData(deduped)
+        chart.timeScale().fitContent()
+        chartRef.current = chart
+
+        const handleResize = () => {
+          if (ref.current && chartRef.current) {
+            chartRef.current.applyOptions({ width: ref.current.clientWidth })
+          }
+        }
+        window.addEventListener('resize', handleResize)
+        return () => window.removeEventListener('resize', handleResize)
+      } catch (e) {
+        console.error('Chart error:', e)
       }
     }
-    window.addEventListener('resize', handleResize)
 
+    init()
     return () => {
-      window.removeEventListener('resize', handleResize)
+      if (chartRef.current) { chartRef.current.remove(); chartRef.current = null }
     }
   }, [candles])
 
   if (!candles?.length) return null
 
   return (
-    <div className="mt-3">
-      <div className="flex items-center justify-between mb-1 text-xs text-gray-400">
-        <div className="flex items-center gap-1">
-          <BarChart2 size={14} className="text-blue-400" />
-          <span>الرسم البياني (آخر {candles.length} شمعة)</span>
-        </div>
+    <div className="mt-2 rounded-lg overflow-hidden border border-gray-700/60">
+      <div className="flex items-center gap-1.5 px-2 py-1.5 bg-gray-800/80 text-xs text-gray-400">
+        <BarChart2 size={12} className="text-blue-400" />
+        <span>{symbol} · {timeframe} · {candles.length} شمعة</span>
       </div>
-      <div ref={containerRef} className="w-full rounded-md border border-gray-700/70 overflow-hidden bg-gray-900/60" />
+      <div ref={ref} className="w-full bg-gray-900" />
     </div>
   )
 }
 
-function AnalysisCard({ analysis, symbol, timeframe }) {
-  if (!analysis) return null
+// ─── Analysis Card ────────────────────────────────────────────────────────────
+function AnalysisCard({ data, symbol, timeframe }) {
+  if (!data || data.error) return null
 
-  const rec = analysis.recommendation || analysis.signal_type || 'WATCH'
-  const confidence = analysis.ai_confidence_score || analysis.ai_confidence || 0
+  const rec = data.recommendation || 'WAIT'
+  const conf = data.ai_confidence_score || 0
+  const entry = data.entry_zones?.[0]
+  const sl = data.stop_loss_zone
+  const tps = data.take_profit_zones || []
+  const rr = data.risk_reward_ratio
+  const gemini = data.gemini_analysis
 
-  const getRecColor = () => {
-    if (rec === 'BUY') return 'text-green-400'
-    if (rec === 'SELL') return 'text-red-400'
-    return 'text-yellow-400'
+  const recStyles = {
+    BUY:  { icon: TrendingUp,   color: 'text-green-400', bg: 'bg-green-400/10 border-green-500/30', label: 'شراء' },
+    SELL: { icon: TrendingDown, color: 'text-red-400',   bg: 'bg-red-400/10 border-red-500/30',     label: 'بيع' },
+    WAIT: { icon: Minus,        color: 'text-yellow-400', bg: 'bg-yellow-400/10 border-yellow-500/30', label: 'انتظار' },
   }
+  const style = recStyles[rec] || recStyles.WAIT
+  const Icon = style.icon
 
-  const getRecLabel = () => {
-    if (rec === 'BUY') return 'شراء'
-    if (rec === 'SELL') return 'بيع'
-    return 'مراقبة'
-  }
+  const confColor = conf >= 70 ? 'text-green-400' : conf >= 50 ? 'text-yellow-400' : 'text-gray-400'
 
   return (
-    <div className="mt-3 rounded-lg border border-gray-700/70 bg-gray-900/60 p-3 text-xs space-y-2">
+    <div className={`mt-2 rounded-xl border p-3 text-xs space-y-2 ${style.bg}`}>
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
-          <Sparkles size={14} className="text-blue-400" />
-          <span className="font-semibold text-gray-100">تحليل ذكي</span>
+          <Icon size={14} className={style.color} />
+          <span className={`font-bold text-sm ${style.color}`}>{style.label}</span>
         </div>
-        <div className="flex items-center gap-2 text-[11px] text-gray-400">
-          {symbol && <span>{symbol}</span>}
+        <div className="flex items-center gap-2 text-gray-400">
+          {symbol && <span className="font-mono">{symbol}</span>}
           {timeframe && <span className="text-gray-500">({timeframe})</span>}
+          <span className={`font-semibold ${confColor}`}>{conf.toFixed(1)}%</span>
         </div>
       </div>
-      <div className="flex items-center justify-between text-[11px]">
-        <span className={`font-semibold ${getRecColor()}`}>{getRecLabel()}</span>
-        <span className="text-gray-400">
-          ثقة:{' '}
-          <span className="text-gray-100 font-medium">
-            {typeof confidence === 'number' ? confidence.toFixed(1) : confidence}%
-          </span>
-        </span>
-      </div>
-      {analysis.entry_zones && analysis.entry_zones.length > 0 && (
-        <div className="text-gray-300">
-          دخول: <span className="text-gray-100">{analysis.entry_zones[0]}</span>
+
+      {/* Price Levels */}
+      {(entry || sl || tps.length > 0) && (
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1 border-t border-gray-700/40 pt-2">
+          {entry && (
+            <div>
+              <span className="text-gray-500">دخول</span>
+              <span className="ml-1 font-mono text-gray-100">{+entry % 1 === 0 ? entry : (+entry).toFixed(5)}</span>
+            </div>
+          )}
+          {sl && (
+            <div>
+              <span className="text-gray-500">وقف</span>
+              <span className="ml-1 font-mono text-red-400">{+sl % 1 === 0 ? sl : (+sl).toFixed(5)}</span>
+            </div>
+          )}
+          {tps.slice(0, 3).map((tp, i) => tp ? (
+            <div key={i}>
+              <span className="text-gray-500">هدف {i + 1}</span>
+              <span className="ml-1 font-mono text-green-400">{+tp % 1 === 0 ? tp : (+tp).toFixed(5)}</span>
+            </div>
+          ) : null)}
+          {rr && (
+            <div className="col-span-2">
+              <span className="text-gray-500">R/R</span>
+              <span className="ml-1 font-mono text-blue-400">1:{(+rr).toFixed(1)}</span>
+            </div>
+          )}
         </div>
       )}
-      {analysis.stop_loss_zone && (
-        <div className="text-gray-300">
-          وقف الخسارة: <span className="text-red-400">{analysis.stop_loss_zone}</span>
-        </div>
-      )}
-      {analysis.take_profit_zones && analysis.take_profit_zones.length > 0 && (
-        <div className="text-gray-300">
-          الأهداف:{' '}
-          <span className="text-green-400">
-            {analysis.take_profit_zones.slice(0, 3).join(' / ')}
-          </span>
-        </div>
-      )}
-      {analysis.risk_reward && (
-        <div className="text-gray-300">
-          R/R:{' '}
-          <span className="text-gray-100">
-            {analysis.risk_reward.toFixed ? analysis.risk_reward.toFixed(2) : analysis.risk_reward}x
-          </span>
+
+      {/* Gemini grade */}
+      {gemini?.signal_grade && gemini.signal_grade !== '?' && (
+        <div className="flex items-center gap-1.5 border-t border-gray-700/40 pt-1.5">
+          <Sparkles size={11} className="text-purple-400" />
+          <span className="text-gray-400">جودة الإشارة:</span>
+          <span className="font-bold text-purple-300">{gemini.signal_grade}</span>
+          {gemini.ict_setup && <span className="text-gray-500 ml-1">{gemini.ict_setup}</span>}
         </div>
       )}
     </div>
   )
 }
 
+// ─── Message Bubble ───────────────────────────────────────────────────────────
+function MessageBubble({ msg }) {
+  const isUser = msg.role === 'user'
+
+  if (isUser) {
+    return (
+      <div className="flex justify-end">
+        <div className="max-w-[80%] rounded-2xl rounded-br-sm px-3 py-2 bg-blue-600 text-white text-sm whitespace-pre-wrap">
+          {msg.content}
+        </div>
+      </div>
+    )
+  }
+
+  const actionLabel = {
+    analyze: { icon: BarChart2, label: 'تحليل', color: 'text-blue-400' },
+    chart:   { icon: BarChart2, label: 'رسم بياني', color: 'text-cyan-400' },
+    report:  { icon: FileText,  label: 'تقرير', color: 'text-amber-400' },
+  }[msg.action]
+
+  return (
+    <div className="flex justify-start">
+      <div className="max-w-[90%] space-y-1">
+        {actionLabel && (
+          <div className={`flex items-center gap-1 text-[11px] ${actionLabel.color} mb-0.5`}>
+            <actionLabel.icon size={11} />
+            <span>{actionLabel.label}</span>
+          </div>
+        )}
+        <div className="rounded-2xl rounded-bl-sm px-3 py-2 bg-gray-800 text-gray-100 text-sm whitespace-pre-wrap leading-relaxed">
+          {msg.content}
+        </div>
+        {msg.analysisData && (
+          <AnalysisCard
+            data={msg.analysisData}
+            symbol={msg.symbol}
+            timeframe={msg.timeframe}
+          />
+        )}
+        {msg.candles?.length > 0 && (
+          <CandlesChart
+            candles={msg.candles}
+            symbol={msg.symbol}
+            timeframe={msg.timeframe}
+          />
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Quick Actions ────────────────────────────────────────────────────────────
+const QUICK_ACTIONS = [
+  { label: '📊 تحليل الذهب', msg: 'حلل الذهب XAUUSD ساعة' },
+  { label: '₿ بيتكوين', msg: 'تحليل BTCUSD 1h' },
+  { label: '💶 يورو', msg: 'تحليل EURUSD 1h' },
+  { label: '🕯️ شموع الذهب', msg: 'اعرض شموع الذهب XAUUSD' },
+]
+
+// ─── Main ChatBot ─────────────────────────────────────────────────────────────
 export default function ChatBot() {
-  const [isOpen, setIsOpen] = useState(false)
+  const [open, setOpen] = useState(false)
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState([])
   const [sessionId, setSessionId] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [lastCandles, setLastCandles] = useState(null)
-  const [lastAnalysis, setLastAnalysis] = useState(null)
-  const [lastMeta, setLastMeta] = useState({ symbol: null, timeframe: null })
+  const bottomRef = useRef(null)
 
-  const handleSend = async () => {
-    if (!input.trim() || loading) return
-    const text = input.trim()
+  const scrollToBottom = useCallback(() => {
+    setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
+  }, [])
+
+  useEffect(() => { scrollToBottom() }, [messages, scrollToBottom])
+
+  const sendMessage = useCallback(async (text) => {
+    if (!text.trim() || loading) return
     setInput('')
     setError('')
 
-    const userMessage = { role: 'user', content: text }
-    setMessages(prev => [...prev, userMessage])
+    const userMsg = { role: 'user', content: text }
+    setMessages(prev => [...prev, userMsg])
 
     try {
       setLoading(true)
@@ -185,206 +265,149 @@ export default function ChatBot() {
       const { session_id, response } = res.data
       if (session_id && !sessionId) setSessionId(session_id)
 
-      const action = response?.action || 'text'
-      const replyText = response?.message || 'تم استقبال الرد من الوكيل.'
-
-      const assistantMessage = {
+      const assistantMsg = {
         role: 'assistant',
-        content: replyText,
-        action,
-        raw: response,
+        content: response?.message || 'تم استقبال الرد.',
+        action: response?.action || 'text',
+        symbol: response?.symbol,
+        timeframe: response?.timeframe,
+        analysisData: response?.data || response?.analysis || null,
+        candles: response?.candles || response?.data?.candles || null,
       }
 
-      setMessages(prev => [...prev, assistantMessage])
-
-      const symbol = response?.symbol || lastMeta.symbol
-      const timeframe = response?.timeframe || lastMeta.timeframe
-
-      if (response?.data && action === 'analyze') {
-        setLastAnalysis(response.data)
-        setLastMeta({ symbol, timeframe })
-      } else if (response?.analysis) {
-        setLastAnalysis(response.analysis)
-        setLastMeta({ symbol, timeframe })
-      }
-
-      let candles = null
-      if (action === 'chart' && response?.data?.candles) {
-        candles = response.data.candles
-      } else if (response?.candles) {
-        candles = response.candles
-      }
-      if (candles && candles.length) {
-        setLastCandles(candles)
-        setLastMeta({ symbol, timeframe })
-      }
+      setMessages(prev => [...prev, assistantMsg])
     } catch (e) {
       console.error(e)
-      setError('فشل الاتصال بوكيل التداول. تأكد أن السيرفر يعمل وأن مفتاح Gemini مفعّل.')
-      setMessages(prev => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: 'حدث خطأ أثناء محاولة التحليل. حاول مرة أخرى لاحقاً.',
-          action: 'error',
-        },
-      ])
+      setError('فشل الاتصال. تأكد أن الخادم يعمل.')
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: '⚠️ حدث خطأ. حاول مرة أخرى.',
+        action: 'error',
+      }])
     } finally {
       setLoading(false)
     }
-  }
+  }, [loading, sessionId])
 
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleSend()
-    }
-  }
-
-  const handleClearSession = async () => {
+  const handleClear = async () => {
     setMessages([])
-    setLastCandles(null)
-    setLastAnalysis(null)
     setError('')
     if (sessionId) {
-      try {
-        await axios.delete(`${API}/api/v1/chat/session/${sessionId}`)
-      } catch {
-        // ignore
-      }
+      try { await axios.delete(`${API}/api/v1/chat/session/${sessionId}`) } catch {}
+      setSessionId('')
     }
   }
 
   return (
     <>
-      {/* Floating button */}
+      {/* Floating Button */}
       <button
-        onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 shadow-xl shadow-blue-500/30 text-sm font-medium"
+        onClick={() => setOpen(o => !o)}
+        className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white px-4 py-2.5 shadow-xl shadow-blue-500/30 text-sm font-medium transition-all"
       >
-        <MessageCircle size={18} />
-        <span>مُوش - وكيل التداول</span>
+        {open ? <X size={18} /> : <MessageCircle size={18} />}
+        <span>مُوش AI</span>
       </button>
 
       {/* Panel */}
-      {isOpen && (
-        <div className="fixed bottom-20 right-6 z-40 w-full max-w-md">
-          <div className="rounded-2xl border border-gray-700 bg-gray-900/95 backdrop-blur shadow-2xl flex flex-col h-[460px]">
+      {open && (
+        <div className="fixed bottom-20 right-6 z-50 w-full max-w-md">
+          <div className="rounded-2xl border border-gray-700/80 bg-gray-900/97 backdrop-blur-sm shadow-2xl flex flex-col h-[520px]">
+
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-bold">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold shadow-lg">
                   M
                 </div>
                 <div>
                   <div className="text-sm font-semibold text-white">مُوش - وكيل التداول الذكي</div>
-                  <div className="text-[11px] text-gray-400">
-                    اسأله عن التحليل، الفرص، الشموع أو اطلب تقرير تداول
-                  </div>
+                  <div className="text-[11px] text-gray-400">ICT · SMC · Wyckoff · Real-time</div>
                 </div>
               </div>
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={handleClearSession}
-                  className="p-1.5 rounded-full hover:bg-gray-800 text-gray-400 hover:text-red-400"
-                  title="مسح المحادثة"
-                >
+              <div className="flex items-center gap-1">
+                <button onClick={handleClear} className="p-1.5 rounded-full hover:bg-gray-800 text-gray-400 hover:text-red-400 transition-colors" title="مسح المحادثة">
                   <Trash2 size={14} />
                 </button>
-                <button
-                  onClick={() => setIsOpen(false)}
-                  className="p-1.5 rounded-full hover:bg-gray-800 text-gray-400 hover:text-gray-100"
-                >
+                <button onClick={() => setOpen(false)} className="p-1.5 rounded-full hover:bg-gray-800 text-gray-400 hover:text-gray-100 transition-colors">
                   <X size={16} />
                 </button>
               </div>
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2 text-sm scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-700/80">
+            <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-700">
+
+              {/* Empty state */}
               {messages.length === 0 && (
-                <div className="text-xs text-gray-400 bg-gray-800/60 border border-dashed border-gray-700 rounded-lg p-3">
-                  جرّب مثلاً:
-                  <ul className="mt-1 list-disc list-inside space-y-0.5">
-                    <li>حلل لي الذهب XAUUSD على فريم الساعة واعطني الفرص</li>
-                    <li>اعرض لي الشموع الأخيرة للبيتكوين مع تقرير مختصر</li>
-                    <li>اعمل لي تقرير تداول مفصل لـ EURUSD ليوم اليوم</li>
-                  </ul>
+                <div className="space-y-3">
+                  <p className="text-center text-xs text-gray-500 pt-2">
+                    خبير تداول بمدارس ICT/SMC/Wyckoff جاهز لمساعدتك
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {QUICK_ACTIONS.map((qa, i) => (
+                      <button
+                        key={i}
+                        onClick={() => sendMessage(qa.msg)}
+                        className="text-xs bg-gray-800/80 hover:bg-gray-700 border border-gray-700/60 rounded-xl px-3 py-2 text-gray-300 text-right transition-colors"
+                      >
+                        {qa.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
 
-              {messages.map((m, idx) => (
-                <div
-                  key={idx}
-                  className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                >
-                  <div
-                    className={`max-w-[80%] rounded-2xl px-3 py-2 ${
-                      m.role === 'user'
-                        ? 'bg-blue-600 text-white rounded-br-sm'
-                        : 'bg-gray-800 text-gray-100 rounded-bl-sm'
-                    } text-sm whitespace-pre-wrap`}
-                  >
-                    {m.content}
-
-                    {m.role === 'assistant' && (
-                      <>
-                        {m.action === 'report' && (
-                          <div className="mt-2 inline-flex items-center gap-1 text-[11px] text-amber-300">
-                            <FileText size={12} />
-                            <span>تقرير تداول</span>
-                          </div>
-                        )}
-                        {m.action === 'analyze' && (
-                          <div className="mt-2 inline-flex items-center gap-1 text-[11px] text-blue-300">
-                            <BarChart2 size={12} />
-                            <span>تحليل وفرص</span>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </div>
+              {messages.map((m, i) => (
+                <MessageBubble key={i} msg={m} />
               ))}
 
+              {loading && (
+                <div className="flex justify-start">
+                  <div className="bg-gray-800 rounded-2xl rounded-bl-sm px-4 py-3">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {error && (
-                <div className="text-[11px] text-red-400 bg-red-900/20 border border-red-700 rounded-md px-2 py-1">
+                <div className="text-xs text-red-400 bg-red-900/20 border border-red-700/50 rounded-lg px-3 py-2">
                   {error}
                 </div>
               )}
 
-              {lastAnalysis && (
-                <AnalysisCard
-                  analysis={lastAnalysis}
-                  symbol={lastMeta.symbol}
-                  timeframe={lastMeta.timeframe}
-                />
-              )}
-
-              {lastCandles && <CandlesChart candles={lastCandles} />}
+              <div ref={bottomRef} />
             </div>
 
             {/* Input */}
-            <div className="border-t border-gray-800 px-3 py-2">
+            <div className="border-t border-gray-800 px-3 py-2.5">
               <div className="flex items-end gap-2">
                 <textarea
                   rows={1}
                   value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  className="flex-1 resize-none bg-gray-800 text-gray-100 text-sm rounded-xl px-3 py-2 border border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 placeholder:text-gray-500"
-                  placeholder="اكتب سؤالك عن التحليل، الشموع أو التقارير..."
+                  onChange={e => setInput(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault()
+                      sendMessage(input)
+                    }
+                  }}
+                  placeholder="اكتب سؤالك... مثل: حلل الذهب ساعة"
+                  className="flex-1 resize-none bg-gray-800 text-gray-100 text-sm rounded-xl px-3 py-2 border border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-gray-500"
                 />
                 <button
-                  onClick={handleSend}
+                  onClick={() => sendMessage(input)}
                   disabled={loading || !input.trim()}
-                  className="h-9 w-9 flex items-center justify-center rounded-full bg-blue-600 hover:bg-blue-500 disabled:bg-blue-900 disabled:text-gray-500 text-white shadow-lg shadow-blue-500/30 transition-colors"
+                  className="h-9 w-9 flex items-center justify-center rounded-full bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white shadow-lg transition-colors"
                 >
-                  {loading ? (
-                    <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    <Send size={16} />
-                  )}
+                  {loading
+                    ? <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    : <Send size={15} />
+                  }
                 </button>
               </div>
             </div>
@@ -394,4 +417,3 @@ export default function ChatBot() {
     </>
   )
 }
-

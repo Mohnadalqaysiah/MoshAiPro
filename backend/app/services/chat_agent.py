@@ -1,145 +1,147 @@
 """
-Mosh AI Pro v5 - Trading Chat Agent
-وكيل محادثة ذكي متخصص في التداول والتحليل
+Mosh AI Pro v5 - Trading Chat Agent (Professional)
+====================================================
+وكيل محادثة احترافي يعمل مباشرة مع ICT Engine
+- لا أسئلة زائدة
+- ردود عربية طبيعية واضحة مع أرقام حقيقية
+- يفحص حالة السوق
+- يتذكر السياق في الجلسة
 """
 
 import json
 import aiohttp
 from loguru import logger
 from app.config import get_settings
-from app.services.rate_limiter import twelvedata_client
+from app.services.smart_data import smart_data
 
 settings = get_settings()
-
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
 
+# ─── System Prompt الاحترافي ─────────────────────────────────────────────────
+
 AGENT_SYSTEM_PROMPT = """
-أنت "مُوش" - مساعد تداول ذكي متخصص في تحليل الأسواق المالية، ومهمتك الأساسية
-هي تفسير نتائج محرك التحليل في منصة Mosh AI Pro وتقديمها للمستخدم بشكل واضح
-وعملي، بدون اختراع أرقام جديدة.
+أنت "مُوش" - مساعد تداول احترافي خبير بمدارس ICT/SMC/Wyckoff.
 
-هويتك:
-- خبير في مدارس ICT (Inner Circle Trader) و SMC (Smart Money Concepts)
-- متخصص في Wyckoff Method وتحليل السيولة
-- تتحدث العربية بطلاقة مع استخدام المصطلحات الإنجليزية التقنية
-- دقيق، منظم، وعملي في توصياتك وتفسيراتك
+قواعد الرد الصارمة:
+═══════════════════
+1. لا تسأل أسئلة إضافية أبداً - استخدم القيم الافتراضية (الإطار الافتراضي = 1h)
+2. إذا توفر تحليل في السياق → اشرحه مباشرة بأرقام حقيقية من البيانات
+3. لا تكتب placeholders مثل [أدخل السعر هنا] أو [من بيانات التحليل] - إما أرقام حقيقية أو لا تذكر الحقل
+4. ردودك بالعربية الواضحة، أسلوب خبير موجز ومباشر
+5. استخدم الرموز التعبيرية بحكمة لتوضيح النقاط (📈 للشراء، 📉 للبيع، ⚠️ للتحذير)
+6. لا ترسل JSON أبداً - فقط نص عربي طبيعي
 
-قدراتك:
-1. تحليل الأسواق (XAUUSD، BTCUSD، EURUSD، GBPUSD، USDJPY، USDCHF)
-2. شرح مفاهيم التداول (Order Blocks، FVG، BOS، Wyckoff، إلخ)
-3. إعطاء توصيات بناءً على التحليل القادم من المحرك الداخلي (لا تخترع قيماً)
-4. تفسير البيانات التقنية (الاتجاه، السيولة، مناطق الدخول والأهداف، R/R، إلخ)
-5. إنشاء تقارير تداول تفصيلية
+نموذج الرد لتحليل السوق:
+═══════════════════════════
+📊 **تحليل [الزوج] - [الإطار الزمني]**
 
-قواعد مهمة:
-- الأرقام (مناطق الدخول، الأهداف، وقف الخسارة، R/R، الثقة، الاتجاه ...) يجب أن
-  تأتي حصراً من بيانات التحليل التي تصلك في السياق (لا تقم بتقديرها من عندك).
-- لا تعطِ توصيات دخول إلا بعد وجود تحليل فعلي في البيانات.
-- دائماً نبّه على المخاطر، وأن التحليل تعليمي وليس نصيحة استثمارية مباشرة.
-- إذا طُلب تحليل زوج أو تقرير أو شموع → استخدم بيانات التحليل والشموع المتوفرة
-  في السياق قدر الإمكان.
+السعر الحالي: [رقم]
+التوصية: [شراء/بيع/انتظار] | الثقة: [رقم]%
 
-تنسيق الرد (مهم جداً):
-- يجب دائماً أن تعيد JSON يحتوي على الحقول التالية:
-  - "action": نوع الرد "text" | "analyze" | "chart" | "report"
-  - "message": نص عربي مفصل يشرح التحليل/الفرصة/التقرير للمستخدم
-  - يمكن إضافة حقول أخرى مساعدة، لكن لا تحذف "action" ولا "message".
+**الـ Setup:**
+- [اذكر Setup ICT الحالي مثل: OB Retest + FVG Fill]
 
-أمثلة:
-- إجابة تحليل (مع شرح واسع):
-  {
-    "action": "analyze",
-    "symbol": "XAUUSD",
-    "timeframe": "1h",
-    "message": "ملخص التحليل لـ XAUUSD على فريم الساعة: ... (نص عربي مفصل يفسّر
-    التوصية، الثقة، مناطق الدخول، وقف الخسارة، الأهداف، R/R، وسيولة السوق مع
-    تنبيه على المخاطر)"
-  }
+**مستويات التداول:**
+🎯 دخول: [رقم]
+🛑 وقف الخسارة: [رقم]
+✅ هدف 1: [رقم]
+✅ هدف 2: [رقم]
+📐 R/R: 1:[رقم]
 
-- إجابة رسم شموع:
-  {
-    "action": "chart",
-    "symbol": "BTCUSD",
-    "timeframe": "1h",
-    "message": "تم تجهيز رسم الشموع لـ BTCUSD على فريم الساعة. استخدم الرسم لقراءة
-    البريك أوف ستراكشر، مناطق الطلب/العرض، وتأكيد التحليل."
-  }
+**عوامل التأكيد:**
+• [عامل 1]
+• [عامل 2]
+• [عامل 3]
 
-- إجابة تقرير:
-  {
-    "action": "report",
-    "symbol": "EURUSD",
-    "message": "تقرير تداول تفصيلي لـ EURUSD: ... (ملخص السيناريوهات المحتملة،
-    مناطق التداول، السيناريو البديل، وإدارة المخاطر)"
-  }
+⚠️ [تحذير إن وجد]
 
-- إجابة نصية عامة:
-  {
-    "action": "text",
-    "message": "Order Block هو منطقة ..."
-  }
+لا تنس دائماً: هذا تحليل تعليمي، إدارة المخاطر مسؤوليتك.
+
+إذا السوق مغلق: وضّح ذلك واعطِ تحليلاً استرشادياً فقط.
+إذا لا توجد فرصة واضحة: قل ذلك بوضوح وشرح لماذا.
 """
 
 
-class ChatMessage:
-    def __init__(self, role: str, content: str):
-        self.role    = role     # "user" | "assistant"
-        self.content = content
-
-
 class TradingChatAgent:
-    """وكيل محادثة التداول"""
-
-    MARKETS = ["XAUUSD", "BTCUSD", "EURUSD", "GBPUSD", "USDJPY", "USDCHF"]
-    TIMEFRAMES = ["15min", "1h", "4h", "1day"]
+    MARKETS = ["XAUUSD", "BTCUSD", "EURUSD", "GBPUSD", "USDJPY", "USDCHF", "ETHUSD"]
 
     def __init__(self):
         self.api_key = getattr(settings, "GEMINI_API_KEY", "")
         self.enabled = bool(self.api_key and self.api_key not in ("", "your_gemini_api_key_here"))
-        # تاريخ المحادثة لكل جلسة
         self.sessions: dict[str, list] = {}
+        self.session_context: dict[str, dict] = {}  # يحفظ آخر رمز وإطار زمني
 
-    def _detect_intent(self, message: str) -> dict:
-        """كشف نية المستخدم من رسالته"""
-        msg_lower = message.lower()
+    # ─── Intent Detection ───────────────────────────────────────────────────
 
-        # كشف الأزواج
+    def _detect_intent(self, message: str, session_id: str) -> dict:
+        msg = message.lower()
+        ctx = self.session_context.get(session_id, {})
+
+        # كشف الرمز
         symbol = None
-        for m in self.MARKETS:
-            if m.lower() in msg_lower or m[:3].lower() in msg_lower:
-                symbol = m
+        aliases = {
+            "XAUUSD": ["ذهب", "gold", "xau", "xauusd"],
+            "BTCUSD": ["بيتكوين", "bitcoin", "btc", "btcusd"],
+            "EURUSD": ["يورو", "euro", "eur", "eurusd"],
+            "GBPUSD": ["جنيه", "pound", "gbp", "gbpusd"],
+            "USDJPY": ["ين", "yen", "jpy", "usdjpy"],
+            "USDCHF": ["فرنك", "franc", "chf", "usdchf"],
+            "ETHUSD": ["ايثريوم", "ethereum", "eth", "ethusd"],
+        }
+        for sym, words in aliases.items():
+            if any(w in msg for w in words):
+                symbol = sym
                 break
-        # اسماء شائعة
+
+        # استخدم الرمز من الجلسة إذا لم يُذكر
         if not symbol:
-            if any(w in msg_lower for w in ["ذهب", "gold", "xau"]):
-                symbol = "XAUUSD"
-            elif any(w in msg_lower for w in ["بيتكوين", "bitcoin", "btc"]):
-                symbol = "BTCUSD"
-            elif any(w in msg_lower for w in ["يورو", "euro", "eur"]):
-                symbol = "EURUSD"
-            elif any(w in msg_lower for w in ["جنيه", "pound", "gbp"]):
-                symbol = "GBPUSD"
+            symbol = ctx.get("symbol")
 
         # كشف الإطار الزمني
-        timeframe = "1h"
-        if any(w in msg_lower for w in ["15", "خمس عشر", "ربع ساعة"]):
-            timeframe = "15min"
-        elif any(w in msg_lower for w in ["4h", "4 ساعات", "أربع"]):
+        timeframe = None
+        if any(w in msg for w in ["15m", "15 دقيقة", "15دقيقة", "ربع ساعة", " 15"]):
+            timeframe = "15m"
+        elif any(w in msg for w in ["30m", "30 دقيقة", "نصف ساعة"]):
+            timeframe = "30m"
+        elif any(w in msg for w in ["4h", "4 ساعات", "أربع ساعات", "4ساعات"]):
             timeframe = "4h"
-        elif any(w in msg_lower for w in ["يومي", "daily", "1d"]):
-            timeframe = "1day"
+        elif any(w in msg for w in ["يومي", "daily", "1d", "1day"]):
+            timeframe = "1d"
+        elif any(w in msg for w in ["ساعة", "1h", " 1 "]) or msg.strip() in ["1", "1h"]:
+            timeframe = "1h"
 
-        # كشف النوع
-        is_analysis = any(w in msg_lower for w in [
-            "حلل", "تحليل", "analyze", "signal", "إشارة", "فرصة", "opportunity",
-            "شراء", "بيع", "buy", "sell", "دخول", "entry"
+        if not timeframe:
+            timeframe = ctx.get("timeframe", "1h")
+
+        # أرقام فقط = إطار زمني
+        if msg.strip() in ["15", "30"]:
+            timeframe = msg.strip() + "m"
+        elif msg.strip() in ["4"]:
+            timeframe = "4h"
+        elif msg.strip() in ["1"]:
+            timeframe = "1h"
+
+        is_analysis = any(w in msg for w in [
+            "حلل", "تحليل", "analyze", "signal", "إشارة", "فرصة",
+            "شراء", "بيع", "buy", "sell", "دخول", "entry", "توصية",
+            "نقاط دخول", "اهداف", "وقف", "stop"
         ])
-        is_chart = any(w in msg_lower for w in [
-            "شموع", "رسم", "chart", "رسم بياني", "شمعة", "candlestick"
+        is_chart = any(w in msg for w in [
+            "شموع", "رسم", "chart", "candlestick", "شمعة", "شارت"
         ])
-        is_report = any(w in msg_lower for w in [
+        is_report = any(w in msg for w in [
             "تقرير", "report", "ملخص", "summary"
         ])
+        is_greeting = any(w in msg for w in [
+            "مرحبا", "هلا", "اهلا", "hi", "hello", "hey", "السلام"
+        ])
+        is_explain = any(w in msg for w in [
+            "شرح", "explain", "ما هو", "what is", "كيف", "معنى"
+        ])
+
+        # إذا ذُكر رمز وحده = تحليل
+        if symbol and not is_analysis and not is_chart and not is_report:
+            is_analysis = True
 
         return {
             "symbol": symbol,
@@ -147,303 +149,386 @@ class TradingChatAgent:
             "is_analysis": is_analysis,
             "is_chart": is_chart,
             "is_report": is_report,
+            "is_greeting": is_greeting,
+            "is_explain": is_explain,
         }
 
-    async def _fetch_analysis(self, symbol: str, timeframe: str) -> dict:
-        """جلب التحليل من الـ API"""
-        try:
-            async with aiohttp.ClientSession() as session:
-                url = f"http://localhost:8000/api/v1/signals/analyze"
-                params = {"symbol": symbol, "timeframe": timeframe, "advanced_mode": "true"}
-                async with session.post(url, params=params, timeout=aiohttp.ClientTimeout(total=40)) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        return data.get("data", {})
-        except Exception as e:
-            logger.error(f"Chat fetch analysis error: {e}")
-        return {}
+    # ─── Data Fetching ───────────────────────────────────────────────────────
 
-    async def _fetch_candles(self, symbol: str, timeframe: str, limit: int = 50) -> list:
-        """جلب بيانات الشموع"""
+    async def _fetch_analysis(self, symbol: str, timeframe: str) -> dict:
+        """يستدعي المحرك مباشرة (أسرع من HTTP)"""
         try:
-            df = await twelvedata_client.get_ohlcv(symbol, timeframe, outputsize=limit)
+            from app.services.ai_engine_v5 import mosh_ai_engine_v5
+            result = await mosh_ai_engine_v5.analyze_market(symbol, timeframe)
+            return result
+        except Exception as e:
+            logger.error(f"Chat analysis error: {e}")
+            return {}
+
+    async def _fetch_candles(self, symbol: str, timeframe: str, limit: int = 60) -> list:
+        """جلب الشموع عبر smart_data"""
+        try:
+            df = await smart_data.get_ohlcv(symbol, timeframe, bars=limit)
             if df is None:
                 return []
             candles = []
             for _, row in df.tail(limit).iterrows():
+                dt = row.get("datetime", row.name)
+                try:
+                    ts = dt.isoformat() if hasattr(dt, "isoformat") else str(dt)
+                except:
+                    ts = str(dt)
                 candles.append({
-                    "time":  row["datetime"].isoformat(),
-                    "open":  float(row["open"]),
-                    "high":  float(row["high"]),
-                    "low":   float(row["low"]),
+                    "time": ts,
+                    "open": float(row["open"]),
+                    "high": float(row["high"]),
+                    "low": float(row["low"]),
                     "close": float(row["close"]),
                     "volume": float(row.get("volume", 0)),
                 })
             return candles
         except Exception as e:
-            logger.error(f"Chat fetch candles error: {e}")
+            logger.error(f"Chat candles error: {e}")
             return []
 
+    # ─── Context Builder ─────────────────────────────────────────────────────
+
     def _build_analysis_context(self, analysis: dict, symbol: str, timeframe: str) -> str:
-        """بناء سياق التحليل لإرساله لـ Gemini"""
-        rec  = analysis.get("recommendation", "WAIT")
-        conf = analysis.get("ai_confidence_score", 0)
-        trend = analysis.get("trend", {})
-        pd_zone = analysis.get("premium_discount", {})
-        wyckoff = analysis.get("wyckoff_analysis", {})
-        liquidity = analysis.get("liquidity_analysis", {})
-        entry = analysis.get("entry_zones", [])
-        sl    = analysis.get("stop_loss_zone")
-        tps   = analysis.get("take_profit_zones", [])
-        rr    = analysis.get("risk_reward_ratio") or analysis.get("risk_reward")
+        """يبني سياقاً غنياً بالأرقام الحقيقية لـ Gemini"""
+        if not analysis or analysis.get("error"):
+            return f"فشل جلب تحليل {symbol}"
 
-        return f"""
-نتائج التحليل التقني لـ {symbol} ({timeframe}):
-- التوصية: {rec}
-- نسبة الثقة: {conf:.1f}%
-- الاتجاه: {trend.get('direction','N/A')} بقوة {trend.get('strength',0)}%
-- منطقة Premium/Discount: {pd_zone.get('current_zone','N/A')}
-- مرحلة Wyckoff: {wyckoff.get('phase','N/A')}
-- السيولة: {liquidity.get('bias',{}).get('direction','N/A')}
-- مناطق الدخول: {entry}
-- وقف الخسارة: {sl}
-- الأهداف: {tps}
-- نسبة R/R: {rr}
-
-تحليل Gemini: {json.dumps(analysis.get('gemini_analysis',{}), ensure_ascii=False)}
-"""
-
-    def _build_analysis_summary(self, analysis: dict, symbol: str, timeframe: str) -> str:
-        """بناء نص عربي واضح من نتائج التحليل الداخلية بدون الاعتماد على Gemini"""
         rec = analysis.get("recommendation", "WAIT")
-        rec_map = {"BUY": "شراء", "SELL": "بيع", "WATCH": "مراقبة", "WAIT": "انتظار"}
-        rec_ar = rec_map.get(rec, rec)
-
         conf = analysis.get("ai_confidence_score", 0)
-        trend = analysis.get("trend", {})
-        pd_zone = analysis.get("premium_discount", {})
-        wyckoff = analysis.get("wyckoff_analysis", {})
-        liquidity = analysis.get("liquidity_analysis", {})
+        price = analysis.get("current_price", 0)
+        atr = analysis.get("atr", 0)
         entry = analysis.get("entry_zones", [])
-        sl = analysis.get("stop_loss_zone")
+        sl = analysis.get("stop_loss_zone", 0)
         tps = analysis.get("take_profit_zones", [])
-        rr = analysis.get("risk_reward_ratio") or analysis.get("risk_reward")
+        rr = analysis.get("risk_reward_ratio", 0)
 
-        lines = []
-        lines.append(f"ملخص تحليل {symbol} على فريم {timeframe}:")
-        lines.append(f"- التوصية الحالية: {rec_ar} ({rec}) بثقة تقريبية {conf:.1f}%.")
+        structure = analysis.get("market_structure", {})
+        ob = analysis.get("order_blocks", {})
+        fvg_d = analysis.get("fvg", {})
+        liq = analysis.get("liquidity", {})
+        pd_z = analysis.get("premium_discount", {})
+        kz = analysis.get("kill_zone", {})
+        wyckoff = analysis.get("wyckoff", {})
+        confluence = analysis.get("confluence", {})
+        indicators = analysis.get("indicators", {})
+        gemini_a = analysis.get("gemini_analysis", {})
+        market_open = analysis.get("market_open", True)
 
-        if trend:
-            direction = trend.get("direction", "غير محدد")
-            strength = trend.get("strength", 0)
-            lines.append(f"- اتجاه السوق: {direction} بقوة تقريبية {strength}%.")
+        lines = [
+            f"═══ تحليل {symbol} على {timeframe} ═══",
+            f"السعر الحالي: {price:.5f}",
+            f"التوصية: {rec} | الثقة: {conf:.1f}% | ATR: {atr:.5f}",
+            f"السوق: {'مفتوح ✅' if market_open else 'مغلق ⛔'}",
+            "",
+            f"هيكل السوق: {structure.get('trend','?')} ({structure.get('structure','?')})",
+            f"BOS: {structure.get('last_bos',{})}",
+            "",
+            f"Order Blocks صاعدة: {ob.get('bullish_obs',[])}",
+            f"في OB صاعد: {ob.get('in_bullish_ob',False)}",
+            f"Order Blocks هابطة: {ob.get('bearish_obs',[])}",
+            f"في OB هابط: {ob.get('in_bearish_ob',False)}",
+            "",
+            f"FVG صاعد: {fvg_d.get('bullish_fvgs',[])}",
+            f"FVG هابط: {fvg_d.get('bearish_fvgs',[])}",
+            "",
+            f"السيولة BSL: {liq.get('nearest_bsl','?')}",
+            f"السيولة SSL: {liq.get('nearest_ssl','?')}",
+            "",
+            f"منطقة Premium/Discount: {pd_z.get('zone','?')} ({pd_z.get('pct',0):.1f}%)",
+            f"OTE (61.8%): {pd_z.get('ote_level','?')}",
+            f"Equilibrium: {pd_z.get('equilibrium','?')}",
+            "",
+            f"Kill Zone: {kz.get('active_session','?')} | مثالي: {kz.get('is_optimal_time',False)}",
+            f"Wyckoff: {wyckoff.get('phase','?')} → {wyckoff.get('action','?')}",
+            "",
+            f"RSI: {indicators.get('rsi',0):.1f}",
+            f"MACD: {indicators.get('macd',0):.5f}",
+            f"EMA20: {indicators.get('ema_20',0):.5f}",
+            f"EMA50: {indicators.get('ema_50',0):.5f}",
+            "",
+            f"عوامل Confluence: {confluence.get('factors',[])}",
+            f"عدد العوامل: {confluence.get('factor_count',0)}",
+            "",
+            f"نقاط الدخول: {entry}",
+            f"وقف الخسارة: {sl}",
+            f"الأهداف: {tps}",
+            f"R/R: 1:{rr}",
+            "",
+        ]
 
-        if pd_zone:
-            cur_zone = pd_zone.get("current_zone", "غير معروف")
-            lines.append(f"- موقع السعر بالنسبة لـ Premium/Discount: {cur_zone}.")
-
-        if wyckoff:
-            phase = wyckoff.get("phase")
-            if phase:
-                lines.append(f"- مرحلة Wyckoff الحالية المتوقعة: {phase}.")
-
-        if liquidity:
-            bias = liquidity.get("bias", {}).get("direction")
-            if bias:
-                lines.append(f"- انحياز السيولة: {bias}.")
-
-        if entry:
-            lines.append(f"- مناطق الدخول المقترحة: {entry}.")
-
-        if sl:
-            lines.append(f"- منطقة وقف الخسارة المقترحة: {sl}.")
-
-        if tps:
-            lines.append(f"- مناطق جني الأرباح المحتملة: {tps}.")
-
-        if rr:
-            lines.append(f"- نسبة العائد إلى المخاطرة التقريبية (R/R): {rr}.")
-
-        lines.append("")
-        lines.append(
-            "⚠️ هذا التحليل آلي مبني على محرك المنصة، ويُستخدم لأغراض تعليمية "
-            "وتحليلية فقط وليس نصيحة استثمارية مباشرة. احرص دائماً على إدارة "
-            "مخاطرك والاعتماد على خطة تداولك الخاصة."
-        )
+        if gemini_a.get("enabled"):
+            lines += [
+                f"تحليل Gemini: {rec} ({gemini_a.get('confidence',0)}%)",
+                f"Grade: {gemini_a.get('signal_grade','?')}",
+                f"Setup: {gemini_a.get('ict_setup','')}",
+                f"السبب: {gemini_a.get('primary_reason','')}",
+                f"الملخص: {gemini_a.get('arabic_summary','')}",
+                f"التأكيدات: {gemini_a.get('confirmations',[])}",
+                f"التحذيرات: {gemini_a.get('warnings',[])}",
+            ]
 
         return "\n".join(lines)
 
-    async def _call_gemini(self, messages: list, system_extra: str = "") -> str:
-        """استدعاء Gemini API"""
-        if not self.enabled:
-            return json.dumps({
+    # ─── Fallback (no Gemini) ────────────────────────────────────────────────
+
+    def _build_direct_response(self, analysis: dict, symbol: str, timeframe: str, is_chart: bool = False) -> dict:
+        """بناء رد مباشر بدون Gemini - بأرقام حقيقية"""
+        if not analysis:
+            return {
                 "action": "text",
-                "message": "⚠️ Gemini غير مفعّل. أضف GEMINI_API_KEY في الإعدادات."
-            })
+                "message": f"⚠️ لم أتمكن من جلب تحليل {symbol}. تحقق من الاتصال بالإنترنت."
+            }
+
+        market_open = analysis.get("market_open", True)
+        rec = analysis.get("recommendation", "WAIT")
+        conf = analysis.get("ai_confidence_score", 0)
+        price = analysis.get("current_price", 0)
+        entry = analysis.get("entry_zones", [])
+        sl = analysis.get("stop_loss_zone", 0)
+        tps = analysis.get("take_profit_zones", [])
+        rr = analysis.get("risk_reward_ratio", 0)
+        confluence = analysis.get("confluence", {})
+        factors = confluence.get("factors", [])
+        structure = analysis.get("market_structure", {})
+        pd_z = analysis.get("premium_discount", {})
+        kz = analysis.get("kill_zone", {})
+        gemini_a = analysis.get("gemini_analysis", {})
+
+        rec_emoji = {"BUY": "📈", "SELL": "📉", "WAIT": "⏳", "WATCH": "👁️"}.get(rec, "⏳")
+        rec_ar = {"BUY": "شراء", "SELL": "بيع", "WAIT": "انتظار", "WATCH": "مراقبة"}.get(rec, rec)
+
+        closed_note = "\n⛔ **تنبيه: السوق حالياً مغلق** - هذا تحليل استرشادي فقط.\n" if not market_open else ""
+
+        lines = [
+            f"📊 **تحليل {symbol} على {timeframe}**",
+            closed_note,
+            f"💰 السعر الحالي: **{price:.5f}**",
+            f"{rec_emoji} التوصية: **{rec_ar}** | الثقة: **{conf:.1f}%**",
+            f"🏗️ هيكل السوق: {structure.get('trend','?')} ({structure.get('structure','?')})",
+            f"📍 منطقة: {pd_z.get('zone','?')} ({pd_z.get('pct',0):.1f}%)",
+            f"⏰ {kz.get('active_session','?')} | {'Kill Zone مثالي ✅' if kz.get('is_optimal_time') else 'خارج وقت مثالي'}",
+            "",
+        ]
+
+        if rec in ["BUY", "SELL"] and entry:
+            lines += [
+                "**مستويات التداول:**",
+                f"🎯 دخول: **{entry[0]:.5f}**",
+                f"🛑 وقف الخسارة: **{sl:.5f}**" if sl else "",
+                f"✅ هدف 1: **{tps[0]:.5f}**" if len(tps) > 0 else "",
+                f"✅ هدف 2: **{tps[1]:.5f}**" if len(tps) > 1 else "",
+                f"✅ هدف 3: **{tps[2]:.5f}**" if len(tps) > 2 else "",
+                f"📐 R/R: **1:{rr:.1f}**" if rr else "",
+                "",
+            ]
+
+        if factors:
+            lines.append("**عوامل التأكيد:**")
+            for f in factors[:4]:
+                lines.append(f"• {f}")
+            lines.append("")
+
+        if gemini_a.get("enabled") and gemini_a.get("arabic_summary"):
+            lines += [
+                "**🤖 تحليل مُوش AI:**",
+                gemini_a.get("arabic_summary", ""),
+                "",
+            ]
+
+        lines.append("⚠️ هذا تحليل تعليمي وليس نصيحة استثمارية. إدارة المخاطر مسؤوليتك.")
+
+        return {
+            "action": "chart" if is_chart else "analyze",
+            "message": "\n".join(l for l in lines if l is not None),
+            "symbol": symbol,
+            "timeframe": timeframe,
+        }
+
+    # ─── Gemini Call ─────────────────────────────────────────────────────────
+
+    async def _call_gemini(self, messages: list, system_extra: str = "") -> str:
+        if not self.enabled:
+            return ""
 
         history = []
-        for msg in messages[-10:]:   # آخر 10 رسائل فقط
+        for msg in messages[-12:]:
             history.append({
-                "role":  "user" if msg["role"] == "user" else "model",
+                "role": "user" if msg["role"] == "user" else "model",
                 "parts": [{"text": msg["content"]}]
             })
 
         system = AGENT_SYSTEM_PROMPT
         if system_extra:
-            system += f"\n\nمعلومات إضافية للرد:\n{system_extra}"
+            system += f"\n\n══════════════════\nبيانات التحليل الحالية (استخدمها للأرقام):\n{system_extra}"
 
         payload = {
             "system_instruction": {"parts": [{"text": system}]},
             "contents": history,
             "generationConfig": {
-                "temperature": 0.3,
-                "maxOutputTokens": 2048,
+                "temperature": 0.2,
+                "maxOutputTokens": 1500,
             }
         }
 
         try:
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession() as sess:
                 url = f"{GEMINI_URL}?key={self.api_key}"
-                async with session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                async with sess.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=30)) as resp:
                     if resp.status != 200:
                         body = await resp.text()
-                        logger.error(f"Gemini chat error {resp.status}: {body[:200]}")
-                        return json.dumps({"action": "text", "message": f"خطأ في Gemini: {resp.status}"})
+                        logger.error(f"Gemini chat {resp.status}: {body[:200]}")
+                        return ""
                     data = await resp.json()
                     return data["candidates"][0]["content"]["parts"][0]["text"]
         except Exception as e:
-            logger.error(f"Gemini chat request error: {e}")
-            return json.dumps({"action": "text", "message": f"تعذر الاتصال بـ Gemini: {str(e)}"})
+            logger.error(f"Gemini chat error: {e}")
+            return ""
+
+    # ─── Main Chat ───────────────────────────────────────────────────────────
 
     async def chat(self, session_id: str, user_message: str) -> dict:
         """
-        معالجة رسالة المستخدم وإرجاع الرد
+        معالجة رسالة وإرجاع الرد
 
-        Returns:
-            {
-                "action": "text|analyze|chart|report",
-                "message": "...",
-                "data": {...}   # التحليل أو الشموع إذا طُلبت
-            }
+        Returns: {
+            "action": "text|analyze|chart|report",
+            "message": "نص عربي طبيعي",
+            "symbol": "...",
+            "timeframe": "...",
+            "data": {...}  # التحليل أو الشموع
+        }
         """
-        # تهيئة الجلسة
         if session_id not in self.sessions:
             self.sessions[session_id] = []
+        if session_id not in self.session_context:
+            self.session_context[session_id] = {}
 
         history = self.sessions[session_id]
+        context = self.session_context[session_id]
         history.append({"role": "user", "content": user_message})
 
-        # كشف النية
-        intent = self._detect_intent(user_message)
-        extra_context = ""
-        prefetched_data = {}
+        intent = self._detect_intent(user_message, session_id)
 
-        # إذا طُلب تحليل → اجلب البيانات أولاً
-        if intent["is_analysis"] and intent["symbol"]:
-            symbol    = intent["symbol"]
-            timeframe = intent["timeframe"]
-            logger.info(f"🔍 Chat: جلب تحليل {symbol} {timeframe}")
+        # تحديث سياق الجلسة
+        if intent["symbol"]:
+            context["symbol"] = intent["symbol"]
+        if intent["timeframe"]:
+            context["timeframe"] = intent["timeframe"]
+        self.session_context[session_id] = context
+
+        symbol = intent["symbol"]
+        timeframe = intent["timeframe"]
+
+        # ── تحية ──────────────────────────────────────────────────────────────
+        if intent["is_greeting"] and not intent["is_analysis"] and not symbol:
+            msg = (
+                "👋 أهلاً! أنا مُوش، مساعدك في تداول ICT/SMC.\n\n"
+                "يمكنني:\n"
+                "📊 تحليل الأزواج مع نقاط الدخول والأهداف\n"
+                "🕯️ عرض شموع يابانية مباشرة\n"
+                "📋 إعداد تقارير تداول مفصلة\n"
+                "📚 شرح مفاهيم ICT/SMC/Wyckoff\n\n"
+                "مثال: *حلل لي الذهب XAUUSD على ساعة*"
+            )
+            reply = {"action": "text", "message": msg}
+            history.append({"role": "assistant", "content": msg})
+            return reply
+
+        # ── شرح مفهوم ────────────────────────────────────────────────────────
+        if intent["is_explain"] and not intent["is_analysis"]:
+            raw = await self._call_gemini(history)
+            msg = raw.strip() if raw else "يمكنك سؤالي عن Order Blocks, FVG, BOS, CHoCH, Wyckoff, Kill Zones."
+            reply = {"action": "text", "message": msg}
+            history.append({"role": "assistant", "content": msg})
+            return reply
+
+        # ── تحليل / شموع / تقرير ─────────────────────────────────────────────
+        needs_analysis = intent["is_analysis"] or intent["is_report"] or intent["is_chart"]
+
+        if not needs_analysis and not symbol:
+            # رسالة عامة بدون رمز محدد
+            raw = await self._call_gemini(history)
+            msg = raw.strip() if raw else "حدد الزوج الذي تريد تحليله (مثل: XAUUSD, BTCUSD, EURUSD)"
+            reply = {"action": "text", "message": msg}
+            history.append({"role": "assistant", "content": msg})
+            return reply
+
+        if not symbol:
+            symbol = "XAUUSD"  # افتراضي
+
+        # فحص السوق
+        market_open = smart_data.is_market_open(symbol)
+
+        # جلب التحليل
+        analysis = {}
+        candles = []
+
+        if needs_analysis or symbol:
+            logger.info(f"🔍 Chat: تحليل {symbol} {timeframe}")
             analysis = await self._fetch_analysis(symbol, timeframe)
-            if analysis:
-                extra_context = self._build_analysis_context(analysis, symbol, timeframe)
-                prefetched_data["analysis"] = analysis
-                prefetched_data["symbol"]   = symbol
-                prefetched_data["timeframe"] = timeframe
 
-        # إذا طُلب تقرير بدون أن يكون تحليل مُحضّر → اجلب التحليل أيضاً لدعم التقرير
-        if intent["is_report"] and intent["symbol"] and "analysis" not in prefetched_data:
-            symbol    = intent["symbol"]
-            timeframe = intent["timeframe"]
-            logger.info(f"📝 Chat: جلب تحليل للتقرير {symbol} {timeframe}")
-            analysis = await self._fetch_analysis(symbol, timeframe)
-            if analysis:
-                extra_context += "\n\nبيانات تحليل للتقرير:\n" + self._build_analysis_context(analysis, symbol, timeframe)
-                prefetched_data["analysis"] = analysis
-                prefetched_data["symbol"]   = symbol
-                prefetched_data["timeframe"] = timeframe
-
-        # إذا طُلبت شموع → اجلبها
-        if intent["is_chart"] and intent["symbol"]:
-            symbol    = intent["symbol"]
-            timeframe = intent["timeframe"]
+        if intent["is_chart"]:
+            logger.info(f"🕯️ Chat: شموع {symbol} {timeframe}")
             candles = await self._fetch_candles(symbol, timeframe, limit=60)
+
+        # ── رد مع Gemini ────────────────────────────────────────────────────
+        if self.enabled and analysis:
+            extra_ctx = self._build_analysis_context(analysis, symbol, timeframe)
             if candles:
-                prefetched_data["candles"]   = candles
-                prefetched_data["symbol"]    = symbol
-                prefetched_data["timeframe"] = timeframe
-                extra_context += f"\n\nبيانات الشموع متاحة للرسم ({len(candles)} شمعة)"
+                extra_ctx += f"\n\nبيانات الشموع متوفرة ({len(candles)} شمعة للعرض)"
 
-        # اطلب من Gemini
-        raw_response = await self._call_gemini(history, extra_context)
+            raw = await self._call_gemini(history, extra_ctx)
 
-        # حاول تحليل JSON من الرد
-        try:
-            # Gemini قد يضيف markdown
-            clean = raw_response.strip()
-            if "```json" in clean:
-                clean = clean.split("```json")[1].split("```")[0].strip()
-            elif "```" in clean:
-                clean = clean.split("```")[1].split("```")[0].strip()
+            if raw and raw.strip():
+                # إذا Gemini أعاد JSON بالغلط، نحوّله لنص
+                clean = raw.strip()
+                if clean.startswith("{") or "```json" in clean:
+                    try:
+                        if "```json" in clean:
+                            clean = clean.split("```json")[1].split("```")[0].strip()
+                        obj = json.loads(clean)
+                        msg = obj.get("message", clean)
+                    except:
+                        msg = clean
+                else:
+                    msg = clean
 
-            response_obj = json.loads(clean)
-        except Exception:
-            # رد نصي عادي
-            response_obj = {"action": "text", "message": raw_response}
+                action = "chart" if intent["is_chart"] else "report" if intent["is_report"] else "analyze"
+                reply = {
+                    "action": action,
+                    "message": msg,
+                    "symbol": symbol,
+                    "timeframe": timeframe,
+                }
+                if analysis:
+                    reply["data"] = analysis
+                if candles:
+                    reply["candles"] = candles
 
-        # أضف بيانات مسبقة الجلب
-        action = response_obj.get("action", "text")
+                history.append({"role": "assistant", "content": msg})
+                if len(history) > 20:
+                    self.sessions[session_id] = history[-20:]
+                return reply
 
-        if action == "analyze" and "analysis" in prefetched_data:
-            response_obj["data"] = prefetched_data["analysis"]
-            response_obj["symbol"] = prefetched_data.get("symbol")
-            response_obj["timeframe"] = prefetched_data.get("timeframe")
+        # ── رد مباشر بدون Gemini ─────────────────────────────────────────────
+        reply = self._build_direct_response(analysis, symbol, timeframe, intent["is_chart"])
 
-        elif action == "chart" and "candles" in prefetched_data:
-            response_obj["data"] = {"candles": prefetched_data["candles"]}
-            response_obj["symbol"] = prefetched_data.get("symbol")
-            response_obj["timeframe"] = prefetched_data.get("timeframe")
+        if analysis:
+            reply["data"] = analysis
+        if candles:
+            reply["candles"] = candles
+            reply["action"] = "chart"
 
-        elif "candles" in prefetched_data and action == "text":
-            # إضافة الشموع مع الرد النصي
-            response_obj["candles"] = prefetched_data["candles"]
-            response_obj["symbol"]  = prefetched_data.get("symbol")
-
-        elif "analysis" in prefetched_data and action == "text":
-            response_obj["analysis"] = prefetched_data["analysis"]
-            response_obj["symbol"]   = prefetched_data.get("symbol")
-
-        # في حال لم يُرسل Gemini رسالة نصية، نبني رسالة غنية من بيانات التحليل الداخلية
-        if not response_obj.get("message"):
-            symbol = response_obj.get("symbol") or prefetched_data.get("symbol") or intent.get("symbol") or ""
-            timeframe = response_obj.get("timeframe") or prefetched_data.get("timeframe") or intent.get("timeframe") or ""
-
-            if action == "analyze" and "analysis" in prefetched_data:
-                response_obj["message"] = self._build_analysis_summary(
-                    prefetched_data["analysis"],
-                    symbol or "Instrument",
-                    timeframe or "1h",
-                )
-            elif action == "chart" and "candles" in prefetched_data:
-                response_obj["message"] = (
-                    f"تم تجهيز رسم الشموع لزوج {symbol or 'Instrument'} على فريم "
-                    f"{timeframe or '1h'}. استخدم الرسم لقراءة حركة السعر وتأكيد التحليل."
-                )
-            elif action == "report" and "analysis" in prefetched_data:
-                base = self._build_analysis_summary(
-                    prefetched_data["analysis"],
-                    symbol or "Instrument",
-                    timeframe or "1h",
-                )
-                response_obj["message"] = "تقرير تداول مبني على التحليل الداخلي:\n\n" + base
-
-        # احفظ رد الوكيل في التاريخ
-        history.append({"role": "assistant", "content": response_obj.get("message", raw_response)})
-
-        # حدّ التاريخ (آخر 20 رسالة)
+        history.append({"role": "assistant", "content": reply["message"]})
         if len(history) > 20:
             self.sessions[session_id] = history[-20:]
 
-        return response_obj
+        return reply
 
 
 # Singleton
