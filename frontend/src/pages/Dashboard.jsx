@@ -14,20 +14,12 @@ export default function Dashboard() {
   const [analyzing, setAnalyzing]   = useState(null)
   const [error, setError]           = useState(null)
   const [limitReached, setLimitReached] = useState(false)
-  const [tgLink, setTgLink]     = useState('')
-  const [tgCopied, setTgCopied] = useState(false)
+  const [tgLink, setTgLink]         = useState('')
+  const [tgCopied, setTgCopied]     = useState(false)
+  const [tgLoading, setTgLoading]   = useState(false)
 
   // جلب آخر الإشارات
   useEffect(() => { fetchSignals() }, [])
-
-  // جلب رابط Telegram عند تحميل المستخدم
-  useEffect(() => {
-    if (user && !user.telegram_linked) {
-      axios.get(`${API}/api/v1/auth/telegram-link`)
-        .then(r => setTgLink(r.data.link || ''))
-        .catch(() => {})
-    }
-  }, [user?.id])
 
   const fetchSignals = async () => {
     try {
@@ -60,9 +52,30 @@ export default function Dashboard() {
     }
   }
 
-  const copyTgLink = () => {
-    if (!tgLink) return
-    navigator.clipboard.writeText(tgLink)
+  const fetchTgLink = async () => {
+    if (tgLink) return tgLink
+    setTgLoading(true)
+    try {
+      const r = await axios.get(`${API}/api/v1/auth/telegram-link`)
+      const link = r.data.link || ''
+      setTgLink(link)
+      return link
+    } catch {
+      return ''
+    } finally {
+      setTgLoading(false)
+    }
+  }
+
+  const openTgLink = async () => {
+    const link = await fetchTgLink()
+    if (link) window.open(link, '_blank', 'noreferrer')
+  }
+
+  const copyTgLink = async () => {
+    const link = await fetchTgLink()
+    if (!link) return
+    navigator.clipboard.writeText(link)
     setTgCopied(true)
     setTimeout(() => setTgCopied(false), 2000)
   }
@@ -131,28 +144,22 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="flex items-center gap-3 mt-4 flex-wrap">
-            {tgLink ? (
-              <>
-                <a
-                  href={tgLink}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white px-5 py-2.5 rounded-lg font-semibold text-sm transition-all"
-                >
-                  <ExternalLink size={15} />
-                  ربط مع @ai_hybridbot
-                </a>
-                <button
-                  onClick={copyTgLink}
-                  className="flex items-center gap-1.5 text-indigo-400 hover:text-white border border-indigo-700 hover:border-indigo-400 px-3 py-2.5 rounded-lg text-sm transition-all"
-                >
-                  {tgCopied ? <CheckCircle size={14} className="text-green-400" /> : <Copy size={14} />}
-                  {tgCopied ? 'تم النسخ' : 'نسخ الرابط'}
-                </button>
-              </>
-            ) : (
-              <span className="text-indigo-400 text-sm animate-pulse">⏳ جاري تحميل الرابط...</span>
-            )}
+            <button
+              onClick={openTgLink}
+              disabled={tgLoading}
+              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 active:scale-95 disabled:opacity-60 text-white px-5 py-2.5 rounded-lg font-semibold text-sm transition-all"
+            >
+              {tgLoading ? <RefreshCw size={15} className="animate-spin" /> : <ExternalLink size={15} />}
+              {tgLoading ? 'جاري التحميل...' : 'ربط مع @ai_hybridbot'}
+            </button>
+            <button
+              onClick={copyTgLink}
+              disabled={tgLoading}
+              className="flex items-center gap-1.5 text-indigo-400 hover:text-white border border-indigo-700 hover:border-indigo-400 px-3 py-2.5 rounded-lg text-sm transition-all"
+            >
+              {tgCopied ? <CheckCircle size={14} className="text-green-400" /> : <Copy size={14} />}
+              {tgCopied ? 'تم النسخ' : 'نسخ الرابط'}
+            </button>
           </div>
         </div>
       )}
