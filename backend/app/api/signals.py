@@ -20,10 +20,11 @@ async def analyze_market(
     symbol: str,
     timeframe: str = "1h",
     advanced_mode: bool = True,
+    force_refresh: bool = False,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """تحليل السوق مع فحص الصلاحية"""
+    """تحليل السوق مع فحص الصلاحية وكاش ذكي"""
     status = check_subscription(user, db)
     if not status["allowed"]:
         raise HTTPException(status_code=403, detail=status["reason"])
@@ -35,19 +36,22 @@ async def analyze_market(
         )
 
     try:
+        # من الكاش؟ لا نخصم كريدت
         analysis = await mosh_ai_engine_v5.analyze_market(
             symbol=symbol,
             timeframe=timeframe,
-            advanced_mode=advanced_mode
+            advanced_mode=advanced_mode,
+            force_refresh=force_refresh
         )
 
-        # Deduct trial analysis credit
-        if user.plan == PlanType.TRIAL:
-            deduct_trial(user, db, kind="analysis")
-        else:
-            user.analyses_total += 1
-            user.analyses_used_today += 1
-            db.commit()
+        # نخصم كريدت فقط إذا كان تحليلاً جديداً (مش من الكاش)
+        if not analysis.get("from_cache", False):
+            if user.plan == PlanType.TRIAL:
+                deduct_trial(user, db, kind="analysis")
+            else:
+                user.analyses_total += 1
+                user.analyses_used_today += 1
+                db.commit()
 
         return {"success": True, "data": analysis}
 

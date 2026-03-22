@@ -61,7 +61,7 @@ async def bot_analyze(
             deduct_trial(user, db, kind="analysis")
 
     try:
-        analysis = await mosh_ai_engine_v5.analyze_market(symbol=symbol, timeframe=timeframe)
+        analysis = await mosh_ai_engine_v5.analyze_market(symbol=symbol, timeframe=timeframe, force_refresh=False)
         return {"success": True, "data": analysis}
     except Exception as e:
         logger.error(f"Bot analyze error: {e}")

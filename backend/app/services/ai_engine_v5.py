@@ -7,6 +7,7 @@ Mosh AI Pro v5 - Master AI Engine (Professional Edition)
 - Gemini AI (التحليل النهائي بخبرة 15 سنة)
 """
 
+import time
 from datetime import datetime
 from typing import Dict, Optional
 from loguru import logger
@@ -17,6 +18,14 @@ from app.services.gemini_engine import gemini_engine
 from app.config import get_settings
 
 settings = get_settings()
+
+# مدة الكاش بالثواني حسب الإطار الزمني
+_SIGNAL_CACHE_TTL = {
+    "15m":  10 * 60,   # 10 دقائق
+    "1h":   30 * 60,   # 30 دقيقة
+    "4h":  120 * 60,   # ساعتان
+    "1d":  360 * 60,   # 6 ساعات
+}
 
 
 class MoshAIEngineV5:
@@ -34,14 +43,45 @@ class MoshAIEngineV5:
 
     def __init__(self):
         self.version = "5.1.0"
+        # Signal cache: key → (analysis_dict, timestamp)
+        self._signal_cache: Dict[str, tuple] = {}
         logger.info(f"🚀 Mosh AI Engine v{self.version} initialized")
         logger.info(f"   └─ Gemini: {'✅' if gemini_engine.enabled else '❌'}")
+
+    def _cache_key(self, symbol: str, timeframe: str) -> str:
+        return f"{symbol.upper()}_{timeframe.lower()}"
+
+    def _get_cached(self, symbol: str, timeframe: str) -> Optional[Dict]:
+        key = self._cache_key(symbol, timeframe)
+        if key not in self._signal_cache:
+            return None
+        data, ts = self._signal_cache[key]
+        ttl = _SIGNAL_CACHE_TTL.get(timeframe, 1800)
+        age = int(time.time() - ts)
+        if age < ttl:
+            logger.info(f"📦 Signal cache hit: {symbol}/{timeframe} (عمره: {age}ث)")
+            return dict(data)  # نسخة لتجنب التعديل المشترك
+        del self._signal_cache[key]
+        return None
+
+    def _set_cached(self, symbol: str, timeframe: str, analysis: Dict):
+        key = self._cache_key(symbol, timeframe)
+        self._signal_cache[key] = (dict(analysis), time.time())
+
+    def clear_cache(self, symbol: str = None, timeframe: str = None):
+        """مسح الكاش — كامل أو لزوج محدد"""
+        if symbol and timeframe:
+            self._signal_cache.pop(self._cache_key(symbol, timeframe), None)
+        else:
+            self._signal_cache.clear()
+        logger.info(f"🗑️ Signal cache cleared: {symbol or 'ALL'}")
 
     async def analyze_market(
         self,
         symbol: str,
         timeframe: str = "1h",
-        advanced_mode: bool = True
+        advanced_mode: bool = True,
+        force_refresh: bool = False
     ) -> Dict:
         """
         التحليل الشامل للسوق
@@ -49,10 +89,18 @@ class MoshAIEngineV5:
         Args:
             symbol: رمز السوق (XAUUSD, BTCUSD, EURUSD...)
             timeframe: الإطار الزمني (15m, 1h, 4h, 1d)
+            force_refresh: تجاهل الكاش وإعادة التحليل
 
         Returns:
             Dict كامل بكل التحليل والتوصيات
         """
+        # ── الكاش: إذا توجد نتيجة حديثة → أرجعها مباشرة ──────────────────
+        if not force_refresh:
+            cached = self._get_cached(symbol, timeframe)
+            if cached is not None:
+                cached["from_cache"] = True
+                return cached
+
         logger.info(f"📊 Starting analysis: {symbol} / {timeframe}")
         start = datetime.now()
 
@@ -116,6 +164,13 @@ class MoshAIEngineV5:
             rec = analysis.get("recommendation", "WAIT")
             conf = analysis.get("ai_confidence_score", 0)
             logger.success(f"✅ {symbol}/{timeframe}: {rec} | {conf}% | {int(ms)}ms")
+
+            # ── حفظ في الكاش ─────────────────────────────────────────────
+            analysis["from_cache"] = False
+            analysis["cached_at"] = datetime.now().isoformat()
+            ttl = _SIGNAL_CACHE_TTL.get(timeframe, 1800)
+            analysis["cache_ttl_seconds"] = ttl
+            self._set_cached(symbol, timeframe, analysis)
 
             return analysis
 

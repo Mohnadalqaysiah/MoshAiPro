@@ -38,12 +38,14 @@ export default function Dashboard() {
     }
   }
 
-  const analyzeMarket = async (symbol) => {
+  const analyzeMarket = async (symbol, forceRefresh = false) => {
     setAnalyzing(symbol)
     setError(null)
     setLimitReached(false)
     try {
-      const res = await axios.post(`${API}/api/v1/signals/analyze?symbol=${symbol}&timeframe=1h&advanced_mode=true`)
+      const res = await axios.post(
+        `${API}/api/v1/signals/analyze?symbol=${symbol}&timeframe=1h&advanced_mode=true&force_refresh=${forceRefresh}`
+      )
       const data = res.data.data
       setSignals(prev => [{ ...data, market: symbol, id: Date.now() }, ...prev.slice(0, 9)])
     } catch (e) {
@@ -157,15 +159,19 @@ export default function Dashboard() {
 
       {/* Quick Analyze */}
       <div className="bg-gray-800 border border-gray-700 rounded-xl p-5">
-        <h2 className="text-white font-semibold mb-4 flex items-center gap-2">
-          <Zap size={18} className="text-blue-400" />
-          تحليل سريع
-        </h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-white font-semibold flex items-center gap-2">
+            <Zap size={18} className="text-blue-400" />
+            تحليل سريع
+          </h2>
+          <span className="text-xs text-gray-500">النتائج مُخزَّنة مؤقتاً · اضغط مطوّلاً للتحديث الإجباري</span>
+        </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {MARKETS.map(market => (
             <button
               key={market}
-              onClick={() => analyzeMarket(market)}
+              onClick={() => analyzeMarket(market, false)}
+              onContextMenu={(e) => { e.preventDefault(); analyzeMarket(market, true) }}
               disabled={analyzing === market}
               className="py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
             >
@@ -213,6 +219,9 @@ export default function Dashboard() {
                     <div className="flex items-center gap-3">
                       <span className="text-white font-bold">{market}</span>
                       <span className={`font-semibold ${getSignalColor(rec)}`}>{getSignalAr(rec)}</span>
+                      {sig.from_cache && (
+                        <span className="text-xs text-gray-500 bg-gray-700 px-2 py-0.5 rounded">محفوظ</span>
+                      )}
                     </div>
                     <div className="flex items-center gap-3 text-sm">
                       <span className="text-gray-400">ثقة: <span className="text-white font-medium">{confidence.toFixed ? confidence.toFixed(1) : confidence}%</span></span>
