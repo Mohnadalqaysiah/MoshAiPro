@@ -1,8 +1,7 @@
 """
-Mosh AI Pro v5 - Gemini AI Engine (Professional Edition)
-=========================================================
-خبير تداول محترف بخبرة 10+ سنوات في ICT/SMC/Wyckoff
-يتلقى البيانات الحقيقية ويعطي تحليلاً دقيقاً
+Mosh AI Pro v5 - Gemini AI Engine (Professional Edition v2)
+============================================================
+Quantitative Market Analyst — ICT/SMC + Wyckoff + Multi-Timeframe
 """
 
 import json
@@ -16,194 +15,422 @@ settings = get_settings()
 GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
 
 EXPERT_SYSTEM_PROMPT = """
-أنت خبير تداول محترف بخبرة 15 سنة في الأسواق المالية، متخصص في:
+أنت محلل أسواق مالية كمّي (Quantitative Market Analyst) بخبرة 15+ سنة.
+تخصصك: ICT/SMC + Wyckoff + Price Action المؤسسي.
 
 ═══════════════════════════════════════════════
-🏛️ ICT (Inner Circle Trader) - المستوى المتقدم
+⚠️ القواعد الحديدية (لا يمكن تجاوزها)
 ═══════════════════════════════════════════════
-• Order Blocks: آخر شمعة هابطة/صاعدة قبل impulse قوي - أقوى مستوى دعم/مقاومة
-• Fair Value Gaps (FVG): الفجوات السعرية التي يعود السعر لملئها بنسبة 70%+
-• Liquidity Sweeps: اكتساح Equal Highs/Lows (SSL/BSL) قبل الانعكاس
-• Market Structure: BOS (كسر هيكلي) + CHoCH (تغيير الطابع = مبكر جداً)
-• Kill Zones: London Open (07-09 UTC) و NY Open (13:30-15:30 UTC) = أفضل التوقيتات
-• Power of 3: Accumulation → Manipulation (False Break) → Distribution
-• OTE: Optimal Trade Entry عند 61.8% Fibonacci من الحركة الأخيرة
+
+1. أنت لا تتوقع — أنت تقرأ ما تفعله المؤسسات من خلال البصمة السعرية
+2. لا توصية بدون 3 عوامل تقاطع كحد أدنى
+3. لا توصية عكس HTF Trend (4H/Daily)
+4. لا توصية خلال 30 دقيقة قبل/بعد حدث اقتصادي عالي التأثير
+5. لا توصية إذا كان ATR أقل من المعدل بـ 40%+ (سوق ميت)
+6. لا توصية إذا كان Spread > 30% من ATR
+7. Risk:Reward لا يقل عن 1:2 (مفضل 1:3+)
+8. وقف الخسارة = Swing Point + (ATR × 0.5) كحد أدنى
+9. لا تدخل أبداً في منتصف الحركة — انتظر Pullback
+10. إذا شككت → الإجابة هي WAIT دائماً
 
 ═══════════════════════════════════════════════
-📊 Wyckoff Method - فهم دورة السوق الكبرى
+🏛️ ICT Framework — قواعد التطبيق
 ═══════════════════════════════════════════════
-• Accumulation: المؤسسات تشتري بهدوء (حجم يرتفع مع السعر الثابت)
-• Markup: الارتفاع المتسارع (دخول الجمهور)
-• Distribution: المؤسسات تبيع (حجم عالٍ بدون تقدم سعري)
-• Markdown: الانهيار
+
+### Order Blocks (OB)
+- تعريف: آخر شمعة معاكسة قبل Impulse Move كبير
+- شروط الصلاحية:
+  • يجب أن يكون Impulse بعد OB ≥ 2× ATR
+  • OB لم يُعاد اختباره أكثر من مرة (Fresh OB أقوى)
+  • OB على HTF أقوى من LTF
+  • Breaker Block (OB مكسور) = مقاومة/دعم جديد
+- القوة: Strong (لم يُلمس) > Moderate (لُمس مرة) > Weak (لُمس مرتين+)
+
+### Fair Value Gaps (FVG)
+- تعريف: فجوة بين High شمعة 1 و Low شمعة 3
+- الملء: 70%+ من FVGs تُملأ جزئياً على الأقل
+- التصفية:
+  • FVG ≥ 0.5× ATR = significant
+  • FVG < 0.3× ATR = ضعيف (تجاهل)
+  • FVG + OB في نفس المنطقة = Confluence Zone (أقوى إشارة)
+
+### Liquidity Concepts
+- BSL (Buy-Side Liquidity): Equal Highs / Swing Highs = مغناطيس للسعر
+- SSL (Sell-Side Liquidity): Equal Lows / Swing Lows = مغناطيس للسعر
+- Sweep ≠ Break:
+  • Sweep = wick يتجاوز ثم يُغلق داخل → انعكاسي
+  • Break = body يغلق فوق/تحت → استمراري
+- Inducement: سيولة صغيرة داخل تصحيح → تُكتسح قبل الحركة الحقيقية
+
+### Market Structure
+- BOS (Break of Structure): كسر آخر HH/LL → تأكيد استمرار
+- CHoCH (Change of Character): أول كسر معاكس → إنذار مبكر
+- SMS (Shift in Market Structure): CHoCH + BOS في نفس الاتجاه الجديد → تأكيد انعكاس
+- القاعدة: لا تتاجر CHoCH وحده — انتظر BOS للتأكيد
+
+### Kill Zones (أوقات الذروة)
+- Asian Range: 00:00-08:00 UTC → تحديد نطاق التلاعب
+- London Open: 07:00-09:00 UTC → أعلى احتمالية لـ Manipulation
+- London Close: 15:00-16:00 UTC → مصيدة سيولة متكررة
+- NY Open: 13:00-15:30 UTC → أقوى حركة في اليوم
+- NY PM: 19:00-21:00 UTC → عادةً تصحيح أو تهدئة
+- ⚠️ خارج Kill Zones: لا تدخل إلا بتقاطع A+ واضح
+
+### Power of 3 (AMD)
+1. Accumulation: نطاق ضيق + حجم منخفض (غالباً Asian session)
+2. Manipulation: كسر كاذب لأحد طرفي النطاق (London Open غالباً)
+3. Distribution: الحركة الحقيقية في الاتجاه المعاكس (NY session غالباً)
+
+### Premium/Discount + OTE
+- Range = آخر Swing High - آخر Swing Low
+- Equilibrium = 50% من Range
+- Premium Zone = فوق 50% → منطقة بيع
+- Discount Zone = تحت 50% → منطقة شراء
+- OTE (Optimal Trade Entry) = 61.8%-78.6% Fibonacci retracement
+- القاعدة: لا تشتري في Premium ولا تبيع في Discount
 
 ═══════════════════════════════════════════════
-⚡ قواعد الدخول الصارمة (لا تخالفها أبداً)
+📊 Wyckoff — التطبيق المتقدم
 ═══════════════════════════════════════════════
-1. لا تدخل إلا في Kill Zone أو بالقرب منها
-2. لا تدخل إلا عند Order Block حقيقي أو FVG
-3. يجب وجود BOS في اتجاه الصفقة
-4. Premium = بيع / Discount = شراء
-5. نسبة المخاطرة للعائد: لا تقل عن 1:2 (تفضيل 1:3)
-6. وقف الخسارة دائماً خلف Swing Point + ATR
-7. لا تعاكس الترند على TF أعلى
+
+### تحديد المرحلة
+- Accumulation: نطاق ضيق + حجم يرتفع عند الدعم → Spring = شراء
+- Markup: ارتفاع مستمر + حجم يرتفع مع السعر → Back-up = شراء
+- Distribution: نطاق ضيق عالٍ + حجم يرتفع عند المقاومة → UTAD = بيع
+- Markdown: انخفاض مستمر + حجم يرتفع مع الهبوط → LPSY = بيع
+
+### Effort vs Result
+- حجم عالٍ + حركة كبيرة = طبيعي (استمرار)
+- حجم عالٍ + حركة صغيرة = امتصاص (انعكاس قريب)
+- حجم منخفض + حركة كبيرة = فراغ سيولة (حركة ضعيفة)
 
 ═══════════════════════════════════════════════
-📐 تقييم جودة الإشارة
+📐 نظام التقييم المرجّح (Weighted Scoring)
 ═══════════════════════════════════════════════
-A+ (85-100): 5+ عوامل متقاطعة + Kill Zone + OB + FVG + BOS
-A  (70-84):  4 عوامل + Kill Zone
-B  (55-69):  3 عوامل كحد أدنى
-C  (40-54):  2 عوامل - انتظر تأكيداً أكثر
-WAIT (<40):  لا تدخل - المشهد غير واضح
+
+| العامل                  | الوزن |
+|------------------------|-------|
+| HTF Trend Alignment    |  20   |
+| BOS في اتجاه الصفقة    |  18   |
+| Order Block (Fresh)    |  15   |
+| Premium/Discount Zone  |  12   |
+| FVG Confluence         |  10   |
+| Kill Zone Timing       |   8   |
+| Liquidity Sweep        |   7   |
+| Wyckoff Confirmation   |   5   |
+| RSI/Stoch Divergence   |   3   |
+| EMA Alignment          |   2   |
+| المجموع                | 100   |
+
+### التصنيف:
+- A+ (85-100): أقصى ثقة — دخول بـ 2% risk
+- A  (70-84):  ثقة عالية — دخول بـ 1.5% risk
+- B  (55-69):  مقبول — دخول بـ 1% risk
+- C  (40-54):  ضعيف — 0.5% risk أو انتظار
+- WAIT (<40): لا تدخل
+
+═══════════════════════════════════════════════
+💰 إدارة رأس المال (Position Sizing)
+═══════════════════════════════════════════════
+
+Position Size = (Account Balance × Risk%) / (Entry - SL)
+
+Risk% حسب التصنيف: A+ = 2% | A = 1.5% | B = 1% | C = 0.5%
+
+قواعد إضافية:
+- Max 3 صفقات مفتوحة متزامنة
+- Max 5% إجمالي المخاطرة المفتوحة
+- بعد 3 خسائر متتالية: توقف 24 ساعة
+
+═══════════════════════════════════════════════
+🚪 استراتيجية الخروج الديناميكية
+═══════════════════════════════════════════════
+
+- TP1 (40% من الحجم): أقرب سيولة أو FVG معاكس
+- TP2 (40% من الحجم): الهدف الرئيسي (Swing Point التالي)
+- TP3 (20% من الحجم): امتداد 1.618 Fibonacci أو OB معاكس على HTF
+- Trailing Stop: بعد TP1 → SL إلى Break Even | بعد TP2 → SL إلى TP1
 
 الإجابة دائماً بـ JSON محدد فقط، بدون أي نص إضافي.
 """
 
 
-def _build_professional_prompt(symbol: str, timeframe: str, ict_data: dict, df_tail: list) -> str:
-    """بناء Prompt احترافي مع بيانات حقيقية"""
+def _build_professional_prompt(
+    symbol: str,
+    timeframe: str,
+    ltf_data: dict,       # 1H analysis (ICT)
+    df_tail: list,        # آخر 20 شمعة 1H
+    htf_data: dict = None,  # 4H analysis (ICT)
+    account_balance: float = 10000.0,
+    max_risk_percent: float = 1.5,
+) -> str:
+    """بناء Prompt احترافي v2 مع HTF+LTF والبيانات الحقيقية"""
 
-    # مستخرج المعلومات المهمة فقط
-    confluence = ict_data.get("confluence", {})
-    structure = ict_data.get("market_structure", {})
-    ob = ict_data.get("order_blocks", {})
-    fvg_data = ict_data.get("fvg", {})
-    liq = ict_data.get("liquidity", {})
-    pd_zone = ict_data.get("premium_discount", {})
-    kz = ict_data.get("kill_zone", {})
-    wy = ict_data.get("wyckoff", {})
-    ind = ict_data.get("indicators", {})
+    # ── HTF (4H) ──────────────────────────────────────────────────────────
+    htf = htf_data or {}
+    htf_structure = htf.get("market_structure", {})
+    htf_ob = htf.get("order_blocks", {})
+    htf_fvg = htf.get("fvg", {})
+    htf_pd = htf.get("premium_discount", {})
 
-    summary = {
-        "رمز": symbol,
-        "إطار_زمني": timeframe,
-        "السعر_الحالي": ict_data.get("current_price"),
-        "ATR": ict_data.get("atr"),
+    htf_bullish_obs = htf_ob.get("bullish_obs", [])[:1]
+    htf_key_ob = htf_bullish_obs[0] if htf_bullish_obs else {}
 
-        "هيكل_السوق": {
-            "الترند": structure.get("trend"),
-            "النمط": structure.get("structure"),
-            "آخر_BOS": structure.get("last_bos"),
-            "CHoCH": structure.get("choch_events", []),
+    # ── LTF (1H) ──────────────────────────────────────────────────────────
+    confluence = ltf_data.get("confluence", {})
+    structure  = ltf_data.get("market_structure", {})
+    ob         = ltf_data.get("order_blocks", {})
+    fvg_data   = ltf_data.get("fvg", {})
+    liq        = ltf_data.get("liquidity", {})
+    pd_zone    = ltf_data.get("premium_discount", {})
+    kz         = ltf_data.get("kill_zone", {})
+    wy         = ltf_data.get("wyckoff", {})
+    ind        = ltf_data.get("indicators", {})
+
+    current_price = ltf_data.get("current_price", 0)
+    atr           = ltf_data.get("atr", 0)
+    atr_avg       = round(float(atr) * 1.15, 2) if atr else 0  # تقدير متوسط ATR
+
+    # ── Recent Liquidity Sweep ─────────────────────────────────────────────
+    equal_lows  = liq.get("equal_lows", [])
+    equal_highs = liq.get("equal_highs", [])
+    recent_sweep = {}
+    if equal_lows:
+        recent_sweep = {"type": "SSL", "level": equal_lows[0], "wick_only": True}
+    elif equal_highs:
+        recent_sweep = {"type": "BSL", "level": equal_highs[0], "wick_only": True}
+
+    # ── News filter placeholder ────────────────────────────────────────────
+    news_filter = ltf_data.get("news_filter", {
+        "high_impact_next_4h": False,
+        "event_name": None,
+        "market_sentiment": "neutral"
+    })
+
+    # ── Determine asset class ─────────────────────────────────────────────
+    crypto_symbols = {"BTCUSD", "ETHUSD", "BNBUSD"}
+    asset_class = "crypto" if symbol.upper() in crypto_symbols else (
+        "metals" if "XAU" in symbol.upper() or "XAG" in symbol.upper() else "forex"
+    )
+
+    input_schema = {
+        "meta": {
+            "symbol": symbol,
+            "asset_class": asset_class,
+            "timeframe_ltf": timeframe,
+            "timeframe_htf": "4h",
+            "account_balance": account_balance,
+            "max_risk_percent": max_risk_percent,
         },
 
-        "Order_Blocks": {
-            "صاعد": ob.get("bullish_obs", [])[:2],
-            "هابط": ob.get("bearish_obs", [])[:2],
-            "في_OB_صاعد": ob.get("in_bullish_ob"),
-            "في_OB_هابط": ob.get("in_bearish_ob"),
+        "multi_timeframe": {
+            "HTF_4h": {
+                "trend": htf_structure.get("trend", "UNKNOWN"),
+                "structure": htf_structure.get("structure", "UNKNOWN"),
+                "last_BOS_price": htf_structure.get("last_bos"),
+                "premium_discount": htf_pd.get("zone", "UNKNOWN"),
+                "key_OB": htf_key_ob,
+                "key_FVG": htf_fvg.get("bullish_fvgs", [{}])[:1][0] if htf_fvg.get("bullish_fvgs") else {},
+            },
+            "LTF_1h": {
+                "trend": structure.get("trend", "UNKNOWN"),
+                "structure": structure.get("structure", "UNKNOWN"),
+                "last_BOS_price": structure.get("last_bos"),
+                "CHoCH_detected": bool(structure.get("choch_events")),
+                "CHoCH_price": structure.get("choch_events", [None])[0] if structure.get("choch_events") else None,
+            },
         },
 
-        "FVG": {
-            "صاعد": fvg_data.get("bullish_fvgs", [])[:2],
-            "هابط": fvg_data.get("bearish_fvgs", [])[:2],
-            "في_FVG_صاعد": fvg_data.get("in_bullish_fvg"),
-            "في_FVG_هابط": fvg_data.get("in_bearish_fvg"),
+        "current_price": current_price,
+        "ATR_14": round(float(atr), 5) if atr else 0,
+        "ATR_14_avg_20": atr_avg,
+
+        "order_blocks": {
+            "bullish": ob.get("bullish_obs", [])[:2],
+            "bearish": ob.get("bearish_obs", [])[:2],
+            "price_in_bullish_OB": ob.get("in_bullish_ob", False),
+            "price_in_bearish_OB": ob.get("in_bearish_ob", False),
         },
 
-        "السيولة": {
-            "BSL_Equal_Highs": liq.get("equal_highs", [])[:2],
-            "SSL_Equal_Lows": liq.get("equal_lows", [])[:2],
-            "الانحياز": liq.get("bias"),
+        "fair_value_gaps": {
+            "bullish": fvg_data.get("bullish_fvgs", [])[:2],
+            "bearish": fvg_data.get("bearish_fvgs", [])[:2],
+            "price_in_bullish_FVG": fvg_data.get("in_bullish_fvg", False),
+            "price_in_bearish_FVG": fvg_data.get("in_bearish_fvg", False),
         },
 
-        "منطقة_Premium_Discount": {
-            "المنطقة": pd_zone.get("zone"),
-            "النسبة_المئوية": pd_zone.get("pct"),
-            "Equilibrium": pd_zone.get("equilibrium"),
-            "OTE_61.8": pd_zone.get("ote_level"),
+        "liquidity": {
+            "BSL": equal_highs[:3],
+            "SSL": equal_lows[:3],
+            "recent_sweep": recent_sweep,
+            "bias": liq.get("bias", "NEUTRAL"),
         },
 
-        "Kill_Zone": {
-            "الجلسة": kz.get("active_session"),
-            "وقت_مثالي": kz.get("is_optimal_time"),
-            "الوقت_الحالي": kz.get("current_time_utc"),
+        "premium_discount": {
+            "swing_high": pd_zone.get("swing_high"),
+            "swing_low": pd_zone.get("swing_low"),
+            "equilibrium": pd_zone.get("equilibrium"),
+            "current_zone": pd_zone.get("zone", "UNKNOWN"),
+            "zone_percent": pd_zone.get("pct"),
+            "OTE_618": pd_zone.get("ote_level"),
         },
 
-        "Wyckoff": {
-            "المرحلة": wy.get("phase"),
-            "الإجراء": wy.get("action"),
+        "session": {
+            "current_session": kz.get("active_session"),
+            "in_kill_zone": kz.get("is_optimal_time", False),
+            "time_utc": kz.get("current_time_utc"),
         },
 
-        "المؤشرات": {
-            "RSI": ind.get("rsi"),
-            "MACD": ind.get("macd"),
+        "wyckoff": {
+            "phase": wy.get("phase"),
+            "action": wy.get("action"),
+            "volume_confirmation": wy.get("confidence", 0) > 50,
+        },
+
+        "indicators": {
+            "RSI_14": ind.get("rsi"),
+            "MACD_histogram": ind.get("macd"),
             "EMA_20": ind.get("ema_20"),
             "EMA_50": ind.get("ema_50"),
+            "EMA_200": ind.get("ema_200"),
             "Stoch_K": ind.get("stoch_k"),
+            "Stoch_D": ind.get("stoch_d"),
+            "volume_ratio": ind.get("volume_ratio"),
         },
 
-        "التقاطع_التقني": {
-            "الاتجاه": confluence.get("direction"),
-            "الثقة": confluence.get("confidence"),
-            "عوامل_الصعود": confluence.get("factors", [])[:5] if confluence.get("direction") == "BUY" else [],
-            "عوامل_الهبوط": confluence.get("factors", [])[:5] if confluence.get("direction") == "SELL" else [],
-            "عدد_العوامل": confluence.get("factor_count"),
+        "confluence_score": {
+            "direction": confluence.get("direction"),
+            "confidence": confluence.get("confidence"),
+            "factor_count": confluence.get("factor_count"),
+            "factors": confluence.get("factors", [])[:6],
         },
 
-        "آخر_20_شمعة": df_tail,
+        "news_filter": news_filter,
+
+        "candles_ltf_last_20": df_tail,
     }
 
     return f"""
-البيانات التقنية الكاملة لـ {symbol} على {timeframe}:
+البيانات التقنية الكاملة لـ {symbol} | HTF: 4H | LTF: {timeframe}:
 
 ```json
-{json.dumps(summary, ensure_ascii=False, indent=2)}
+{json.dumps(input_schema, ensure_ascii=False, indent=2)}
 ```
 
-بناءً على خبرتك المهنية في ICT/SMC/Wyckoff وهذه البيانات:
+بناءً على خبرتك في ICT/SMC/Wyckoff وهذه البيانات الحقيقية، أجب بـ JSON التالي فقط (لا نص إضافي):
 
-أجب بـ JSON التالي فقط (لا نص إضافي):
 {{
-  "recommendation": "BUY|SELL|WAIT",
-  "confidence_score": <0-100>,
-  "signal_grade": "A+|A|B|C|WAIT",
-  "entry_price": <رقم>,
-  "stop_loss": <رقم>,
-  "take_profit_1": <رقم>,
-  "take_profit_2": <رقم>,
-  "take_profit_3": <رقم أو null>,
-  "risk_reward": <رقم>,
-  "primary_reason": "<جملة واحدة: السبب الرئيسي للإشارة>",
-  "ict_setup": "<اسم الـ Setup مثل: OB_Retest_FVG أو Liquidity_Sweep_BOS>",
-  "analysis": {{
-    "structure": "<تحليل هيكل السوق>",
-    "smart_money": "<ماذا تفعل Smart Money الآن؟>",
-    "entry_reasoning": "<لماذا هذا هو المستوى الصحيح للدخول>",
-    "invalidation": "<متى تُلغى الإشارة؟>",
-    "session_context": "<توقيت الدخول ومناسبته>"
+  "schema_version": "2.0",
+  "symbol": "{symbol}",
+
+  "signal": {{
+    "recommendation": "BUY|SELL|WAIT",
+    "confidence_score": <0-100>,
+    "signal_grade": "A+|A|B|C|WAIT",
+    "ict_setup": "<اسم الـ Setup مثل: OTE+OB+FVG أو Liquidity_Sweep_BOS>"
   }},
-  "confirmations": ["<عامل 1>", "<عامل 2>", "<عامل 3>"],
-  "warnings": ["<تحذير إن وجد>"],
-  "arabic_summary": "<ملخص احترافي في 2-3 جمل للمتداول العربي>"
+
+  "trade_plan": {{
+    "entry_price": <رقم>,
+    "stop_loss": <رقم>,
+    "sl_distance": <entry - sl>,
+    "sl_in_ATR": <sl_distance / ATR>,
+    "targets": {{
+      "tp1": {{"price": <رقم>, "rr": <رقم>, "size_percent": 40, "reason": "<سبب>"}},
+      "tp2": {{"price": <رقم>, "rr": <رقم>, "size_percent": 40, "reason": "<سبب>"}},
+      "tp3": {{"price": <رقم أو null>, "rr": <رقم أو null>, "size_percent": 20, "reason": "<سبب أو null>"}}
+    }},
+    "risk_reward_avg": <متوسط RR>,
+    "trailing_stop": "بعد TP1 → SL إلى Break Even | بعد TP2 → SL إلى TP1"
+  }},
+
+  "position_sizing": {{
+    "account_balance": <account_balance>,
+    "risk_percent": <حسب التصنيف: A+=2, A=1.5, B=1, C=0.5>,
+    "risk_amount": <balance * risk_percent / 100>,
+    "position_size": <risk_amount / sl_distance>,
+    "unit": "<BTC|lot|oz>"
+  }},
+
+  "scoring_breakdown": {{
+    "htf_alignment":    {{"score": <0-20>, "max": 20, "note": "<ملاحظة>"}},
+    "bos_direction":    {{"score": <0-18>, "max": 18, "note": "<ملاحظة>"}},
+    "order_block":      {{"score": <0-15>, "max": 15, "note": "<ملاحظة>"}},
+    "premium_discount": {{"score": <0-12>, "max": 12, "note": "<ملاحظة>"}},
+    "fvg_confluence":   {{"score": <0-10>, "max": 10, "note": "<ملاحظة>"}},
+    "kill_zone":        {{"score": <0-8>,  "max": 8,  "note": "<ملاحظة>"}},
+    "liquidity_sweep":  {{"score": <0-7>,  "max": 7,  "note": "<ملاحظة>"}},
+    "wyckoff":          {{"score": <0-5>,  "max": 5,  "note": "<ملاحظة>"}},
+    "rsi_stoch":        {{"score": <0-3>,  "max": 3,  "note": "<ملاحظة>"}},
+    "ema_alignment":    {{"score": <0-2>,  "max": 2,  "note": "<ملاحظة>"}},
+    "total": <مجموع الدرجات>,
+    "total_max": 100
+  }},
+
+  "analysis": {{
+    "structure": "<تحليل HTF+LTF معاً>",
+    "smart_money": "<ماذا تفعل المؤسسات الآن؟>",
+    "entry_logic": "<لماذا هذا المستوى بالضبط؟>",
+    "invalidation": "<متى تُلغى الإشارة؟>",
+    "session_context": "<توقيت + Kill Zone>",
+    "wyckoff_detail": "<المرحلة + Effort vs Result>",
+    "risk_note": "<ملاحظة على ATR أو Spread>"
+  }},
+
+  "confirmations": ["<✅ عامل 1>", "<✅ عامل 2>", "..."],
+  "warnings": ["<⚠️ تحذير إن وجد>"],
+
+  "filters_passed": {{
+    "htf_alignment": <true/false>,
+    "no_high_impact_news": <true/false>,
+    "atr_above_minimum": <true/false>,
+    "spread_acceptable": true,
+    "not_mid_move": <true/false>,
+    "min_rr_met": <true/false>
+  }},
+
+  "arabic_summary": "<ملخص احترافي في 2-3 جمل: الإشارة + المستويات + حجم الصفقة>"
 }}
 """
 
 
 class GeminiEngine:
-    """محرك Gemini المحترف للتحليل الذكي"""
+    """محرك Gemini المحترف للتحليل الذكي v2"""
 
     def __init__(self):
         self.api_key = getattr(settings, "GEMINI_API_KEY", "")
         self.enabled = bool(self.api_key and self.api_key not in ["", "your_gemini_api_key_here"])
         if self.enabled:
-            logger.success("✅ Gemini AI Engine مفعّل (Professional Mode)")
+            logger.success("✅ Gemini AI Engine v2 مفعّل (Quantitative Mode)")
         else:
             logger.warning("⚠️ Gemini AI Engine غير مفعّل")
 
-    async def analyze(self, symbol: str, timeframe: str, ict_data: dict, df: pd.DataFrame = None) -> dict:
-        """تحليل احترافي مع بيانات الشموع الحقيقية"""
+    async def analyze(
+        self,
+        symbol: str,
+        timeframe: str,
+        ltf_data: dict,
+        df: pd.DataFrame = None,
+        htf_data: dict = None,
+        account_balance: float = 10000.0,
+        max_risk_percent: float = 1.5,
+    ) -> dict:
+        """تحليل احترافي v2 مع HTF+LTF وإدارة رأس المال"""
         if not self.enabled:
             return {}
 
-        # آخر 20 شمعة للـ Prompt
+        # آخر 20 شمعة LTF للـ Prompt
         df_tail = []
         if df is not None and len(df) > 0:
             tail = df.tail(20)[["open", "high", "low", "close"]].round(5)
             df_tail = tail.to_dict("records")
 
-        prompt = _build_professional_prompt(symbol, timeframe, ict_data, df_tail)
+        prompt = _build_professional_prompt(
+            symbol, timeframe, ltf_data, df_tail,
+            htf_data=htf_data,
+            account_balance=account_balance,
+            max_risk_percent=max_risk_percent,
+        )
 
         payload = {
             "system_instruction": {
@@ -213,8 +440,8 @@ class GeminiEngine:
                 {"role": "user", "parts": [{"text": prompt}]}
             ],
             "generationConfig": {
-                "temperature": 0.15,      # منخفض = أكثر دقة وثباتاً
-                "maxOutputTokens": 1500,
+                "temperature": 0.10,       # أقل من v1 = أكثر دقة وثباتاً
+                "maxOutputTokens": 2000,
                 "responseMimeType": "application/json",
             }
         }
@@ -225,7 +452,7 @@ class GeminiEngine:
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     url, json=payload,
-                    timeout=aiohttp.ClientTimeout(total=30)
+                    timeout=aiohttp.ClientTimeout(total=40)
                 ) as resp:
 
                     if resp.status != 200:
@@ -244,10 +471,15 @@ class GeminiEngine:
                         text = text[4:].strip()
 
                     result = json.loads(text)
-                    grade = result.get("signal_grade", "?")
-                    rec = result.get("recommendation", "?")
-                    conf = result.get("confidence_score", 0)
-                    logger.success(f"🤖 Gemini: {symbol} → {rec} | Grade: {grade} | Confidence: {conf}%")
+                    sig = result.get("signal", {})
+                    grade = sig.get("signal_grade", "?")
+                    rec   = sig.get("recommendation", "?")
+                    conf  = sig.get("confidence_score", 0)
+                    total = result.get("scoring_breakdown", {}).get("total", 0)
+                    logger.success(
+                        f"🤖 Gemini v2: {symbol} → {rec} | Grade: {grade} | "
+                        f"Score: {total}/100 | Confidence: {conf}%"
+                    )
                     return result
 
         except json.JSONDecodeError as e:
@@ -259,53 +491,79 @@ class GeminiEngine:
 
     def merge_with_ict(self, ict_data: dict, gemini: dict) -> dict:
         """
-        دمج Gemini مع ICT Analysis
-        Gemini يأخذ 70% وزن (فهو يرى الصورة الكاملة)
+        دمج Gemini v2 مع ICT Analysis
+        Gemini v2 يأخذ 75% وزن (يرى HTF+LTF + Position Sizing)
         """
         if not gemini:
             return ict_data
 
-        gemini_conf = float(gemini.get("confidence_score", 0))
-        ict_conf = float(ict_data.get("ai_confidence_score", 0))
+        sig        = gemini.get("signal", {})
+        trade_plan = gemini.get("trade_plan", {})
+        targets    = trade_plan.get("targets", {})
+        scoring    = gemini.get("scoring_breakdown", {})
+        pos_size   = gemini.get("position_sizing", {})
+        analysis   = gemini.get("analysis", {})
+        filters    = gemini.get("filters_passed", {})
 
-        # متوسط مرجّح
-        final_conf = round(gemini_conf * 0.70 + ict_conf * 0.30, 1)
+        gemini_conf = float(sig.get("confidence_score", 0))
+        ict_conf    = float(ict_data.get("ai_confidence_score", 0))
+        final_conf  = round(gemini_conf * 0.75 + ict_conf * 0.25, 1)
 
         merged = {**ict_data}
         merged["ai_confidence_score"] = final_conf
 
-        # توصية Gemini تُقدَّم إذا كان واثقاً
-        if gemini_conf >= 50:
-            merged["recommendation"] = gemini.get("recommendation", ict_data.get("recommendation"))
+        # توصية Gemini تُقدَّم إذا اجتازت الفلاتر
+        all_filters_pass = all(filters.values()) if filters else True
+        if gemini_conf >= 40 and all_filters_pass:
+            merged["recommendation"] = sig.get("recommendation", ict_data.get("recommendation"))
+        elif not all_filters_pass:
+            merged["recommendation"] = "WAIT"
 
-        # مستويات Gemini (أدق من ICT لأنه يرى السياق)
-        if gemini.get("entry_price"):
-            merged["entry_zones"] = [gemini["entry_price"]]
-        if gemini.get("stop_loss"):
-            merged["stop_loss_zone"] = gemini["stop_loss"]
+        # مستويات الدخول والخروج من Gemini (أدق)
+        if trade_plan.get("entry_price"):
+            merged["entry_zones"] = [trade_plan["entry_price"]]
+        if trade_plan.get("stop_loss"):
+            merged["stop_loss_zone"] = trade_plan["stop_loss"]
 
-        tps = [v for v in [
-            gemini.get("take_profit_1"),
-            gemini.get("take_profit_2"),
-            gemini.get("take_profit_3")
-        ] if v]
+        tps = [
+            t.get("price") for t in [
+                targets.get("tp1", {}),
+                targets.get("tp2", {}),
+                targets.get("tp3", {}),
+            ] if t.get("price")
+        ]
         if tps:
             merged["take_profit_zones"] = tps
 
-        if gemini.get("risk_reward"):
-            merged["risk_reward_ratio"] = gemini["risk_reward"]
+        if trade_plan.get("risk_reward_avg"):
+            merged["risk_reward_ratio"] = trade_plan["risk_reward_avg"]
 
-        # تحليل Gemini المفصّل
+        # Position Sizing
+        merged["position_sizing"] = pos_size
+
+        # Scoring Breakdown
+        merged["scoring_breakdown"] = {
+            "total": scoring.get("total", 0),
+            "total_max": 100,
+            "details": {
+                k: v for k, v in scoring.items()
+                if k not in ("total", "total_max")
+            }
+        }
+
+        # تحليل Gemini الكامل
         merged["gemini_analysis"] = {
             "enabled": True,
+            "version": "2.0",
             "confidence": gemini_conf,
-            "signal_grade": gemini.get("signal_grade", "?"),
-            "ict_setup": gemini.get("ict_setup", ""),
-            "primary_reason": gemini.get("primary_reason", ""),
+            "signal_grade": sig.get("signal_grade", "?"),
+            "ict_setup": sig.get("ict_setup", ""),
             "arabic_summary": gemini.get("arabic_summary", ""),
             "confirmations": gemini.get("confirmations", []),
             "warnings": gemini.get("warnings", []),
-            "detailed_analysis": gemini.get("analysis", {}),
+            "filters_passed": filters,
+            "detailed_analysis": analysis,
+            "trade_plan": trade_plan,
         }
 
         return merged

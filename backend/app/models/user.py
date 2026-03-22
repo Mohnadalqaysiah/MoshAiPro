@@ -54,6 +54,10 @@ class User(Base):
     # Telegram link token (for bot linking)
     telegram_link_token   = Column(String, unique=True, nullable=True, index=True)
 
+    # Trading Preferences (Position Sizing)
+    account_balance       = Column(Float, default=10000.0)   # رأس المال الافتراضي
+    risk_percent          = Column(Float, default=1.5)        # نسبة المخاطرة الافتراضية
+
     # Preferences
     language              = Column(String, default="ar")
     notifications_enabled = Column(Boolean, default=True)

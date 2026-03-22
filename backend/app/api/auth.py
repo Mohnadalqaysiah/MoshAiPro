@@ -44,6 +44,10 @@ class BotVerifyIn(BaseModel):
     telegram_username: str = ""
     telegram_name: str = ""
 
+class TradingSettingsIn(BaseModel):
+    account_balance: float = 10000.0
+    risk_percent: float = 1.5
+
 
 # ─── Register ─────────────────────────────────────────────────────────────────
 
@@ -100,6 +104,30 @@ def get_profile(
     info = _user_info(user)
     info["subscription_status"] = status
     return info
+
+
+# ─── Trading Settings ─────────────────────────────────────────────────────────
+
+@router.put("/trading-settings")
+def update_trading_settings(
+    data: TradingSettingsIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """تحديث إعدادات التداول: رأس المال ونسبة المخاطرة"""
+    if data.account_balance < 100:
+        raise HTTPException(400, "رأس المال يجب أن يكون 100$ على الأقل")
+    if not (0.1 <= data.risk_percent <= 5.0):
+        raise HTTPException(400, "نسبة المخاطرة يجب أن تكون بين 0.1% و5%")
+
+    user.account_balance = data.account_balance
+    user.risk_percent    = data.risk_percent
+    db.commit()
+    return {
+        "success": True,
+        "account_balance": user.account_balance,
+        "risk_percent": user.risk_percent,
+    }
 
 
 # ─── Link Telegram ────────────────────────────────────────────────────────────
@@ -211,4 +239,6 @@ def _user_info(user: User) -> dict:
         "telegram_username":     user.telegram_username,
         "telegram_linked":       bool(user.telegram_id),
         "created_at":            user.created_at.isoformat() if user.created_at else None,
+        "account_balance":       float(user.account_balance or 10000.0),
+        "risk_percent":          float(user.risk_percent or 1.5),
     }

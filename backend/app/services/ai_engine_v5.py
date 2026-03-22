@@ -1,12 +1,13 @@
 """
-Mosh AI Pro v5 - Master AI Engine (Professional Edition)
-=========================================================
+Mosh AI Pro v5 - Master AI Engine (Professional Edition v2)
+===========================================================
 يجمع:
 - SmartDataProvider (yfinance + TwelveData)
 - ICT Engine (Order Blocks, FVG, BOS, Liquidity, Wyckoff)
-- Gemini AI (التحليل النهائي بخبرة 15 سنة)
+- Gemini AI v2 (Multi-Timeframe HTF+LTF + Position Sizing)
 """
 
+import asyncio
 import time
 from datetime import datetime
 from typing import Dict, Optional
@@ -30,23 +31,23 @@ _SIGNAL_CACHE_TTL = {
 
 class MoshAIEngineV5:
     """
-    المحرك الرئيسي الموحّد
+    المحرك الرئيسي الموحّد v2
 
     Pipeline:
-    1. جلب البيانات (yfinance → TwelveData fallback)
-    2. حساب المؤشرات التقنية
-    3. تحليل ICT الكامل (OB, FVG, BOS, Liquidity, PD, KZ, Wyckoff)
-    4. حساب Confluence Score
-    5. Gemini AI Enhancement
-    6. القرار النهائي
+    1. جلب البيانات: 4H (HTF) + 1H (LTF) بالتوازي
+    2. ICT Analysis على كلا الإطارين
+    3. Gemini AI v2: يرى HTF+LTF + يحسب Position Sizing
+    4. القرار النهائي مع Weighted Scoring
     """
 
     def __init__(self):
-        self.version = "5.1.0"
+        self.version = "5.2.0"
         # Signal cache: key → (analysis_dict, timestamp)
         self._signal_cache: Dict[str, tuple] = {}
         logger.info(f"🚀 Mosh AI Engine v{self.version} initialized")
-        logger.info(f"   └─ Gemini: {'✅' if gemini_engine.enabled else '❌'}")
+        logger.info(f"   └─ Gemini v2: {'✅' if gemini_engine.enabled else '❌'}")
+
+    # ─── Cache ──────────────────────────────────────────────────────────────
 
     def _cache_key(self, symbol: str, timeframe: str) -> str:
         return f"{symbol.upper()}_{timeframe.lower()}"
@@ -60,7 +61,7 @@ class MoshAIEngineV5:
         age = int(time.time() - ts)
         if age < ttl:
             logger.info(f"📦 Signal cache hit: {symbol}/{timeframe} (عمره: {age}ث)")
-            return dict(data)  # نسخة لتجنب التعديل المشترك
+            return dict(data)
         del self._signal_cache[key]
         return None
 
@@ -69,107 +70,129 @@ class MoshAIEngineV5:
         self._signal_cache[key] = (dict(analysis), time.time())
 
     def clear_cache(self, symbol: str = None, timeframe: str = None):
-        """مسح الكاش — كامل أو لزوج محدد"""
         if symbol and timeframe:
             self._signal_cache.pop(self._cache_key(symbol, timeframe), None)
         else:
             self._signal_cache.clear()
         logger.info(f"🗑️ Signal cache cleared: {symbol or 'ALL'}")
 
+    # ─── Main Analysis ──────────────────────────────────────────────────────
+
     async def analyze_market(
         self,
         symbol: str,
         timeframe: str = "1h",
         advanced_mode: bool = True,
-        force_refresh: bool = False
+        force_refresh: bool = False,
+        account_balance: float = 10000.0,
+        max_risk_percent: float = 1.5,
     ) -> Dict:
         """
-        التحليل الشامل للسوق
+        التحليل الشامل للسوق v2 — HTF+LTF + Position Sizing
 
         Args:
             symbol: رمز السوق (XAUUSD, BTCUSD, EURUSD...)
-            timeframe: الإطار الزمني (15m, 1h, 4h, 1d)
+            timeframe: الإطار الزمني LTF (1h, 4h...)
             force_refresh: تجاهل الكاش وإعادة التحليل
-
-        Returns:
-            Dict كامل بكل التحليل والتوصيات
+            account_balance: رأس مال الحساب لحساب حجم الصفقة
+            max_risk_percent: نسبة المخاطرة القصوى
         """
-        # ── الكاش: إذا توجد نتيجة حديثة → أرجعها مباشرة ──────────────────
+        # ── الكاش ────────────────────────────────────────────────────────────
         if not force_refresh:
             cached = self._get_cached(symbol, timeframe)
             if cached is not None:
                 cached["from_cache"] = True
                 return cached
 
-        logger.info(f"📊 Starting analysis: {symbol} / {timeframe}")
+        logger.info(f"📊 Starting analysis v2: {symbol} / {timeframe}")
         start = datetime.now()
 
         try:
-            # ── Step 1: جلب البيانات ──────────────────────────────────────────
-            df = await smart_data.get_ohlcv(symbol, timeframe, bars=150)
+            # ── Step 1: جلب LTF + HTF بالتوازي ─────────────────────────────
+            htf_timeframe = "4h" if timeframe in ("1h", "15m", "30m") else "1d"
 
-            if df is None or len(df) < 30:
-                logger.error(f"❌ No data for {symbol}")
+            df_ltf, df_htf = await asyncio.gather(
+                smart_data.get_ohlcv(symbol, timeframe, bars=150),
+                smart_data.get_ohlcv(symbol, htf_timeframe, bars=100),
+            )
+
+            if df_ltf is None or len(df_ltf) < 30:
+                logger.error(f"❌ No LTF data for {symbol}")
                 return self._error_response(symbol, "لا توجد بيانات كافية")
 
-            logger.info(f"   ✅ Data: {len(df)} bars, price={df['close'].iloc[-1]:.5f}")
+            logger.info(
+                f"   ✅ LTF ({timeframe}): {len(df_ltf)} bars, "
+                f"price={df_ltf['close'].iloc[-1]:.5f}"
+            )
+            if df_htf is not None:
+                logger.info(f"   ✅ HTF ({htf_timeframe}): {len(df_htf)} bars")
 
-            # ── Step 2: ICT Analysis الكامل ─────────────────────────────────
-            analysis = ict_engine.full_analysis(df, symbol, timeframe)
+            # ── Step 2: ICT Analysis على LTF + HTF ──────────────────────────
+            ltf_analysis = ict_engine.full_analysis(df_ltf, symbol, timeframe)
 
-            if "error" in analysis:
-                return self._error_response(symbol, analysis["error"])
+            htf_analysis = None
+            if df_htf is not None and len(df_htf) >= 30:
+                htf_analysis = ict_engine.full_analysis(df_htf, symbol, htf_timeframe)
 
-            # ── Step 3: Gemini Enhancement ───────────────────────────────────
+            if "error" in ltf_analysis:
+                return self._error_response(symbol, ltf_analysis["error"])
+
+            # ── Step 3: Gemini v2 Enhancement ───────────────────────────────
             if gemini_engine.enabled:
                 try:
                     gemini_result = await gemini_engine.analyze(
-                        symbol, timeframe, analysis, df
+                        symbol=symbol,
+                        timeframe=timeframe,
+                        ltf_data=ltf_analysis,
+                        df=df_ltf,
+                        htf_data=htf_analysis,
+                        account_balance=account_balance,
+                        max_risk_percent=max_risk_percent,
                     )
                     if gemini_result:
-                        analysis = gemini_engine.merge_with_ict(analysis, gemini_result)
+                        ltf_analysis = gemini_engine.merge_with_ict(ltf_analysis, gemini_result)
+                        sig = gemini_result.get("signal", {})
                         logger.success(
-                            f"   🤖 Gemini: {analysis['recommendation']} "
-                            f"({analysis['ai_confidence_score']}%)"
+                            f"   🤖 Gemini v2: {sig.get('recommendation')} | "
+                            f"Grade: {sig.get('signal_grade')} | "
+                            f"Score: {gemini_result.get('scoring_breakdown', {}).get('total', 0)}/100"
                         )
                 except Exception as e:
-                    logger.warning(f"   ⚠️ Gemini failed (using ICT only): {e}")
+                    logger.warning(f"   ⚠️ Gemini v2 failed (using ICT only): {e}")
 
             # ── Step 4: Final formatting ─────────────────────────────────────
             ms = (datetime.now() - start).total_seconds() * 1000
+            analysis = ltf_analysis
             analysis["processing_time_ms"] = int(ms)
             analysis["version"] = self.version
             analysis["market_open"] = smart_data.is_market_open(symbol)
+            analysis["htf_timeframe"] = htf_timeframe
 
-            # Map old fields for API compatibility
+            # HTF context للمنصة والبوت
+            if htf_analysis:
+                analysis["htf_context"] = {
+                    "timeframe": htf_timeframe,
+                    "trend": htf_analysis.get("market_structure", {}).get("trend", "UNKNOWN"),
+                    "structure": htf_analysis.get("market_structure", {}).get("structure", "UNKNOWN"),
+                    "premium_discount": htf_analysis.get("premium_discount", {}).get("zone", "UNKNOWN"),
+                    "wyckoff_phase": htf_analysis.get("wyckoff", {}).get("phase", "UNKNOWN"),
+                }
+
+            # توافق مع API القديم
             analysis["trend"] = {
                 "direction": analysis.get("market_structure", {}).get("trend", "RANGING"),
                 "strength": analysis.get("ai_confidence_score", 0),
-                "confirmations": {
-                    "structure": analysis.get("market_structure", {}).get("structure", "UNKNOWN"),
-                    "bos": analysis.get("market_structure", {}).get("trend", "RANGING"),
-                }
-            }
-            analysis["score_breakdown"] = {
-                "market_structure": analysis.get("market_structure", {}).get("confidence", 0),
-                "order_blocks": 25 if analysis.get("order_blocks", {}).get("in_bullish_ob") or
-                                      analysis.get("order_blocks", {}).get("in_bearish_ob") else 0,
-                "fvg": 15 if analysis.get("fvg", {}).get("in_bullish_fvg") or
-                            analysis.get("fvg", {}).get("in_bearish_fvg") else 0,
-                "premium_discount": analysis.get("premium_discount", {}).get("confidence", 0),
-                "kill_zone": analysis.get("kill_zone", {}).get("confidence", 0),
-                "wyckoff": analysis.get("wyckoff", {}).get("confidence", 0),
+                "htf_trend": analysis.get("htf_context", {}).get("trend", "UNKNOWN"),
             }
 
-            rec = analysis.get("recommendation", "WAIT")
+            rec  = analysis.get("recommendation", "WAIT")
             conf = analysis.get("ai_confidence_score", 0)
             logger.success(f"✅ {symbol}/{timeframe}: {rec} | {conf}% | {int(ms)}ms")
 
             # ── حفظ في الكاش ─────────────────────────────────────────────
             analysis["from_cache"] = False
             analysis["cached_at"] = datetime.now().isoformat()
-            ttl = _SIGNAL_CACHE_TTL.get(timeframe, 1800)
-            analysis["cache_ttl_seconds"] = ttl
+            analysis["cache_ttl_seconds"] = _SIGNAL_CACHE_TTL.get(timeframe, 1800)
             self._set_cached(symbol, timeframe, analysis)
 
             return analysis

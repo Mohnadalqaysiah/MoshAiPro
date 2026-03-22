@@ -41,7 +41,9 @@ async def analyze_market(
             symbol=symbol,
             timeframe=timeframe,
             advanced_mode=advanced_mode,
-            force_refresh=force_refresh
+            force_refresh=force_refresh,
+            account_balance=float(getattr(user, "account_balance", 10000.0) or 10000.0),
+            max_risk_percent=float(getattr(user, "risk_percent", 1.5) or 1.5),
         )
 
         # نخصم كريدت فقط إذا كان تحليلاً جديداً (مش من الكاش)
@@ -49,9 +51,10 @@ async def analyze_market(
             if user.plan == PlanType.TRIAL:
                 deduct_trial(user, db, kind="analysis")
             else:
-                user.analyses_total += 1
+                user.analyses_total     += 1
                 user.analyses_used_today += 1
                 db.commit()
+
 
         return {"success": True, "data": analysis}
 
