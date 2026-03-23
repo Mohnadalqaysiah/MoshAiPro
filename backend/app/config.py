@@ -78,8 +78,12 @@ class Settings(BaseSettings):
     TWELVEDATA_RATE_LIMIT: int = 8
     FINNHUB_RATE_LIMIT: int = 60
 
+    # ----- Email / SMTP -----
+    SMTP_PASSWORD: str = ""
+    SUPPORT_EMAIL: str = "support@qaffel.com"
+
     # ----- SaaS / Payments -----
-    TELEGRAM_BOT_USERNAME: str = "ai_hybridbot"
+    TELEGRAM_BOT_USERNAME: str = "Qaffelbot"
     BOT_SECRET: str = "mosh-bot-secret-change-me"
     USDT_WALLET_ADDRESS: str = "TVh8P92EEjr732frVRpxg1iE4GsfZpLM6E"
     USDT_NETWORK: str = "TRC20"

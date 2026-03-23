@@ -4,7 +4,8 @@ Register / Login / Profile / Link Telegram
 """
 from datetime import datetime, timedelta, timezone
 import secrets
-from fastapi import APIRouter, Depends, HTTPException
+import random
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from loguru import logger
@@ -55,6 +56,23 @@ class ChangePasswordIn(BaseModel):
 class UpdateProfileIn(BaseModel):
     full_name: str = ""
     phone_number: str = ""
+
+class ForgotPasswordIn(BaseModel):
+    email: str
+
+class ResetPasswordIn(BaseModel):
+    email: str
+    otp: str
+    new_password: str
+
+class ContactIn(BaseModel):
+    name: str
+    email: str
+    subject: str = ""
+    message: str
+
+# OTP store: email → {otp, expires_at}
+_otp_store: dict = {}
 
 
 # ─── Register ─────────────────────────────────────────────────────────────────
@@ -136,6 +154,82 @@ def update_trading_settings(
         "account_balance": user.account_balance,
         "risk_percent": user.risk_percent,
     }
+
+
+# ─── Forgot Password (OTP) ────────────────────────────────────────────────────
+
+@router.post("/forgot-password")
+def forgot_password(
+    data: ForgotPasswordIn,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """إرسال OTP لاستعادة كلمة المرور"""
+    from app.services.email_service import send_email, otp_email_body
+    email = data.email.lower().strip()
+    user  = db.query(User).filter(User.email == email).first()
+
+    # لا نكشف إن كان البريد مسجلاً أم لا
+    if user:
+        otp = str(random.randint(100000, 999999))
+        _otp_store[email] = {
+            "otp": otp,
+            "expires_at": datetime.now(timezone.utc) + timedelta(minutes=10)
+        }
+        smtp_pass = settings.SMTP_PASSWORD
+        background_tasks.add_task(
+            send_email, email,
+            "رمز استعادة كلمة المرور — Qafeel AI",
+            otp_email_body(otp), smtp_pass
+        )
+        logger.info(f"📧 OTP sent to {email}")
+
+    return {"success": True, "message": "إذا كان البريد مسجلاً ستصلك رسالة خلال دقائق"}
+
+
+@router.post("/reset-password")
+def reset_password(data: ResetPasswordIn, db: Session = Depends(get_db)):
+    """التحقق من OTP وتغيير كلمة المرور"""
+    email  = data.email.lower().strip()
+    stored = _otp_store.get(email)
+
+    if not stored:
+        raise HTTPException(400, "لم يُطلب رمز تحقق لهذا البريد")
+    if datetime.now(timezone.utc) > stored["expires_at"]:
+        _otp_store.pop(email, None)
+        raise HTTPException(400, "انتهت صلاحية الرمز. اطلب رمزاً جديداً")
+    if stored["otp"] != data.otp.strip():
+        raise HTTPException(400, "رمز التحقق غير صحيح")
+    if len(data.new_password) < 8:
+        raise HTTPException(400, "كلمة المرور يجب أن تكون 8 أحرف على الأقل")
+
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(404, "المستخدم غير موجود")
+
+    user.password_hash = hash_password(data.new_password)
+    db.commit()
+    _otp_store.pop(email, None)
+
+    logger.info(f"🔑 Password reset via OTP: {email}")
+    return {"success": True, "message": "تم تغيير كلمة المرور بنجاح"}
+
+
+# ─── Contact Form ──────────────────────────────────────────────────────────────
+
+@router.post("/contact")
+def send_contact(data: ContactIn, background_tasks: BackgroundTasks):
+    """استقبال رسائل صفحة التواصل وإرسالها للدعم"""
+    from app.services.email_service import send_email, contact_email_body
+    smtp_pass = settings.SMTP_PASSWORD
+    body = contact_email_body(data.name, data.email, data.subject, data.message)
+    background_tasks.add_task(
+        send_email,
+        settings.SUPPORT_EMAIL,
+        f"[تواصل] {data.subject or 'رسالة جديدة'} — {data.name}",
+        body, smtp_pass
+    )
+    return {"success": True, "message": "تم إرسال رسالتك بنجاح"}
 
 
 # ─── Change Password ──────────────────────────────────────────────────────────
