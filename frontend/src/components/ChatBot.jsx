@@ -303,7 +303,7 @@ export default function ChatBot() {
       {/* Floating Button */}
       <button
         onClick={() => setOpen(o => !o)}
-        className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white px-4 py-2.5 shadow-xl shadow-blue-500/30 text-sm font-medium transition-all"
+        className="fixed bottom-5 left-4 md:left-auto md:right-6 z-50 flex items-center gap-2 rounded-full bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white px-4 py-2.5 shadow-xl shadow-blue-500/30 text-sm font-medium transition-all"
       >
         {open ? <X size={18} /> : <MessageCircle size={18} />}
         <span>مُوش AI</span>
@@ -311,8 +311,8 @@ export default function ChatBot() {
 
       {/* Panel */}
       {open && (
-        <div className="fixed bottom-20 right-6 z-50 w-full max-w-md">
-          <div className="rounded-2xl border border-gray-700/80 bg-gray-900/97 backdrop-blur-sm shadow-2xl flex flex-col h-[520px]">
+        <div className="fixed inset-0 md:inset-auto md:bottom-20 md:right-6 z-40 md:w-full md:max-w-md">
+          <div className="rounded-none md:rounded-2xl border-0 md:border border-gray-700/80 bg-gray-900 backdrop-blur-sm shadow-2xl flex flex-col h-full md:h-[520px]">
 
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">

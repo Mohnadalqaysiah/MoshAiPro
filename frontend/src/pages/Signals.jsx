@@ -2,7 +2,7 @@ import { useState } from 'react'
 import axios from 'axios'
 import { Zap, RefreshCw, AlertCircle } from 'lucide-react'
 
-const API = 'http://localhost:8000'
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const MARKETS = ['XAUUSD', 'BTCUSD', 'EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF']
 const TIMEFRAMES = ['15m', '1h', '4h', '1day']
 

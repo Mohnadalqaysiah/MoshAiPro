@@ -126,8 +126,12 @@ EXPERT_SYSTEM_PROMPT = """
 - A+ (85-100): أقصى ثقة — دخول بـ 2% risk
 - A  (70-84):  ثقة عالية — دخول بـ 1.5% risk
 - B  (55-69):  مقبول — دخول بـ 1% risk
-- C  (40-54):  ضعيف — 0.5% risk أو انتظار
-- WAIT (<40): لا تدخل
+- C  (40-54):  ضعيف — 0.5% risk (أعطِ التوصية مع تحذير)
+- WAIT (<40): لا تدخل — المشهد غير واضح
+
+⚠️ قاعدة مهمة: لا تعطِ WAIT إلا إذا كانت الدرجة أقل من 40 فعلاً.
+درجة 40-54 = توصية C مع تحذير، وليس WAIT.
+درجة 55+ = توصية واضحة B أو أعلى.
 
 ═══════════════════════════════════════════════
 💰 إدارة رأس المال (Position Sizing)
@@ -512,11 +516,12 @@ class GeminiEngine:
         merged = {**ict_data}
         merged["ai_confidence_score"] = final_conf
 
-        # توصية Gemini تُقدَّم إذا اجتازت الفلاتر
-        all_filters_pass = all(filters.values()) if filters else True
-        if gemini_conf >= 40 and all_filters_pass:
+        # توصية Gemini: اقبلها إذا الثقة >= 40 حتى لو بعض الفلاتر فاشلة
+        # WAIT فقط إذا الثقة < 40 أو الفلاتر الحيوية فاشلة
+        critical_filters_ok = filters.get("htf_alignment", True) and filters.get("min_rr_met", True)
+        if gemini_conf >= 40 and critical_filters_ok:
             merged["recommendation"] = sig.get("recommendation", ict_data.get("recommendation"))
-        elif not all_filters_pass:
+        elif gemini_conf < 40 or not critical_filters_ok:
             merged["recommendation"] = "WAIT"
 
         # مستويات الدخول والخروج من Gemini (أدق)

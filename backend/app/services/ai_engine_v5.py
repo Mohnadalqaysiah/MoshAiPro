@@ -22,10 +22,20 @@ settings = get_settings()
 
 # مدة الكاش بالثواني حسب الإطار الزمني
 _SIGNAL_CACHE_TTL = {
-    "15m":  10 * 60,   # 10 دقائق
-    "1h":   30 * 60,   # 30 دقيقة
-    "4h":  120 * 60,   # ساعتان
-    "1d":  360 * 60,   # 6 ساعات
+    "15m":   3 * 60,   # 3 دقائق فقط (السوق يتغير سريعاً)
+    "30m":   8 * 60,   # 8 دقائق
+    "1h":   20 * 60,   # 20 دقيقة
+    "4h":   90 * 60,   # 90 دقيقة
+    "1d":  300 * 60,   # 5 ساعات
+}
+
+# نسبة تغير السعر التي تُلغي الكاش (0.3% = 0.003)
+_CACHE_PRICE_DRIFT = {
+    "15m": 0.003,   # 0.3%
+    "30m": 0.005,   # 0.5%
+    "1h":  0.008,   # 0.8%
+    "4h":  0.015,   # 1.5%
+    "1d":  0.030,   # 3%
 }
 
 
@@ -52,18 +62,34 @@ class MoshAIEngineV5:
     def _cache_key(self, symbol: str, timeframe: str) -> str:
         return f"{symbol.upper()}_{timeframe.lower()}"
 
-    def _get_cached(self, symbol: str, timeframe: str) -> Optional[Dict]:
+    def _get_cached(self, symbol: str, timeframe: str, current_price: float = None) -> Optional[Dict]:
         key = self._cache_key(symbol, timeframe)
         if key not in self._signal_cache:
             return None
         data, ts = self._signal_cache[key]
-        ttl = _SIGNAL_CACHE_TTL.get(timeframe, 1800)
+        ttl = _SIGNAL_CACHE_TTL.get(timeframe, 1200)
         age = int(time.time() - ts)
-        if age < ttl:
-            logger.info(f"📦 Signal cache hit: {symbol}/{timeframe} (عمره: {age}ث)")
-            return dict(data)
-        del self._signal_cache[key]
-        return None
+
+        # انتهى TTL؟
+        if age >= ttl:
+            del self._signal_cache[key]
+            return None
+
+        # تغير السعر كثيراً؟ → ألغِ الكاش
+        if current_price and data.get("current_price"):
+            cached_price = float(data["current_price"])
+            drift_limit = _CACHE_PRICE_DRIFT.get(timeframe, 0.008)
+            drift = abs(current_price - cached_price) / cached_price
+            if drift > drift_limit:
+                logger.info(
+                    f"🔄 Cache invalidated: {symbol}/{timeframe} "
+                    f"سعر تغير {drift*100:.2f}% (حد: {drift_limit*100:.1f}%)"
+                )
+                del self._signal_cache[key]
+                return None
+
+        logger.info(f"📦 Signal cache hit: {symbol}/{timeframe} (عمره: {age}ث)")
+        return dict(data)
 
     def _set_cached(self, symbol: str, timeframe: str, analysis: Dict):
         key = self._cache_key(symbol, timeframe)
@@ -97,9 +123,11 @@ class MoshAIEngineV5:
             account_balance: رأس مال الحساب لحساب حجم الصفقة
             max_risk_percent: نسبة المخاطرة القصوى
         """
-        # ── الكاش ────────────────────────────────────────────────────────────
+        # ── الكاش: فحص أولي بدون سعر ─────────────────────────────────────────
         if not force_refresh:
-            cached = self._get_cached(symbol, timeframe)
+            # جلب السعر الحالي السريع للمقارنة مع الكاش
+            quick_price = smart_data.get_current_price(symbol)
+            cached = self._get_cached(symbol, timeframe, current_price=quick_price)
             if cached is not None:
                 cached["from_cache"] = True
                 return cached
