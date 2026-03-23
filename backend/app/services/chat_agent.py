@@ -326,20 +326,35 @@ class TradingChatAgent:
         conf = analysis.get("ai_confidence_score", 0)
         price = analysis.get("current_price") or 0
 
-        # إذا السعر صفر أو ناقص — اجلبه مباشرة من المصدر
+        # إذا السعر صفر أو ناقص — اجلبه من مصادر متعددة بالأولوية
         price_source_note = ""
         if not price:
-            rt = smart_data.get_realtime_price_with_meta(symbol)
-            if rt:
-                price = rt["price"]
-                price_source_note = f" [مصدر: {rt['source']} — {rt['fetched_at']}]"
-            else:
-                # لا سعر حقيقي متاح — نوقف التحليل ولا نخترع
-                return (
-                    f"⚠️ تعذّر جلب السعر الحقيقي لـ {symbol} الآن.\n"
-                    f"قل للمستخدم بوضوح: 'لا تتوفر بيانات حية الآن، حاول مجدداً بعد لحظات.'\n"
-                    f"❌ لا تخترع أي سعر أو مستوى من ذاكرتك."
-                )
+            # 1. TwelveData / yfinance مباشرة
+            try:
+                rt = smart_data.get_realtime_price_with_meta(symbol)
+                if rt and rt["price"]:
+                    price = rt["price"]
+                    price_source_note = f" [{rt['source']}]"
+            except Exception:
+                pass
+
+        if not price:
+            # 2. آخر سعر إغلاق من بيانات ICT (levels.entry ≈ close[-1])
+            price = (
+                analysis.get("levels", {}).get("entry") or
+                analysis.get("confluence", {}).get("entry") or
+                0
+            )
+            if price:
+                price_source_note = " [آخر إغلاق]"
+
+        if not price:
+            # 3. لا يوجد سعر حقيقي من أي مصدر
+            return (
+                f"⚠️ تعذّر جلب السعر الحقيقي لـ {symbol} الآن.\n"
+                f"قل للمستخدم: 'لا تتوفر بيانات حية الآن، حاول بعد لحظات.'\n"
+                f"❌ لا تخترع أي رقم."
+            )
 
         atr = analysis.get("atr", 0)
         entry = analysis.get("entry_zones", [])
