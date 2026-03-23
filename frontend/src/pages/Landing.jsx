@@ -1,35 +1,58 @@
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { TrendingUp, Shield, Zap, Bot, Bell, BarChart2, ChevronLeft, CheckCircle, Star, LayoutDashboard } from 'lucide-react'
+import { useLang } from '../contexts/LangContext'
+import { TrendingUp, Shield, Zap, Bot, Bell, BarChart2, ChevronLeft, ChevronRight, CheckCircle, Star, LayoutDashboard } from 'lucide-react'
+
+const FEATURE_ICONS = [
+  <BarChart2 className="text-blue-400"   size={24} />,
+  <Bot       className="text-purple-400" size={24} />,
+  <Bell      className="text-green-400"  size={24} />,
+  <TrendingUp className="text-yellow-400" size={24} />,
+  <Shield    className="text-red-400"    size={24} />,
+  <Zap       className="text-cyan-400"   size={24} />,
+]
 
 export default function Landing() {
   const { user } = useAuth()
+  const { lang, toggle, t } = useLang()
+  const isAr = lang === 'ar'
+  const ChevronCta = isAr ? ChevronLeft : ChevronRight
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white" dir="rtl">
+    <div className="min-h-screen bg-gray-950 text-white" dir={t.dir}>
 
       {/* ── Navbar ───────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-50 bg-gray-950/90 backdrop-blur border-b border-gray-800">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <Link to="/" className="flex items-center gap-2">
             <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center font-bold text-sm">Q</div>
             <span className="font-bold text-lg">Qafeel <span className="text-blue-400">AI</span></span>
-          </div>
+          </Link>
+
           <nav className="hidden md:flex items-center gap-6 text-sm text-gray-400">
-            <a href="#features" className="hover:text-white transition-colors">المميزات</a>
-            <a href="#pricing"  className="hover:text-white transition-colors">الأسعار</a>
-            <a href="#faq"      className="hover:text-white transition-colors">الأسئلة</a>
-            <Link to="/contact" className="hover:text-white transition-colors">تواصل</Link>
+            <a href="#features" className="hover:text-white transition-colors">{t.nav.features}</a>
+            <a href="#pricing"  className="hover:text-white transition-colors">{t.nav.pricing}</a>
+            <a href="#faq"      className="hover:text-white transition-colors">{t.nav.faq}</a>
+            <Link to="/contact" className="hover:text-white transition-colors">{t.nav.contact}</Link>
           </nav>
+
           <div className="flex items-center gap-2">
+            {/* Language toggle */}
+            <button
+              onClick={toggle}
+              className="text-xs border border-gray-700 hover:border-gray-500 text-gray-400 hover:text-white px-2.5 py-1 rounded-lg transition-colors font-medium"
+            >
+              {isAr ? 'EN' : 'ع'}
+            </button>
+
             {user ? (
               <Link to="/dashboard" className="flex items-center gap-1.5 text-sm bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg font-medium transition-colors">
-                <LayoutDashboard size={14} /> لوحة التحكم
+                <LayoutDashboard size={14} /> {t.nav.dashboard}
               </Link>
             ) : (
               <>
-                <Link to="/login"    className="text-sm text-gray-300 hover:text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors">دخول</Link>
-                <Link to="/register" className="text-sm bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg font-medium transition-colors">ابدأ مجاناً</Link>
+                <Link to="/login"    className="text-sm text-gray-300 hover:text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors">{t.nav.login}</Link>
+                <Link to="/register" className="text-sm bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg font-medium transition-colors">{t.nav.start}</Link>
               </>
             )}
           </div>
@@ -38,46 +61,40 @@ export default function Landing() {
 
       {/* ── Hero ─────────────────────────────────────────────────────── */}
       <section className="relative py-20 md:py-32 px-4 overflow-hidden">
-        {/* Background glow */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-blue-600/10 rounded-full blur-3xl" />
         </div>
         <div className="max-w-4xl mx-auto text-center relative">
           <div className="inline-flex items-center gap-2 bg-blue-600/20 border border-blue-500/30 text-blue-300 text-xs px-4 py-1.5 rounded-full mb-6">
             <Zap size={12} />
-            يعمل بتقنية Gemini AI + ICT/SMC الاحترافية
+            {t.hero.badge}
           </div>
           <h1 className="text-4xl md:text-6xl font-bold leading-tight mb-6">
-            تداول بذكاء مع<br />
+            {t.hero.h1a}<br />
             <span className="text-transparent bg-clip-text bg-gradient-to-l from-blue-400 to-purple-400">
-              الذكاء الاصطناعي
+              {t.hero.h1b}
             </span>
           </h1>
           <p className="text-gray-400 text-lg md:text-xl max-w-2xl mx-auto mb-10 leading-relaxed">
-            إشارات تداول دقيقة للذهب، البيتكوين والفوركس — مدعومة بتحليل ICT/SMC/Wyckoff المؤسسي وتُرسل مباشرة على Telegram.
+            {t.hero.sub}
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link to="/register" className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-8 py-3.5 rounded-xl font-semibold text-base transition-all hover:scale-105 shadow-lg shadow-blue-500/25">
-              ابدأ تجربة مجانية
-              <ChevronLeft size={18} />
+              {t.hero.cta1}
+              <ChevronCta size={18} />
             </Link>
             <Link to="/pricing" className="flex items-center gap-2 border border-gray-700 hover:border-gray-500 text-gray-300 hover:text-white px-8 py-3.5 rounded-xl font-medium text-base transition-colors">
-              عرض الأسعار
+              {t.hero.cta2}
             </Link>
           </div>
-          <p className="text-gray-600 text-sm mt-4">10 تحليلات مجانية · بدون بطاقة ائتمان</p>
+          <p className="text-gray-600 text-sm mt-4">{t.hero.note}</p>
         </div>
       </section>
 
       {/* ── Stats ────────────────────────────────────────────────────── */}
       <section className="py-12 px-4 border-y border-gray-800/50">
         <div className="max-w-4xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
-          {[
-            { value: '4',      label: 'أسواق مدعومة' },
-            { value: '15+',    label: 'مؤشر ICT/SMC' },
-            { value: '24/7',   label: 'تحليل مستمر' },
-            { value: '< 30ث', label: 'وقت التحليل' },
-          ].map((s, i) => (
+          {t.stats.map((s, i) => (
             <div key={i}>
               <div className="text-3xl font-bold text-white mb-1">{s.value}</div>
               <div className="text-gray-500 text-sm">{s.label}</div>
@@ -90,51 +107,14 @@ export default function Landing() {
       <section id="features" className="py-20 px-4">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-14">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">كل ما تحتاجه في منصة واحدة</h2>
-            <p className="text-gray-400 max-w-xl mx-auto">تحليل احترافي بمستوى المؤسسات — متاح للجميع</p>
+            <h2 className="text-3xl md:text-4xl font-bold mb-4">{t.featuresTitle}</h2>
+            <p className="text-gray-400 max-w-xl mx-auto">{t.featuresSub}</p>
           </div>
           <div className="grid md:grid-cols-3 gap-6">
-            {[
-              {
-                icon: <BarChart2 className="text-blue-400" size={24} />,
-                title: 'تحليل ICT/SMC المتقدم',
-                desc:  'Order Blocks، FVG، Liquidity Sweep، BOS/CHoCH، Premium/Discount — بنفس أدوات المتداولين المؤسسيين.',
-                color: 'blue',
-              },
-              {
-                icon: <Bot className="text-purple-400" size={24} />,
-                title: 'وكيل AI للمحادثة',
-                desc:  'اسأل "مُوش" عن أي زوج بالعامية — يحلل السوق ويعطيك خطة تداول كاملة مع مستويات الدخول والخروج.',
-                color: 'purple',
-              },
-              {
-                icon: <Bell className="text-green-400" size={24} />,
-                title: 'تنبيهات Telegram فورية',
-                desc:  'استقبل الإشارات والتنبيهات مباشرة على هاتفك عبر بوت @ai_hybridbot بمجرد ربط حسابك.',
-                color: 'green',
-              },
-              {
-                icon: <TrendingUp className="text-yellow-400" size={24} />,
-                title: 'Multi-Timeframe Analysis',
-                desc:  'تحليل مزدوج HTF (4H) + LTF (1H) لتأكيد الاتجاه والدخول في الوقت المناسب.',
-                color: 'yellow',
-              },
-              {
-                icon: <Shield className="text-red-400" size={24} />,
-                title: 'إدارة رأس المال',
-                desc:  'حساب تلقائي لحجم الصفقة بناءً على رصيدك ونسبة المخاطرة مع نظام تقييم A+/A/B/C.',
-                color: 'red',
-              },
-              {
-                icon: <Zap className="text-cyan-400" size={24} />,
-                title: 'Wyckoff المؤسسي',
-                desc:  'تحديد مراحل التجميع والتوزيع، Spring، UTAD، و Effort vs Result لفهم نوايا Smart Money.',
-                color: 'cyan',
-              },
-            ].map((f, i) => (
+            {t.features.map((f, i) => (
               <div key={i} className="bg-gray-900 border border-gray-800 rounded-2xl p-6 hover:border-gray-700 transition-colors">
                 <div className="w-12 h-12 bg-gray-800 rounded-xl flex items-center justify-center mb-4">
-                  {f.icon}
+                  {FEATURE_ICONS[i]}
                 </div>
                 <h3 className="font-semibold text-white mb-2">{f.title}</h3>
                 <p className="text-gray-500 text-sm leading-relaxed">{f.desc}</p>
@@ -148,14 +128,10 @@ export default function Landing() {
       <section className="py-20 px-4 bg-gray-900/40">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-14">
-            <h2 className="text-3xl font-bold mb-4">كيف يعمل؟</h2>
+            <h2 className="text-3xl font-bold mb-4">{t.howTitle}</h2>
           </div>
           <div className="grid md:grid-cols-3 gap-8">
-            {[
-              { step: '01', title: 'سجّل مجاناً', desc: 'أنشئ حسابك في 30 ثانية واحصل على 10 تحليلات مجانية لتجربة المنصة.' },
-              { step: '02', title: 'اختر السوق والإطار', desc: 'اختر من XAUUSD أو BTCUSD أو EURUSD أو GBPUSD واضغط تحليل.' },
-              { step: '03', title: 'استقبل الإشارة', desc: 'خلال ثوانٍ تحصل على توصية كاملة مع الدخول والوقف والأهداف وحجم الصفقة.' },
-            ].map((s, i) => (
+            {t.how.map((s, i) => (
               <div key={i} className="text-center">
                 <div className="w-14 h-14 bg-blue-600/20 border border-blue-500/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
                   <span className="text-blue-400 font-bold text-lg">{s.step}</span>
@@ -172,46 +148,15 @@ export default function Landing() {
       <section id="pricing" className="py-20 px-4">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-14">
-            <h2 className="text-3xl font-bold mb-4">أسعار بسيطة وشفافة</h2>
-            <p className="text-gray-400">ابدأ مجاناً ثم اشترك بما يناسبك</p>
+            <h2 className="text-3xl font-bold mb-4">{t.pricingTitle}</h2>
+            <p className="text-gray-400">{t.pricingSub}</p>
           </div>
           <div className="grid md:grid-cols-3 gap-6">
-            {[
-              {
-                name: 'تجريبي',
-                price: 'مجاني',
-                period: '',
-                color: 'border-gray-700',
-                features: ['10 تحليلات', '20 رسالة شات', 'جميع الأسواق', 'ربط Telegram'],
-                cta: 'ابدأ مجاناً',
-                href: '/register',
-                highlight: false,
-              },
-              {
-                name: 'أسبوعي',
-                price: '$9.99',
-                period: '/ أسبوع',
-                color: 'border-blue-500',
-                features: ['تحليلات غير محدودة', '50 رسالة شات/يوم', 'جميع الأسواق', 'ربط Telegram', 'تحليل متعدد الفريمات'],
-                cta: 'اشترك الآن',
-                href: '/pricing',
-                highlight: true,
-              },
-              {
-                name: 'شهري',
-                price: '$29.99',
-                period: '/ شهر',
-                color: 'border-purple-500',
-                features: ['تحليلات غير محدودة', '200 رسالة شات/يوم', 'جميع الأسواق', 'ربط Telegram', 'أولوية الدعم'],
-                cta: 'اشترك الآن',
-                href: '/pricing',
-                highlight: false,
-              },
-            ].map((p, i) => (
-              <div key={i} className={`relative bg-gray-900 border-2 ${p.color} rounded-2xl p-6 ${p.highlight ? 'shadow-xl shadow-blue-500/10' : ''}`}>
-                {p.highlight && (
+            {t.plans.map((p, i) => (
+              <div key={i} className={`relative bg-gray-900 border-2 ${p.highlight ? 'border-blue-500 shadow-xl shadow-blue-500/10' : 'border-gray-700'} rounded-2xl p-6`}>
+                {p.badge && (
                   <div className="absolute -top-3 right-1/2 translate-x-1/2 bg-blue-600 text-white text-xs px-3 py-1 rounded-full font-medium">
-                    الأكثر طلباً
+                    {p.badge}
                   </div>
                 )}
                 <h3 className="font-bold text-white text-lg mb-1">{p.name}</h3>
@@ -246,19 +191,13 @@ export default function Landing() {
       {/* ── FAQ ──────────────────────────────────────────────────────── */}
       <section id="faq" className="py-20 px-4 bg-gray-900/40">
         <div className="max-w-3xl mx-auto">
-          <h2 className="text-3xl font-bold text-center mb-12">الأسئلة الشائعة</h2>
+          <h2 className="text-3xl font-bold text-center mb-12">{t.faqTitle}</h2>
           <div className="space-y-4">
-            {[
-              { q: 'هل الإشارات مضمونة الربح؟', a: 'لا. التحليل مبني على بيانات تقنية حقيقية لكنه ليس نصيحة مالية. التداول ينطوي على مخاطر وأنت مسؤول عن قراراتك.' },
-              { q: 'ما الأسواق المدعومة؟', a: 'حالياً: الذهب (XAUUSD)، البيتكوين (BTCUSD)، اليورو/دولار (EURUSD)، الجنيه/دولار (GBPUSD). سيتم إضافة المزيد قريباً.' },
-              { q: 'كيف يعمل ربط Telegram؟', a: 'من لوحة التحكم اضغط "ربط مع Telegram" وسيتوجه لك رابط تشغيل البوت @ai_hybridbot تلقائياً.' },
-              { q: 'هل يمكنني إلغاء الاشتراك؟', a: 'نعم، الاشتراك غير ملزم. ينتهي تلقائياً عند نهاية المدة ولا يتجدد.' },
-              { q: 'ما طرق الدفع المتاحة؟', a: 'ندعم USDT (TRC20) حالياً. التسعير بالدولار الأمريكي.' },
-            ].map((item, i) => (
+            {t.faq.map((item, i) => (
               <details key={i} className="bg-gray-900 border border-gray-800 rounded-xl group">
                 <summary className="flex items-center justify-between px-5 py-4 cursor-pointer list-none font-medium text-white">
                   {item.q}
-                  <ChevronLeft size={16} className="text-gray-500 group-open:-rotate-90 transition-transform" />
+                  <ChevronLeft size={16} className={`text-gray-500 group-open:-rotate-90 transition-transform ${!isAr ? 'rotate-180' : ''}`} />
                 </summary>
                 <p className="px-5 pb-4 text-gray-400 text-sm leading-relaxed border-t border-gray-800 pt-3">{item.a}</p>
               </details>
@@ -270,11 +209,11 @@ export default function Landing() {
       {/* ── CTA ──────────────────────────────────────────────────────── */}
       <section className="py-20 px-4">
         <div className="max-w-2xl mx-auto text-center">
-          <h2 className="text-3xl md:text-4xl font-bold mb-4">جاهز تبدأ؟</h2>
-          <p className="text-gray-400 mb-8">10 تحليلات مجانية. بدون بطاقة ائتمان.</p>
+          <h2 className="text-3xl md:text-4xl font-bold mb-4">{t.ctaTitle}</h2>
+          <p className="text-gray-400 mb-8">{t.ctaSub}</p>
           <Link to="/register" className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-10 py-4 rounded-xl font-semibold text-lg transition-all hover:scale-105 shadow-lg shadow-blue-500/25">
-            ابدأ مجاناً الآن
-            <ChevronLeft size={20} />
+            {t.ctaBtn}
+            <ChevronCta size={20} />
           </Link>
         </div>
       </section>
@@ -284,40 +223,44 @@ export default function Landing() {
         <div className="max-w-6xl mx-auto">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-8">
             <div>
-              <div className="flex items-center gap-2 mb-3">
+              <Link to="/" className="flex items-center gap-2 mb-3">
                 <div className="w-7 h-7 bg-blue-500 rounded-lg flex items-center justify-center font-bold text-xs">Q</div>
                 <span className="font-bold">Qafeel AI</span>
-              </div>
-              <p className="text-gray-600 text-xs leading-relaxed">منصة تداول ذكية مدعومة بالذكاء الاصطناعي وتحليل ICT/SMC المؤسسي.</p>
+              </Link>
+              <p className="text-gray-600 text-xs leading-relaxed">
+                {isAr
+                  ? 'منصة تداول ذكية مدعومة بالذكاء الاصطناعي وتحليل ICT/SMC المؤسسي.'
+                  : 'Smart trading platform powered by AI and institutional ICT/SMC analysis.'}
+              </p>
             </div>
             <div>
-              <h4 className="font-semibold text-sm mb-3 text-gray-300">المنصة</h4>
+              <h4 className="font-semibold text-sm mb-3 text-gray-300">{t.footer.platform}</h4>
               <ul className="space-y-2 text-xs text-gray-600">
-                <li><Link to="/register" className="hover:text-gray-400">التسجيل</Link></li>
-                <li><Link to="/login"    className="hover:text-gray-400">الدخول</Link></li>
-                <li><Link to="/pricing"  className="hover:text-gray-400">الأسعار</Link></li>
+                <li><Link to="/register" className="hover:text-gray-400">{t.footer.register}</Link></li>
+                <li><Link to="/login"    className="hover:text-gray-400">{t.footer.login}</Link></li>
+                <li><Link to="/pricing"  className="hover:text-gray-400">{t.footer.pricing}</Link></li>
               </ul>
             </div>
             <div>
-              <h4 className="font-semibold text-sm mb-3 text-gray-300">قانوني</h4>
+              <h4 className="font-semibold text-sm mb-3 text-gray-300">{t.footer.legal}</h4>
               <ul className="space-y-2 text-xs text-gray-600">
-                <li><Link to="/terms"   className="hover:text-gray-400">الشروط والأحكام</Link></li>
-                <li><Link to="/privacy" className="hover:text-gray-400">سياسة الخصوصية</Link></li>
+                <li><Link to="/terms"   className="hover:text-gray-400">{t.footer.terms}</Link></li>
+                <li><Link to="/privacy" className="hover:text-gray-400">{t.footer.privacy}</Link></li>
               </ul>
             </div>
             <div>
-              <h4 className="font-semibold text-sm mb-3 text-gray-300">تواصل</h4>
+              <h4 className="font-semibold text-sm mb-3 text-gray-300">{t.footer.contact}</h4>
               <ul className="space-y-2 text-xs text-gray-600">
-                <li><Link to="/contact" className="hover:text-gray-400">اتصل بنا</Link></li>
-                <li><a href="https://t.me/ai_hybridbot" target="_blank" rel="noreferrer" className="hover:text-gray-400">Telegram Bot</a></li>
+                <li><Link to="/contact" className="hover:text-gray-400">{t.footer.contactUs}</Link></li>
+                <li><a href="https://t.me/Qaffelbot" target="_blank" rel="noreferrer" className="hover:text-gray-400">@Qaffelbot</a></li>
               </ul>
             </div>
           </div>
           <div className="border-t border-gray-800 pt-6 flex flex-col md:flex-row items-center justify-between gap-3 text-xs text-gray-700">
-            <span>© 2026 Qafeel AI Trade. جميع الحقوق محفوظة.</span>
+            <span>{t.footer.copy}</span>
             <span className="flex items-center gap-1">
               <Star size={10} className="text-yellow-600" />
-              هذا تحليل تقني فقط وليس نصيحة مالية أو استثمارية
+              {t.footer.disclaimer}
             </span>
           </div>
         </div>

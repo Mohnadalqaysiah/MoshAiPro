@@ -30,7 +30,7 @@ export default function Pricing() {
   const { user } = useAuth()
   const [selected, setSelected] = useState('monthly')
   const [txId, setTxId]         = useState('')
-  const [network, setNetwork]   = useState('TRC20')
+  const network = 'TRC20'
   const [step, setStep]         = useState('plan') // plan | pay | done
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
@@ -42,7 +42,6 @@ export default function Pricing() {
     axios.get(`${API}/api/v1/subscription/plans`)
       .then(r => {
         if (r.data.wallet) setWallet(r.data.wallet)
-        if (r.data.network) setNetwork(r.data.network)
       })
       .catch(() => setWallet('TVh8P92EEjr732frVRpxg1iE4GsfZpLM6E'))
   }, [])
@@ -155,21 +154,11 @@ export default function Pricing() {
                   {copied ? <CheckCircle size={16} className="text-green-400" /> : <Copy size={16} />}
                 </button>
               </div>
-              <div className="mt-3 flex gap-2">
-                {['TRC20', 'BEP20'].map(n => (
-                  <button
-                    key={n}
-                    onClick={() => setNetwork(n)}
-                    className={`text-xs px-3 py-1 rounded-full border ${
-                      network === n ? 'border-blue-500 text-blue-400 bg-blue-900/30' : 'border-gray-600 text-gray-400'
-                    }`}
-                  >
-                    {n}
-                  </button>
-                ))}
+              <div className="mt-3">
+                <span className="text-xs px-3 py-1 rounded-full border border-blue-500 text-blue-400 bg-blue-900/30">TRC20</span>
               </div>
               <p className="text-xs text-yellow-400 mt-3">
-                ⚠️ أرسل المبلغ بالضبط ${plan?.price} USDT على شبكة {network}
+                ⚠️ أرسل المبلغ بالضبط ${plan?.price} USDT على شبكة TRC20 فقط
               </p>
             </div>
 

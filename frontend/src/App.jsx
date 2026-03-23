@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { LangProvider } from './contexts/LangContext'
 import Dashboard  from './pages/Dashboard'
 import Signals    from './pages/Signals'
 import Markets    from './pages/Markets'
@@ -80,10 +81,12 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <Router>
-        <AppRoutes />
-      </Router>
-    </AuthProvider>
+    <LangProvider>
+      <AuthProvider>
+        <Router>
+          <AppRoutes />
+        </Router>
+      </AuthProvider>
+    </LangProvider>
   )
 }
