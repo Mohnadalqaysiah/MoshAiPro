@@ -15,6 +15,7 @@ export default function Dashboard() {
   const [error, setError]           = useState(null)
   const [limitReached, setLimitReached] = useState(false)
   const [tgLink, setTgLink]         = useState('')
+  const [tgBot, setTgBot]           = useState('Qaffelbot')
   const [tgCopied, setTgCopied]     = useState(false)
   const [tgLoading, setTgLoading]   = useState(false)
   const [relinking, setRelinking]   = useState(false)
@@ -61,6 +62,7 @@ export default function Dashboard() {
       const r = await axios.get(`${API}/api/v1/auth/telegram-link`)
       const link = r.data.link || ''
       setTgLink(link)
+      if (r.data.bot_username) setTgBot(r.data.bot_username)
       return link
     } catch {
       return ''
@@ -88,6 +90,7 @@ export default function Dashboard() {
       const r = await axios.post(`${API}/api/v1/auth/relink-telegram`)
       const link = r.data.link || ''
       setTgLink(link)
+      if (r.data.bot_username) setTgBot(r.data.bot_username)
       setRelinkDone(true)
       if (link) window.open(link, '_blank', 'noreferrer')
     } catch { /* ignore */ } finally { setRelinking(false) }
@@ -154,7 +157,7 @@ export default function Dashboard() {
             </div>
             <div>
               <h3 className="text-white font-semibold">اربط حسابك مع Telegram</h3>
-              <p className="text-indigo-300 text-sm mt-0.5">استقبل الإشارات والتنبيهات مباشرة على هاتفك عبر @Qaffelbot</p>
+              <p className="text-indigo-300 text-sm mt-0.5">استقبل الإشارات والتنبيهات مباشرة على هاتفك عبر @{tgBot}</p>
             </div>
           </div>
           <div className="flex items-center gap-3 mt-4 flex-wrap">
@@ -164,7 +167,7 @@ export default function Dashboard() {
               className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 active:scale-95 disabled:opacity-60 text-white px-5 py-2.5 rounded-lg font-semibold text-sm transition-all"
             >
               {tgLoading ? <RefreshCw size={15} className="animate-spin" /> : <ExternalLink size={15} />}
-              {tgLoading ? 'جاري التحميل...' : 'ربط مع @Qaffelbot'}
+              {tgLoading ? 'جاري التحميل...' : 'ربط مع @{tgBot}'}
             </button>
             <button
               onClick={copyTgLink}
@@ -199,7 +202,7 @@ export default function Dashboard() {
               className="flex items-center gap-2 text-xs bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition"
             >
               {relinking ? <RefreshCw size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-              إعادة ربط @Qaffelbot
+              إعادة ربط @{tgBot}
             </button>
           </div>
         </div>

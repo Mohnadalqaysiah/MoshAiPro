@@ -175,6 +175,10 @@ export default function Admin() {
   const [settingSaving, setSettingSaving] = useState('')
   const [settingMsg, setSettingMsg] = useState(null)
 
+  const [adminProfile, setAdminProfile] = useState({ current_password:'', new_email:'', new_password:'' })
+  const [adminProfileSaving, setAdminProfileSaving] = useState(false)
+  const [adminProfileMsg, setAdminProfileMsg] = useState(null)
+
   useEffect(() => {
     if (user?.role !== 'admin') { navigate('/dashboard'); return }
     loadStats()
@@ -207,6 +211,21 @@ export default function Admin() {
     } catch (e) {
       setSettingMsg({ type:'err', text: e.response?.data?.detail || 'خطأ في الحفظ' })
     } finally { setSettingSaving('') }
+  }
+
+  const saveAdminProfile = async (e) => {
+    e.preventDefault()
+    setAdminProfileSaving(true); setAdminProfileMsg(null)
+    try {
+      const payload = { current_password: adminProfile.current_password }
+      if (adminProfile.new_email.trim())    payload.new_email    = adminProfile.new_email.trim()
+      if (adminProfile.new_password.trim()) payload.new_password = adminProfile.new_password.trim()
+      await axios.put(`${API}/api/v1/admin/profile`, payload)
+      setAdminProfileMsg({ type:'ok', text:'تم تحديث بيانات الحساب بنجاح' })
+      setAdminProfile({ current_password:'', new_email:'', new_password:'' })
+    } catch (e) {
+      setAdminProfileMsg({ type:'err', text: e.response?.data?.detail || 'خطأ في الحفظ' })
+    } finally { setAdminProfileSaving(false) }
   }
 
   const handlePayment = async (id, action) => {
@@ -500,36 +519,83 @@ export default function Admin() {
                 </div>
               )}
 
-              <div className="space-y-4 max-w-lg">
-                {[
-                  { key:'usdt_wallet',          label:'عنوان محفظة USDT (TRC20)', type:'text', mono:true },
-                  { key:'telegram_bot_username', label:'اسم بوت تيليجرام (بدون @)', type:'text', mono:false },
-                ].map(f => {
-                  const meta = siteSettings[f.key] || {}
-                  return (
-                    <div key={f.key} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                      <label className="block text-sm text-gray-300 font-medium mb-1">{f.label}</label>
-                      {meta.description && <p className="text-xs text-gray-500 mb-2">{meta.description}</p>}
-                      <div className="flex gap-2">
-                        <input
-                          type={f.type}
-                          value={settingEdits[f.key] ?? ''}
-                          onChange={e => setSettingEdits(s => ({...s, [f.key]: e.target.value}))}
-                          className={`flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500 ${f.mono ? 'font-mono' : ''}`}
-                          dir="ltr"
-                        />
-                        <button
-                          disabled={settingSaving === f.key}
-                          onClick={() => saveSetting(f.key)}
-                          className="flex items-center gap-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition"
-                        >
-                          {settingSaving === f.key ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle size={13}/>}
-                          حفظ
-                        </button>
+              <div className="grid md:grid-cols-2 gap-6 max-w-3xl">
+
+                {/* Site Settings */}
+                <div className="space-y-4">
+                  <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">إعدادات الموقع</h2>
+                  {[
+                    { key:'usdt_wallet',          label:'عنوان محفظة USDT (TRC20)', mono:true },
+                    { key:'telegram_bot_username', label:'اسم بوت تيليجرام (بدون @)', mono:false },
+                  ].map(f => {
+                    const meta = siteSettings[f.key] || {}
+                    return (
+                      <div key={f.key} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                        <label className="block text-sm text-gray-300 font-medium mb-1">{f.label}</label>
+                        {meta.description && <p className="text-xs text-gray-500 mb-2">{meta.description}</p>}
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={settingEdits[f.key] ?? ''}
+                            onChange={e => setSettingEdits(s => ({...s, [f.key]: e.target.value}))}
+                            className={`flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500 ${f.mono ? 'font-mono' : ''}`}
+                            dir="ltr"
+                          />
+                          <button
+                            disabled={settingSaving === f.key}
+                            onClick={() => saveSetting(f.key)}
+                            className="flex items-center gap-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition"
+                          >
+                            {settingSaving === f.key ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle size={13}/>}
+                            حفظ
+                          </button>
+                        </div>
                       </div>
+                    )
+                  })}
+                </div>
+
+                {/* Admin Account */}
+                <div>
+                  <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">حساب الإدارة</h2>
+                  <form onSubmit={saveAdminProfile} className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3">
+                    <p className="text-xs text-gray-500">البريد الحالي: <span className="text-gray-300">{user?.email}</span></p>
+
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">كلمة المرور الحالية *</label>
+                      <input type="password" required value={adminProfile.current_password}
+                        onChange={e => setAdminProfile(p => ({...p, current_password: e.target.value}))}
+                        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        dir="ltr" placeholder="••••••••" />
                     </div>
-                  )
-                })}
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">البريد الإلكتروني الجديد</label>
+                      <input type="email" value={adminProfile.new_email}
+                        onChange={e => setAdminProfile(p => ({...p, new_email: e.target.value}))}
+                        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        dir="ltr" placeholder="admin@qafeel.com" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">كلمة المرور الجديدة</label>
+                      <input type="password" value={adminProfile.new_password}
+                        onChange={e => setAdminProfile(p => ({...p, new_password: e.target.value}))}
+                        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        dir="ltr" placeholder="8 أحرف على الأقل" />
+                    </div>
+
+                    {adminProfileMsg && (
+                      <div className={`flex items-center gap-2 text-xs rounded-lg px-3 py-2 ${adminProfileMsg.type==='ok'?'bg-green-900/30 text-green-400':'bg-red-900/30 text-red-400'}`}>
+                        {adminProfileMsg.type==='ok'?<CheckCircle size={12}/>:<AlertTriangle size={12}/>} {adminProfileMsg.text}
+                      </div>
+                    )}
+
+                    <button type="submit" disabled={adminProfileSaving}
+                      className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm py-2 rounded-lg transition">
+                      {adminProfileSaving ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle size={13}/>}
+                      حفظ بيانات الحساب
+                    </button>
+                  </form>
+                </div>
               </div>
             </div>
           )}

@@ -14,7 +14,7 @@ from app.models.user import User, UserRole, PlanType
 from app.models.payment import Payment, PaymentStatus, PaymentPlan
 from app.models.market_config import MarketConfig
 from app.models.site_settings import SiteSettings
-from app.services.auth_service import get_admin_user
+from app.services.auth_service import get_admin_user, hash_password, verify_password
 
 router = APIRouter()
 
@@ -33,6 +33,11 @@ class PaymentActionIn(BaseModel):
 
 class SettingIn(BaseModel):
     value: str
+
+class AdminProfileIn(BaseModel):
+    new_email:    Optional[str] = None
+    new_password: Optional[str] = None
+    current_password: str
 
 class MarketIn(BaseModel):
     symbol:       str
@@ -397,6 +402,35 @@ def get_expiring_users(
         })
 
     return {"users": result, "count": len(result)}
+
+
+# ─── Admin Profile ────────────────────────────────────────────────────────────
+
+@router.put("/profile")
+def update_admin_profile(
+    data: AdminProfileIn,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """يسمح للأدمن بتغيير إيميله أو كلمة مروره"""
+    if not verify_password(data.current_password, admin.password_hash):
+        raise HTTPException(400, "كلمة المرور الحالية غير صحيحة")
+
+    if data.new_email:
+        email = data.new_email.lower().strip()
+        existing = db.query(User).filter(User.email == email, User.id != admin.id).first()
+        if existing:
+            raise HTTPException(400, "البريد الإلكتروني مستخدم من حساب آخر")
+        admin.email = email
+
+    if data.new_password:
+        if len(data.new_password) < 8:
+            raise HTTPException(400, "كلمة المرور يجب أن تكون 8 أحرف على الأقل")
+        admin.password_hash = hash_password(data.new_password)
+
+    db.commit()
+    logger.info(f"🔐 Admin profile updated: {admin.email}")
+    return {"success": True, "email": admin.email}
 
 
 # ─── Site Settings ────────────────────────────────────────────────────────────

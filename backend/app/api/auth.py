@@ -12,6 +12,7 @@ from loguru import logger
 
 from app.database import get_db
 from app.models.user import User, UserRole, PlanType
+from app.models.site_settings import SiteSettings
 from app.services.auth_service import (
     hash_password, verify_password, create_token,
     get_current_user, check_subscription
@@ -289,6 +290,14 @@ def link_telegram(
 
 # ─── Telegram Link Token ──────────────────────────────────────────────────────
 
+def _get_bot_username(db: Session) -> str:
+    """يجلب اسم البوت من قاعدة البيانات أولاً، ثم من الإعدادات"""
+    row = db.query(SiteSettings).filter(SiteSettings.key == "telegram_bot_username").first()
+    if row and row.value:
+        return row.value.strip()
+    return getattr(settings, "TELEGRAM_BOT_USERNAME", "Qaffelbot")
+
+
 @router.get("/telegram-link")
 def get_telegram_link(
     user: User = Depends(get_current_user),
@@ -300,13 +309,14 @@ def get_telegram_link(
         db.commit()
         db.refresh(user)
 
-    bot_username = getattr(settings, "TELEGRAM_BOT_USERNAME", "MoshAiProBot")
+    bot_username = _get_bot_username(db)
     link = f"https://t.me/{bot_username}?start={user.telegram_link_token}"
     return {
         "token": user.telegram_link_token,
         "link": link,
         "already_linked": bool(user.telegram_id),
         "telegram_username": user.telegram_username,
+        "bot_username": bot_username,
     }
 
 
@@ -315,23 +325,21 @@ def relink_telegram(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """
-    يفك ربط Telegram الحالي ويولّد رابط تفعيل جديد
-    مفيد عند تغيير البوت
-    """
+    """يفك ربط Telegram الحالي ويولّد رابط تفعيل جديد"""
     user.telegram_id = None
     user.telegram_username = None
     user.telegram_link_token = secrets.token_urlsafe(16)
     db.commit()
     db.refresh(user)
 
-    bot_username = getattr(settings, "TELEGRAM_BOT_USERNAME", "Qaffelbot")
+    bot_username = _get_bot_username(db)
     link = f"https://t.me/{bot_username}?start={user.telegram_link_token}"
     logger.info(f"🔄 Telegram re-link requested: {user.email}")
     return {
         "success": True,
         "token": user.telegram_link_token,
         "link": link,
+        "bot_username": bot_username,
     }
 
 

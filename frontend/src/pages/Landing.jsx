@@ -33,6 +33,7 @@ export default function Landing() {
             <a href="#features" className="hover:text-white transition-colors">{t.nav.features}</a>
             <a href="#pricing"  className="hover:text-white transition-colors">{t.nav.pricing}</a>
             <a href="#faq"      className="hover:text-white transition-colors">{t.nav.faq}</a>
+            <Link to="/about"   className="hover:text-white transition-colors">{t.nav.about}</Link>
             <Link to="/contact" className="hover:text-white transition-colors">{t.nav.contact}</Link>
           </nav>
 
@@ -221,8 +222,8 @@ export default function Landing() {
       {/* ── Footer ───────────────────────────────────────────────────── */}
       <footer className="border-t border-gray-800 py-10 px-4">
         <div className="max-w-6xl mx-auto">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-8">
-            <div>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-8 mb-8">
+            <div className="col-span-2 md:col-span-1">
               <Link to="/" className="flex items-center gap-2 mb-3">
                 <div className="w-7 h-7 bg-blue-500 rounded-lg flex items-center justify-center font-bold text-xs">Q</div>
                 <span className="font-bold">Qafeel AI</span>
@@ -239,6 +240,13 @@ export default function Landing() {
                 <li><Link to="/register" className="hover:text-gray-400">{t.footer.register}</Link></li>
                 <li><Link to="/login"    className="hover:text-gray-400">{t.footer.login}</Link></li>
                 <li><Link to="/pricing"  className="hover:text-gray-400">{t.footer.pricing}</Link></li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="font-semibold text-sm mb-3 text-gray-300">{t.footer.company}</h4>
+              <ul className="space-y-2 text-xs text-gray-600">
+                <li><Link to="/about"  className="hover:text-gray-400">{t.footer.about}</Link></li>
+                <li><Link to="/vision" className="hover:text-gray-400">{t.footer.vision}</Link></li>
               </ul>
             </div>
             <div>
