@@ -167,7 +167,7 @@ export default function Dashboard() {
               className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 active:scale-95 disabled:opacity-60 text-white px-5 py-2.5 rounded-lg font-semibold text-sm transition-all"
             >
               {tgLoading ? <RefreshCw size={15} className="animate-spin" /> : <ExternalLink size={15} />}
-              {tgLoading ? 'جاري التحميل...' : 'ربط مع @{tgBot}'}
+              {tgLoading ? 'جاري التحميل...' : `ربط مع @${tgBot}`}
             </button>
             <button
               onClick={copyTgLink}
