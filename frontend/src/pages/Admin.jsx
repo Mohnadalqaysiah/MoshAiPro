@@ -6,7 +6,7 @@ import {
   Users, CreditCard, BarChart2, CheckCircle, XCircle, Clock,
   Search, Plus, Trash2, ToggleLeft, ToggleRight, TrendingUp,
   DollarSign, Activity, ChevronDown, RefreshCw, Calendar, Phone,
-  MessageCircle, X, ExternalLink, Shield, AlertTriangle
+  MessageCircle, X, ExternalLink, Shield, AlertTriangle, Settings
 } from 'lucide-react'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -170,6 +170,11 @@ export default function Admin() {
     symbol:'', display_name:'', category:'forex', yf_symbol:'', td_symbol:'', is_premium:false, sort_order:0
   })
 
+  const [siteSettings, setSiteSettings] = useState({})
+  const [settingEdits, setSettingEdits] = useState({})
+  const [settingSaving, setSettingSaving] = useState('')
+  const [settingMsg, setSettingMsg] = useState(null)
+
   useEffect(() => {
     if (user?.role !== 'admin') { navigate('/dashboard'); return }
     loadStats()
@@ -179,12 +184,30 @@ export default function Admin() {
     if (tab === 'users')    loadUsers()
     if (tab === 'payments') loadPayments()
     if (tab === 'markets')  loadMarkets()
+    if (tab === 'settings') loadSettings()
   }, [tab])
 
   const loadStats    = async () => { const r = await axios.get(`${API}/api/v1/admin/stats`); setStats(r.data) }
   const loadUsers    = async () => { setLoading(true); const r = await axios.get(`${API}/api/v1/admin/users?search=${search}&limit=200`); setUsers(r.data.users); setLoading(false) }
   const loadPayments = async (status='all') => { setLoading(true); const r = await axios.get(`${API}/api/v1/admin/payments?status_filter=${status}&limit=100`); setPayments(r.data.payments); setLoading(false) }
   const loadMarkets  = async () => { setLoading(true); const r = await axios.get(`${API}/api/v1/admin/markets`); setMarkets(r.data); setLoading(false) }
+  const loadSettings = async () => {
+    const r = await axios.get(`${API}/api/v1/admin/settings`)
+    setSiteSettings(r.data)
+    const edits = {}
+    Object.entries(r.data).forEach(([k, v]) => { edits[k] = v.value || '' })
+    setSettingEdits(edits)
+  }
+  const saveSetting = async (key) => {
+    setSettingSaving(key); setSettingMsg(null)
+    try {
+      await axios.put(`${API}/api/v1/admin/settings/${key}`, { value: settingEdits[key] })
+      setSettingMsg({ type:'ok', text:'تم الحفظ بنجاح' })
+      loadSettings()
+    } catch (e) {
+      setSettingMsg({ type:'err', text: e.response?.data?.detail || 'خطأ في الحفظ' })
+    } finally { setSettingSaving('') }
+  }
 
   const handlePayment = async (id, action) => {
     await axios.put(`${API}/api/v1/admin/payments/${id}`, { action })
@@ -202,6 +225,7 @@ export default function Admin() {
     { key:'users',    icon:Users,      label:'المستخدمون' },
     { key:'payments', icon:CreditCard, label:'المدفوعات' },
     { key:'markets',  icon:BarChart2,  label:'الأسواق' },
+    { key:'settings', icon:Settings,   label:'الإعدادات' },
   ]
 
   return (
@@ -461,6 +485,51 @@ export default function Admin() {
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── Settings ── */}
+          {tab === 'settings' && (
+            <div>
+              <h1 className="text-xl font-bold mb-6">إعدادات الموقع</h1>
+
+              {settingMsg && (
+                <div className={`flex items-center gap-2 text-sm rounded-lg px-3 py-2 mb-4 ${settingMsg.type==='ok'?'bg-green-900/30 text-green-400':'bg-red-900/30 text-red-400'}`}>
+                  {settingMsg.type==='ok'?<CheckCircle size={14}/>:<AlertTriangle size={14}/>} {settingMsg.text}
+                </div>
+              )}
+
+              <div className="space-y-4 max-w-lg">
+                {[
+                  { key:'usdt_wallet',          label:'عنوان محفظة USDT (TRC20)', type:'text', mono:true },
+                  { key:'telegram_bot_username', label:'اسم بوت تيليجرام (بدون @)', type:'text', mono:false },
+                ].map(f => {
+                  const meta = siteSettings[f.key] || {}
+                  return (
+                    <div key={f.key} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                      <label className="block text-sm text-gray-300 font-medium mb-1">{f.label}</label>
+                      {meta.description && <p className="text-xs text-gray-500 mb-2">{meta.description}</p>}
+                      <div className="flex gap-2">
+                        <input
+                          type={f.type}
+                          value={settingEdits[f.key] ?? ''}
+                          onChange={e => setSettingEdits(s => ({...s, [f.key]: e.target.value}))}
+                          className={`flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500 ${f.mono ? 'font-mono' : ''}`}
+                          dir="ltr"
+                        />
+                        <button
+                          disabled={settingSaving === f.key}
+                          onClick={() => saveSetting(f.key)}
+                          className="flex items-center gap-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition"
+                        >
+                          {settingSaving === f.key ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle size={13}/>}
+                          حفظ
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}

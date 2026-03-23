@@ -13,6 +13,7 @@ from app.database import get_db
 from app.models.user import User, UserRole, PlanType
 from app.models.payment import Payment, PaymentStatus, PaymentPlan
 from app.models.market_config import MarketConfig
+from app.models.site_settings import SiteSettings
 from app.services.auth_service import get_admin_user
 
 router = APIRouter()
@@ -29,6 +30,9 @@ class UserUpdateIn(BaseModel):
 class PaymentActionIn(BaseModel):
     action:     str   # approve | reject
     admin_note: str = ""
+
+class SettingIn(BaseModel):
+    value: str
 
 class MarketIn(BaseModel):
     symbol:       str
@@ -393,6 +397,33 @@ def get_expiring_users(
         })
 
     return {"users": result, "count": len(result)}
+
+
+# ─── Site Settings ────────────────────────────────────────────────────────────
+
+@router.get("/settings")
+def get_settings_admin(
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    rows = db.query(SiteSettings).all()
+    return {r.key: {"value": r.value, "description": r.description} for r in rows}
+
+
+@router.put("/settings/{key}")
+def update_setting(
+    key: str,
+    data: SettingIn,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    row = db.query(SiteSettings).filter(SiteSettings.key == key).first()
+    if not row:
+        raise HTTPException(404, f"الإعداد '{key}' غير موجود")
+    row.value = data.value.strip()
+    db.commit()
+    logger.info(f"⚙️ Setting updated: {key} = {data.value}")
+    return {"success": True, "key": key, "value": row.value}
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────

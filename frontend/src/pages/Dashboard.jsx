@@ -17,6 +17,8 @@ export default function Dashboard() {
   const [tgLink, setTgLink]         = useState('')
   const [tgCopied, setTgCopied]     = useState(false)
   const [tgLoading, setTgLoading]   = useState(false)
+  const [relinking, setRelinking]   = useState(false)
+  const [relinkDone, setRelinkDone] = useState(false)
 
   // جلب آخر الإشارات
   useEffect(() => { fetchSignals() }, [])
@@ -80,6 +82,17 @@ export default function Dashboard() {
     setTimeout(() => setTgCopied(false), 2000)
   }
 
+  const relinkTelegram = async () => {
+    setRelinking(true)
+    try {
+      const r = await axios.post(`${API}/api/v1/auth/relink-telegram`)
+      const link = r.data.link || ''
+      setTgLink(link)
+      setRelinkDone(true)
+      if (link) window.open(link, '_blank', 'noreferrer')
+    } catch { /* ignore */ } finally { setRelinking(false) }
+  }
+
   const getSignalColor = (rec) => {
     if (rec === 'BUY') return 'text-green-400'
     if (rec === 'SELL') return 'text-red-400'
@@ -98,7 +111,8 @@ export default function Dashboard() {
     return 'مراقبة'
   }
 
-  const showTgCard = user && !user.telegram_linked
+  const showTgCard     = user && !user.telegram_linked && !relinkDone
+  const showRelinkCard = user && user.telegram_linked && !relinkDone
 
   return (
     <div className="space-y-6">
@@ -131,7 +145,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Telegram Linking Card */}
+      {/* Telegram Linking Card — not linked yet */}
       {showTgCard && (
         <div className="bg-indigo-950/60 border border-indigo-500/70 rounded-xl p-5" dir="rtl">
           <div className="flex items-center gap-3">
@@ -140,7 +154,7 @@ export default function Dashboard() {
             </div>
             <div>
               <h3 className="text-white font-semibold">اربط حسابك مع Telegram</h3>
-              <p className="text-indigo-300 text-sm mt-0.5">استقبل الإشارات والتنبيهات مباشرة على هاتفك عبر @ai_hybridbot</p>
+              <p className="text-indigo-300 text-sm mt-0.5">استقبل الإشارات والتنبيهات مباشرة على هاتفك عبر @Qaffelbot</p>
             </div>
           </div>
           <div className="flex items-center gap-3 mt-4 flex-wrap">
@@ -150,7 +164,7 @@ export default function Dashboard() {
               className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 active:scale-95 disabled:opacity-60 text-white px-5 py-2.5 rounded-lg font-semibold text-sm transition-all"
             >
               {tgLoading ? <RefreshCw size={15} className="animate-spin" /> : <ExternalLink size={15} />}
-              {tgLoading ? 'جاري التحميل...' : 'ربط مع @ai_hybridbot'}
+              {tgLoading ? 'جاري التحميل...' : 'ربط مع @Qaffelbot'}
             </button>
             <button
               onClick={copyTgLink}
@@ -159,6 +173,33 @@ export default function Dashboard() {
             >
               {tgCopied ? <CheckCircle size={14} className="text-green-400" /> : <Copy size={14} />}
               {tgCopied ? 'تم النسخ' : 'نسخ الرابط'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Re-link Telegram Card — already linked */}
+      {showRelinkCard && (
+        <div className="bg-gray-900 border border-gray-700 rounded-xl p-4" dir="rtl">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-green-900/40 flex items-center justify-center flex-shrink-0">
+                <CheckCircle size={16} className="text-green-400" />
+              </div>
+              <div>
+                <p className="text-sm text-white font-medium">
+                  Telegram مربوط{user.telegram_username ? ` — @${user.telegram_username}` : ''}
+                </p>
+                <p className="text-xs text-gray-400 mt-0.5">إذا تغيّر البوت أو انقطع الربط، أعد التفعيل</p>
+              </div>
+            </div>
+            <button
+              onClick={relinkTelegram}
+              disabled={relinking}
+              className="flex items-center gap-2 text-xs bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition"
+            >
+              {relinking ? <RefreshCw size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+              إعادة ربط @Qaffelbot
             </button>
           </div>
         </div>

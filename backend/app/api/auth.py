@@ -310,6 +310,31 @@ def get_telegram_link(
     }
 
 
+@router.post("/relink-telegram")
+def relink_telegram(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    يفك ربط Telegram الحالي ويولّد رابط تفعيل جديد
+    مفيد عند تغيير البوت
+    """
+    user.telegram_id = None
+    user.telegram_username = None
+    user.telegram_link_token = secrets.token_urlsafe(16)
+    db.commit()
+    db.refresh(user)
+
+    bot_username = getattr(settings, "TELEGRAM_BOT_USERNAME", "Qaffelbot")
+    link = f"https://t.me/{bot_username}?start={user.telegram_link_token}"
+    logger.info(f"🔄 Telegram re-link requested: {user.email}")
+    return {
+        "success": True,
+        "token": user.telegram_link_token,
+        "link": link,
+    }
+
+
 @router.post("/bot-verify")
 def bot_verify_link(data: BotVerifyIn, db: Session = Depends(get_db)):
     """

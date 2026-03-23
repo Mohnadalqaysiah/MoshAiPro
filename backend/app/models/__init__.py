@@ -8,6 +8,7 @@ from app.models.payment import Payment, PaymentStatus, PaymentPlan
 from app.models.market_config import MarketConfig
 from app.models.signal import Signal, SignalType, SignalStatus, SignalQuality
 from app.models.analysis import Analysis
+from app.models.site_settings import SiteSettings
 
 __all__ = [
     "User", "UserRole", "PlanType",
@@ -15,4 +16,5 @@ __all__ = [
     "MarketConfig",
     "Signal", "SignalType", "SignalStatus", "SignalQuality",
     "Analysis",
+    "SiteSettings",
 ]

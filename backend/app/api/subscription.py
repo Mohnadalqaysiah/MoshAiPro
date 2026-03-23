@@ -11,6 +11,7 @@ from loguru import logger
 from app.database import get_db
 from app.models.user import User, PlanType
 from app.models.payment import Payment, PaymentStatus, PaymentPlan
+from app.models.site_settings import SiteSettings
 from app.services.auth_service import get_current_user, check_subscription
 from app.config import get_settings
 
@@ -54,10 +55,13 @@ class PaymentIn(BaseModel):
 # ─── Endpoints ────────────────────────────────────────────────────────────────
 
 @router.get("/plans")
-def get_plans():
+def get_plans(db: Session = Depends(get_db)):
+    # Read wallet from DB settings; fall back to config
+    row = db.query(SiteSettings).filter(SiteSettings.key == "usdt_wallet").first()
+    wallet = row.value if (row and row.value) else USDT_WALLET
     return {
         "plans": PLANS,
-        "wallet": USDT_WALLET,
+        "wallet": wallet,
         "network": USDT_NETWORK,
         "note": "أرسل المبلغ بالضبط بالـ USDT ثم أدخل رقم المعاملة (TxID) للتحقق"
     }
