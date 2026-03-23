@@ -33,12 +33,26 @@ async def chat_message(
     if not status["allowed"]:
         raise HTTPException(status_code=403, detail=status["reason"])
 
-    # Check trial chat credits specifically
+    # حدود الرسائل اليومية حسب الخطة
+    DAILY_CHAT_LIMITS = {
+        PlanType.TRIAL:   0,    # يستخدم trial_chat_left
+        PlanType.WEEKLY:  50,   # 50 رسالة/يوم
+        PlanType.MONTHLY: 200,  # 200 رسالة/يوم
+    }
+
     if user.plan == PlanType.TRIAL and user.trial_chat_left <= 0:
         raise HTTPException(
             status_code=403,
-            detail=f"استهلكت رسائل المحادثة التجريبية. اشترك للمتابعة."
+            detail="استهلكت رسائل المحادثة التجريبية. اشترك للمتابعة."
         )
+
+    if user.plan in (PlanType.WEEKLY, PlanType.MONTHLY):
+        daily_limit = DAILY_CHAT_LIMITS[user.plan]
+        if user.chat_used_today >= daily_limit:
+            raise HTTPException(
+                status_code=403,
+                detail=f"وصلت للحد اليومي ({daily_limit} رسالة). يتجدد غداً."
+            )
 
     session_id = req.session_id or str(uuid.uuid4())
     try:
@@ -52,11 +66,19 @@ async def chat_message(
             user.chat_used_today += 1
             db.commit()
 
+        DAILY_LIMITS = {PlanType.WEEKLY: 50, PlanType.MONTHLY: 200}
+        if user.plan == PlanType.TRIAL:
+            credits_left = user.trial_chat_left
+        elif user.plan in DAILY_LIMITS:
+            credits_left = max(0, DAILY_LIMITS[user.plan] - user.chat_used_today)
+        else:
+            credits_left = None
+
         return {
             "success": True,
             "session_id": session_id,
             "response": response,
-            "credits_left": user.trial_chat_left if user.plan == PlanType.TRIAL else None,
+            "credits_left": credits_left,
         }
     except HTTPException:
         raise

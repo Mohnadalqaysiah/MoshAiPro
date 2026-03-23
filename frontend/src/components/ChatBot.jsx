@@ -300,10 +300,10 @@ export default function ChatBot() {
 
   return (
     <>
-      {/* Floating Button */}
+      {/* Floating Button — يختفي على الموبايل عند فتح الشات */}
       <button
         onClick={() => setOpen(o => !o)}
-        className="fixed bottom-5 left-4 md:left-auto md:right-6 z-50 flex items-center gap-2 rounded-full bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white px-4 py-2.5 shadow-xl shadow-blue-500/30 text-sm font-medium transition-all"
+        className={`fixed bottom-5 left-4 md:left-auto md:right-6 z-50 flex items-center gap-2 rounded-full bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white px-4 py-2.5 shadow-xl shadow-blue-500/30 text-sm font-medium transition-all ${open ? 'hidden md:flex' : 'flex'}`}
       >
         {open ? <X size={18} /> : <MessageCircle size={18} />}
         <span>مُوش AI</span>

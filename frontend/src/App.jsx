@@ -8,6 +8,10 @@ import Login      from './pages/Login'
 import Register   from './pages/Register'
 import Pricing    from './pages/Pricing'
 import Admin      from './pages/Admin'
+import Landing    from './pages/Landing'
+import Terms      from './pages/Terms'
+import Privacy    from './pages/Privacy'
+import Contact    from './pages/Contact'
 import Navbar     from './components/Navbar'
 import ChatBot    from './components/ChatBot'
 import TrialBanner from './components/TrialBanner'
@@ -35,7 +39,11 @@ function AppRoutes() {
 
   return (
     <Routes>
-      {/* Public */}
+      {/* Landing & Public Pages */}
+      <Route path="/"         element={user ? <Navigate to="/dashboard" /> : <Landing />} />
+      <Route path="/terms"    element={<Terms />} />
+      <Route path="/privacy"  element={<Privacy />} />
+      <Route path="/contact"  element={<Contact />} />
       <Route path="/login"    element={user ? <Navigate to="/dashboard" /> : <Login />} />
       <Route path="/register" element={user ? <Navigate to="/dashboard" /> : <Register />} />
       <Route path="/pricing"  element={<Pricing />} />
