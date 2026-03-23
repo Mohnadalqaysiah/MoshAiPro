@@ -32,6 +32,8 @@ services:
     environment:
       - DATABASE_URL=postgresql://${DB_USER:-moshuser}:${DB_PASSWORD:-moshpass}@postgres:5432/${DB_NAME:-moshaiprodb}
       - REDIS_URL=redis://redis:6379/0
+    ports:
+      - "127.0.0.1:8000:8000"
     depends_on:
       - postgres
       - redis
@@ -45,6 +47,8 @@ services:
       dockerfile: Dockerfile.prod
     container_name: moshapi_frontend
     restart: always
+    ports:
+      - "127.0.0.1:8080:80"
     networks:
       - moshnet
 
