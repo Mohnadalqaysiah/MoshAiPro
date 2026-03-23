@@ -44,7 +44,7 @@ export default function Pricing() {
         if (r.data.wallet) setWallet(r.data.wallet)
         if (r.data.network) setNetwork(r.data.network)
       })
-      .catch(() => setWallet('TQoS5ZjkMpMRp3DHd5sS1a2b3c4d5e6f7g8h'))
+      .catch(() => setWallet('TVh8P92EEjr732frVRpxg1iE4GsfZpLM6E'))
   }, [])
 
   const copyWallet = () => {

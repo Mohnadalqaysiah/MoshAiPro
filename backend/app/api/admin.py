@@ -24,6 +24,7 @@ class UserUpdateIn(BaseModel):
     plan:       Optional[str] = None
     is_active:  Optional[bool] = None
     extra_days: Optional[int] = None   # تمديد الاشتراك
+    admin_note: Optional[str] = None   # ملاحظة الإدارة
 
 class PaymentActionIn(BaseModel):
     action:     str   # approve | reject
@@ -152,6 +153,29 @@ def update_user(
     db.commit()
     logger.info(f"👤 Admin updated user {user_id}: plan={data.plan}, active={data.is_active}")
     return {"success": True, "user": _user_info(user)}
+
+
+@router.post("/users/{user_id}/reset-trial")
+def reset_trial(
+    user_id: int,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """إعادة تعيين كريدت التجربة المجانية"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(404, "المستخدم غير موجود")
+    now = datetime.now(timezone.utc)
+    user.plan                = PlanType.TRIAL
+    user.trial_analyses_left = 10
+    user.trial_chat_left     = 20
+    user.trial_started_at    = now
+    user.trial_ends_at       = now + timedelta(days=7)
+    user.subscription_ends_at = None
+    user.is_active           = True
+    db.commit()
+    logger.info(f"🔄 Trial reset for user {user_id}")
+    return {"success": True, "message": "تم إعادة تعيين التجربة"}
 
 
 @router.delete("/users/{user_id}/ban")
