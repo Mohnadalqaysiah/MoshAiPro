@@ -32,7 +32,7 @@ export default function Login() {
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-blue-600 mb-4">
             <TrendingUp size={28} className="text-white" />
           </div>
-          <h1 className="text-2xl font-bold text-white">Mosh AI Pro</h1>
+          <h1 className="text-2xl font-bold text-white">Qafeel <span className="text-blue-400">AI</span></h1>
           <p className="text-gray-400 text-sm mt-1">منصة التداول الذكي بمدارس ICT/SMC</p>
         </div>
 
@@ -86,7 +86,12 @@ export default function Login() {
             </button>
           </form>
 
-          <p className="text-center text-sm text-gray-500 mt-6">
+          <p className="text-center text-sm text-gray-500 mt-4">
+            <Link to="/forgot-password" className="text-gray-400 hover:text-blue-400 transition">
+              نسيت كلمة المرور؟
+            </Link>
+          </p>
+          <p className="text-center text-sm text-gray-500 mt-3">
             ليس لديك حساب؟{' '}
             <Link to="/register" className="text-blue-400 hover:text-blue-300">
               سجّل مجاناً

@@ -1,13 +1,10 @@
 import { Link } from 'react-router-dom'
-import { TrendingUp, Shield, Zap, Bot, Bell, BarChart2, ChevronLeft, CheckCircle, Star } from 'lucide-react'
-
-// ─── SEO meta helper (injected via Helmet-like approach) ──────────────────────
-const META = {
-  title: 'Mosh AI Pro — تداول بذكاء مع الذكاء الاصطناعي',
-  desc:  'منصة تداول احترافية تعتمد على الذكاء الاصطناعي وتحليل ICT/SMC/Wyckoff لتوليد إشارات دقيقة للذهب والبيتكوين والفوركس.',
-}
+import { useAuth } from '../contexts/AuthContext'
+import { TrendingUp, Shield, Zap, Bot, Bell, BarChart2, ChevronLeft, CheckCircle, Star, LayoutDashboard } from 'lucide-react'
 
 export default function Landing() {
+  const { user } = useAuth()
+
   return (
     <div className="min-h-screen bg-gray-950 text-white" dir="rtl">
 
@@ -15,8 +12,8 @@ export default function Landing() {
       <header className="sticky top-0 z-50 bg-gray-950/90 backdrop-blur border-b border-gray-800">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center font-bold text-sm">M</div>
-            <span className="font-bold text-lg">Mosh AI <span className="text-blue-400">Pro</span></span>
+            <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center font-bold text-sm">Q</div>
+            <span className="font-bold text-lg">Qafeel <span className="text-blue-400">AI</span></span>
           </div>
           <nav className="hidden md:flex items-center gap-6 text-sm text-gray-400">
             <a href="#features" className="hover:text-white transition-colors">المميزات</a>
@@ -25,8 +22,16 @@ export default function Landing() {
             <Link to="/contact" className="hover:text-white transition-colors">تواصل</Link>
           </nav>
           <div className="flex items-center gap-2">
-            <Link to="/login"    className="text-sm text-gray-300 hover:text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors">دخول</Link>
-            <Link to="/register" className="text-sm bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg font-medium transition-colors">ابدأ مجاناً</Link>
+            {user ? (
+              <Link to="/dashboard" className="flex items-center gap-1.5 text-sm bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg font-medium transition-colors">
+                <LayoutDashboard size={14} /> لوحة التحكم
+              </Link>
+            ) : (
+              <>
+                <Link to="/login"    className="text-sm text-gray-300 hover:text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors">دخول</Link>
+                <Link to="/register" className="text-sm bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg font-medium transition-colors">ابدأ مجاناً</Link>
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -280,8 +285,8 @@ export default function Landing() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-8">
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <div className="w-7 h-7 bg-blue-500 rounded-lg flex items-center justify-center font-bold text-xs">M</div>
-                <span className="font-bold">Mosh AI Pro</span>
+                <div className="w-7 h-7 bg-blue-500 rounded-lg flex items-center justify-center font-bold text-xs">Q</div>
+                <span className="font-bold">Qafeel AI</span>
               </div>
               <p className="text-gray-600 text-xs leading-relaxed">منصة تداول ذكية مدعومة بالذكاء الاصطناعي وتحليل ICT/SMC المؤسسي.</p>
             </div>
@@ -309,7 +314,7 @@ export default function Landing() {
             </div>
           </div>
           <div className="border-t border-gray-800 pt-6 flex flex-col md:flex-row items-center justify-between gap-3 text-xs text-gray-700">
-            <span>© 2026 Mosh AI Pro. جميع الحقوق محفوظة.</span>
+            <span>© 2026 Qafeel AI Trade. جميع الحقوق محفوظة.</span>
             <span className="flex items-center gap-1">
               <Star size={10} className="text-yellow-600" />
               هذا تحليل تقني فقط وليس نصيحة مالية أو استثمارية

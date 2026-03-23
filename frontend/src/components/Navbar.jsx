@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { TrendingUp, BarChart2, Activity, Zap, LogOut, Shield, User, Menu, X } from 'lucide-react'
+import { TrendingUp, BarChart2, Activity, Zap, LogOut, Shield, User, Menu, X, Settings } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 
 export default function Navbar() {
@@ -34,10 +34,10 @@ export default function Navbar() {
       <div className="container mx-auto flex items-center justify-between">
 
         {/* Logo */}
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center font-bold text-white text-sm">M</div>
-          <span className="text-white font-bold text-base">Mosh AI <span className="text-blue-400">Pro</span></span>
-        </div>
+        <Link to="/" className="flex items-center gap-2">
+          <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center font-bold text-white text-sm">Q</div>
+          <span className="text-white font-bold text-base">Qafeel <span className="text-blue-400">AI</span></span>
+        </Link>
 
         {/* Desktop Nav Links */}
         <div className="hidden md:flex items-center gap-1">
@@ -66,10 +66,10 @@ export default function Navbar() {
             </Link>
           )}
           {user && (
-            <div className="flex items-center gap-1.5 text-xs text-gray-400 px-2 py-1.5 rounded-lg bg-gray-700/50">
+            <Link to="/profile" className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white px-2 py-1.5 rounded-lg bg-gray-700/50 hover:bg-gray-700 transition">
               <User size={13} />
               <span className="max-w-[100px] truncate">{user.full_name || user.email}</span>
-            </div>
+            </Link>
           )}
           <button onClick={handleLogout} className="flex items-center gap-1 text-xs text-gray-400 hover:text-red-400 px-2 py-1.5 rounded-lg hover:bg-gray-700">
             <LogOut size={14} /> خروج
@@ -110,10 +110,10 @@ export default function Navbar() {
             </Link>
           )}
           {user && (
-            <div className="flex items-center gap-2 px-4 py-2 text-sm text-gray-400">
-              <User size={14} />
-              <span className="truncate">{user.full_name || user.email}</span>
-            </div>
+            <Link to="/profile" onClick={() => setOpen(false)} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm text-gray-400 hover:bg-gray-700">
+              <Settings size={14} />
+              <span className="truncate">حسابي — {user.full_name || user.email}</span>
+            </Link>
           )}
           <button onClick={handleLogout} className="flex items-center gap-2 w-full px-4 py-2.5 rounded-lg text-sm text-red-400 hover:bg-gray-700">
             <LogOut size={16} /> تسجيل الخروج

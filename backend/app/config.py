@@ -28,8 +28,8 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 43200
     
     # ----- Application -----
-    APP_NAME: str = "Mosh AI Pro v5"
-    APP_VERSION: str = "5.0.0"
+    APP_NAME: str = "Qafeel AI Trade"
+    APP_VERSION: str = "5.2.0"
     DEBUG: bool = True
     ALLOWED_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
     
@@ -81,7 +81,7 @@ class Settings(BaseSettings):
     # ----- SaaS / Payments -----
     TELEGRAM_BOT_USERNAME: str = "ai_hybridbot"
     BOT_SECRET: str = "mosh-bot-secret-change-me"
-    USDT_WALLET_ADDRESS: str = "TQoS5ZjkMpMRp3DHd5sSxxxxxxxYOUR_WALLET"
+    USDT_WALLET_ADDRESS: str = "TVh8P92EEjr732frVRpxg1iE4GsfZpLM6E"
     USDT_NETWORK: str = "TRC20"
     TRIAL_ANALYSES: int = 10
     TRIAL_CHAT: int = 20

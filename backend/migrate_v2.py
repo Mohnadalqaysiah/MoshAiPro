@@ -23,6 +23,10 @@ migrations = [
     ALTER TABLE users
     ADD COLUMN IF NOT EXISTS risk_percent FLOAT DEFAULT 1.5;
     """,
+    """
+    ALTER TABLE users
+    ADD COLUMN IF NOT EXISTS phone_number VARCHAR;
+    """,
 ]
 
 with engine.connect() as conn:

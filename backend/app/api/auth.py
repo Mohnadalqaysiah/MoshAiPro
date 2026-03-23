@@ -48,6 +48,14 @@ class TradingSettingsIn(BaseModel):
     account_balance: float = 10000.0
     risk_percent: float = 1.5
 
+class ChangePasswordIn(BaseModel):
+    old_password: str
+    new_password: str
+
+class UpdateProfileIn(BaseModel):
+    full_name: str = ""
+    phone_number: str = ""
+
 
 # ─── Register ─────────────────────────────────────────────────────────────────
 
@@ -128,6 +136,39 @@ def update_trading_settings(
         "account_balance": user.account_balance,
         "risk_percent": user.risk_percent,
     }
+
+
+# ─── Change Password ──────────────────────────────────────────────────────────
+
+@router.put("/change-password")
+def change_password(
+    data: ChangePasswordIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if not verify_password(data.old_password, user.password_hash):
+        raise HTTPException(400, "كلمة المرور الحالية غير صحيحة")
+    if len(data.new_password) < 8:
+        raise HTTPException(400, "كلمة المرور الجديدة يجب أن تكون 8 أحرف على الأقل")
+    user.password_hash = hash_password(data.new_password)
+    db.commit()
+    return {"success": True, "message": "تم تغيير كلمة المرور بنجاح"}
+
+
+# ─── Update Profile ───────────────────────────────────────────────────────────
+
+@router.put("/profile")
+def update_profile(
+    data: UpdateProfileIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if data.full_name:
+        user.full_name = data.full_name.strip()
+    if data.phone_number is not None:
+        user.phone_number = data.phone_number.strip() or None
+    db.commit()
+    return {"success": True, "user": _user_info(user)}
 
 
 # ─── Link Telegram ────────────────────────────────────────────────────────────
@@ -241,4 +282,5 @@ def _user_info(user: User) -> dict:
         "created_at":            user.created_at.isoformat() if user.created_at else None,
         "account_balance":       float(user.account_balance or 10000.0),
         "risk_percent":          float(user.risk_percent or 1.5),
+        "phone_number":          user.phone_number or "",
     }
