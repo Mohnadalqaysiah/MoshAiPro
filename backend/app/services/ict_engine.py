@@ -871,8 +871,12 @@ class ICTEngine:
         reward_tp2 = abs(tp2 - entry)
         rr = round(reward_tp2 / risk, 2) if risk > 0 else 0
 
+        # منطقة الدخول المهنية: ±25% من ATR حول نقطة الدخول المثالية
+        zone_buffer = atr * 0.25
         return {
             "entry": round(entry, 5),
+            "entry_zone_min": round(entry - zone_buffer, 5),
+            "entry_zone_max": round(entry + zone_buffer, 5),
             "stop_loss": round(sl, 5),
             "tp1": round(tp1, 5),
             "tp2": round(tp2, 5),

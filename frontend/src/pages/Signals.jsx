@@ -105,28 +105,86 @@ export default function Signals() {
             <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
               <h3 className="text-white font-semibold mb-3">مستويات الدخول</h3>
               <div className="space-y-2 text-sm">
-                {result.entry_zones?.map((e, i) => (
+                {/* السعر الفوري الحالي */}
+                {result.current_price != null && (
+                  <div className="flex justify-between pb-2 border-b border-gray-700">
+                    <span className="text-gray-400 flex items-center gap-1">
+                      السعر الحالي
+                      {result.price_source === 'twelvedata' && (
+                        <span className="text-green-600 text-xs">● live</span>
+                      )}
+                    </span>
+                    <span className="text-blue-300 font-mono font-semibold">
+                      {typeof result.current_price === 'number'
+                        ? result.current_price.toFixed(symbol === 'BTCUSD' ? 2 : 5)
+                        : result.current_price}
+                      {result.price_fetched_at && (
+                        <span className="text-gray-600 text-xs mr-1">
+                          ({new Date(result.price_fetched_at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })})
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                )}
+                {/* منطقة الدخول من ICT engine */}
+                {(result.levels?.entry_zone_min || result.levels?.entry) && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">منطقة الدخول</span>
+                    <span className="text-white font-mono">
+                      {result.levels.entry_zone_min && result.levels.entry_zone_max
+                        ? `${result.levels.entry_zone_min} — ${result.levels.entry_zone_max}`
+                        : result.levels.entry}
+                    </span>
+                  </div>
+                )}
+                {/* منطقة الدخول من Gemini (القديم) */}
+                {!result.levels?.entry && result.entry_zones?.map((e, i) => (
                   <div key={i} className="flex justify-between">
                     <span className="text-gray-400">منطقة دخول {i+1}</span>
                     <span className="text-white font-mono">{e}</span>
                   </div>
                 ))}
-                {result.stop_loss_zone && (
+                {/* SL */}
+                {(result.levels?.stop_loss || result.stop_loss_zone) && (
                   <div className="flex justify-between border-t border-gray-700 pt-2 mt-2">
                     <span className="text-gray-400">وقف الخسارة</span>
-                    <span className="text-red-400 font-mono">{result.stop_loss_zone}</span>
+                    <span className="text-red-400 font-mono">{result.levels?.stop_loss || result.stop_loss_zone}</span>
                   </div>
                 )}
-                {result.take_profit_zones?.map((tp, i) => (
+                {/* TP من ICT engine */}
+                {result.levels?.tp1 && (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">هدف 1</span>
+                      <span className="text-green-400 font-mono">{result.levels.tp1}</span>
+                    </div>
+                    {result.levels.tp2 && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">هدف 2</span>
+                        <span className="text-green-300 font-mono">{result.levels.tp2}</span>
+                      </div>
+                    )}
+                    {result.levels.tp3 && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">هدف 3</span>
+                        <span className="text-green-200 font-mono">{result.levels.tp3}</span>
+                      </div>
+                    )}
+                  </>
+                )}
+                {/* TP من Gemini (القديم) */}
+                {!result.levels?.tp1 && result.take_profit_zones?.map((tp, i) => (
                   <div key={i} className="flex justify-between">
                     <span className="text-gray-400">هدف {i+1}</span>
                     <span className="text-green-400 font-mono">{tp}</span>
                   </div>
                 ))}
-                {result.risk_reward && (
+                {(result.risk_reward || result.levels?.risk_reward) && (
                   <div className="flex justify-between border-t border-gray-700 pt-2 mt-2">
                     <span className="text-gray-400">Risk/Reward</span>
-                    <span className="text-blue-400 font-mono">{result.risk_reward?.toFixed(2)}x</span>
+                    <span className="text-blue-400 font-mono">
+                      {((result.levels?.risk_reward ?? result.risk_reward) || 0).toFixed(2)}x
+                    </span>
                   </div>
                 )}
               </div>

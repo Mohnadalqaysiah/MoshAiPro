@@ -298,33 +298,54 @@ class SmartDataProvider:
         }
         return ttls.get(timeframe, 300)
 
-    def get_current_price(self, symbol: str) -> Optional[float]:
-        """السعر الحالي من yfinance"""
+    def get_realtime_price_with_meta(self, symbol: str) -> Optional[Dict]:
+        """
+        جلب السعر الفوري مع المصدر والوقت.
+        يجرب TwelveData أولاً (spot حقيقي) ثم yfinance كـ fallback.
+        Returns: {"price": float, "source": str, "fetched_at": str} أو None
+        """
+        fetched_at = datetime.utcnow().isoformat() + "Z"
+
+        # 1. TwelveData /price أولاً — spot فوري
+        if self.td_key:
+            try:
+                td_symbol = TWELVEDATA_MAP.get(symbol.upper(), symbol)
+                resp = requests.get(
+                    f"{self.td_base}/price",
+                    params={"symbol": td_symbol, "apikey": self.td_key},
+                    timeout=5
+                )
+                data = resp.json()
+                if "price" in data:
+                    return {
+                        "price": float(data["price"]),
+                        "source": "twelvedata",
+                        "fetched_at": datetime.utcnow().isoformat() + "Z",
+                    }
+            except Exception as e:
+                logger.warning(f"TwelveData price error for {symbol}: {e}")
+
+        # 2. yfinance fallback — آخر شمعة 1m
         try:
             if YFINANCE_AVAILABLE:
                 yf_symbol = YFINANCE_MAP.get(symbol.upper(), symbol)
                 ticker = yf.Ticker(yf_symbol)
                 data = ticker.history(period="1d", interval="1m")
                 if data is not None and len(data) > 0:
-                    return float(data["Close"].iloc[-1])
+                    return {
+                        "price": float(data["Close"].iloc[-1]),
+                        "source": "yfinance",
+                        "fetched_at": datetime.utcnow().isoformat() + "Z",
+                    }
         except Exception as e:
-            logger.warning(f"Price fetch error: {e}")
-
-        # Fallback TwelveData
-        try:
-            td_symbol = TWELVEDATA_MAP.get(symbol.upper(), symbol)
-            resp = requests.get(
-                f"{self.td_base}/price",
-                params={"symbol": td_symbol, "apikey": self.td_key},
-                timeout=5
-            )
-            data = resp.json()
-            if "price" in data:
-                return float(data["price"])
-        except Exception:
-            pass
+            logger.warning(f"yfinance price error for {symbol}: {e}")
 
         return None
+
+    def get_current_price(self, symbol: str) -> Optional[float]:
+        """السعر الحالي (للتوافق مع الكود القديم)"""
+        meta = self.get_realtime_price_with_meta(symbol)
+        return meta["price"] if meta else None
 
     def is_market_open(self, symbol: str) -> bool:
         """فحص إذا السوق مفتوح"""

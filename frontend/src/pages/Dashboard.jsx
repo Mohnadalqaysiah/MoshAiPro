@@ -264,10 +264,31 @@ export default function Dashboard() {
               const rec = sig.recommendation || sig.signal_type || 'WATCH'
               const confidence = sig.ai_confidence_score || sig.ai_confidence || 0
               const market = sig.market || sig.symbol || 'N/A'
+
+              // مستويات من ICT engine (الجديد) أو Gemini (القديم)
+              const levels = sig.levels || {}
+              const entryMin  = levels.entry_zone_min  || sig.entry_zone_min
+              const entryMax  = levels.entry_zone_max  || sig.entry_zone_max
+              const entryExact = levels.entry || sig.entry_zones?.[0]
+              const sl   = levels.stop_loss  || sig.stop_loss_zone
+              const tp1  = levels.tp1        || sig.take_profit_zones?.[0]
+              const tp2  = levels.tp2        || sig.take_profit_zones?.[1]
+              const rr   = sig.risk_reward   || levels.risk_reward
+
+              // السعر الفوري + المصدر + الوقت
+              const livePrice    = sig.current_price
+              const priceSource  = sig.price_source
+              const priceFetchAt = sig.price_fetched_at
+                ? new Date(sig.price_fetched_at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })
+                : null
+
+              const fmt = (v, d = 5) => v != null ? (typeof v === 'number' ? v.toFixed(d) : v) : null
+
               return (
                 <div key={sig.id || i} className={`border rounded-lg p-4 ${getSignalBg(rec)}`}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
+                  {/* الصف الأول: رمز + توصية + مؤشرات */}
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
                       <span className="text-white font-bold">{market}</span>
                       <span className={`font-semibold ${getSignalColor(rec)}`}>{getSignalAr(rec)}</span>
                       {sig.from_cache && (
@@ -276,16 +297,36 @@ export default function Dashboard() {
                     </div>
                     <div className="flex items-center gap-3 text-sm">
                       <span className="text-gray-400">ثقة: <span className="text-white font-medium">{confidence.toFixed ? confidence.toFixed(1) : confidence}%</span></span>
-                      {sig.risk_reward && (
-                        <span className="text-gray-400">R/R: <span className="text-white font-medium">{sig.risk_reward.toFixed ? sig.risk_reward.toFixed(2) : sig.risk_reward}x</span></span>
+                      {rr != null && (
+                        <span className="text-gray-400">R/R: <span className="text-white font-medium">{typeof rr === 'number' ? rr.toFixed(2) : rr}x</span></span>
                       )}
                     </div>
                   </div>
-                  {sig.entry_zones && sig.entry_zones.length > 0 && (
-                    <div className="mt-2 text-sm text-gray-400">
-                      دخول: <span className="text-white">{sig.entry_zones[0]}</span>
-                      {sig.stop_loss_zone && <> | SL: <span className="text-red-400">{sig.stop_loss_zone}</span></>}
-                      {sig.take_profit_zones && sig.take_profit_zones[0] && <> | TP1: <span className="text-green-400">{sig.take_profit_zones[0]}</span></>}
+
+                  {/* السعر الفوري */}
+                  {livePrice != null && (
+                    <div className="mt-2 flex items-center gap-2 text-xs">
+                      <span className="text-gray-500">السعر الحالي:</span>
+                      <span className="text-blue-300 font-semibold">{fmt(livePrice, market === 'BTCUSD' ? 2 : 5)}</span>
+                      {priceFetchAt && <span className="text-gray-600">({priceFetchAt})</span>}
+                      {priceSource === 'twelvedata' && (
+                        <span className="text-green-700 text-xs px-1 py-0.5 bg-green-900/30 rounded">● live</span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* منطقة الدخول + SL + TP */}
+                  {(entryMin || entryExact) && (
+                    <div className="mt-2 text-xs text-gray-400 space-y-1">
+                      <div>
+                        {entryMin && entryMax
+                          ? <>دخول: <span className="text-white">{fmt(entryMin)} — {fmt(entryMax)}</span></>
+                          : <>دخول: <span className="text-white">{fmt(entryExact)}</span></>
+                        }
+                        {sl != null && <> &nbsp;|&nbsp; SL: <span className="text-red-400">{fmt(sl)}</span></>}
+                        {tp1 != null && <> &nbsp;|&nbsp; TP1: <span className="text-green-400">{fmt(tp1)}</span></>}
+                        {tp2 != null && <> &nbsp;|&nbsp; TP2: <span className="text-green-300">{fmt(tp2)}</span></>}
+                      </div>
                     </div>
                   )}
                 </div>

@@ -217,6 +217,17 @@ class MoshAIEngineV5:
             conf = analysis.get("ai_confidence_score", 0)
             logger.success(f"✅ {symbol}/{timeframe}: {rec} | {conf}% | {int(ms)}ms")
 
+            # ── السعر الفوري الحقيقي (TwelveData spot أو yfinance 1m) ──────
+            try:
+                rt_price = smart_data.get_realtime_price_with_meta(symbol)
+                if rt_price:
+                    analysis["current_price"]   = rt_price["price"]
+                    analysis["price_source"]    = rt_price["source"]
+                    analysis["price_fetched_at"] = rt_price["fetched_at"]
+                    logger.info(f"   💱 Live price [{rt_price['source']}]: {rt_price['price']}")
+            except Exception as _pe:
+                logger.warning(f"   ⚠️ Could not fetch live price: {_pe}")
+
             # ── حفظ في الكاش ─────────────────────────────────────────────
             analysis["from_cache"] = False
             analysis["cached_at"] = datetime.now().isoformat()
