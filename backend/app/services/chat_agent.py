@@ -132,6 +132,9 @@ AGENT_SYSTEM_PROMPT = """
 • لا تعطي توصية بدون أرقام حقيقية
 • لا تخالف القواعد حتى لو التحليل مغري
 • لا تذكر "Gemini" في ردك أبداً
+• ❌ ممنوع تطلب السعر الحالي من المستخدم أبداً — السعر موجود دائماً في السياق المرسل إليك، استخدمه مباشرة
+• ❌ ممنوع تقول "زودني بالسعر" أو "أعطني السعر الحالي" — هذا خطأ كبير
+• ✔️ السعر الحالي يوجد في السطر "السعر الحالي: [رقم]" في السياق — استخدمه كما هو
 """
 
 
@@ -319,7 +322,13 @@ class TradingChatAgent:
 
         rec = analysis.get("recommendation", "WAIT")
         conf = analysis.get("ai_confidence_score", 0)
-        price = analysis.get("current_price", 0)
+        price = analysis.get("current_price") or 0
+
+        # إذا السعر صفر أو ناقص — اجلبه مباشرة من المصدر
+        if not price:
+            rt = smart_data.get_realtime_price_with_meta(symbol)
+            if rt:
+                price = rt["price"]
         atr = analysis.get("atr", 0)
         entry = analysis.get("entry_zones", [])
         sl = analysis.get("stop_loss_zone", 0)
