@@ -107,23 +107,33 @@ export default function Signals() {
               <div className="space-y-2 text-sm">
                 {/* السعر الفوري الحالي */}
                 {result.current_price != null && (
-                  <div className="flex justify-between pb-2 border-b border-gray-700">
-                    <span className="text-gray-400 flex items-center gap-1">
-                      السعر الحالي
-                      {result.price_source === 'twelvedata' && (
-                        <span className="text-green-600 text-xs">● live</span>
-                      )}
-                    </span>
-                    <span className="text-blue-300 font-mono font-semibold">
-                      {typeof result.current_price === 'number'
-                        ? result.current_price.toFixed(symbol === 'BTCUSD' ? 2 : 5)
-                        : result.current_price}
-                      {result.price_fetched_at && (
-                        <span className="text-gray-600 text-xs mr-1">
-                          ({new Date(result.price_fetched_at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })})
-                        </span>
-                      )}
-                    </span>
+                  <div className="pb-2 border-b border-gray-700 space-y-1">
+                    <div className="flex justify-between">
+                      <span className="text-gray-400 flex items-center gap-1.5">
+                        السعر الحالي
+                        {result.price_source === 'finnhub_spot'
+                          ? <span className="text-green-500 text-xs font-medium">● spot</span>
+                          : result.price_source?.includes('futures')
+                            ? <span className="text-yellow-600 text-xs">● futures</span>
+                            : <span className="text-blue-500 text-xs">● live</span>
+                        }
+                      </span>
+                      <span className="text-blue-300 font-mono font-semibold">
+                        {typeof result.current_price === 'number'
+                          ? result.current_price.toFixed(symbol === 'BTCUSD' ? 2 : 5)
+                          : result.current_price}
+                        {result.price_fetched_at && (
+                          <span className="text-gray-600 text-xs mr-1">
+                            ({new Date(result.price_fetched_at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })})
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                    {result.price_source?.includes('futures') && (
+                      <p className="text-xs text-yellow-700/80 text-right">
+                        ⚠️ السعر من عقود الآجل — قد يختلف ±5 نقاط عن سعر Spot في منصتك
+                      </p>
+                    )}
                   </div>
                 )}
                 {/* منطقة الدخول من ICT engine */}

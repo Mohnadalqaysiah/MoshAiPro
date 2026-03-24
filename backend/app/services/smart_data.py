@@ -414,20 +414,7 @@ class SmartDataProvider:
 
         fetched_at = datetime.utcnow().isoformat() + "Z"
 
-        # ─── 1. yfinance — مجاني بلا حدود ────────────────────────────────────
-        try:
-            if YFINANCE_AVAILABLE:
-                yf_symbol = YFINANCE_MAP.get(sym, sym)
-                ticker = yf.Ticker(yf_symbol)
-                hist = ticker.history(period="1d", interval="1m")
-                if hist is not None and len(hist) > 0:
-                    price = float(hist["Close"].iloc[-1])
-                    self._price_cache[sym] = (price, "yfinance", fetched_at, now_ts)
-                    return {"price": price, "source": "yfinance", "fetched_at": fetched_at}
-        except Exception as e:
-            logger.warning(f"yfinance price error for {symbol}: {e}")
-
-        # ─── 2. Finnhub — مجاني 60 req/min ───────────────────────────────────
+        # ─── 1. Finnhub quote — spot حقيقي (ليس futures) ────────────────────
         if self._fh_key:
             try:
                 fh_symbol = FINNHUB_MAP.get(sym)
@@ -438,13 +425,28 @@ class SmartDataProvider:
                         timeout=5,
                     )
                     data = resp.json()
-                    price = data.get("c") or data.get("l")  # current or last
+                    price = data.get("c") or data.get("l")
                     if price and float(price) > 0:
                         price = float(price)
-                        self._price_cache[sym] = (price, "finnhub", fetched_at, now_ts)
-                        return {"price": price, "source": "finnhub", "fetched_at": fetched_at}
+                        self._price_cache[sym] = (price, "finnhub_spot", fetched_at, now_ts)
+                        return {"price": price, "source": "finnhub_spot", "fetched_at": fetched_at}
             except Exception as e:
                 logger.warning(f"Finnhub price error for {symbol}: {e}")
+
+        # ─── 2. yfinance 1m — مجاني (futures للمعادن، قريب من spot) ──────────
+        try:
+            if YFINANCE_AVAILABLE:
+                yf_symbol = YFINANCE_MAP.get(sym, sym)
+                ticker = yf.Ticker(yf_symbol)
+                hist = ticker.history(period="1d", interval="1m")
+                if hist is not None and len(hist) > 0:
+                    price = float(hist["Close"].iloc[-1])
+                    # للذهب والفضة: GC=F هي futures — نضيف label
+                    src = "yfinance_futures" if sym in ("XAUUSD", "XAGUSD") else "yfinance"
+                    self._price_cache[sym] = (price, src, fetched_at, now_ts)
+                    return {"price": price, "source": src, "fetched_at": fetched_at}
+        except Exception as e:
+            logger.warning(f"yfinance price error for {symbol}: {e}")
 
         return None
 
