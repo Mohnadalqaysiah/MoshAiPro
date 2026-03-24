@@ -38,6 +38,19 @@ YFINANCE_MAP = {
     "AUDUSD": "AUDUSD=X",
     "USDCAD": "USDCAD=X",
     "NZDUSD": "NZDUSD=X",
+    "NAS100":  "NQ=F",      # Nasdaq Futures
+    "NASDAQ":  "NQ=F",
+    "US100":   "NQ=F",
+    "SP500":   "ES=F",      # S&P 500 Futures
+    "US500":   "ES=F",
+    "DOW":     "YM=F",      # Dow Jones Futures
+    "US30":    "YM=F",
+    "USOIL":   "CL=F",      # WTI Crude Oil
+    "OIL":     "CL=F",
+    "XAGUSD":  "SI=F",      # Silver
+    "NATGAS":  "NG=F",      # Natural Gas
+    "USDINDEX":"DX-Y.NYB",  # US Dollar Index
+    "DXY":     "DX-Y.NYB",
 }
 
 TWELVEDATA_MAP = {
@@ -65,6 +78,17 @@ FINNHUB_MAP = {
     "AUDUSD": "OANDA:AUD_USD",
     "USDCAD": "OANDA:USD_CAD",
     "NZDUSD": "OANDA:NZD_USD",
+    "NAS100":  "OANDA:NAS100_USD",
+    "NASDAQ":  "OANDA:NAS100_USD",
+    "US100":   "OANDA:NAS100_USD",
+    "SP500":   "OANDA:SPX500_USD",
+    "US500":   "OANDA:SPX500_USD",
+    "DOW":     "OANDA:US30_USD",
+    "US30":    "OANDA:US30_USD",
+    "USOIL":   "OANDA:WTICO_USD",
+    "OIL":     "OANDA:WTICO_USD",
+    "XAGUSD":  "OANDA:XAG_USD",
+    "NATGAS":  "OANDA:NATGAS_USD",
 }
 
 # yfinance interval map

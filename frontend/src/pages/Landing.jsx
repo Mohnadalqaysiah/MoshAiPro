@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
 import { TrendingUp, Shield, Zap, Bot, Bell, BarChart2, ChevronLeft, ChevronRight, CheckCircle, Star, LayoutDashboard } from 'lucide-react'
+import PublicChatBot from '../components/PublicChatBot'
 
 const FEATURE_ICONS = [
   <BarChart2 className="text-blue-400"   size={24} />,
@@ -274,6 +275,7 @@ export default function Landing() {
         </div>
       </footer>
 
+      <PublicChatBot />
     </div>
   )
 }

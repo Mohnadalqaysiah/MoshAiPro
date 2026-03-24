@@ -11,6 +11,7 @@ const MARKETS = ['XAUUSD', 'BTCUSD', 'EURUSD', 'GBPUSD']
 export default function Dashboard() {
   const { user } = useAuth()
   const [signals, setSignals]       = useState([])
+  const [signalHistory, setSignalHistory] = useState([])
   const [analyzing, setAnalyzing]   = useState(null)
   const [error, setError]           = useState(null)
   const [limitReached, setLimitReached] = useState(false)
@@ -22,7 +23,7 @@ export default function Dashboard() {
   const [relinkDone, setRelinkDone] = useState(false)
 
   // جلب آخر الإشارات
-  useEffect(() => { fetchSignals() }, [])
+  useEffect(() => { fetchSignals(); fetchSignalHistory() }, [])
 
   const fetchSignals = async () => {
     try {
@@ -30,6 +31,15 @@ export default function Dashboard() {
       setSignals(res.data.data || [])
     } catch (e) {
       // no signals yet
+    }
+  }
+
+  const fetchSignalHistory = async () => {
+    try {
+      const res = await axios.get(`${API}/api/v1/signals/history?limit=20`)
+      setSignalHistory(res.data.signals || [])
+    } catch (e) {
+      // no history yet
     }
   }
 
@@ -332,6 +342,61 @@ export default function Dashboard() {
                 </div>
               )
             })}
+          </div>
+        )}
+      </div>
+
+      {/* Signal History */}
+      <div className="bg-gray-800 border border-gray-700 rounded-xl p-5">
+        <h2 className="text-white font-semibold mb-4 flex items-center gap-2">
+          <Activity size={18} className="text-purple-400" />
+          سجل التوصيات
+        </h2>
+        {signalHistory.length === 0 ? (
+          <p className="text-gray-500 text-center py-6 text-sm">لا يوجد سجل بعد. قم بتحليل سوق للبدء.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm" dir="rtl">
+              <thead>
+                <tr className="text-gray-400 border-b border-gray-700 text-xs">
+                  <th className="pb-2 text-right font-medium">السوق</th>
+                  <th className="pb-2 text-right font-medium">النوع</th>
+                  <th className="pb-2 text-right font-medium">الحالة</th>
+                  <th className="pb-2 text-right font-medium">الثقة</th>
+                  <th className="pb-2 text-right font-medium">الدخول</th>
+                  <th className="pb-2 text-right font-medium">التاريخ</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-700/50">
+                {signalHistory.map((s) => {
+                  const statusMap = {
+                    ACTIVE:  { label: 'نشطة 🟢',   cls: 'bg-green-900/40 text-green-300' },
+                    TP1_HIT: { label: 'TP1 ✅',     cls: 'bg-blue-900/40 text-blue-300' },
+                    TP2_HIT: { label: 'TP2 🎯',     cls: 'bg-purple-900/40 text-purple-300' },
+                    SL_HIT:  { label: 'SL ❌',      cls: 'bg-red-900/40 text-red-300' },
+                    EXPIRED: { label: 'منتهية ⏰',  cls: 'bg-gray-700/60 text-gray-400' },
+                  }
+                  const st = statusMap[s.status] || { label: s.status, cls: 'bg-gray-700 text-gray-400' }
+                  const typeColor = s.type === 'BUY' ? 'bg-green-900/40 text-green-300' : 'bg-red-900/40 text-red-300'
+                  const typeLabel = s.type === 'BUY' ? 'شراء' : 'بيع'
+                  const createdAt = s.created_at ? new Date(s.created_at).toLocaleDateString('ar-EG', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'
+                  return (
+                    <tr key={s.id} className="hover:bg-gray-700/30 transition-colors">
+                      <td className="py-2 pr-1 font-semibold text-white">{s.market}</td>
+                      <td className="py-2">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${typeColor}`}>{typeLabel}</span>
+                      </td>
+                      <td className="py-2">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${st.cls}`}>{st.label}</span>
+                      </td>
+                      <td className="py-2 text-yellow-300 font-medium">{s.confidence ? `${Math.round(s.confidence)}%` : '-'}</td>
+                      <td className="py-2 text-gray-300">{s.entry ? (typeof s.entry === 'number' ? s.entry.toFixed(5) : s.entry) : '-'}</td>
+                      <td className="py-2 text-gray-500 text-xs">{createdAt}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

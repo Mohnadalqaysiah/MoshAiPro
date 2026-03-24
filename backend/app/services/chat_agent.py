@@ -193,6 +193,28 @@ class TradingChatAgent:
                 "ايثريوم", "الايثريوم", "ethereum", "eth", "ethusd",
                 "إيثيريوم", "إيث", "eth/usd",
             ],
+            "NAS100": [
+                "نازداك", "الناسداك", "ناسداك", "nasdaq", "nas100", "us100",
+                "نازدك", "الناسدق", "ناسدق", "تقنية امريكا", "نازدق",
+            ],
+            "USOIL": [
+                "نفط", "النفط", "oil", "usoil", "crude", "برنت", "wti",
+                "خام", "الخام", "نفط خام", "نفط امريكي",
+            ],
+            "SP500": [
+                "اس بي", "sp500", "s&p", "s&p500", "us500", "sp 500",
+                "ستاندرد", "مؤشر امريكي", "اسواق امريكا",
+            ],
+            "DOW": [
+                "داو", "الداو", "dow", "dow jones", "us30", "داو جونز",
+                "الصناعي الامريكي",
+            ],
+            "XAGUSD": [
+                "فضة", "الفضة", "silver", "xagusd", "xag", "xag/usd",
+            ],
+            "NATGAS": [
+                "غاز", "الغاز", "gas", "natgas", "natural gas", "غاز طبيعي",
+            ],
         }
         for sym, words in aliases.items():
             if any(w in msg for w in words):
@@ -201,6 +223,17 @@ class TradingChatAgent:
 
         if not symbol:
             symbol = ctx.get("symbol")
+
+        # كشف أي رمز مباشر كتبه المستخدم (مثل: AAPL, TSLA, MSFT)
+        if not symbol:
+            import re
+            raw_sym = re.search(r'\b([A-Z]{2,6})\b', message)
+            if raw_sym:
+                candidate = raw_sym.group(1)
+                # تجاهل كلمات شائعة
+                ignore = {"ICT","SMC","USD","EUR","GBP","AI","OK","TP","SL","OR","AND","THE"}
+                if candidate not in ignore:
+                    symbol = candidate
 
         # ── كشف الإطار الزمني (عامية موسعة) ─────────────────────────────────
         timeframe = None
