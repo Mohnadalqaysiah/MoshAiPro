@@ -117,7 +117,8 @@ def format_analysis(data: dict, symbol: str, timeframe: str) -> str:
         msg += f"🔴 *OB مقاومة:* `{fmt_ob(bear_obs[0])}`\n"
 
     # ICT engine nests under bias.below_price / above_price; legacy uses nearest_ssl/nearest_bsl
-    liq_bias = liq.get("bias", {}) if isinstance(liq, dict) else {}
+    _liq_bias_raw = liq.get("bias", {}) if isinstance(liq, dict) else {}
+    liq_bias = _liq_bias_raw if isinstance(_liq_bias_raw, dict) else {}
     ssl = liq.get("nearest_ssl") or liq_bias.get("below_price")
     bsl = liq.get("nearest_bsl") or liq_bias.get("above_price")
     if ssl:
