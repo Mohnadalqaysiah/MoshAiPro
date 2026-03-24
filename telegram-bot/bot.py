@@ -73,21 +73,29 @@ def format_analysis(data: dict, symbol: str, timeframe: str) -> str:
         f"📊 الثقة: `{conf:.1f}%`\n\n"
     )
 
-    entry = data.get("entry_zones", [])
-    sl    = data.get("stop_loss_zone")
-    tps   = data.get("take_profit_zones", [])
-    rr    = data.get("risk_reward_ratio") or data.get("risk_reward")
+    levels = data.get("levels", {})
+    # support both ICT engine v5 (levels.*) and legacy Gemini fields
+    entry_v = levels.get("entry") or (data.get("entry_zones") or [None])[0]
+    entry_min = levels.get("entry_zone_min")
+    entry_max = levels.get("entry_zone_max")
+    sl    = levels.get("stop_loss") or data.get("stop_loss_zone")
+    tp1   = levels.get("tp1") or (data.get("take_profit_zones") or [None])[0]
+    tp2   = levels.get("tp2") or (data.get("take_profit_zones") or [None, None])[1] if len(data.get("take_profit_zones") or []) > 1 else levels.get("tp2")
+    rr    = levels.get("risk_reward") or data.get("risk_reward_ratio") or data.get("risk_reward")
 
-    if entry:  msg += f"🎯 *دخول:* `{entry[0]}`\n"
+    if entry_min and entry_max:
+        msg += f"🎯 *دخول:* `{entry_min} — {entry_max}`\n"
+    elif entry_v:
+        msg += f"🎯 *دخول:* `{entry_v}`\n"
     if sl:     msg += f"🛑 *وقف الخسارة:* `{sl}`\n"
-    for i, tp in enumerate(tps[:2], 1):
-        msg += f"✅ *هدف {i}:* `{tp}`\n"
+    if tp1:    msg += f"✅ *هدف 1:* `{tp1}`\n"
+    if tp2:    msg += f"✅ *هدف 2:* `{tp2}`\n"
     if rr:     msg += f"\n⚖️ *R/R:* `{float(rr):.2f}x`\n"
 
     ob      = data.get("order_blocks", {})
-    wyckoff = data.get("wyckoff", {})
+    wyckoff = data.get("wyckoff_analysis") or data.get("wyckoff", {})
     pd_z    = data.get("premium_discount", {})
-    liq     = data.get("liquidity", {})
+    liq     = data.get("liquidity_analysis") or data.get("liquidity", {})
 
     def fmt_ob(o):
         """تحويل dict الـ OB إلى نص مقروء"""
@@ -108,15 +116,18 @@ def format_analysis(data: dict, symbol: str, timeframe: str) -> str:
     if bear_obs:
         msg += f"🔴 *OB مقاومة:* `{fmt_ob(bear_obs[0])}`\n"
 
-    ssl = liq.get("nearest_ssl")
-    bsl = liq.get("nearest_bsl")
+    # ICT engine nests under bias.below_price / above_price; legacy uses nearest_ssl/nearest_bsl
+    liq_bias = liq.get("bias", {}) if isinstance(liq, dict) else {}
+    ssl = liq.get("nearest_ssl") or liq_bias.get("below_price")
+    bsl = liq.get("nearest_bsl") or liq_bias.get("above_price")
     if ssl:
         msg += f"🧲 *سيولة تحت:* `{ssl}`\n"
     if bsl:
         msg += f"🧲 *سيولة فوق:* `{bsl}`\n"
 
     phase = wyckoff.get("phase") if isinstance(wyckoff, dict) else None
-    zone  = pd_z.get("zone")    if isinstance(pd_z, dict)    else None
+    # ICT engine uses current_zone; legacy uses zone
+    zone  = pd_z.get("current_zone") or pd_z.get("zone") if isinstance(pd_z, dict) else None
     if phase:
         phase_ar = {
             "ACCUMULATION": "تراكم", "DISTRIBUTION": "توزيع",
@@ -340,7 +351,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data == "menu_back":
         await query.edit_message_text(
-            "🤖 *Qaffel AI — القائمة الرئيسية",
+            "🤖 *Qaffel AI — القائمة الرئيسية*",
             parse_mode="Markdown", reply_markup=main_menu_keyboard()
         )
 

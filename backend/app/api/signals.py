@@ -123,7 +123,7 @@ async def get_latest_signals(
         signals = db.query(Signal).order_by(
             Signal.created_at.desc()
         ).limit(limit).all()
-        
+
         return {
             "success": True,
             "count": len(signals),
@@ -131,19 +131,59 @@ async def get_latest_signals(
                 {
                     "id": s.id,
                     "market": s.market,
-                    "signal_type": s.signal_type.value,
+                    "signal_type": s.signal_type.value if hasattr(s.signal_type, 'value') else s.signal_type,
                     "entry_price": s.entry_price,
-                    "status": s.status.value,
+                    "status": s.status.value if hasattr(s.status, 'value') else s.status,
                     "ai_confidence": s.ai_confidence,
                     "created_at": s.created_at.isoformat()
                 }
                 for s in signals
             ]
         }
-    
+
     except Exception as e:
         logger.error(f"❌ Error fetching signals: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/history")
+async def get_signal_history(
+    limit: int = 20,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """سجل التوصيات مع حالة التتبع"""
+    now = datetime.now(timezone.utc)
+    signals = (
+        db.query(Signal)
+        .filter(Signal.user_id == user.id)
+        .order_by(Signal.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    result = []
+    for s in signals:
+        # تحقق من الانتهاء تلقائياً
+        if s.status == SignalStatus.ACTIVE and s.expires_at and s.expires_at < now:
+            s.status = SignalStatus.EXPIRED
+            db.commit()
+        result.append({
+            "id":          s.id,
+            "market":      s.market,
+            "timeframe":   s.timeframe,
+            "type":        s.signal_type.value if hasattr(s.signal_type, 'value') else s.signal_type,
+            "status":      s.status.value if hasattr(s.status, 'value') else s.status,
+            "confidence":  s.ai_confidence,
+            "entry":       s.entry_price,
+            "sl":          s.stop_loss,
+            "tp1":         s.take_profit_1,
+            "tp2":         s.take_profit_2,
+            "rr":          s.risk_reward_ratio,
+            "quality":     s.signal_quality.value if hasattr(s.signal_quality, 'value') else s.signal_quality,
+            "created_at":  s.created_at.isoformat() if s.created_at else None,
+            "expires_at":  s.expires_at.isoformat() if s.expires_at else None,
+        })
+    return {"signals": result}
 
 
 @router.get("/{signal_id}")
@@ -194,41 +234,3 @@ async def get_signal_details(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/history")
-async def get_signal_history(
-    limit: int = 20,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """سجل التوصيات مع حالة التتبع"""
-    now = datetime.now(timezone.utc)
-    signals = (
-        db.query(Signal)
-        .filter(Signal.user_id == user.id)
-        .order_by(Signal.created_at.desc())
-        .limit(limit)
-        .all()
-    )
-    result = []
-    for s in signals:
-        # تحقق من الانتهاء تلقائياً
-        if s.status == SignalStatus.ACTIVE and s.expires_at and s.expires_at < now:
-            s.status = SignalStatus.EXPIRED
-            db.commit()
-        result.append({
-            "id":          s.id,
-            "market":      s.market,
-            "timeframe":   s.timeframe,
-            "type":        s.signal_type,
-            "status":      s.status,
-            "confidence":  s.ai_confidence,
-            "entry":       s.entry_price,
-            "sl":          s.stop_loss,
-            "tp1":         s.take_profit_1,
-            "tp2":         s.take_profit_2,
-            "rr":          s.risk_reward_ratio,
-            "quality":     s.signal_quality,
-            "created_at":  s.created_at.isoformat() if s.created_at else None,
-            "expires_at":  s.expires_at.isoformat() if s.expires_at else None,
-        })
-    return {"signals": result}
