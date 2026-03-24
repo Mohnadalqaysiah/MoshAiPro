@@ -29,7 +29,7 @@ export default function Contact() {
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
             <div className="w-7 h-7 bg-blue-500 rounded-lg flex items-center justify-center font-bold text-sm">Q</div>
-            <span className="font-bold text-lg">Qafeel <span className="text-blue-400">AI</span></span>
+            <span className="font-bold text-lg">Qaffel <span className="text-blue-400">AI</span></span>
           </Link>
           <div className="flex gap-4 text-sm">
             <Link to="/login"    className="text-gray-400 hover:text-white transition">تسجيل الدخول</Link>
@@ -147,7 +147,7 @@ export default function Contact() {
       </main>
 
       <footer className="border-t border-gray-800 py-8 text-center text-gray-500 text-sm">
-        <p>© 2026 Qafeel AI · <Link to="/terms" className="hover:text-gray-300">الشروط والأحكام</Link> · <Link to="/privacy" className="hover:text-gray-300">سياسة الخصوصية</Link></p>
+        <p>© 2026 Qaffel AI · <Link to="/terms" className="hover:text-gray-300">الشروط والأحكام</Link> · <Link to="/privacy" className="hover:text-gray-300">سياسة الخصوصية</Link></p>
       </footer>
     </div>
   )

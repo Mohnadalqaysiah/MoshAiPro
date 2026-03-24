@@ -1,5 +1,5 @@
 """
-Mosh AI Pro v5 - Telegram Bot
+Qaffel AI v5 - Telegram Bot
 بوت تيليجرام مع ربط الحسابات وإشعارات انتهاء الاشتراك
 """
 
@@ -66,7 +66,7 @@ def format_analysis(data: dict, symbol: str, timeframe: str) -> str:
     price  = data.get("current_price", 0)
 
     msg = (
-        f"🤖 *Mosh AI Pro — تحليل*\n"
+        f"🤖 *Qaffel AI — تحليل*\n"
         f"━━━━━━━━━━━━━━━━━━\n"
         f"📌 `{symbol}` | `{timeframe}` | السعر: `{price}`\n\n"
         f"{emoji} *التوصية: {rec_ar}*\n"
@@ -317,7 +317,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # /start عادي
     await update.message.reply_text(
-        "🤖 *مرحباً في Mosh AI Pro v5*\n\n"
+        "🤖 *مرحباً في Qaffel AI*\n\n"
         "نظام تحليل الأسواق المالية بالذكاء الاصطناعي\n"
         "مع تنبيهات تلقائية عند ظهور الفرص 🚨\n\n"
         "━━━━━━━━━━━━━━━━\n"
@@ -340,7 +340,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data == "menu_back":
         await query.edit_message_text(
-            "🤖 *Mosh AI Pro v5* — القائمة الرئيسية",
+            "🤖 *Qaffel AI — القائمة الرئيسية",
             parse_mode="Markdown", reply_markup=main_menu_keyboard()
         )
 
@@ -655,7 +655,7 @@ def main():
         logger.error("❌ TELEGRAM_BOT_TOKEN غير محدد!")
         return
 
-    logger.info("🤖 بدء تشغيل Mosh AI Pro v5 Bot...")
+    logger.info("🤖 بدء تشغيل Qaffel AI Bot...")
 
     app = Application.builder().token(BOT_TOKEN).build()
 

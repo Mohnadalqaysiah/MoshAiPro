@@ -1,5 +1,5 @@
 """
-Qafeel AI — Email Service via Hostinger SMTP
+Qaffel AI — Email Service via Hostinger SMTP
 """
 import smtplib
 import ssl
@@ -11,7 +11,7 @@ from loguru import logger
 SMTP_HOST = "smtp.hostinger.com"
 SMTP_PORT = 465
 SMTP_FROM = "support@qaffel.com"
-SMTP_NAME = "Qafeel AI"
+SMTP_NAME = "Qaffel AI"
 
 
 def send_email(to: str, subject: str, body_html: str, smtp_password: str) -> bool:
@@ -43,7 +43,7 @@ def otp_email_body(otp: str) -> str:
       <div style="text-align:center;margin-bottom:24px;">
         <div style="display:inline-block;background:#3b82f6;border-radius:12px;
              width:48px;height:48px;line-height:48px;font-size:22px;font-weight:bold;color:#fff;">Q</div>
-        <h2 style="margin:12px 0 4px;color:#fff;">Qafeel AI</h2>
+        <h2 style="margin:12px 0 4px;color:#fff;">Qaffel AI</h2>
         <p style="margin:0;color:#9ca3af;font-size:14px;">استعادة كلمة المرور</p>
       </div>
 
@@ -77,7 +77,7 @@ def contact_email_body(name: str, sender_email: str, subject: str, message: str)
     return f"""
     <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;
          background:#111827;border-radius:16px;padding:32px;color:#e5e7eb;">
-      <h2 style="color:#3b82f6;margin-top:0;">رسالة جديدة — Qafeel AI</h2>
+      <h2 style="color:#3b82f6;margin-top:0;">رسالة جديدة — Qaffel AI</h2>
       <table style="width:100%;border-collapse:collapse;">
         <tr><td style="color:#9ca3af;padding:6px 0;width:120px;">الاسم:</td><td style="color:#fff;">{name}</td></tr>
         <tr><td style="color:#9ca3af;padding:6px 0;">البريد:</td><td style="color:#3b82f6;">{sender_email}</td></tr>

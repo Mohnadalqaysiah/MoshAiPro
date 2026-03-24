@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 43200
     
     # ----- Application -----
-    APP_NAME: str = "Qafeel AI Trade"
+    APP_NAME: str = "Qaffel AI Trade"
     APP_VERSION: str = "5.2.0"
     DEBUG: bool = True
     ALLOWED_ORIGINS: str = "http://localhost:3000,http://localhost:5173"

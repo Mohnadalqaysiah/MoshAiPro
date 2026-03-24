@@ -15,6 +15,7 @@ from app.models.payment import Payment, PaymentStatus, PaymentPlan
 from app.models.market_config import MarketConfig
 from app.models.site_settings import SiteSettings
 from app.services.auth_service import get_admin_user, hash_password, verify_password
+from app.services.smart_data import smart_data as _smart_data
 
 router = APIRouter()
 
@@ -175,9 +176,15 @@ def reset_trial(
     if not user:
         raise HTTPException(404, "المستخدم غير موجود")
     now = datetime.now(timezone.utc)
+    # اقرأ الحدود من SiteSettings (إذا عدّلها الأدمن) أو استخدم الافتراضي
+    def _get_int(key: str, default: int) -> int:
+        r = db.query(SiteSettings).filter(SiteSettings.key == key).first()
+        try: return int(r.value) if r and r.value else default
+        except: return default
+
     user.plan                = PlanType.TRIAL
-    user.trial_analyses_left = 10
-    user.trial_chat_left     = 20
+    user.trial_analyses_left = _get_int("trial_analysis_limit", 10)
+    user.trial_chat_left     = _get_int("trial_chat_limit", 20)
     user.trial_started_at    = now
     user.trial_ends_at       = now + timedelta(days=7)
     user.subscription_ends_at = None
@@ -200,6 +207,25 @@ def ban_user(
     user.is_active = False
     db.commit()
     return {"success": True, "message": f"تم حظر {user.email}"}
+
+
+@router.delete("/users/{user_id}")
+def delete_user_permanent(
+    user_id: int,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """حذف نهائي للمستخدم من قاعدة البيانات"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(404, "المستخدم غير موجود")
+    if user.role == "admin":
+        raise HTTPException(400, "لا يمكن حذف حساب الإدارة")
+    email = user.email
+    db.delete(user)
+    db.commit()
+    logger.info(f"🗑️ User permanently deleted: {email}")
+    return {"success": True, "message": f"تم حذف {email} نهائياً"}
 
 
 # ─── Payments ────────────────────────────────────────────────────────────────
@@ -457,6 +483,15 @@ def update_setting(
     row.value = data.value.strip()
     db.commit()
     logger.info(f"⚙️ Setting updated: {key} = {data.value}")
+
+    # عند تغيير TwelveData — حدّث الـ runtime مباشرة بدون إعادة تشغيل
+    if key in ("twelvedata_api_key", "twelvedata_enabled"):
+        td_key_row = db.query(SiteSettings).filter(SiteSettings.key == "twelvedata_api_key").first()
+        td_en_row  = db.query(SiteSettings).filter(SiteSettings.key == "twelvedata_enabled").first()
+        api_key  = (td_key_row.value or "").strip() if td_key_row else ""
+        enabled  = (td_en_row.value or "false").strip().lower() == "true" if td_en_row else False
+        _smart_data.update_twelvedata_config(api_key, enabled)
+
     return {"success": True, "key": key, "value": row.value}
 
 

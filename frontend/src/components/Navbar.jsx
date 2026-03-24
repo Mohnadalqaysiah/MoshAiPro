@@ -36,7 +36,7 @@ export default function Navbar() {
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2">
           <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center font-bold text-white text-sm">Q</div>
-          <span className="text-white font-bold text-base">Qafeel <span className="text-blue-400">AI</span></span>
+          <span className="text-white font-bold text-base">Qaffel <span className="text-blue-400">AI</span></span>
         </Link>
 
         {/* Desktop Nav Links */}

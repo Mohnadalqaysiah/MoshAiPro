@@ -5,8 +5,8 @@ import { useAuth } from '../contexts/AuthContext'
 import {
   Users, CreditCard, BarChart2, CheckCircle, XCircle, Clock,
   Search, Plus, Trash2, ToggleLeft, ToggleRight, TrendingUp,
-  DollarSign, Activity, ChevronDown, RefreshCw, Calendar, Phone,
-  MessageCircle, X, ExternalLink, Shield, AlertTriangle, Settings
+  DollarSign, Activity, RefreshCw, Calendar,
+  X, ExternalLink, Shield, AlertTriangle, Settings
 } from 'lucide-react'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -42,6 +42,12 @@ function UserModal({ user: u, onClose, onUpdate }) {
         if (!confirm('حظر هذا المستخدم؟')) { setLoading(''); return }
         await axios.delete(`${API}/api/v1/admin/users/${u.id}/ban`)
         setMsg({ type:'ok', text:'تم الحظر' })
+      } else if (action === 'delete') {
+        if (!confirm(`⚠️ حذف نهائي لـ ${u.email}؟ لا يمكن التراجع!`)) { setLoading(''); return }
+        await axios.delete(`${API}/api/v1/admin/users/${u.id}`)
+        onClose()
+        onUpdate()
+        return
       } else if (action === 'plan') {
         await axios.put(`${API}/api/v1/admin/users/${u.id}`, payload)
         setMsg({ type:'ok', text:'تم تغيير الباقة' })
@@ -144,6 +150,11 @@ function UserModal({ user: u, onClose, onUpdate }) {
                 className="flex items-center gap-1 text-xs bg-red-900/50 hover:bg-red-800/50 text-red-300 px-3 py-1.5 rounded-lg transition border border-red-700/50">
                 <Shield size={12}/> حظر دائم
               </button>
+              <button disabled={loading==='delete'}
+                onClick={() => doAction('delete')}
+                className="flex items-center gap-1 text-xs bg-red-950/60 hover:bg-red-900/60 text-red-400 px-3 py-1.5 rounded-lg transition border border-red-800/50">
+                <Trash2 size={12}/> حذف نهائي
+              </button>
             </div>
           </div>
         </div>
@@ -202,10 +213,11 @@ export default function Admin() {
     Object.entries(r.data).forEach(([k, v]) => { edits[k] = v.value || '' })
     setSettingEdits(edits)
   }
-  const saveSetting = async (key) => {
+  const saveSetting = async (key, overrideValue) => {
     setSettingSaving(key); setSettingMsg(null)
     try {
-      await axios.put(`${API}/api/v1/admin/settings/${key}`, { value: settingEdits[key] })
+      const value = overrideValue !== undefined ? overrideValue : settingEdits[key]
+      await axios.put(`${API}/api/v1/admin/settings/${key}`, { value })
       setSettingMsg({ type:'ok', text:'تم الحفظ بنجاح' })
       loadSettings()
     } catch (e) {
@@ -265,7 +277,7 @@ export default function Admin() {
               <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-xs font-bold">Q</div>
               <div>
                 <div className="text-sm font-semibold">لوحة الإدارة</div>
-                <div className="text-xs text-gray-400">Qafeel AI</div>
+                <div className="text-xs text-gray-400">Qaffel AI</div>
               </div>
             </div>
           </div>
@@ -519,7 +531,7 @@ export default function Admin() {
                 </div>
               )}
 
-              <div className="grid md:grid-cols-2 gap-6 max-w-3xl">
+              <div className="grid md:grid-cols-3 gap-6 max-w-5xl">
 
                 {/* Site Settings */}
                 <div className="space-y-4">
@@ -534,25 +546,80 @@ export default function Admin() {
                         <label className="block text-sm text-gray-300 font-medium mb-1">{f.label}</label>
                         {meta.description && <p className="text-xs text-gray-500 mb-2">{meta.description}</p>}
                         <div className="flex gap-2">
-                          <input
-                            type="text"
-                            value={settingEdits[f.key] ?? ''}
+                          <input type="text" value={settingEdits[f.key] ?? ''}
                             onChange={e => setSettingEdits(s => ({...s, [f.key]: e.target.value}))}
-                            className={`flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500 ${f.mono ? 'font-mono' : ''}`}
-                            dir="ltr"
-                          />
-                          <button
-                            disabled={settingSaving === f.key}
-                            onClick={() => saveSetting(f.key)}
-                            className="flex items-center gap-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition"
-                          >
-                            {settingSaving === f.key ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle size={13}/>}
-                            حفظ
+                            className={`flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500 ${f.mono?'font-mono':''}`}
+                            dir="ltr" />
+                          <button disabled={settingSaving === f.key} onClick={() => saveSetting(f.key)}
+                            className="flex items-center gap-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition">
+                            {settingSaving === f.key ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle size={13}/>} حفظ
                           </button>
                         </div>
                       </div>
                     )
                   })}
+
+                  {/* TwelveData */}
+                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-300 font-medium">TwelveData (احتياطي)</p>
+                        <p className="text-xs text-gray-500 mt-0.5">يُستخدم فقط عند التفعيل</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          const cur = siteSettings['twelvedata_enabled']?.value === 'true'
+                          saveSetting('twelvedata_enabled', cur ? 'false' : 'true')
+                        }}
+                        className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border transition ${
+                          siteSettings['twelvedata_enabled']?.value === 'true'
+                            ? 'bg-green-900/40 border-green-700 text-green-400'
+                            : 'bg-gray-800 border-gray-700 text-gray-400'
+                        }`}>
+                        {siteSettings['twelvedata_enabled']?.value === 'true'
+                          ? <><ToggleRight size={14}/> مفعّل</>
+                          : <><ToggleLeft size={14}/> معطّل</>}
+                      </button>
+                    </div>
+                    <div className="flex gap-2">
+                      <input type="text" value={settingEdits['twelvedata_api_key'] ?? ''}
+                        onChange={e => setSettingEdits(s => ({...s, twelvedata_api_key: e.target.value}))}
+                        placeholder="API Key..."
+                        className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        dir="ltr" />
+                      <button disabled={settingSaving === 'twelvedata_api_key'} onClick={() => saveSetting('twelvedata_api_key')}
+                        className="flex items-center gap-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm px-3 py-2 rounded-lg transition">
+                        {settingSaving === 'twelvedata_api_key' ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle size={13}/>} حفظ
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* حدود الاستخدام */}
+                <div className="space-y-3">
+                  <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">حدود الاستخدام</h2>
+                  {[
+                    { key:'trial_chat_limit',       label:'محادثات التجريبي',   badge:'تجريبي', color:'gray' },
+                    { key:'trial_analysis_limit',   label:'تحليلات التجريبي',   badge:'تجريبي', color:'gray' },
+                    { key:'weekly_chat_limit',      label:'محادثات الأسبوعي',   badge:'أسبوعي', color:'blue' },
+                    { key:'weekly_analysis_limit',  label:'تحليلات الأسبوعي',  badge:'أسبوعي', color:'blue' },
+                    { key:'monthly_chat_limit',     label:'محادثات الشهري',     badge:'شهري',   color:'purple' },
+                    { key:'monthly_analysis_limit', label:'تحليلات الشهري',    badge:'شهري',   color:'purple' },
+                  ].map(f => (
+                    <div key={f.key} className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex items-center gap-2">
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-400 mb-1">{f.label}</p>
+                        <input type="number" min="0" value={settingEdits[f.key] ?? (siteSettings[f.key]?.value || '')}
+                          onChange={e => setSettingEdits(s => ({...s, [f.key]: e.target.value}))}
+                          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          dir="ltr" />
+                      </div>
+                      <button disabled={settingSaving === f.key} onClick={() => saveSetting(f.key)}
+                        className="mt-4 flex items-center bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-2.5 py-2 rounded-lg transition">
+                        {settingSaving === f.key ? <RefreshCw size={12} className="animate-spin"/> : <CheckCircle size={12}/>}
+                      </button>
+                    </div>
+                  ))}
                 </div>
 
                 {/* Admin Account */}

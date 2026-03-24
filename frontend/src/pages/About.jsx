@@ -10,7 +10,7 @@ export default function About() {
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
             <div className="w-7 h-7 bg-blue-500 rounded-lg flex items-center justify-center font-bold text-sm">Q</div>
-            <span className="font-bold text-lg">Qafeel <span className="text-blue-400">AI</span></span>
+            <span className="font-bold text-lg">Qaffel <span className="text-blue-400">AI</span></span>
           </Link>
           <div className="flex gap-4 text-sm">
             <Link to="/login"    className="text-gray-400 hover:text-white transition">تسجيل الدخول</Link>
@@ -36,7 +36,7 @@ export default function About() {
             </span>
           </h1>
           <p className="text-gray-400 text-lg leading-relaxed">
-            Qafeel AI منصة عربية متخصصة في تحليل الأسواق المالية بالذكاء الاصطناعي،
+            Qaffel AI منصة عربية متخصصة في تحليل الأسواق المالية بالذكاء الاصطناعي،
             تجمع بين تقنيات التحليل المؤسسي الاحترافي وسهولة الوصول للجميع.
           </p>
         </div>
@@ -49,7 +49,7 @@ export default function About() {
             <div>
               <h2 className="text-2xl font-bold mb-4">قصتنا</h2>
               <p className="text-gray-400 leading-relaxed mb-4">
-                وُلدت فكرة Qafeel AI من رحم التحدي الذي يعيشه المتداول العربي يومياً —
+                وُلدت فكرة Qaffel AI من رحم التحدي الذي يعيشه المتداول العربي يومياً —
                 أدوات تحليل احترافية موجودة لكنها بالإنجليزية وتحتاج خبرة عميقة، أو إشارات
                 مجهولة المصدر لا يمكن الوثوق بها.
               </p>
@@ -170,7 +170,7 @@ export default function About() {
           <div className="flex items-start gap-3">
             <Star size={16} className="text-yellow-400 mt-0.5 flex-shrink-0" />
             <p className="text-yellow-300/80 text-sm leading-relaxed">
-              <strong>إخلاء مسؤولية:</strong> جميع التحليلات والإشارات المقدمة على منصة Qafeel AI
+              <strong>إخلاء مسؤولية:</strong> جميع التحليلات والإشارات المقدمة على منصة Qaffel AI
               هي لأغراض تعليمية وتحليلية فقط، ولا تُعدّ نصيحة مالية أو استثمارية.
               التداول في الأسواق المالية ينطوي على مخاطر حقيقية وقد تخسر جزءاً أو كل رأس مالك.
               أنت المسؤول الكامل عن قراراتك الاستثمارية.
@@ -194,7 +194,7 @@ export default function About() {
       </section>
 
       <footer className="border-t border-gray-800 py-8 text-center text-gray-500 text-sm">
-        <p>© 2026 Qafeel AI ·
+        <p>© 2026 Qaffel AI ·
           <Link to="/terms"   className="hover:text-gray-300 mx-2">الشروط</Link>·
           <Link to="/privacy" className="hover:text-gray-300 mx-2">الخصوصية</Link>·
           <Link to="/contact" className="hover:text-gray-300 mx-2">تواصل معنا</Link>

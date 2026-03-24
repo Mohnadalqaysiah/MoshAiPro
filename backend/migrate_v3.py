@@ -1,5 +1,5 @@
 """
-Qafeel AI — Migration v3
+Qaffel AI — Migration v3
 Creates site_settings table and seeds default values
 """
 import os

@@ -120,6 +120,10 @@ class SmartDataProvider:
         self._fh_key  = getattr(settings, "FINNHUB_API_KEY", None)
         self._fh_base = "https://finnhub.io/api/v1"
 
+        # TwelveData — معطّل افتراضياً، يُفعَّل من لوحة الإدارة فقط
+        self._td_enabled = False
+        self._td_runtime_key: str = ""
+
     # ─── Public: fetch OHLCV ───────────────────────────────────────────────
 
     async def get_ohlcv(self, symbol: str, timeframe: str = "1h", bars: int = 150) -> Optional[pd.DataFrame]:
@@ -369,6 +373,32 @@ class SmartDataProvider:
             except Exception as e:
                 logger.warning(f"Finnhub price error for {symbol}: {e}")
 
+        return None
+
+    def update_twelvedata_config(self, api_key: str, enabled: bool) -> None:
+        """يُستدعى من لوحة الإدارة لتفعيل/تعطيل TwelveData بدون إعادة تشغيل"""
+        self._td_runtime_key = api_key.strip()
+        self._td_enabled     = enabled and bool(self._td_runtime_key)
+        logger.info(f"TwelveData config updated: enabled={self._td_enabled}")
+        # امسح الكاش لإجبار إعادة الجلب
+        self._price_cache.clear()
+
+    def _try_twelvedata_price(self, symbol: str) -> Optional[float]:
+        """استخدام TwelveData فقط عند التفعيل الصريح من الإدارة"""
+        if not (self._td_enabled and self._td_runtime_key):
+            return None
+        try:
+            td_symbol = TWELVEDATA_MAP.get(symbol.upper(), symbol)
+            resp = requests.get(
+                f"{self.td_base}/price",
+                params={"symbol": td_symbol, "apikey": self._td_runtime_key},
+                timeout=5,
+            )
+            data = resp.json()
+            if "price" in data:
+                return float(data["price"])
+        except Exception as e:
+            logger.warning(f"TwelveData price error for {symbol}: {e}")
         return None
 
     def get_current_price(self, symbol: str) -> Optional[float]:

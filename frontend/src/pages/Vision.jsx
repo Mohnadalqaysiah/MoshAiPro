@@ -10,7 +10,7 @@ export default function Vision() {
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
             <div className="w-7 h-7 bg-blue-500 rounded-lg flex items-center justify-center font-bold text-sm">Q</div>
-            <span className="font-bold text-lg">Qafeel <span className="text-blue-400">AI</span></span>
+            <span className="font-bold text-lg">Qaffel <span className="text-blue-400">AI</span></span>
           </Link>
           <div className="flex gap-4 text-sm">
             <Link to="/login"    className="text-gray-400 hover:text-white transition">تسجيل الدخول</Link>
@@ -140,7 +140,7 @@ export default function Vision() {
       {/* SEO-rich Why us section */}
       <section className="py-16 px-6">
         <div className="max-w-4xl mx-auto">
-          <h2 className="text-2xl font-bold text-center mb-12">لماذا Qafeel AI؟</h2>
+          <h2 className="text-2xl font-bold text-center mb-12">لماذا Qaffel AI؟</h2>
           <div className="grid md:grid-cols-2 gap-6">
             {[
               {
@@ -151,7 +151,7 @@ export default function Vision() {
               {
                 icon: Globe,
                 title: 'الأول بالعربية',
-                desc: 'لا يوجد في السوق منصة عربية تقدم هذا المستوى من التحليل المؤسسي بالذكاء الاصطناعي. Qafeel AI يملأ هذا الفراغ بمحتوى 100% عربي وواجهة مصممة للمتداول العربي.',
+                desc: 'لا يوجد في السوق منصة عربية تقدم هذا المستوى من التحليل المؤسسي بالذكاء الاصطناعي. Qaffel AI يملأ هذا الفراغ بمحتوى 100% عربي وواجهة مصممة للمتداول العربي.',
               },
               {
                 icon: Zap,
@@ -221,7 +221,7 @@ export default function Vision() {
           </div>
           <h2 className="text-3xl font-bold mb-4">كن جزءاً من مستقبل التداول الذكي</h2>
           <p className="text-gray-400 mb-8">
-            انضم للمتداولين الذين يستخدمون Qafeel AI لاتخاذ قرارات أفضل.
+            انضم للمتداولين الذين يستخدمون Qaffel AI لاتخاذ قرارات أفضل.
             ابدأ بـ 10 تحليلات مجانية بدون أي التزام.
           </p>
           <div className="flex items-center justify-center gap-3 flex-wrap">
@@ -238,7 +238,7 @@ export default function Vision() {
       </section>
 
       <footer className="border-t border-gray-800 py-8 text-center text-gray-500 text-sm">
-        <p>© 2026 Qafeel AI ·
+        <p>© 2026 Qaffel AI ·
           <Link to="/terms"   className="hover:text-gray-300 mx-2">الشروط</Link>·
           <Link to="/privacy" className="hover:text-gray-300 mx-2">الخصوصية</Link>·
           <Link to="/about"   className="hover:text-gray-300 mx-2">من نحن</Link>·

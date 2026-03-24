@@ -180,7 +180,7 @@ def forgot_password(
         smtp_pass = settings.SMTP_PASSWORD
         background_tasks.add_task(
             send_email, email,
-            "رمز استعادة كلمة المرور — Qafeel AI",
+            "رمز استعادة كلمة المرور — Qaffel AI",
             otp_email_body(otp), smtp_pass
         )
         logger.info(f"📧 OTP sent to {email}")

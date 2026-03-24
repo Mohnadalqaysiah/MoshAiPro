@@ -26,7 +26,7 @@ export default function Landing() {
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
             <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center font-bold text-sm">Q</div>
-            <span className="font-bold text-lg">Qafeel <span className="text-blue-400">AI</span></span>
+            <span className="font-bold text-lg">Qaffel <span className="text-blue-400">AI</span></span>
           </Link>
 
           <nav className="hidden md:flex items-center gap-6 text-sm text-gray-400">
@@ -226,7 +226,7 @@ export default function Landing() {
             <div className="col-span-2 md:col-span-1">
               <Link to="/" className="flex items-center gap-2 mb-3">
                 <div className="w-7 h-7 bg-blue-500 rounded-lg flex items-center justify-center font-bold text-xs">Q</div>
-                <span className="font-bold">Qafeel AI</span>
+                <span className="font-bold">Qaffel AI</span>
               </Link>
               <p className="text-gray-600 text-xs leading-relaxed">
                 {isAr

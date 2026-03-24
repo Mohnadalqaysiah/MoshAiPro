@@ -1,5 +1,5 @@
 """
-Qafeel AI — Site Settings Model
+Qaffel AI — Site Settings Model
 إعدادات قابلة للتعديل من لوحة الإدارة (محفظة، بوت، إلخ)
 """
 from sqlalchemy import Column, Integer, String, DateTime, Text
