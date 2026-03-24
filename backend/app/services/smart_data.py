@@ -53,6 +53,20 @@ TWELVEDATA_MAP = {
     "NZDUSD": "NZD/USD",
 }
 
+# Finnhub symbols (رموز للـ quote endpoint)
+FINNHUB_MAP = {
+    "XAUUSD": "OANDA:XAU_USD",
+    "BTCUSD": "BINANCE:BTCUSDT",
+    "ETHUSD": "BINANCE:ETHUSDT",
+    "EURUSD": "OANDA:EUR_USD",
+    "GBPUSD": "OANDA:GBP_USD",
+    "USDJPY": "OANDA:USD_JPY",
+    "USDCHF": "OANDA:USD_CHF",
+    "AUDUSD": "OANDA:AUD_USD",
+    "USDCAD": "OANDA:USD_CAD",
+    "NZDUSD": "OANDA:NZD_USD",
+}
+
 # yfinance interval map
 YF_INTERVAL_MAP = {
     "1m":  "1m",
@@ -95,9 +109,16 @@ class SmartDataProvider:
     """
 
     def __init__(self):
-        self.td_key = settings.TWELVEDATA_API_KEY
+        self.td_key  = settings.TWELVEDATA_API_KEY
         self.td_base = "https://api.twelvedata.com"
         self._cache: Dict[str, tuple] = {}
+        # كاش السعر الفوري — TTL ثلاث دقائق (يحمي من استنزاف API)
+        self._price_cache: Dict[str, tuple] = {}   # symbol → (price, source, fetched_at, ts)
+        self._PRICE_TTL = 180  # ثانية
+
+        # Finnhub (مجاني 60 req/min) — بديل TwelveData
+        self._fh_key  = getattr(settings, "FINNHUB_API_KEY", None)
+        self._fh_base = "https://finnhub.io/api/v1"
 
     # ─── Public: fetch OHLCV ───────────────────────────────────────────────
 
@@ -301,44 +322,52 @@ class SmartDataProvider:
     def get_realtime_price_with_meta(self, symbol: str) -> Optional[Dict]:
         """
         جلب السعر الفوري مع المصدر والوقت.
-        يجرب TwelveData أولاً (spot حقيقي) ثم yfinance كـ fallback.
-        Returns: {"price": float, "source": str, "fetched_at": str} أو None
+        الأولوية: كاش (3 دقائق) → yfinance 1m (مجاني) → Finnhub (مجاني 60/min) → None
+        TwelveData معطّل تماماً لحماية الكوتا الشهرية.
         """
+        sym = symbol.upper()
+        now_ts = datetime.utcnow().timestamp()
+
+        # ─── 0. كاش ───────────────────────────────────────────────────────────
+        cached = self._price_cache.get(sym)
+        if cached:
+            price, source, fetched_at, ts = cached
+            if now_ts - ts < self._PRICE_TTL:
+                return {"price": price, "source": f"{source}(cached)", "fetched_at": fetched_at}
+
         fetched_at = datetime.utcnow().isoformat() + "Z"
 
-        # 1. TwelveData /price أولاً — spot فوري
-        if self.td_key:
-            try:
-                td_symbol = TWELVEDATA_MAP.get(symbol.upper(), symbol)
-                resp = requests.get(
-                    f"{self.td_base}/price",
-                    params={"symbol": td_symbol, "apikey": self.td_key},
-                    timeout=5
-                )
-                data = resp.json()
-                if "price" in data:
-                    return {
-                        "price": float(data["price"]),
-                        "source": "twelvedata",
-                        "fetched_at": datetime.utcnow().isoformat() + "Z",
-                    }
-            except Exception as e:
-                logger.warning(f"TwelveData price error for {symbol}: {e}")
-
-        # 2. yfinance fallback — آخر شمعة 1m
+        # ─── 1. yfinance — مجاني بلا حدود ────────────────────────────────────
         try:
             if YFINANCE_AVAILABLE:
-                yf_symbol = YFINANCE_MAP.get(symbol.upper(), symbol)
+                yf_symbol = YFINANCE_MAP.get(sym, sym)
                 ticker = yf.Ticker(yf_symbol)
-                data = ticker.history(period="1d", interval="1m")
-                if data is not None and len(data) > 0:
-                    return {
-                        "price": float(data["Close"].iloc[-1]),
-                        "source": "yfinance",
-                        "fetched_at": datetime.utcnow().isoformat() + "Z",
-                    }
+                hist = ticker.history(period="1d", interval="1m")
+                if hist is not None and len(hist) > 0:
+                    price = float(hist["Close"].iloc[-1])
+                    self._price_cache[sym] = (price, "yfinance", fetched_at, now_ts)
+                    return {"price": price, "source": "yfinance", "fetched_at": fetched_at}
         except Exception as e:
             logger.warning(f"yfinance price error for {symbol}: {e}")
+
+        # ─── 2. Finnhub — مجاني 60 req/min ───────────────────────────────────
+        if self._fh_key:
+            try:
+                fh_symbol = FINNHUB_MAP.get(sym)
+                if fh_symbol:
+                    resp = requests.get(
+                        f"{self._fh_base}/quote",
+                        params={"symbol": fh_symbol, "token": self._fh_key},
+                        timeout=5,
+                    )
+                    data = resp.json()
+                    price = data.get("c") or data.get("l")  # current or last
+                    if price and float(price) > 0:
+                        price = float(price)
+                        self._price_cache[sym] = (price, "finnhub", fetched_at, now_ts)
+                        return {"price": price, "source": "finnhub", "fetched_at": fetched_at}
+            except Exception as e:
+                logger.warning(f"Finnhub price error for {symbol}: {e}")
 
         return None
 
