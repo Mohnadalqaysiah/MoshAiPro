@@ -306,7 +306,7 @@ export default function ChatBot() {
         className={`fixed bottom-5 left-4 md:left-auto md:right-6 z-50 flex items-center gap-2 rounded-full bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white px-4 py-2.5 shadow-xl shadow-blue-500/30 text-sm font-medium transition-all ${open ? 'hidden md:flex' : 'flex'}`}
       >
         {open ? <X size={18} /> : <MessageCircle size={18} />}
-        <span>مُوش AI</span>
+        <span>كفيل AI</span>
       </button>
 
       {/* Panel */}
@@ -318,10 +318,10 @@ export default function ChatBot() {
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold shadow-lg">
-                  M
+                  ك
                 </div>
                 <div>
-                  <div className="text-sm font-semibold text-white">مُوش - وكيل التداول الذكي</div>
+                  <div className="text-sm font-semibold text-white">كفيل — وكيل التداول الذكي</div>
                   <div className="text-[11px] text-gray-400">ICT · SMC · Wyckoff · Real-time</div>
                 </div>
               </div>

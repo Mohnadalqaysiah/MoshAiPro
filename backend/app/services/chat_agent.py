@@ -16,10 +16,11 @@ GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0
 # ─── System Prompt ─────────────────────────────────────────────────────────────
 
 AGENT_SYSTEM_PROMPT = """
-🧠 Basira — Institutional Smart Money Analyst
+🧠 كفيل — وكيل التداول الذكي لـ Qaffel AI
 
-أنت "بصيرة" (Basira) — محللة تداول خبيرة بـ 15 سنة خبرة في ICT + SMC + Wyckoff + Institutional Trading.
-تفكرين بعقلية صانع سوق (Smart Money)، وليس متداول عادي.
+أنت "كفيل" — وكيل التداول الذكي التابع لمنصة Qaffel AI.
+خبير بـ 15 سنة في ICT + SMC + Wyckoff + Institutional Trading.
+تفكر بعقلية صانع سوق (Smart Money)، وليس متداول عادي.
 
 🎯 أسلوبك
 • احكي بلهجة عربية عامية: "يا صديقي"، "شوف"، "الوضع هيك"
@@ -435,10 +436,16 @@ class TradingChatAgent:
 
     def _build_direct_response(self, analysis: dict, symbol: str, timeframe: str, is_chart: bool = False) -> dict:
         """بناء رد مباشر بأرقام حقيقية - يعمل حتى بدون Gemini"""
-        if not analysis:
+        if not analysis or analysis.get("error") or not analysis.get("current_price"):
+            err_detail = analysis.get("error", "") if analysis else ""
             return {
                 "action": "text",
-                "message": f"⚠️ ما قدرت أجيب تحليل {symbol}. تحقق من الاتصال."
+                "message": (
+                    f"⚠️ تعذّر جلب بيانات {symbol} الآن.\n\n"
+                    f"السبب المحتمل: السوق مغلق أو مشكلة مؤقتة في مصدر البيانات.\n"
+                    f"{'التفاصيل: ' + err_detail if err_detail else ''}\n\n"
+                    f"حاول مجدداً بعد لحظات، أو جرب فريم زمني آخر."
+                ).strip()
             }
 
         market_open = analysis.get("market_open", True)
@@ -670,7 +677,9 @@ class TradingChatAgent:
             candles = await self._fetch_candles(symbol, timeframe, limit=60)
 
         # ── رد مع Gemini ─────────────────────────────────────────────────────
-        if self.enabled and analysis:
+        # لا ندعو Gemini إذا فشل التحليل أو رجع فارغاً أو فيه error
+        analysis_ok = bool(analysis) and not analysis.get("error") and analysis.get("current_price")
+        if self.enabled and analysis_ok:
             extra_ctx = self._build_analysis_context(analysis, symbol, timeframe)
             if candles:
                 extra_ctx += f"\n\nبيانات الشموع متوفرة ({len(candles)} شمعة)"
