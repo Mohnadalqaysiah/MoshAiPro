@@ -17,9 +17,9 @@ import requests
 try:
     import yfinance as yf
     YFINANCE_AVAILABLE = True
-except ImportError:
+except Exception as _yf_err:
     YFINANCE_AVAILABLE = False
-    logger.warning("yfinance not installed - using TwelveData only")
+    logger.warning(f"yfinance unavailable: {_yf_err}")
 
 from app.config import get_settings
 
