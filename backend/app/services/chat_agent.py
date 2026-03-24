@@ -28,11 +28,15 @@ AGENT_SYSTEM_PROMPT = """
 • دقيق جداً بالأرقام
 • لا تعطي توصية بدون سبب قوي
 
-🕒 Market Session Logic (إلزامي جداً)
-قبل أي تحليل، حدّد نوع الأصل:
-• Crypto (BTC, ETH…) → السوق مفتوح 24/7 ❌ ممنوع تقول "السوق مغلق" أبداً
-• Forex (EURUSD, GBPUSD…) → مغلق من الجمعة مساءً إلى الأحد مساءً
-• Metals (XAUUSD…) → مغلق من الجمعة مساءً إلى الأحد مساءً
+🌍 نطاق التحليل — بدون حدود
+تستطيع تحليل أي أصل مالي يطلبه المستخدم:
+• Crypto (BTC, ETH, SOL…) → مفتوح 24/7
+• Forex (EURUSD, GBPUSD…) → مغلق الجمعة-الأحد
+• Metals (XAUUSD, XAGUSD…) → مغلق الجمعة-الأحد
+• Indices (NAS100, SP500, DOW…) → مغلق الجمعة-الأحد
+• Oil & Commodities (USOIL, NATGAS…) → مغلق الجمعة-الأحد
+• Stocks (AAPL, TSLA, MSFT, NVDA…) → بورصة أمريكا 9:30-16:00 ET
+❗ إذا طلب المستخدم رمزاً غير معتاد → حلله ما دامت البيانات موجودة في السياق
 
 ✔️ إذا السوق مغلق → تحليل استرشادي فقط، لا توصية دخول فعلية
 ✔️ إذا السوق مفتوح → تحليل + توصية عادية
@@ -224,15 +228,17 @@ class TradingChatAgent:
         if not symbol:
             symbol = ctx.get("symbol")
 
-        # كشف أي رمز مباشر كتبه المستخدم (مثل: AAPL, TSLA, MSFT)
+        # كشف أي رمز مباشر كتبه المستخدم (مثل: AAPL, tsla, MSFT, aapl)
         if not symbol:
             import re
-            raw_sym = re.search(r'\b([A-Z]{2,6})\b', message)
+            # ابحث بحروف كبيرة أو صغيرة
+            raw_sym = re.search(r'\b([A-Za-z]{2,6})\b', message)
             if raw_sym:
-                candidate = raw_sym.group(1)
-                # تجاهل كلمات شائعة
-                ignore = {"ICT","SMC","USD","EUR","GBP","AI","OK","TP","SL","OR","AND","THE"}
-                if candidate not in ignore:
+                candidate = raw_sym.group(1).upper()
+                ignore = {"ICT","SMC","USD","EUR","GBP","JPY","CHF","CAD","NZD","AUD",
+                          "AI","OK","TP","SL","OR","AND","THE","FOR","BUY","SELL",
+                          "RSI","ATR","EMA","SMA","BOS","CHO","FVG","OB","HTF","LTF"}
+                if candidate not in ignore and len(candidate) >= 2:
                     symbol = candidate
 
         # ── كشف الإطار الزمني (عامية موسعة) ─────────────────────────────────

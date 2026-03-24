@@ -51,6 +51,10 @@ YFINANCE_MAP = {
     "NATGAS":  "NG=F",      # Natural Gas
     "USDINDEX":"DX-Y.NYB",  # US Dollar Index
     "DXY":     "DX-Y.NYB",
+    # أسهم أمريكية شائعة — yfinance يستخدمها مباشرة
+    "AAPL":  "AAPL",  "TSLA": "TSLA",  "MSFT": "MSFT",
+    "NVDA":  "NVDA",  "AMZN": "AMZN",  "GOOGL":"GOOGL",
+    "META":  "META",  "NFLX": "NFLX",  "AMD":  "AMD",
 }
 
 TWELVEDATA_MAP = {
