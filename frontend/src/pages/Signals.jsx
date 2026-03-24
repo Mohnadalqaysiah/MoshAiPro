@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import axios from 'axios'
-import { Zap, RefreshCw, AlertCircle } from 'lucide-react'
+import { Zap, RefreshCw, AlertCircle, Calculator } from 'lucide-react'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const MARKETS = ['XAUUSD', 'BTCUSD', 'EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF']
@@ -195,6 +195,20 @@ export default function Signals() {
                     <span className="text-blue-400 font-mono">
                       {((result.levels?.risk_reward ?? result.risk_reward) || 0).toFixed(2)}x
                     </span>
+                  </div>
+                )}
+                {result.lot_size && (
+                  <div className="flex justify-between border-t border-gray-700 pt-2 mt-2">
+                    <span className="text-gray-400 flex items-center gap-1">
+                      <Calculator size={12} /> حجم اللوت
+                    </span>
+                    <span className="text-yellow-400 font-mono font-semibold">{result.lot_size}</span>
+                  </div>
+                )}
+                {result.account_balance && (
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-600">البالانس / المخاطرة</span>
+                    <span className="text-gray-500">${result.account_balance} · {result.risk_percent}%</span>
                   </div>
                 )}
               </div>

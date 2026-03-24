@@ -1,7 +1,7 @@
 """
 Mosh AI Pro v5 - User Model (Full SaaS)
 """
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float, Enum as SAEnum
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Float, Enum as SAEnum, JSON
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -65,14 +65,20 @@ class User(Base):
     language              = Column(String, default="ar")
     notifications_enabled = Column(Boolean, default=True)
 
+    # Bot Notification Preferences
+    notify_watchlist      = Column(JSON,    default=list)   # ["XAUUSD","BTCUSD"]
+    notify_timeframe      = Column(String,  default="1h")
+    notify_min_confidence = Column(Integer, default=65)
+
     # Timestamps
     created_at   = Column(DateTime(timezone=True), server_default=func.now())
     updated_at   = Column(DateTime(timezone=True), onupdate=func.now())
     last_seen_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
-    payments     = relationship("Payment", back_populates="user", cascade="all, delete-orphan")
-    signals      = relationship("Signal", back_populates="user", cascade="all, delete-orphan")
+    payments      = relationship("Payment",     back_populates="user", cascade="all, delete-orphan")
+    signals       = relationship("Signal",      back_populates="user", cascade="all, delete-orphan")
+    analysis_logs = relationship("AnalysisLog", back_populates="user", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<User(id={self.id}, email={self.email}, plan={self.plan})>"

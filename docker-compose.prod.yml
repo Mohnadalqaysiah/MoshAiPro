@@ -60,6 +60,7 @@ services:
     restart: always
     environment:
       - API_URL=http://backend:8000
+      - FRONTEND_URL=https://qaffel.com
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
     depends_on:
       - backend

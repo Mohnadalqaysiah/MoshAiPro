@@ -1,19 +1,24 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { TrendingUp, BarChart2, Activity, Zap, LogOut, Shield, User, Menu, X, Settings } from 'lucide-react'
+import { TrendingUp, BarChart2, Activity, Zap, LogOut, Shield, User, Menu, X, Settings, History, Globe } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { useLang } from '../contexts/LangContext'
 
 export default function Navbar() {
   const location  = useLocation()
   const navigate  = useNavigate()
   const { user, logout } = useAuth()
+  const { lang, toggle: toggleLang } = useLang()
   const [open, setOpen] = useState(false)
 
+  const isAr = lang === 'ar'
+
   const links = [
-    { path: '/dashboard', label: 'لوحة التحكم', icon: <Activity size={16} /> },
-    { path: '/signals',   label: 'الإشارات',    icon: <Zap size={16} /> },
-    { path: '/markets',   label: 'الأسواق',     icon: <TrendingUp size={16} /> },
-    { path: '/analytics', label: 'التحليلات',   icon: <BarChart2 size={16} /> },
+    { path: '/dashboard', label: isAr ? 'لوحة التحكم' : 'Dashboard',  icon: <Activity size={16} /> },
+    { path: '/signals',   label: isAr ? 'الإشارات'    : 'Signals',    icon: <Zap size={16} /> },
+    { path: '/analyses',  label: isAr ? 'سجل التحليل' : 'Analyses',   icon: <History size={16} /> },
+    { path: '/markets',   label: isAr ? 'الأسواق'     : 'Markets',    icon: <TrendingUp size={16} /> },
+    { path: '/analytics', label: isAr ? 'التحليلات'   : 'Analytics',  icon: <BarChart2 size={16} /> },
   ]
 
   const handleLogout = () => { logout(); navigate('/login') }
@@ -71,8 +76,15 @@ export default function Navbar() {
               <span className="max-w-[100px] truncate">{user.full_name || user.email}</span>
             </Link>
           )}
+          <button
+            onClick={toggleLang}
+            title={isAr ? 'Switch to English' : 'التبديل للعربية'}
+            className="flex items-center gap-1 text-xs text-gray-400 hover:text-blue-400 px-2 py-1.5 rounded-lg hover:bg-gray-700"
+          >
+            <Globe size={14} /> {isAr ? 'EN' : 'AR'}
+          </button>
           <button onClick={handleLogout} className="flex items-center gap-1 text-xs text-gray-400 hover:text-red-400 px-2 py-1.5 rounded-lg hover:bg-gray-700">
-            <LogOut size={14} /> خروج
+            <LogOut size={14} /> {isAr ? 'خروج' : 'Logout'}
           </button>
         </div>
 

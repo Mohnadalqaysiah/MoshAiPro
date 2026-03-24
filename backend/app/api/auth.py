@@ -50,6 +50,13 @@ class TradingSettingsIn(BaseModel):
     account_balance: float = 10000.0
     risk_percent: float = 1.5
 
+class NotificationPrefsIn(BaseModel):
+    notify_watchlist:      list = []
+    notify_timeframe:      str  = "1h"
+    notify_min_confidence: int  = 65
+    notifications_enabled: bool = True
+    language:              str  = "ar"
+
 class ChangePasswordIn(BaseModel):
     old_password: str
     new_password: str
@@ -410,4 +417,39 @@ def _user_info(user: User) -> dict:
         "account_balance":       float(user.account_balance or 10000.0),
         "risk_percent":          float(user.risk_percent or 1.5),
         "phone_number":          user.phone_number or "",
+        "language":              user.language or "ar",
+        "notify_watchlist":      user.notify_watchlist or [],
+        "notify_timeframe":      user.notify_timeframe or "1h",
+        "notify_min_confidence": user.notify_min_confidence or 65,
+        "notifications_enabled": bool(user.notifications_enabled),
     }
+
+
+# ─── Notification Preferences ──────────────────────────────────────────────────
+
+@router.get("/preferences")
+def get_preferences(user: User = Depends(get_current_user)):
+    return {
+        "notify_watchlist":      user.notify_watchlist or [],
+        "notify_timeframe":      user.notify_timeframe or "1h",
+        "notify_min_confidence": user.notify_min_confidence or 65,
+        "notifications_enabled": bool(user.notifications_enabled),
+        "language":              user.language or "ar",
+        "account_balance":       float(user.account_balance or 10000.0),
+        "risk_percent":          float(user.risk_percent or 1.5),
+    }
+
+
+@router.put("/preferences")
+def update_preferences(
+    data: NotificationPrefsIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    user.notify_watchlist      = data.notify_watchlist
+    user.notify_timeframe      = data.notify_timeframe
+    user.notify_min_confidence = data.notify_min_confidence
+    user.notifications_enabled = data.notifications_enabled
+    user.language              = data.language
+    db.commit()
+    return {"success": True}

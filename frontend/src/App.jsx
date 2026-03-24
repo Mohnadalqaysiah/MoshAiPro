@@ -16,6 +16,7 @@ import Contact         from './pages/Contact'
 import About           from './pages/About'
 import Vision          from './pages/Vision'
 import Profile         from './pages/Profile'
+import Analyses        from './pages/Analyses'
 import ForgotPassword  from './pages/ForgotPassword'
 import Navbar     from './components/Navbar'
 import ChatBot    from './components/ChatBot'
@@ -72,6 +73,7 @@ function AppRoutes() {
                 <Route path="/signals"   element={<Signals />} />
                 <Route path="/markets"   element={<Markets />} />
                 <Route path="/analytics" element={<Analytics />} />
+                <Route path="/analyses" element={<Analyses />} />
                 <Route path="/profile"   element={<Profile />} />
               </Routes>
             </main>

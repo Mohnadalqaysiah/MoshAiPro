@@ -10,7 +10,7 @@ import sys
 
 from app.config import get_settings
 from app.database import init_db
-from app.api import signals, markets, analytics, chat, auth, subscription, admin, bot, public_chat
+from app.api import signals, markets, analytics, chat, auth, subscription, admin, bot, public_chat, analyses
 from app.services.gemini_engine import gemini_engine
 from app.services.rate_limiter import twelvedata_client
 
@@ -105,6 +105,7 @@ app.include_router(markets.router,      prefix="/api/v1/markets",       tags=["M
 app.include_router(analytics.router,    prefix="/api/v1/analytics",     tags=["Analytics"])
 app.include_router(chat.router,         prefix="/api/v1/chat",          tags=["Chat"])
 app.include_router(public_chat.router,  prefix="/api/v1/public",         tags=["Public"])
+app.include_router(analyses.router,     prefix="/api/v1/analyses",        tags=["Analyses"])
 
 
 # WebSocket endpoint for real-time updates

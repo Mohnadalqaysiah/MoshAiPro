@@ -11,10 +11,38 @@ from loguru import logger
 
 from app.database import get_db
 from app.services.ai_engine_v5 import mosh_ai_engine_v5
-from app.models import Signal
+from app.models import Signal, AnalysisLog
 from app.models.signal import Signal, SignalType, SignalStatus, SignalQuality
 from app.models.user import User, PlanType
 from app.services.auth_service import get_current_user, check_subscription, deduct_trial
+
+
+def _calc_lot_size(account_balance: float, risk_percent: float,
+                   entry: float, sl: float, symbol: str) -> float | None:
+    """
+    حساب حجم اللوت المناسب بناءً على رأس المال والمخاطرة.
+    pip_value: تقريبي — $10 لكل 0.01 لوت لمعظم أزواج الفوركس
+    """
+    try:
+        if not entry or not sl or entry == sl:
+            return None
+        risk_amount = account_balance * (risk_percent / 100)
+        sl_pips = abs(entry - sl)
+        if sl_pips == 0:
+            return None
+        # تحديد قيمة النقطة حسب الزوج
+        if symbol in ("XAUUSD",):
+            pip_value_per_lot = 10.0     # $10 لكل نقطة لكل لوت قياسي
+        elif symbol in ("BTCUSD",):
+            pip_value_per_lot = 1.0
+        elif symbol in ("USDJPY", "USDCHF"):
+            pip_value_per_lot = 8.0
+        else:
+            pip_value_per_lot = 10.0     # افتراضي للفوركس
+        lot = risk_amount / (sl_pips * pip_value_per_lot)
+        return round(max(0.01, min(lot, 100.0)), 2)
+    except Exception:
+        return None
 
 router = APIRouter()
 
@@ -60,42 +88,75 @@ async def analyze_market(
                 db.commit()
 
 
-        # حفظ التوصية في قاعدة البيانات
-        try:
-            rec = analysis.get("recommendation", "WAIT")
-            levels = analysis.get("levels", {})
-            entry  = levels.get("entry") or analysis.get("entry_zones", [None])[0]
-            sl     = levels.get("stop_loss") or analysis.get("stop_loss_zone")
-            tp1    = levels.get("tp1") or (analysis.get("take_profit_zones", [None])[0] if analysis.get("take_profit_zones") else None)
-            tp2    = levels.get("tp2") or (analysis.get("take_profit_zones", [None, None])[1] if len(analysis.get("take_profit_zones", [])) > 1 else None)
-            conf   = analysis.get("ai_confidence_score", 0)
+        # استخراج المستويات
+        rec    = analysis.get("recommendation", "WAIT")
+        levels = analysis.get("levels", {})
+        entry  = levels.get("entry") or analysis.get("entry_zones", [None])[0]
+        sl     = levels.get("stop_loss") or analysis.get("stop_loss_zone")
+        tp1    = levels.get("tp1") or (analysis.get("take_profit_zones", [None])[0] if analysis.get("take_profit_zones") else None)
+        tp2    = levels.get("tp2") or (analysis.get("take_profit_zones", [None, None])[1] if len(analysis.get("take_profit_zones", [])) > 1 else None)
+        conf   = analysis.get("ai_confidence_score", 0)
+        rr     = levels.get("risk_reward")
 
+        # حساب اللوت المناسب
+        bal    = float(getattr(user, "account_balance", 10000.0) or 10000.0)
+        risk   = float(getattr(user, "risk_percent", 1.5) or 1.5)
+        lot    = _calc_lot_size(bal, risk, entry or 0, sl or 0, symbol) if entry and sl else None
+        if lot:
+            analysis["lot_size"]       = lot
+            analysis["account_balance"] = bal
+            analysis["risk_percent"]   = risk
+
+        # حفظ سجل التحليل (كل تحليل)
+        try:
+            log = AnalysisLog(
+                user_id       = user.id,
+                market        = symbol,
+                timeframe     = timeframe,
+                recommendation= rec,
+                confidence    = conf,
+                current_price = analysis.get("current_price"),
+                entry         = float(entry) if entry else None,
+                sl            = float(sl)    if sl    else None,
+                tp1           = float(tp1)   if tp1   else None,
+                tp2           = float(tp2)   if tp2   else None,
+                rr            = float(rr)    if rr    else None,
+                lot_size      = lot,
+                from_cache    = analysis.get("from_cache", False),
+                full_result   = {k: v for k, v in analysis.items()
+                                 if k not in ("from_cache",) and not isinstance(v, (bytes,))},
+            )
+            db.add(log)
+            db.commit()
+        except Exception as _le:
+            logger.warning(f"AnalysisLog save error: {_le}")
+
+        # حفظ الإشارة (BUY/SELL قوية فقط)
+        try:
             if rec in ("BUY", "SELL") and entry and sl and tp1 and conf >= 60:
                 sig_type = SignalType.BUY if rec == "BUY" else SignalType.SELL
-                # فريم → مدة صلاحية
                 tf_hours = {"1m":2,"5m":4,"15m":8,"30m":12,"1h":24,"4h":72,"1d":168,"1w":336}
                 expires_h = tf_hours.get(timeframe, 24)
                 expires_at = datetime.now(timezone.utc) + timedelta(hours=expires_h)
-                # hash فريد
                 sig_hash = hashlib.md5(f"{user.id}-{symbol}-{timeframe}-{rec}-{entry}".encode()).hexdigest()
                 existing = db.query(Signal).filter(Signal.signal_hash == sig_hash).first()
                 if not existing:
                     sig = Signal(
-                        user_id=user.id,
-                        market=symbol,
-                        timeframe=timeframe,
-                        signal_type=sig_type,
-                        signal_quality=SignalQuality.PREMIUM if conf >= 80 else SignalQuality.STANDARD,
-                        status=SignalStatus.ACTIVE,
-                        entry_price=float(entry),
-                        stop_loss=float(sl),
-                        take_profit_1=float(tp1),
-                        take_profit_2=float(tp2 or tp1),
-                        current_price=analysis.get("current_price"),
-                        ai_confidence=conf,
-                        risk_reward_ratio=levels.get("risk_reward"),
-                        signal_hash=sig_hash,
-                        expires_at=expires_at,
+                        user_id       = user.id,
+                        market        = symbol,
+                        timeframe     = timeframe,
+                        signal_type   = sig_type,
+                        signal_quality= SignalQuality.PREMIUM if conf >= 80 else SignalQuality.STANDARD,
+                        status        = SignalStatus.ACTIVE,
+                        entry_price   = float(entry),
+                        stop_loss     = float(sl),
+                        take_profit_1 = float(tp1),
+                        take_profit_2 = float(tp2 or tp1),
+                        current_price = analysis.get("current_price"),
+                        ai_confidence = conf,
+                        risk_reward_ratio = rr,
+                        signal_hash   = sig_hash,
+                        expires_at    = expires_at,
                     )
                     db.add(sig)
                     db.commit()

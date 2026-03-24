@@ -529,18 +529,56 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ─── Background Monitor ───────────────────────────────────────────────────────
+async def fetch_all_db_watchlists() -> list:
+    """يجلب قوائم المراقبة من DB عبر API"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"{API_URL}/api/v1/bot/all-watchlists",
+                headers=BOT_HEADERS,
+                timeout=aiohttp.ClientTimeout(total=15)
+            ) as resp:
+                if resp.status == 200:
+                    return (await resp.json()).get("users", [])
+    except Exception as e:
+        logger.error(f"fetch_all_db_watchlists error: {e}")
+    return []
+
+
 async def monitor_markets(app: Application):
     logger.info("🔍 بدء المراقبة التلقائية...")
     await asyncio.sleep(30)
 
     while True:
         try:
+            # الأولوية: DB watchlists
+            db_users = await fetch_all_db_watchlists()
+            merged: dict[int, tuple[set, str, int]] = {}
+
+            # قوائم DB
+            for entry in db_users:
+                try:
+                    tid = int(entry["telegram_id"])
+                    merged[tid] = (
+                        set(entry.get("watchlist", [])),
+                        entry.get("timeframe", "1h"),
+                        entry.get("min_confidence", 65),
+                    )
+                except Exception:
+                    pass
+
+            # دمج قوائم في الذاكرة (fallback للمستخدمين غير المرتبطين)
             for uid, watchlist in list(user_watchlist.items()):
+                if uid not in merged and watchlist:
+                    merged[uid] = (
+                        watchlist,
+                        user_timeframe.get(uid, "1h"),
+                        user_min_confidence.get(uid, 65),
+                    )
+
+            for uid, (watchlist, tf, min_conf) in merged.items():
                 if not watchlist:
                     continue
-
-                tf       = user_timeframe.get(uid, "1h")
-                min_conf = user_min_confidence.get(uid, 65)
 
                 for symbol in list(watchlist):
                     now = datetime.now(timezone.utc)

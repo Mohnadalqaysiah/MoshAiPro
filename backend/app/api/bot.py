@@ -135,3 +135,47 @@ def bot_expiring(
         })
 
     return {"users": result, "count": len(result)}
+
+
+@router.get("/watchlist")
+def bot_get_watchlist(
+    telegram_id: str,
+    _: bool = Depends(verify_bot),
+    db: Session = Depends(get_db),
+):
+    """يرجع إعدادات المراقبة المحفوظة في DB للمستخدم المرتبط بالتيليجرام"""
+    user = _get_linked_user(telegram_id, db)
+    if not user:
+        return {"linked": False, "watchlist": [], "timeframe": "1h", "min_confidence": 65, "notifications_enabled": False}
+    return {
+        "linked": True,
+        "watchlist":           user.notify_watchlist      or [],
+        "timeframe":           user.notify_timeframe      or "1h",
+        "min_confidence":      user.notify_min_confidence or 65,
+        "notifications_enabled": bool(user.notifications_enabled),
+    }
+
+
+@router.get("/all-watchlists")
+def bot_all_watchlists(
+    _: bool = Depends(verify_bot),
+    db: Session = Depends(get_db),
+):
+    """كل المستخدمين الذين لديهم قائمة مراقبة مفعّلة — يستخدمها البوت للإشعارات"""
+    users = db.query(User).filter(
+        User.telegram_id != None,
+        User.notifications_enabled == True,
+        User.is_active == True,
+        User.plan != PlanType.BANNED,
+    ).all()
+    result = []
+    for u in users:
+        wl = u.notify_watchlist or []
+        if wl:
+            result.append({
+                "telegram_id":    u.telegram_id,
+                "watchlist":      wl,
+                "timeframe":      u.notify_timeframe      or "1h",
+                "min_confidence": u.notify_min_confidence or 65,
+            })
+    return {"users": result, "count": len(result)}
