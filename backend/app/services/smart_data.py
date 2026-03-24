@@ -140,15 +140,21 @@ class SmartDataProvider:
                 logger.debug(f"📦 Cache hit: {symbol} {timeframe}")
                 return df_cached
 
-        # Try yfinance first
+        # 1. yfinance أولاً
         df = None
         if YFINANCE_AVAILABLE:
             df = await asyncio.get_event_loop().run_in_executor(
                 None, self._fetch_yfinance, symbol, timeframe, bars
             )
 
-        # Fallback to TwelveData
-        if df is None and self.td_key:
+        # 2. Finnhub candles — مجاني 60/min
+        if df is None and self._fh_key:
+            df = await asyncio.get_event_loop().run_in_executor(
+                None, self._fetch_finnhub_candles, symbol, timeframe, bars
+            )
+
+        # 3. TwelveData — فقط إذا فعّله الأدمن صراحةً
+        if df is None and self._td_enabled and self._td_runtime_key:
             df = await self._fetch_twelvedata(symbol, timeframe, bars)
 
         if df is None or len(df) < 30:
@@ -208,6 +214,73 @@ class SmartDataProvider:
 
         except Exception as e:
             logger.warning(f"⚠️ yfinance error for {symbol}: {e}")
+            return None
+
+    # ─── Finnhub Candles ──────────────────────────────────────────────────
+
+    def _fetch_finnhub_candles(self, symbol: str, timeframe: str, bars: int) -> Optional[pd.DataFrame]:
+        """Finnhub OHLCV — مجاني 60 req/min، يدعم forex/metals/crypto"""
+        if not self._fh_key:
+            return None
+        try:
+            import time as _time
+            fh_symbol = FINNHUB_MAP.get(symbol.upper())
+            if not fh_symbol:
+                return None
+
+            # تحويل الفريم لـ Finnhub resolution
+            res_map = {"1m":"1","5m":"5","15m":"15","30m":"30","1h":"60","4h":"60","1d":"D","1day":"D","1w":"W"}
+            resolution = res_map.get(timeframe, "60")
+
+            # نطاق زمني
+            to_ts   = int(_time.time())
+            bars_needed = bars * 2 if timeframe == "4h" else bars
+            seconds = {"1":"60","5":300,"15":900,"30":1800,"60":3600,"D":86400,"W":604800}.get(resolution, 3600)
+            from_ts = to_ts - (bars_needed * seconds)
+
+            # نختار الـ endpoint بناءً على نوع الأصل
+            sym_up = symbol.upper()
+            if sym_up in ("BTCUSD","ETHUSD"):
+                endpoint = f"{self._fh_base}/crypto/candle"
+            else:
+                endpoint = f"{self._fh_base}/forex/candle"
+
+            resp = requests.get(endpoint, params={
+                "symbol": fh_symbol, "resolution": resolution,
+                "from": from_ts, "to": to_ts, "token": self._fh_key
+            }, timeout=15)
+            data = resp.json()
+
+            if data.get("s") != "ok" or not data.get("t"):
+                logger.warning(f"Finnhub candles: no data for {symbol} ({data.get('s')})")
+                return None
+
+            df = pd.DataFrame({
+                "datetime": pd.to_datetime(data["t"], unit="s", utc=True),
+                "open":  data["o"], "high": data["h"],
+                "low":   data["l"], "close": data["c"],
+                "volume": data.get("v", [0]*len(data["t"]))
+            })
+            df = df.set_index("datetime")
+
+            # Resample 1h → 4h
+            if timeframe == "4h":
+                df = df.resample("4h").agg({
+                    "open":"first","high":"max","low":"min","close":"last","volume":"sum"
+                }).dropna()
+
+            df = df.tail(bars).reset_index()
+            for col in ["open","high","low","close"]:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+            df = df.dropna(subset=["open","high","low","close"])
+            if len(df) < 10:
+                return None
+
+            logger.info(f"✅ Finnhub candles: {symbol} {timeframe} — {len(df)} bars")
+            return df
+
+        except Exception as e:
+            logger.warning(f"Finnhub candles error {symbol}: {e}")
             return None
 
     # ─── TwelveData ───────────────────────────────────────────────────────
