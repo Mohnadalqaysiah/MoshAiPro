@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import axios from 'axios'
 import { Zap, RefreshCw, AlertCircle, Calculator } from 'lucide-react'
+import useMarkets from '../hooks/useMarkets'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-const MARKETS = ['XAUUSD', 'BTCUSD', 'EURUSD', 'GBPUSD', 'USDJPY', 'USDCHF']
 const TIMEFRAMES = ['15m', '1h', '4h', '1day']
 
 export default function Signals() {
+  const { markets } = useMarkets()
   const [symbol, setSymbol] = useState('XAUUSD')
   const [timeframe, setTimeframe] = useState('1h')
   const [result, setResult] = useState(null)
@@ -49,7 +50,7 @@ export default function Signals() {
               onChange={e => setSymbol(e.target.value)}
               className="w-full bg-gray-700 border border-gray-600 text-white rounded-lg px-3 py-2 text-sm"
             >
-              {MARKETS.map(m => <option key={m} value={m}>{m}</option>)}
+              {markets.map(m => <option key={m.symbol} value={m.symbol}>{m.symbol} — {m.name}</option>)}
             </select>
           </div>
           <div>

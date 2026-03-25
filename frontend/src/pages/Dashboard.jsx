@@ -3,13 +3,13 @@ import { Link } from 'react-router-dom'
 import axios from 'axios'
 import { TrendingUp, TrendingDown, Activity, Zap, AlertCircle, RefreshCw, Send, ExternalLink, Copy, CheckCircle } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import useMarkets from '../hooks/useMarkets'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
-const MARKETS = ['XAUUSD', 'BTCUSD', 'EURUSD', 'GBPUSD']
-
 export default function Dashboard() {
   const { user } = useAuth()
+  const { markets } = useMarkets()
   const [signals, setSignals]       = useState([])
   const [signalHistory, setSignalHistory] = useState([])
   const [analyzing, setAnalyzing]   = useState(null)
@@ -228,20 +228,20 @@ export default function Dashboard() {
           <span className="text-xs text-gray-500">النتائج مُخزَّنة مؤقتاً · اضغط مطوّلاً للتحديث الإجباري</span>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {MARKETS.map(market => (
+          {markets.map(m => (
             <button
-              key={market}
-              onClick={() => analyzeMarket(market, false)}
-              onContextMenu={(e) => { e.preventDefault(); analyzeMarket(market, true) }}
-              disabled={analyzing === market}
+              key={m.symbol}
+              onClick={() => analyzeMarket(m.symbol, false)}
+              onContextMenu={(e) => { e.preventDefault(); analyzeMarket(m.symbol, true) }}
+              disabled={analyzing === m.symbol}
               className="py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
             >
-              {analyzing === market ? (
+              {analyzing === m.symbol ? (
                 <>
                   <RefreshCw size={14} className="animate-spin" />
                   جاري...
                 </>
-              ) : market}
+              ) : m.symbol}
             </button>
           ))}
         </div>

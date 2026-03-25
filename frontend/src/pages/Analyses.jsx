@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import axios from 'axios'
 import { History, RefreshCw, Zap, ChevronDown, ChevronUp, AlertCircle, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { useLang } from '../contexts/LangContext'
+import useMarkets from '../hooks/useMarkets'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -61,12 +62,11 @@ const REC_STYLE = {
   WATCH: { bg: 'bg-gray-700     text-gray-400',   icon: <Minus size={13} /> },
 }
 
-const MARKETS = ['XAUUSD','BTCUSD','EURUSD','GBPUSD','USDJPY','USDCHF','NAS100','USOIL','XAGUSD','SP500']
-
 export default function Analyses() {
   const { lang } = useLang()
   const tx = T[lang] || T.ar
   const isAr = lang === 'ar'
+  const { markets } = useMarkets()
 
   const [logs,     setLogs]     = useState([])
   const [total,    setTotal]    = useState(0)
@@ -134,10 +134,10 @@ export default function Analyses() {
           className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${!filterM ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
           {tx.all}
         </button>
-        {MARKETS.map(m => (
-          <button key={m} onClick={() => setFilterM(filterM === m ? '' : m)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${filterM === m ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
-            {m}
+        {markets.map(m => (
+          <button key={m.symbol} onClick={() => setFilterM(filterM === m.symbol ? '' : m.symbol)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${filterM === m.symbol ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
+            {m.symbol}
           </button>
         ))}
       </div>

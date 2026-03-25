@@ -2,17 +2,17 @@ import { useState, useEffect } from 'react'
 import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
-import { User, Mail, Phone, Lock, Save, CheckCircle, AlertCircle, TrendingUp, Bell, BellOff, Calculator } from 'lucide-react'
+import useMarkets from '../hooks/useMarkets'
+import { User, Mail, Phone, Lock, Save, CheckCircle, AlertCircle, TrendingUp, Bell, Calculator } from 'lucide-react'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-
-const MARKETS   = ['XAUUSD','BTCUSD','EURUSD','GBPUSD','USDJPY','USDCHF','NAS100','USOIL','XAGUSD','SP500']
 const TIMEFRAMES = ['15m','1h','4h','1day']
 
 export default function Profile() {
   const { user, token, refreshUser } = useAuth()
   const { lang } = useLang()
   const isAr = lang === 'ar'
+  const { markets } = useMarkets()
 
   const [profile, setProfile] = useState({ full_name: user?.full_name || '', phone_number: user?.phone_number || '' })
   const [pw, setPw]           = useState({ old_password: '', new_password: '', confirm: '' })
@@ -219,7 +219,7 @@ export default function Profile() {
               <label className="block text-xs text-gray-400 mb-1">{isAr ? 'الزوج' : 'Symbol'}</label>
               <select value={lotSymbol} onChange={e => setLotSymbol(e.target.value)}
                 className="w-full bg-gray-900 border border-gray-600 text-white rounded-lg px-2 py-2 text-xs">
-                {MARKETS.map(m => <option key={m} value={m}>{m}</option>)}
+                {markets.map(m => <option key={m.symbol} value={m.symbol}>{m.symbol}</option>)}
               </select>
             </div>
             <div>
@@ -276,14 +276,14 @@ export default function Profile() {
               <span className="text-gray-600 mr-1 text-xs">({prefs.notify_watchlist.length} {isAr ? 'مختار' : 'selected'})</span>
             </label>
             <div className="flex flex-wrap gap-2">
-              {MARKETS.map(m => (
-                <button key={m} type="button" onClick={() => toggleWatchlist(m)}
+              {markets.map(m => (
+                <button key={m.symbol} type="button" onClick={() => toggleWatchlist(m.symbol)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                    prefs.notify_watchlist.includes(m)
+                    prefs.notify_watchlist.includes(m.symbol)
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
                   }`}>
-                  {prefs.notify_watchlist.includes(m) ? '✓ ' : ''}{m}
+                  {prefs.notify_watchlist.includes(m.symbol) ? '✓ ' : ''}{m.symbol}
                 </button>
               ))}
             </div>
