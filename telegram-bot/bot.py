@@ -23,10 +23,19 @@ BOT_SECRET   = os.getenv("BOT_SECRET", "mosh-bot-secret-2026")
 # Header ترسله لكل طلب للـ API
 BOT_HEADERS  = {"X-Bot-Secret": BOT_SECRET}
 
-MARKETS = ["XAUUSD", "BTCUSD", "EURUSD", "GBPUSD", "USDJPY", "USDCHF"]
+# ─── قوائم الأزواج — تُحدَّث من API عند البدء ────────────────────────────────
+MARKETS = ["XAUUSD", "BTCUSD", "EURUSD", "GBPUSD", "USDJPY", "USDCHF"]  # fallback
 TIMEFRAMES = ["15m", "1h", "4h", "1day"]
 
-MARKET_NAMES = {
+# emoji لكل فئة
+_CATEGORY_EMOJI = {
+    "forex":     {"XAUUSD":"🥇","EURUSD":"💶","GBPUSD":"💷","USDJPY":"💴","USDCHF":"🇨🇭","AUDUSD":"🦘","default":"💱"},
+    "crypto":    "₿",
+    "commodity": "🛢️",
+    "stock":     "📈",
+}
+
+MARKET_NAMES: dict[str, str] = {
     "XAUUSD": "🥇 الذهب",
     "BTCUSD": "₿ بيتكوين",
     "EURUSD": "💶 يورو/دولار",
@@ -35,7 +44,44 @@ MARKET_NAMES = {
     "USDCHF": "🇨🇭 دولار/فرنك",
 }
 
-FOREX_MARKETS = {"XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "USDCHF"}
+# الأسواق التي تُغلق في عطلة نهاية الأسبوع (فوركس وسلع)
+FOREX_MARKETS: set[str] = {"XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "USDCHF",
+                            "XAGUSD", "USOIL", "NATGAS", "NAS100", "SP500", "US30"}
+
+
+async def load_markets_from_api():
+    """يجلب الأزواج النشطة من /api/v1/markets/list ويحدّث MARKETS و MARKET_NAMES"""
+    global MARKETS, MARKET_NAMES
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"{API_URL}/api/v1/markets/list",
+                timeout=aiohttp.ClientTimeout(total=10)
+            ) as resp:
+                if resp.status == 200:
+                    data = (await resp.json()).get("data", [])
+                    if data:
+                        MARKETS = [m["symbol"] for m in data]
+                        new_names = {}
+                        for m in data:
+                            sym  = m["symbol"]
+                            cat  = m.get("category", "forex")
+                            name = m.get("name_ar") or m.get("name", sym)
+                            if cat == "crypto":
+                                emoji = "₿" if sym == "BTCUSD" else "🔷"
+                            elif cat == "stock":
+                                emoji = "📈"
+                            elif cat == "commodity":
+                                emoji = "🛢️"
+                            else:
+                                emoji = MARKET_NAMES.get(sym, "💱").split()[0]
+                            new_names[sym] = f"{emoji} {name}"
+                        MARKET_NAMES = new_names
+                        logger.info(f"✅ تحميل {len(MARKETS)} زوج من API")
+                        return
+    except Exception as e:
+        logger.warning(f"load_markets_from_api: {e} — سيُستخدم الافتراضي")
+
 ALERT_COOLDOWN_MINUTES = 60
 MONITOR_INTERVAL = 900       # 15 دقيقة
 EXPIRY_CHECK_INTERVAL = 3600  # كل ساعة
@@ -566,8 +612,14 @@ async def monitor_markets(app: Application):
     logger.info("🔍 بدء المراقبة التلقائية...")
     await asyncio.sleep(30)
 
+    _market_reload_counter = 0
     while True:
         try:
+            # تحديث قائمة الأزواج كل 4 دورات (~ساعة)
+            _market_reload_counter += 1
+            if _market_reload_counter % 4 == 0:
+                await load_markets_from_api()
+
             # ── 1. فحص نتائج الإشارات (TP/SL) ──────────────────────────────
             outcomes = await fetch_signal_outcomes()
             for o in outcomes:
@@ -785,6 +837,7 @@ def main():
     app.add_handler(CallbackQueryHandler(button_handler))
 
     async def post_init(application: Application):
+        await load_markets_from_api()   # تحميل الأزواج فور البدء
         asyncio.create_task(monitor_markets(application))
         asyncio.create_task(check_expiry_and_notify(application))
 
