@@ -49,38 +49,44 @@ FOREX_MARKETS: set[str] = {"XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "USDCHF",
                             "XAGUSD", "USOIL", "NATGAS", "NAS100", "SP500", "US30"}
 
 
-async def load_markets_from_api():
-    """يجلب الأزواج النشطة من /api/v1/markets/list ويحدّث MARKETS و MARKET_NAMES"""
+async def load_markets_from_api(retries: int = 6, delay: int = 10):
+    """يجلب الأزواج النشطة من /api/v1/markets/list ويحدّث MARKETS و MARKET_NAMES
+    يُعيد المحاولة حتى `retries` مرة بفاصل `delay` ثانية (لانتظار جهوزية الـ backend)."""
     global MARKETS, MARKET_NAMES
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{API_URL}/api/v1/markets/list",
-                timeout=aiohttp.ClientTimeout(total=10)
-            ) as resp:
-                if resp.status == 200:
-                    data = (await resp.json()).get("data", [])
-                    if data:
-                        MARKETS = [m["symbol"] for m in data]
-                        new_names = {}
-                        for m in data:
-                            sym  = m["symbol"]
-                            cat  = m.get("category", "forex")
-                            name = m.get("name_ar") or m.get("name", sym)
-                            if cat == "crypto":
-                                emoji = "₿" if sym == "BTCUSD" else "🔷"
-                            elif cat == "stock":
-                                emoji = "📈"
-                            elif cat == "commodity":
-                                emoji = "🛢️"
-                            else:
-                                emoji = MARKET_NAMES.get(sym, "💱").split()[0]
-                            new_names[sym] = f"{emoji} {name}"
-                        MARKET_NAMES = new_names
-                        logger.info(f"✅ تحميل {len(MARKETS)} زوج من API")
-                        return
-    except Exception as e:
-        logger.warning(f"load_markets_from_api: {e} — سيُستخدم الافتراضي")
+    for attempt in range(1, retries + 1):
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    f"{API_URL}/api/v1/markets/list",
+                    timeout=aiohttp.ClientTimeout(total=10)
+                ) as resp:
+                    if resp.status == 200:
+                        data = (await resp.json()).get("data", [])
+                        if data:
+                            MARKETS = [m["symbol"] for m in data]
+                            new_names = {}
+                            for m in data:
+                                sym  = m["symbol"]
+                                cat  = m.get("category", "forex")
+                                name = m.get("name_ar") or m.get("name", sym)
+                                if cat == "crypto":
+                                    emoji = "₿" if sym == "BTCUSD" else "🔷"
+                                elif cat == "stock":
+                                    emoji = "📈"
+                                elif cat == "commodity":
+                                    emoji = "🛢️"
+                                else:
+                                    emoji = MARKET_NAMES.get(sym, "💱").split()[0]
+                                new_names[sym] = f"{emoji} {name}"
+                            MARKET_NAMES = new_names
+                            logger.info(f"✅ تحميل {len(MARKETS)} زوج من API")
+                            return
+        except Exception as e:
+            if attempt < retries:
+                logger.warning(f"load_markets_from_api (محاولة {attempt}/{retries}): {e} — إعادة المحاولة بعد {delay}s")
+                await asyncio.sleep(delay)
+            else:
+                logger.warning(f"load_markets_from_api: فشل بعد {retries} محاولات — سيُستخدم الافتراضي")
 
 ALERT_COOLDOWN_MINUTES = 60
 MONITOR_INTERVAL = 900       # 15 دقيقة
