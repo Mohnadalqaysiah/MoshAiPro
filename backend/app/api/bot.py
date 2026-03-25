@@ -2,6 +2,7 @@
 Mosh AI Pro v5 - Bot API
 Endpoints خاصة بالبوت (تتحقق من BOT_SECRET بدلاً من JWT المستخدم)
 """
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
 from typing import Optional
@@ -9,7 +10,9 @@ from loguru import logger
 
 from app.database import get_db
 from app.models.user import User, PlanType
+from app.models.signal import Signal, SignalStatus
 from app.services.ai_engine_v5 import mosh_ai_engine_v5
+from app.services.smart_data import smart_data as _smart_data
 from app.config import get_settings
 
 router = APIRouter()
@@ -135,6 +138,80 @@ def bot_expiring(
         })
 
     return {"users": result, "count": len(result)}
+
+
+@router.get("/check-outcomes")
+async def bot_check_outcomes(
+    _: bool = Depends(verify_bot),
+    db: Session = Depends(get_db),
+):
+    """
+    يفحص كل الإشارات النشطة ويعيد أي منها ضرب TP/SL.
+    يستخدمه البوت للإشعارات التلقائية بالنتائج.
+    """
+    now = datetime.now(timezone.utc)
+    active = db.query(Signal).filter(
+        Signal.status == SignalStatus.ACTIVE,
+        Signal.expires_at > now,
+    ).all()
+
+    triggered = []
+    for sig in active:
+        try:
+            price_info = await _smart_data.get_realtime_price_with_meta(sig.market)
+            price = price_info.get("price") if price_info else None
+            if not price:
+                continue
+            price  = float(price)
+            entry  = float(sig.entry_price)
+            sl     = float(sig.stop_loss)
+            tp1    = float(sig.take_profit_1)
+            tp2    = float(sig.take_profit_2)
+            is_buy = sig.signal_type.value == "BUY"
+
+            new_status = None
+            if is_buy:
+                if   price <= sl:  new_status = SignalStatus.SL_HIT
+                elif price >= tp2: new_status = SignalStatus.TP2_HIT
+                elif price >= tp1: new_status = SignalStatus.TP1_HIT
+            else:
+                if   price >= sl:  new_status = SignalStatus.SL_HIT
+                elif price <= tp2: new_status = SignalStatus.TP2_HIT
+                elif price <= tp1: new_status = SignalStatus.TP1_HIT
+
+            if new_status and new_status != sig.status:
+                sig.status = new_status
+                sig.current_price = price
+                db.commit()
+
+                if new_status == SignalStatus.SL_HIT:
+                    pnl = -round(abs(entry - sl), 5)
+                elif new_status == SignalStatus.TP2_HIT:
+                    pnl = round(abs(tp2 - entry), 5)
+                else:
+                    pnl = round(abs(tp1 - entry), 5)
+
+                user = db.query(User).filter(User.id == sig.user_id).first()
+                if user and user.telegram_id:
+                    triggered.append({
+                        "telegram_id":  user.telegram_id,
+                        "signal_id":    sig.id,
+                        "market":       sig.market,
+                        "timeframe":    sig.timeframe,
+                        "signal_type":  sig.signal_type.value,
+                        "status":       new_status.value,
+                        "entry":        entry,
+                        "sl":           sl,
+                        "tp1":          tp1,
+                        "tp2":          tp2,
+                        "current_price":price,
+                        "pnl_points":   pnl,
+                        "confidence":   sig.ai_confidence,
+                    })
+        except Exception as _e:
+            logger.warning(f"check_outcomes signal {sig.id}: {_e}")
+
+    return {"triggered": triggered, "count": len(triggered)}
 
 
 @router.get("/watchlist")

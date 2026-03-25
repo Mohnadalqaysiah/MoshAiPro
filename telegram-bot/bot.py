@@ -546,45 +546,103 @@ async def fetch_all_db_watchlists() -> list:
     return []
 
 
+async def fetch_signal_outcomes() -> list:
+    """يجلب الإشارات التي ضربت TP أو SL"""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"{API_URL}/api/v1/bot/check-outcomes",
+                headers=BOT_HEADERS,
+                timeout=aiohttp.ClientTimeout(total=30)
+            ) as resp:
+                if resp.status == 200:
+                    return (await resp.json()).get("triggered", [])
+    except Exception as e:
+        logger.error(f"fetch_signal_outcomes error: {e}")
+    return []
+
+
 async def monitor_markets(app: Application):
     logger.info("🔍 بدء المراقبة التلقائية...")
     await asyncio.sleep(30)
 
     while True:
         try:
-            # الأولوية: DB watchlists
+            # ── 1. فحص نتائج الإشارات (TP/SL) ──────────────────────────────
+            outcomes = await fetch_signal_outcomes()
+            for o in outcomes:
+                try:
+                    tid    = int(o["telegram_id"])
+                    status = o["status"]
+                    market = o["market"]
+                    pnl    = o["pnl_points"]
+                    price  = o["current_price"]
+                    entry  = o["entry"]
+                    tp1    = o["tp1"]
+                    tp2    = o["tp2"]
+                    sl     = o["sl"]
+                    stype  = o["signal_type"]
+
+                    if status == "SL_HIT":
+                        header = f"🔴 *وقف الخسارة ضُرب!*"
+                        pnl_txt = f"📉 الخسارة: `{abs(pnl):.5f}` نقطة"
+                        pnl_usd = f"⚠️ الصفقة أُغلقت بخسارة"
+                    elif status == "TP2_HIT":
+                        header = f"🎯 *الهدف 2 تحقق!*"
+                        pnl_txt = f"📈 الربح: `{pnl:.5f}` نقطة"
+                        pnl_usd = f"🏆 صفقة ناجحة — الهدف الكامل"
+                    else:
+                        header = f"✅ *الهدف 1 تحقق!*"
+                        pnl_txt = f"📈 الربح: `{pnl:.5f}` نقطة"
+                        pnl_usd = f"💡 فكّر بنقل الإيقاف لنقطة التعادل"
+
+                    rec_ar = "شراء" if stype == "BUY" else "بيع"
+                    outcome_msg = (
+                        f"{header}\n\n"
+                        f"📌 `{market}` — {rec_ar}\n"
+                        f"💲 سعر الدخول: `{entry}`\n"
+                        f"💲 السعر الحالي: `{price}`\n"
+                        f"🎯 TP1: `{tp1}` | TP2: `{tp2}`\n"
+                        f"🛑 SL: `{sl}`\n\n"
+                        f"{pnl_txt}\n"
+                        f"{pnl_usd}\n\n"
+                        f"⚠️ _للمعلومات فقط، ليس توصية استثمارية._"
+                    )
+                    await app.bot.send_message(chat_id=tid, text=outcome_msg, parse_mode="Markdown")
+                    logger.info(f"🏁 نتيجة إشارة → {tid} | {market} | {status} | {pnl:+.5f}")
+                except Exception as _e:
+                    logger.error(f"خطأ إرسال نتيجة: {_e}")
+
+            # ── 2. مراقبة الأزواج وإرسال تنبيهات جديدة ───────────────────
             db_users = await fetch_all_db_watchlists()
             merged: dict[int, tuple[set, str, int]] = {}
 
-            # قوائم DB
             for entry in db_users:
                 try:
                     tid = int(entry["telegram_id"])
-                    merged[tid] = (
-                        set(entry.get("watchlist", [])),
-                        entry.get("timeframe", "1h"),
-                        entry.get("min_confidence", 65),
-                    )
+                    wl  = set(s.upper() for s in entry.get("watchlist", []))
+                    if wl:
+                        merged[tid] = (wl, entry.get("timeframe", "1h"), entry.get("min_confidence", 65))
                 except Exception:
                     pass
 
-            # دمج قوائم في الذاكرة (fallback للمستخدمين غير المرتبطين)
+            # fallback: قوائم in-memory من أزرار البوت
             for uid, watchlist in list(user_watchlist.items()):
                 if uid not in merged and watchlist:
                     merged[uid] = (
-                        watchlist,
+                        set(s.upper() for s in watchlist),
                         user_timeframe.get(uid, "1h"),
                         user_min_confidence.get(uid, 65),
                     )
 
-            for uid, (watchlist, tf, min_conf) in merged.items():
-                if not watchlist:
-                    continue
+            logger.info(f"🔍 دورة مراقبة — {len(merged)} مستخدم نشط")
 
+            for uid, (watchlist, tf, min_conf) in merged.items():
                 for symbol in list(watchlist):
                     now = datetime.now(timezone.utc)
 
                     if not is_market_open(symbol):
+                        # إشعار واحد فقط عند الإغلاق
                         key = (uid, f"{symbol}_closed_{now.date()}")
                         if key not in last_alert:
                             last_alert[key] = now
@@ -599,41 +657,55 @@ async def monitor_markets(app: Application):
                                 pass
                         continue
 
-                    result = await fetch_analysis(symbol, tf, telegram_id=str(uid))
+                    # التحليل بدون خصم كريدت (telegram_id="")
+                    result = await fetch_analysis(symbol, tf, telegram_id="")
                     if not result or result.get("error") or result.get("_error"):
+                        logger.warning(f"⚠️ تحليل فاشل: {symbol}/{tf} → {result.get('_error', result.get('error', '?'))}")
                         continue
 
                     rec  = result.get("recommendation", "WATCH")
                     conf = result.get("ai_confidence_score", 0)
 
+                    logger.debug(f"  {symbol}/{tf}: {rec} {conf:.1f}% (حد:{min_conf}%)")
+
                     if rec not in ("BUY", "SELL") or conf < min_conf:
                         continue
 
+                    # cooldown check
                     key  = (uid, symbol)
                     last = last_alert.get(key)
                     if last and (now - last).total_seconds() < ALERT_COOLDOWN_MINUTES * 60:
+                        logger.debug(f"  ⏳ cooldown نشط لـ {symbol} ({uid})")
                         continue
 
                     last_alert[key] = now
                     emoji  = "🟢" if rec == "BUY" else "🔴"
                     rec_ar = "شراء" if rec == "BUY" else "بيع"
 
+                    # بناء الرسالة مع حماية من الأخطاء
+                    try:
+                        analysis_text = format_analysis(result, symbol, tf)
+                    except Exception as _fe:
+                        logger.warning(f"format_analysis خطأ: {_fe}")
+                        analysis_text = ""
+
                     alert_msg = (
                         f"🚨 *فرصة تداول!*\n\n"
                         f"{emoji} *{rec_ar}* — {MARKET_NAMES.get(symbol, symbol)}\n"
                         f"📊 الثقة: *{conf:.1f}%*\n\n"
-                    ) + format_analysis(result, symbol, tf)
+                        f"{analysis_text}"
+                    )[:4000]  # حد Telegram
 
                     try:
                         await app.bot.send_message(chat_id=uid, text=alert_msg, parse_mode="Markdown")
-                        logger.info(f"📨 تنبيه → {uid} | {symbol} | {rec} | {conf:.1f}%")
+                        logger.info(f"📨 تنبيه أُرسل → {uid} | {symbol} | {rec} | {conf:.1f}%")
                     except Exception as e:
-                        logger.error(f"فشل الإرسال لـ {uid}: {e}")
+                        logger.error(f"فشل إرسال تنبيه {uid}/{symbol}: {e}")
 
-                    await asyncio.sleep(1)
+                    await asyncio.sleep(0.5)
 
         except Exception as e:
-            logger.error(f"خطأ في المراقبة: {e}")
+            logger.error(f"خطأ عام في المراقبة: {e}", exc_info=True)
 
         await asyncio.sleep(MONITOR_INTERVAL)
 
