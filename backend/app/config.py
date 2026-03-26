@@ -78,10 +78,10 @@ class Settings(BaseSettings):
     TWELVEDATA_RATE_LIMIT: int = 8
     FINNHUB_RATE_LIMIT: int = 60
 
-    # ----- Email / SMTP -----
-    SMTP_HOST: str = "smtp.gmail.com"
-    SMTP_PORT: int = 587
-    SMTP_USER: str = ""
+    # ----- Email / SMTP (Hostinger SSL) -----
+    SMTP_HOST: str = "smtp.hostinger.com"
+    SMTP_PORT: int = 465
+    SMTP_USER: str = "support@qaffel.com"
     SMTP_PASSWORD: str = ""
     SMTP_FROM_NAME: str = "Qaffel AI"
     SUPPORT_EMAIL: str = "support@qaffel.com"

@@ -7,15 +7,22 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from loguru import logger
 
+from app.config import get_settings
 
-SMTP_HOST = "smtp.hostinger.com"
-SMTP_PORT = 465
-SMTP_FROM = "support@qaffel.com"
-SMTP_NAME = "Qaffel AI"
+_s = get_settings()
+
+SMTP_HOST = _s.SMTP_HOST        # smtp.hostinger.com
+SMTP_PORT = _s.SMTP_PORT        # 465
+SMTP_FROM = _s.SMTP_USER        # support@qaffel.com
+SMTP_NAME = _s.SMTP_FROM_NAME   # Qaffel AI
 
 
-def send_email(to: str, subject: str, body_html: str, smtp_password: str) -> bool:
+def send_email(to: str, subject: str, body_html: str, smtp_password: str = "") -> bool:
     """إرسال إيميل عبر Hostinger SMTP SSL"""
+    password = smtp_password or _s.SMTP_PASSWORD
+    if not password:
+        logger.warning(f"⚠️  Email skipped (no SMTP_PASSWORD): {to}")
+        return False
     try:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
@@ -26,7 +33,7 @@ def send_email(to: str, subject: str, body_html: str, smtp_password: str) -> boo
 
         ctx = ssl.create_default_context()
         with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, context=ctx) as server:
-            server.login(SMTP_FROM, smtp_password)
+            server.login(SMTP_FROM, password)
             server.sendmail(SMTP_FROM, to, msg.as_string())
 
         logger.info(f"✉️  Email sent → {to} | {subject}")
