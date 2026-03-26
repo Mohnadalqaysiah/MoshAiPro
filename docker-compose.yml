@@ -36,6 +36,7 @@ services:
       - redis
     volumes:
       - ./backend:/app
+      - static_uploads:/app/static/uploads
     networks:
       - moshnet
     restart: unless-stopped
@@ -75,6 +76,7 @@ services:
 
 volumes:
   postgres_data:
+  static_uploads:
 
 networks:
   moshnet:
