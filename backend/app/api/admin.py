@@ -8,9 +8,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional, List
 from loguru import logger
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+from app.services.email_service import send_email as _send_email_svc
 
 from app.database import get_db
 from app.models.user import User, UserRole, PlanType
@@ -629,20 +627,7 @@ class EmailSendIn(BaseModel):
     user_id: Optional[int] = None   # None = أرسل للكل
 
 def _send_one(to_email: str, subject: str, body: str):
-    try:
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject
-        msg["From"]    = f"{_settings.SMTP_FROM_NAME} <{_settings.SMTP_USER}>"
-        msg["To"]      = to_email
-        msg.attach(MIMEText(body, "html", "utf-8"))
-        with smtplib.SMTP(_settings.SMTP_HOST, _settings.SMTP_PORT, timeout=15) as s:
-            s.starttls()
-            s.login(_settings.SMTP_USER, _settings.SMTP_PASSWORD)
-            s.sendmail(_settings.SMTP_USER, [to_email], msg.as_string())
-        return True
-    except Exception as e:
-        logger.warning(f"Email failed to {to_email}: {e}")
-        return False
+    return _send_email_svc(to_email, subject, body, _settings.SMTP_PASSWORD)
 
 def _send_bulk(emails: List[str], subject: str, body: str):
     ok = fail = 0
