@@ -430,7 +430,7 @@ export default function Admin() {
                   <tbody className="divide-y divide-gray-800/50">
                     {filteredUsers.map(u => (
                       <tr key={u.id} className="hover:bg-gray-900/50 cursor-pointer" onClick={() => setSelectedUser(u)}>
-                        <td className="py-2 px-3 text-gray-600 text-xs">{u.id}</td>
+                        <td className="py-2 px-3 text-gray-500 text-xs font-mono select-all" title="User ID">#{u.id}</td>
                         <td className="py-2.5 px-3">
                           <div className="font-medium text-white text-sm">{u.full_name || '—'}</div>
                           <div className="text-xs text-gray-500 font-mono">{u.email}</div>
@@ -444,9 +444,21 @@ export default function Admin() {
                         </td>
                         <td className="py-2.5 px-3 text-xs text-gray-500">{u.created_at?.slice(0,10)||'—'}</td>
                         <td className="py-2.5 px-3" onClick={e => e.stopPropagation()}>
-                          <button onClick={() => setSelectedUser(u)} className="text-xs text-blue-400 hover:text-blue-300 border border-blue-800/50 rounded px-2 py-0.5">
-                            تفاصيل
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <button onClick={() => setSelectedUser(u)} className="text-xs text-blue-400 hover:text-blue-300 border border-blue-800/50 rounded px-2 py-0.5">
+                              تفاصيل
+                            </button>
+                            <button
+                              title={`إرسال إيميل لـ ${u.email}`}
+                              onClick={() => {
+                                setEmailForm(f => ({ ...f, user_id: String(u.id), subject: '', body: '' }))
+                                setTab('email')
+                              }}
+                              className="text-xs text-gray-400 hover:text-blue-400 border border-gray-700 hover:border-blue-700 rounded px-1.5 py-0.5 transition"
+                            >
+                              <Mail size={11}/>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -653,10 +665,37 @@ export default function Admin() {
                 </div>
               </form>
 
+              {/* ── تحذيرات انتهاء الاشتراك ── */}
+              <div className="mt-6 bg-gray-900 border border-yellow-800/40 rounded-xl p-5">
+                <h3 className="text-sm font-semibold text-yellow-400 mb-1">⚠️ تحذيرات انتهاء الاشتراك</h3>
+                <p className="text-xs text-gray-500 mb-3">
+                  إرسال إيميل تحذير تلقائي لكل مستخدم اشتراكه ينتهي قريباً وليس لديه حساب تيليجرام
+                </p>
+                <div className="flex gap-2 items-center">
+                  <select id="exp-days" defaultValue="3"
+                    className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white">
+                    {[1,2,3,5,7].map(d => <option key={d} value={d}>{d} أيام قبل الانتهاء</option>)}
+                  </select>
+                  <button
+                    onClick={async () => {
+                      const days = document.getElementById('exp-days').value
+                      try {
+                        const r = await axios.post(`${API}/api/v1/admin/email/subscription-warnings?days_before=${days}`)
+                        setEmailMsg({ type:'ok', text:`تم إرسال التحذيرات لـ ${r.data.sent} مستخدم` })
+                      } catch (e) {
+                        setEmailMsg({ type:'err', text: e.response?.data?.detail || 'خطأ' })
+                      }
+                    }}
+                    className="flex items-center gap-1 text-sm bg-yellow-700 hover:bg-yellow-600 text-white px-4 py-1.5 rounded-lg transition">
+                    <Mail size={13}/> إرسال التحذيرات
+                  </button>
+                </div>
+              </div>
+
               <div className="mt-4 p-4 bg-gray-900 border border-gray-800 rounded-xl text-xs text-gray-500 space-y-1">
                 <p>⚙️ يتطلب ضبط متغيرات البيئة: <span className="font-mono text-gray-400">SMTP_USER</span> و <span className="font-mono text-gray-400">SMTP_PASSWORD</span></p>
                 <p>📧 الإرسال يتم في الخلفية ولا يوقف الصفحة</p>
-                <p>🔐 <span className="font-mono text-gray-400">SMTP_HOST</span> الافتراضي: smtp.gmail.com (port 587)</p>
+                <p>🔐 <span className="font-mono text-gray-400">SMTP_HOST</span> الافتراضي: smtp.hostinger.com (port 465)</p>
               </div>
             </div>
           )}

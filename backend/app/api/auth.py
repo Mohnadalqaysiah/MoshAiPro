@@ -87,7 +87,12 @@ _otp_store: dict = {}
 # ─── Register ─────────────────────────────────────────────────────────────────
 
 @router.post("/register")
-def register(data: RegisterIn, ref: str = Query(default=""), db: Session = Depends(get_db)):
+def register(
+    data: RegisterIn,
+    background_tasks: BackgroundTasks,
+    ref: str = Query(default=""),
+    db: Session = Depends(get_db),
+):
     if db.query(User).filter(User.email == data.email.lower()).first():
         raise HTTPException(400, "البريد الإلكتروني مسجّل مسبقاً")
 
@@ -136,6 +141,14 @@ def register(data: RegisterIn, ref: str = Query(default=""), db: Session = Depen
 
     token = create_token(user.id, user.role)
     logger.info(f"✅ New user registered: {user.email} (ref={user.referred_by_code or 'none'})")
+
+    # ── إيميل ترحيب في الخلفية ──────────────────────────────────────────
+    smtp_pass = settings.SMTP_PASSWORD
+    if smtp_pass:
+        from app.services.email_service import send_email, welcome_email_body
+        body = welcome_email_body(user.full_name or user.email, trial_days=TRIAL_DAYS, trial_analyses=10)
+        background_tasks.add_task(send_email, user.email, "مرحباً بك في Qaffel AI 🎉", body, smtp_pass)
+
     return {"token": token, "user": _user_info(user)}
 
 

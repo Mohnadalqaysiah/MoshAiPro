@@ -260,6 +260,7 @@ def list_payments(
 def handle_payment(
     payment_id: int,
     data: PaymentActionIn,
+    background: BackgroundTasks,
     admin: User = Depends(get_admin_user),
     db: Session = Depends(get_db)
 ):
@@ -316,6 +317,22 @@ def handle_payment(
                             f"💰 Affiliate commission: referrer_id={ref_aff.user_id} "
                             f"tier={tier} rate={rate*100:.0f}% earned={commission}$"
                         )
+                        # إيميل إشعار عمولة للمُحيل
+                        ref_user = db.query(User).filter(User.id == ref_aff.user_id).first()
+                        if ref_user and _settings.SMTP_PASSWORD:
+                            from app.services.email_service import send_email, affiliate_commission_email_body
+                            body = affiliate_commission_email_body(
+                                name=ref_user.full_name or ref_user.email,
+                                commission_usd=commission,
+                                referral_name=user.full_name or user.email,
+                                tier=tier,
+                                pending_balance=ref_aff.pending_balance_usd + commission,
+                            )
+                            background.add_task(
+                                send_email, ref_user.email,
+                                f"💰 عمولة جديدة ${commission:.2f} — Qaffel AI",
+                                body, _settings.SMTP_PASSWORD,
+                            )
 
     elif data.action == "reject":
         payment.status     = PaymentStatus.REJECTED
@@ -325,6 +342,36 @@ def handle_payment(
         raise HTTPException(400, "action يجب أن يكون approve أو reject")
 
     db.commit()
+
+    # ── إيميل إشعار للمستخدم بعد الـ commit ──────────────────────────────
+    if _settings.SMTP_PASSWORD:
+        from app.services.email_service import (
+            send_email, payment_approved_email_body, payment_rejected_email_body
+        )
+        _user = db.query(User).filter(User.id == payment.user_id).first()
+        if _user:
+            if data.action == "approve":
+                days = 7 if payment.plan == PaymentPlan.WEEKLY else 30
+                ends_str = (_user.subscription_ends_at.strftime("%Y-%m-%d")
+                            if _user.subscription_ends_at else "—")
+                body = payment_approved_email_body(
+                    _user.full_name or _user.email,
+                    payment.plan.value, days, ends_str,
+                )
+                background.add_task(
+                    send_email, _user.email,
+                    "✅ تم تفعيل اشتراكك — Qaffel AI", body, _settings.SMTP_PASSWORD,
+                )
+            elif data.action == "reject":
+                body = payment_rejected_email_body(
+                    _user.full_name or _user.email,
+                    payment.plan.value, data.admin_note or "",
+                )
+                background.add_task(
+                    send_email, _user.email,
+                    "❌ تعذّر قبول دفعتك — Qaffel AI", body, _settings.SMTP_PASSWORD,
+                )
+
     return {"success": True, "payment": _payment_info(payment)}
 
 
@@ -464,6 +511,49 @@ def get_expiring_users(
         })
 
     return {"users": result, "count": len(result)}
+
+
+@router.post("/email/subscription-warnings")
+def send_subscription_warnings(
+    days_before: int = Query(default=3, ge=1, le=7),
+    background: BackgroundTasks = None,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """
+    يرسل إيميل تحذير لكل من اشتراكه ينتهي خلال X أيام وليس لديه تيليجرام
+    """
+    from app.services.email_service import send_email, subscription_expiry_email_body
+    smtp_pass = _settings.SMTP_PASSWORD
+    if not smtp_pass:
+        raise HTTPException(503, "SMTP غير مُعدّ")
+
+    now      = datetime.now(timezone.utc)
+    deadline = now + timedelta(days=days_before)
+
+    # اشتراك مدفوع ينتهي قريباً + بدون تيليجرام
+    users = db.query(User).filter(
+        User.plan.in_([PlanType.WEEKLY, PlanType.MONTHLY]),
+        User.subscription_ends_at != None,
+        User.subscription_ends_at > now,
+        User.subscription_ends_at <= deadline,
+        User.telegram_id == None,
+        User.is_active == True,
+    ).all()
+
+    sent = 0
+    for u in users:
+        days_left = max(0, (u.subscription_ends_at - now).days)
+        body = subscription_expiry_email_body(u.full_name or u.email, days_left)
+        subject = f"⚠️ اشتراكك ينتهي خلال {days_left} {'يوم' if days_left > 1 else 'أيام'} — Qaffel AI"
+        if background:
+            background.add_task(send_email, u.email, subject, body, smtp_pass)
+        else:
+            send_email(u.email, subject, body, smtp_pass)
+        sent += 1
+
+    logger.info(f"📧 Subscription warnings sent: {sent} users (≤{days_before}d, no Telegram)")
+    return {"sent": sent, "days_before": days_before}
 
 
 # ─── Admin Profile ────────────────────────────────────────────────────────────
