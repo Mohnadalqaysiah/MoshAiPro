@@ -2,11 +2,30 @@ import { useState, useEffect } from 'react'
 import axios from 'axios'
 import { BarChart2, Activity, TrendingUp } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { useLang } from '../contexts/LangContext'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
+const T = {
+  ar: {
+    title: 'التحليلات', sub: 'إحصائيات الإشارات والأداء',
+    total: 'إجمالي الإشارات', buy: 'شراء', sell: 'بيع', avgConf: 'متوسط الثقة',
+    dist: 'توزيع الإشارات', watch: 'مراقبة', topMarkets: 'الأسواق الأكثر تحليلاً',
+    noData: 'لا توجد بيانات', systemStatus: 'حالة النظام',
+  },
+  en: {
+    title: 'Analytics', sub: 'Signal statistics and performance',
+    total: 'Total Signals', buy: 'Buy', sell: 'Sell', avgConf: 'Avg Confidence',
+    dist: 'Signal Distribution', watch: 'Watch', topMarkets: 'Most Analyzed Markets',
+    noData: 'No data available', systemStatus: 'System Status',
+  },
+}
+
 export default function Analytics() {
   const { user } = useAuth()
+  const { lang } = useLang()
+  const tx = T[lang] || T.ar
+  const isAr = lang === 'ar'
   const isAdmin = user?.role === 'admin'
   const [signals, setSignals] = useState([])
   const [loading, setLoading] = useState(true)
@@ -40,19 +59,19 @@ export default function Analytics() {
   }, {})
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" dir={isAr ? 'rtl' : 'ltr'}>
       <div>
-        <h1 className="text-2xl font-bold text-white">التحليلات</h1>
-        <p className="text-gray-400 text-sm mt-1">إحصائيات الإشارات والأداء</p>
+        <h1 className="text-2xl font-bold text-white">{tx.title}</h1>
+        <p className="text-gray-400 text-sm mt-1">{tx.sub}</p>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: 'إجمالي الإشارات', value: signals.length, color: 'text-blue-400' },
-          { label: 'شراء', value: buyCount, color: 'text-green-400' },
-          { label: 'بيع', value: sellCount, color: 'text-red-400' },
-          { label: 'متوسط الثقة', value: `${avgConf}%`, color: 'text-yellow-400' },
+          { label: tx.total, value: signals.length, color: 'text-blue-400' },
+          { label: tx.buy, value: buyCount, color: 'text-green-400' },
+          { label: tx.sell, value: sellCount, color: 'text-red-400' },
+          { label: tx.avgConf, value: `${avgConf}%`, color: 'text-yellow-400' },
         ].map((s, i) => (
           <div key={i} className="bg-gray-800 border border-gray-700 rounded-xl p-4 text-center">
             <div className={`text-3xl font-bold ${s.color}`}>{s.value}</div>
@@ -66,16 +85,16 @@ export default function Analytics() {
         <div className="bg-gray-800 border border-gray-700 rounded-xl p-5">
           <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
             <BarChart2 size={18} className="text-blue-400" />
-            توزيع الإشارات
+            {tx.dist}
           </h3>
           {signals.length === 0 ? (
-            <p className="text-gray-500 text-sm text-center py-4">لا توجد بيانات</p>
+            <p className="text-gray-500 text-sm text-center py-4">{tx.noData}</p>
           ) : (
             <div className="space-y-3">
               {[
-                { label: 'شراء', count: buyCount, color: 'bg-green-500' },
-                { label: 'بيع', count: sellCount, color: 'bg-red-500' },
-                { label: 'مراقبة', count: watchCount, color: 'bg-gray-500' },
+                { label: tx.buy, count: buyCount, color: 'bg-green-500' },
+                { label: tx.sell, count: sellCount, color: 'bg-red-500' },
+                { label: tx.watch, count: watchCount, color: 'bg-gray-500' },
               ].map(item => (
                 <div key={item.label}>
                   <div className="flex justify-between text-sm mb-1">
@@ -97,10 +116,10 @@ export default function Analytics() {
         <div className="bg-gray-800 border border-gray-700 rounded-xl p-5">
           <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
             <TrendingUp size={18} className="text-blue-400" />
-            الأسواق الأكثر تحليلاً
+            {tx.topMarkets}
           </h3>
           {Object.keys(marketCounts).length === 0 ? (
-            <p className="text-gray-500 text-sm text-center py-4">لا توجد بيانات</p>
+            <p className="text-gray-500 text-sm text-center py-4">{tx.noData}</p>
           ) : (
             <div className="space-y-3">
               {Object.entries(marketCounts)
@@ -130,7 +149,7 @@ export default function Analytics() {
         <div className="bg-gray-800 border border-gray-700 rounded-xl p-5">
           <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
             <Activity size={18} className="text-blue-400" />
-            حالة النظام
+            {tx.systemStatus}
           </h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[

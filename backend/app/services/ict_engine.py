@@ -418,12 +418,155 @@ class ICTEngine:
             else:
                 bias = "BULLISH"  # السيولة أسفل → قد يهبط ليكتسحها ثم يصعد
 
+        # نحتفظ أيضاً بالمستويات المُكتسَحة لاستخدامها في كاشف Stop Hunt
+        swept_highs = sorted([h for h in equal_highs if h["swept"]],
+                             key=lambda x: x["distance_pct"])[:3]
+        swept_lows  = sorted([l for l in equal_lows  if l["swept"]],
+                             key=lambda x: x["distance_pct"])[:3]
+
         return {
-            "equal_highs": unswept_highs,
-            "equal_lows": unswept_lows,
-            "bias": bias,
-            "nearest_bsl": unswept_highs[0]["level"] if unswept_highs else None,
-            "nearest_ssl": unswept_lows[0]["level"] if unswept_lows else None,
+            "equal_highs":  unswept_highs,
+            "equal_lows":   unswept_lows,
+            "swept_highs":  swept_highs,   # BSL مُكتسَح مؤخراً
+            "swept_lows":   swept_lows,    # SSL مُكتسَح مؤخراً
+            "bias":         bias,
+            "nearest_bsl":  unswept_highs[0]["level"] if unswept_highs else None,
+            "nearest_ssl":  unswept_lows[0]["level"]  if unswept_lows  else None,
+        }
+
+    # ─── Liquidity Sweep / Stop Hunt Detection ────────────────────────────────
+
+    def detect_liquidity_sweeps(self, df: pd.DataFrame, liquidity: Dict) -> Dict:
+        """
+        كاشف اكتساح السيولة وصيد الـ Stop Loss (Stop Hunt)
+
+        Smart Money تسحب السيولة قبل الانعكاس:
+        - SSL Stop Hunt: الشمعة تنخفض تحت قاع → تُغلق فوقه → BUY
+        - BSL Stop Hunt: الشمعة ترتفع فوق قمة → تُغلق تحتها → SELL
+
+        تُعيد:
+        - ssl_sweep / bsl_sweep: تفاصيل أفضل اكتساح مؤخراً
+        - has_bullish_sweep / has_bearish_sweep: هل الاكتساح مع رفض مؤكد؟
+        - sweep_quality: STRONG / MODERATE / WEAK / NONE
+        """
+        if len(df) < 10:
+            return {"has_bullish_sweep": False, "has_bearish_sweep": False, "sweep_quality": "NONE"}
+
+        # ATR كمرجع للحجم
+        atr = float(df["atr"].iloc[-1]) if "atr" in df.columns else float((df["high"] - df["low"]).mean())
+        if atr <= 0:
+            atr = 1.0
+
+        # ── مستويات السيولة من detect_liquidity_pools ─────────────────────────
+        bsl_levels = [h["level"] for h in liquidity.get("equal_highs", [])]
+        ssl_levels = [l["level"] for l in liquidity.get("equal_lows",  [])]
+
+        # نضيف أيضاً swing highs/lows الفردية كمستويات سيولة فردية
+        highs_sp, lows_sp = self.find_swing_points(df, strength=3)
+        lookback = max(0, len(df) - int(len(df) * 0.4))  # آخر 40% من البيانات
+        bsl_levels += [h["price"] for h in highs_sp if h["index"] >= lookback]
+        ssl_levels += [l["price"] for l in lows_sp  if l["index"] >= lookback]
+
+        # إزالة التكرار (مستويات متقاربة جداً تُدمج)
+        def _deduplicate(levels, tol_pct=0.001):
+            out = []
+            for lvl in sorted(set(levels)):
+                if not out or abs(lvl - out[-1]) / lvl > tol_pct:
+                    out.append(lvl)
+            return out
+
+        bsl_levels = _deduplicate(bsl_levels)
+        ssl_levels = _deduplicate(ssl_levels)
+
+        # ── مسح آخر 15 شمعة بحثاً عن اكتساح + رفض ───────────────────────────
+        scan_window = min(15, len(df) - 2)
+        scan_df = df.iloc[-(scan_window + 1):-1]  # نستثني الشمعة الحالية
+
+        best_bsl_sweep = None
+        best_ssl_sweep = None
+
+        for i, (_, row) in enumerate(scan_df.iterrows()):
+            hi    = float(row["high"])
+            lo    = float(row["low"])
+            cl    = float(row["close"])
+            op    = float(row["open"])
+            candles_since = scan_window - i  # 1 = الشمعة الأخيرة
+
+            # ── BSL Stop Hunt (هبوط بعد سحب سيولة فوق القمم) ─────────────────
+            for level in bsl_levels:
+                if hi > level and cl < level:
+                    wick_above   = hi - level
+                    body_below   = level - cl
+                    wick_ratio   = wick_above / atr
+
+                    confirmed = (
+                        wick_above  > atr * 0.25 and   # شوكة واضحة فوق المستوى
+                        body_below  > atr * 0.05 and   # الإغلاق داخل الرينج
+                        cl < op                         # شمعة هبوطية
+                    )
+                    info = {
+                        "level":             round(level, 5),
+                        "wick_magnitude":    round(wick_above, 5),
+                        "wick_atr_ratio":    round(wick_ratio, 2),
+                        "rejection_confirmed": confirmed,
+                        "candles_since":     candles_since,
+                    }
+                    if best_bsl_sweep is None or (
+                        confirmed and not best_bsl_sweep["rejection_confirmed"]
+                    ) or (
+                        confirmed == best_bsl_sweep["rejection_confirmed"]
+                        and candles_since < best_bsl_sweep["candles_since"]
+                    ):
+                        best_bsl_sweep = info
+
+            # ── SSL Stop Hunt (صعود بعد سحب سيولة تحت القيعان) ───────────────
+            for level in ssl_levels:
+                if lo < level and cl > level:
+                    wick_below   = level - lo
+                    body_above   = cl - level
+                    wick_ratio   = wick_below / atr
+
+                    confirmed = (
+                        wick_below > atr * 0.25 and
+                        body_above > atr * 0.05 and
+                        cl > op                         # شمعة صعودية
+                    )
+                    info = {
+                        "level":             round(level, 5),
+                        "wick_magnitude":    round(wick_below, 5),
+                        "wick_atr_ratio":    round(wick_ratio, 2),
+                        "rejection_confirmed": confirmed,
+                        "candles_since":     candles_since,
+                    }
+                    if best_ssl_sweep is None or (
+                        confirmed and not best_ssl_sweep["rejection_confirmed"]
+                    ) or (
+                        confirmed == best_ssl_sweep["rejection_confirmed"]
+                        and candles_since < best_ssl_sweep["candles_since"]
+                    ):
+                        best_ssl_sweep = info
+
+        # ── جودة الاكتساح ─────────────────────────────────────────────────────
+        has_bullish_sweep = bool(best_ssl_sweep and best_ssl_sweep["rejection_confirmed"])
+        has_bearish_sweep = bool(best_bsl_sweep and best_bsl_sweep["rejection_confirmed"])
+
+        if has_bullish_sweep or has_bearish_sweep:
+            sweep = best_ssl_sweep if has_bullish_sweep else best_bsl_sweep
+            if sweep["candles_since"] <= 5 and sweep["wick_atr_ratio"] >= 0.5:
+                quality = "STRONG"    # اكتساح حديث + شوكة قوية
+            else:
+                quality = "MODERATE"  # اكتساح مؤكد لكن أقدم أو أضعف
+        elif best_bsl_sweep or best_ssl_sweep:
+            quality = "WEAK"          # اكتساح بدون رفض مؤكد
+        else:
+            quality = "NONE"
+
+        return {
+            "bsl_sweep":        best_bsl_sweep,
+            "ssl_sweep":        best_ssl_sweep,
+            "has_bullish_sweep": has_bullish_sweep,
+            "has_bearish_sweep": has_bearish_sweep,
+            "sweep_quality":    quality,
         }
 
     # ─── Premium / Discount Zones ─────────────────────────────────────────────
@@ -715,16 +858,44 @@ class ICTEngine:
             bear_score += pts
             bear_factors.append(f"منطقة {pd_zone} ({premium_discount.get('pct', 0):.1f}%)")
 
-        # ── 5. Liquidity Swept (10 نقطة) ──────────────────────────────────────
-        # SSL مُكتسَحة → Bullish (السوق سحب السيولة تحت ثم ارتد)
-        swept_ssl = any(l.get("swept") for l in liquidity.get("equal_lows", []))
-        swept_bsl = any(h.get("swept") for h in liquidity.get("equal_highs", []))
-        if swept_ssl:
-            bull_score += 10
-            bull_factors.append("سيولة بيعية SSL مُكتسَحة → انعكاس صاعد")
-        if swept_bsl:
-            bear_score += 10
-            bear_factors.append("سيولة شرائية BSL مُكتسَحة → انعكاس هابط")
+        # ── 5. Liquidity Sweep + Stop Hunt (25 نقطة) ─────────────────────────────
+        # الاكتساح مع رفض = شرط ICT / SMC الأساسي للدخول
+        sweep = liquidity.get("sweep_analysis", {})
+        sq    = sweep.get("sweep_quality", "NONE")
+
+        if sweep.get("has_bullish_sweep"):
+            # SSL Stop Hunt مؤكد → صعود
+            pts = 25 if sq == "STRONG" else 15
+            bull_score += pts
+            ssl_info = sweep.get("ssl_sweep", {})
+            bull_factors.append(
+                f"✅ Stop Hunt SSL مؤكد — منذ {ssl_info.get('candles_since','?')} شمعة"
+                f" (شوكة {ssl_info.get('wick_atr_ratio','?')}x ATR)"
+            )
+        elif sweep.get("ssl_sweep"):
+            # SSL مُكتسَح لكن بدون رفض واضح
+            bull_score += 5
+            ssl_info = sweep.get("ssl_sweep", {})
+            bull_factors.append(f"SSL مُكتسَح (رفض غير مؤكد — منذ {ssl_info.get('candles_since','?')} شمعة)")
+
+        if sweep.get("has_bearish_sweep"):
+            # BSL Stop Hunt مؤكد → هبوط
+            pts = 25 if sq == "STRONG" else 15
+            bear_score += pts
+            bsl_info = sweep.get("bsl_sweep", {})
+            bear_factors.append(
+                f"✅ Stop Hunt BSL مؤكد — منذ {bsl_info.get('candles_since','?')} شمعة"
+                f" (شوكة {bsl_info.get('wick_atr_ratio','?')}x ATR)"
+            )
+        elif sweep.get("bsl_sweep"):
+            bear_score += 5
+            bsl_info = sweep.get("bsl_sweep", {})
+            bear_factors.append(f"BSL مُكتسَح (رفض غير مؤكد — منذ {bsl_info.get('candles_since','?')} شمعة)")
+
+        # عقوبة: لا يوجد اكتساح سيولة على الإطلاق → -8 نقاط لكلا الاتجاهين
+        if sq == "NONE":
+            bull_score = max(0, bull_score - 8)
+            bear_score = max(0, bear_score - 8)
 
         # ── 6. Kill Zone (10 نقطة) ─────────────────────────────────────────────
         if kill_zone.get("is_optimal_time"):
@@ -919,6 +1090,11 @@ class ICTEngine:
             order_blocks = self.detect_order_blocks(df)
             fvg = self.detect_fvg(df)
             liquidity = self.detect_liquidity_pools(df)
+
+            # ── Sweep / Stop Hunt Detection (يُضاف داخل liquidity dict) ──────
+            sweep_analysis = self.detect_liquidity_sweeps(df, liquidity)
+            liquidity["sweep_analysis"] = sweep_analysis
+
             premium_discount = self.analyze_premium_discount(df)
             kill_zone = self.get_kill_zone()
             wyckoff = self.analyze_wyckoff(df)
@@ -947,6 +1123,7 @@ class ICTEngine:
                 "order_blocks": order_blocks,
                 "fvg": fvg,
                 "liquidity": liquidity,
+                "liquidity_sweep": sweep_analysis,   # مباشر للـ AI Engine
                 "premium_discount": premium_discount,
                 "kill_zone": kill_zone,
                 "wyckoff": wyckoff,

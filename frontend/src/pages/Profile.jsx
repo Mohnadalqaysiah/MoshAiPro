@@ -3,7 +3,7 @@ import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
 import useMarkets from '../hooks/useMarkets'
-import { User, Mail, Phone, Lock, Save, CheckCircle, AlertCircle, TrendingUp, Bell, Calculator } from 'lucide-react'
+import { User, Mail, Phone, Lock, Save, CheckCircle, AlertCircle, TrendingUp, Bell, Calculator, Gift, Copy, ExternalLink, Users, DollarSign } from 'lucide-react'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const TIMEFRAMES = ['15m','1h','4h','1day']
@@ -30,6 +30,24 @@ export default function Profile() {
   const [tradingMsg, setTradingMsg] = useState(null)
   const [prefsMsg,   setPrefsMsg]   = useState(null)
   const [loading,    setLoading]    = useState('')
+
+  // Affiliate state
+  const [affiliate, setAffiliate] = useState(null)
+  const [copied,    setCopied]    = useState(false)
+
+  useEffect(() => {
+    axios.get(`${API}/api/v1/affiliate/dashboard`)
+      .then(r => setAffiliate(r.data))
+      .catch(() => {})
+  }, [])
+
+  const copyLink = () => {
+    if (!affiliate?.referral_link) return
+    navigator.clipboard.writeText(affiliate.referral_link).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }
 
   // حساسبة اللوت (preview)
   const [lotPreview, setLotPreview] = useState(null)
@@ -318,6 +336,87 @@ export default function Profile() {
           </button>
           <Msg msg={prefsMsg} />
         </form>
+      </div>
+
+      {/* ── Affiliate / Referral ── */}
+      <div className="bg-gray-800 border border-gray-700 rounded-xl p-6">
+        <h2 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
+          <Gift size={16} className="text-green-400" /> {isAr ? 'نظام الإحالة' : 'Referral Program'}
+        </h2>
+
+        {affiliate ? (
+          <div className="space-y-4">
+            {/* Tier badge */}
+            <div className="flex flex-wrap gap-3">
+              <div className={`px-4 py-2 rounded-xl text-sm font-bold border ${affiliate.current_tier === 2 ? 'bg-yellow-900/30 border-yellow-600 text-yellow-400' : 'bg-blue-900/30 border-blue-700 text-blue-400'}`}>
+                {isAr ? `المرحلة ${affiliate.current_tier}` : `Tier ${affiliate.current_tier}`}
+                {' · '}{affiliate.commission_rate_pct}%
+                {affiliate.current_tier === 1 && affiliate.referrals_to_next_tier != null && (
+                  <span className="text-xs font-normal opacity-70 mr-1">
+                    ({affiliate.referrals_to_next_tier} {isAr ? 'للمرحلة التالية' : 'to Tier 2'})
+                  </span>
+                )}
+              </div>
+              <div className="bg-gray-700 px-4 py-2 rounded-xl text-sm">
+                <span className="text-gray-400">{isAr ? 'الإحالات:' : 'Referrals:'} </span>
+                <span className="text-white font-bold">{affiliate.total_referrals}</span>
+              </div>
+            </div>
+
+            {/* Earnings */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-gray-900 rounded-xl p-3">
+                <p className="text-xs text-gray-400 mb-1">{isAr ? 'رصيد معلّق' : 'Pending Balance'}</p>
+                <p className="text-green-400 font-bold text-lg">${affiliate.pending_balance_usd?.toFixed(2)}</p>
+              </div>
+              <div className="bg-gray-900 rounded-xl p-3">
+                <p className="text-xs text-gray-400 mb-1">{isAr ? 'إجمالي الأرباح' : 'Total Paid Out'}</p>
+                <p className="text-white font-bold text-lg">${affiliate.paid_out_usd?.toFixed(2)}</p>
+              </div>
+            </div>
+
+            {/* Referral link */}
+            <div>
+              <p className="text-sm text-gray-400 mb-2">{isAr ? 'رابط الإحالة الخاص بك:' : 'Your referral link:'}</p>
+              <div className="flex gap-2">
+                <input readOnly value={affiliate.referral_link || ''}
+                  className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-xs text-blue-300 font-mono focus:outline-none"
+                  dir="ltr" />
+                <button onClick={copyLink}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${copied ? 'bg-green-600 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-300'}`}>
+                  {copied ? <CheckCircle size={13} /> : <Copy size={13} />}
+                  {copied ? (isAr ? 'تم!' : 'Copied!') : (isAr ? 'نسخ' : 'Copy')}
+                </button>
+              </div>
+            </div>
+
+            {/* Info */}
+            <div className="bg-green-900/10 border border-green-800/30 rounded-xl p-3 text-xs text-gray-400 space-y-1">
+              <p>• {isAr ? 'احصل على 5% عمولة من كل اشتراك مدفوع عبر رابطك' : 'Earn 5% commission on every paid subscription via your link'}</p>
+              <p>• {isAr ? 'بعد 25 إحالة ناجحة، ترتفع العمولة إلى 15%' : 'After 25 successful referrals, your commission rises to 15%'}</p>
+              <p>• {isAr ? 'يتم احتساب العمولة عند قبول الدفع من قبل الإدارة' : 'Commission is credited when admin approves the payment'}</p>
+            </div>
+
+            {/* Recent referrals table */}
+            {affiliate.referrals?.length > 0 && (
+              <div>
+                <p className="text-sm text-gray-400 mb-2">{isAr ? 'آخر الإحالات:' : 'Recent referrals:'}</p>
+                <div className="space-y-2">
+                  {affiliate.referrals.slice(0, 5).map((r, i) => (
+                    <div key={i} className="flex justify-between items-center bg-gray-900 rounded-lg px-3 py-2 text-xs">
+                      <span className="text-gray-400">{r.referred_user_email}</span>
+                      <span className="text-green-400 font-mono">+${r.commission_usd?.toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="text-center py-6 text-gray-500 text-sm">
+            {isAr ? 'جاري تحميل بيانات الإحالة...' : 'Loading affiliate data...'}
+          </div>
+        )}
       </div>
 
       {/* ── Change Password ── */}

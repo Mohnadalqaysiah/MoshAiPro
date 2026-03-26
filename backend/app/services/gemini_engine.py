@@ -175,6 +175,23 @@ Risk% حسب التصنيف: A+ = 2% | A = 1.5% | B = 1% | C = 0.5%
 ❌ ممنوع إطلاقاً إرسال صفقة بمستويات معكوسة أو غير منطقية
 ❌ ممنوع SL فوق الدخول في BUY أو تحت الدخول في SELL
 
+═══════════════════════════════════════════════
+💧 قاعدة السيولة الإجبارية — ICT Liquidity Gate
+═══════════════════════════════════════════════
+
+هذا شرط لا تفاوض فيه قبل أي توصية BUY أو SELL:
+
+1. تحقق من حقل "stop_hunt_analysis" في البيانات المدخلة
+2. إذا كان "has_bullish_sweep" = false وأنت تفكر بـ BUY → WAIT
+3. إذا كان "has_bearish_sweep" = false وأنت تفكر بـ SELL → WAIT
+4. استثناء: إذا كان sweep_quality = NONE لكن توجد عوامل تقاطع أخرى قوية جداً (score > 85) → يمكن الدخول مع تخفيض الثقة 20 نقطة
+
+عند الإشارة للسيولة في analysis_notes يجب ذكر:
+- نوع Stop Hunt (SSL/BSL)
+- عدد الشموع منذ الاكتساح (candles_since)
+- جودة الاكتساح (STRONG/MODERATE/WEAK/NONE)
+- هل يوجد Equal Highs/Lows كهدف للسعر
+
 الإجابة دائماً بـ JSON محدد فقط، بدون أي نص إضافي.
 """
 
@@ -215,14 +232,51 @@ def _build_professional_prompt(
     atr           = ltf_data.get("atr", 0)
     atr_avg       = round(float(atr) * 1.15, 2) if atr else 0  # تقدير متوسط ATR
 
-    # ── Recent Liquidity Sweep ─────────────────────────────────────────────
+    # ── Liquidity Sweep Analysis (من ICT Engine الجديد) ──────────────────
     equal_lows  = liq.get("equal_lows", [])
     equal_highs = liq.get("equal_highs", [])
+    sweep_data  = liq.get("sweep_analysis") or ltf_data.get("liquidity_sweep", {})
+
+    # بناء recent_sweep من البيانات الحقيقية
     recent_sweep = {}
-    if equal_lows:
-        recent_sweep = {"type": "SSL", "level": equal_lows[0], "wick_only": True}
-    elif equal_highs:
-        recent_sweep = {"type": "BSL", "level": equal_highs[0], "wick_only": True}
+    if sweep_data.get("has_bullish_sweep"):
+        ssl_info = sweep_data.get("ssl_sweep", {})
+        recent_sweep = {
+            "type":              "SSL_STOP_HUNT",
+            "level":             ssl_info.get("level"),
+            "wick_atr_ratio":    ssl_info.get("wick_atr_ratio"),
+            "candles_since":     ssl_info.get("candles_since"),
+            "rejection_confirmed": True,
+            "quality":           sweep_data.get("sweep_quality"),
+        }
+    elif sweep_data.get("has_bearish_sweep"):
+        bsl_info = sweep_data.get("bsl_sweep", {})
+        recent_sweep = {
+            "type":              "BSL_STOP_HUNT",
+            "level":             bsl_info.get("level"),
+            "wick_atr_ratio":    bsl_info.get("wick_atr_ratio"),
+            "candles_since":     bsl_info.get("candles_since"),
+            "rejection_confirmed": True,
+            "quality":           sweep_data.get("sweep_quality"),
+        }
+    elif sweep_data.get("ssl_sweep"):
+        ssl_info = sweep_data.get("ssl_sweep", {})
+        recent_sweep = {
+            "type":              "SSL_WEAK",
+            "level":             ssl_info.get("level"),
+            "rejection_confirmed": False,
+            "candles_since":     ssl_info.get("candles_since"),
+        }
+    elif sweep_data.get("bsl_sweep"):
+        bsl_info = sweep_data.get("bsl_sweep", {})
+        recent_sweep = {
+            "type":              "BSL_WEAK",
+            "level":             bsl_info.get("level"),
+            "rejection_confirmed": False,
+            "candles_since":     bsl_info.get("candles_since"),
+        }
+    else:
+        recent_sweep = {"type": "NONE", "rejection_confirmed": False}
 
     # ── News filter placeholder ────────────────────────────────────────────
     news_filter = ltf_data.get("news_filter", {
@@ -284,10 +338,16 @@ def _build_professional_prompt(
         },
 
         "liquidity": {
-            "BSL": equal_highs[:3],
-            "SSL": equal_lows[:3],
-            "recent_sweep": recent_sweep,
-            "bias": liq.get("bias", "NEUTRAL"),
+            "BSL_unswept":         equal_highs[:3],
+            "SSL_unswept":         equal_lows[:3],
+            "nearest_BSL":         liq.get("nearest_bsl"),
+            "nearest_SSL":         liq.get("nearest_ssl"),
+            "bias":                liq.get("bias", "NEUTRAL"),
+            "stop_hunt_analysis":  recent_sweep,
+            "has_bullish_sweep":   sweep_data.get("has_bullish_sweep", False),
+            "has_bearish_sweep":   sweep_data.get("has_bearish_sweep", False),
+            "sweep_quality":       sweep_data.get("sweep_quality", "NONE"),
+            "ICT_rule":            "لا دخول بدون Stop Hunt مؤكد (Sweep + Rejection)",
         },
 
         "premium_discount": {

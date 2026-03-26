@@ -213,6 +213,9 @@ class MoshAIEngineV5:
                 "htf_trend": analysis.get("htf_context", {}).get("trend", "UNKNOWN"),
             }
 
+            # ── بوابة السيولة الذكية (Smart Money Gate) ──────────────────────
+            analysis = self._validate_sweep_gate(analysis)
+
             # ── التحقق الإجباري من صحة المستويات ────────────────────────────
             analysis = self._validate_trade_levels(analysis)
 
@@ -244,6 +247,77 @@ class MoshAIEngineV5:
             import traceback
             traceback.print_exc()
             return self._error_response(symbol, str(e))
+
+    def _validate_sweep_gate(self, analysis: dict) -> dict:
+        """
+        بوابة السيولة الصارمة — ICT Hard Gate (شرط قاطع لا استثناء)
+
+        مبدأ: الصفقة تُمنع كلياً ما لم يُكتشف Stop Hunt مؤكد:
+            ✅ sweep + rejection_confirmed → يُسمح بالدخول
+            ❌ sweep بدون rejection       → WAIT فوري
+            ❌ لا sweep على الإطلاق       → WAIT فوري
+        """
+        rec = analysis.get("recommendation")
+        if rec not in ("BUY", "SELL"):
+            return analysis
+
+        # جلب بيانات الـ Sweep من ICT أو من Liquidity dict
+        sweep = (
+            analysis.get("liquidity_sweep")
+            or analysis.get("liquidity", {}).get("sweep_analysis")
+            or {}
+        )
+
+        has_confirmed_sweep = (
+            sweep.get("has_bullish_sweep") if rec == "BUY"
+            else sweep.get("has_bearish_sweep")
+        )
+
+        # ✅ الحالة الوحيدة المسموح بها: Sweep + Rejection مؤكد
+        if has_confirmed_sweep:
+            sweep_quality = sweep.get("sweep_quality", "MODERATE")
+            logger.debug(f"✅ Sweep Gate PASSED [{rec}]: quality={sweep_quality}")
+            return analysis
+
+        # ─── كل الحالات الأخرى → WAIT فوري ───────────────────────────────────
+
+        # تحديد السبب الدقيق للرفض
+        has_any_sweep = (
+            bool(sweep.get("ssl_sweep")) if rec == "BUY"
+            else bool(sweep.get("bsl_sweep"))
+        )
+
+        if has_any_sweep:
+            reason = "اكتساح سيولة بدون رفض مؤكد (Sweep ≠ Rejection)"
+            short  = "SWEEP_NO_REJECTION"
+        else:
+            reason = "لم يُكتشف اكتساح سيولة (شرط ICT الأساسي غير متحقق)"
+            short  = "NO_SWEEP"
+
+        logger.warning(
+            f"🚫 Sweep Hard Gate BLOCKED [{rec}] → WAIT | reason={short} | "
+            f"has_bullish={sweep.get('has_bullish_sweep')} "
+            f"has_bearish={sweep.get('has_bearish_sweep')}"
+        )
+
+        # تحويل إجباري لـ WAIT
+        analysis["recommendation"]    = "WAIT"
+        analysis["ai_confidence_score"] = min(
+            float(analysis.get("ai_confidence_score") or 0), 54.0
+        )
+
+        # تسجيل السبب في الـ factors
+        conf_data = analysis.get("confluence", {})
+        if isinstance(conf_data, dict):
+            factors = conf_data.get("factors", [])
+            if isinstance(factors, list):
+                factors.insert(0, f"🚫 Sweep Gate: {reason}")
+
+        # حقل مستقل لسهولة الـ debugging
+        analysis["sweep_gate_blocked"] = True
+        analysis["sweep_gate_reason"]  = short
+
+        return analysis
 
     def _validate_trade_levels(self, analysis: dict) -> dict:
         """

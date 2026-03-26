@@ -5,13 +5,14 @@ Register / Login / Profile / Link Telegram
 from datetime import datetime, timedelta, timezone
 import secrets
 import random
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from loguru import logger
 
 from app.database import get_db
 from app.models.user import User, UserRole, PlanType
+from app.models.affiliate import Affiliate, generate_affiliate_code
 from app.models.site_settings import SiteSettings
 from app.services.auth_service import (
     hash_password, verify_password, create_token,
@@ -86,9 +87,20 @@ _otp_store: dict = {}
 # ─── Register ─────────────────────────────────────────────────────────────────
 
 @router.post("/register")
-def register(data: RegisterIn, db: Session = Depends(get_db)):
+def register(data: RegisterIn, ref: str = Query(default=""), db: Session = Depends(get_db)):
     if db.query(User).filter(User.email == data.email.lower()).first():
         raise HTTPException(400, "البريد الإلكتروني مسجّل مسبقاً")
+
+    # Resolve referral code (silently ignore invalid/self-referrals)
+    referrer = None
+    clean_ref = ref.upper().strip() if ref else ""
+    if clean_ref:
+        referrer = db.query(User).filter(User.affiliate_code == clean_ref).first()
+        if referrer and referrer.email == data.email.lower().strip():
+            referrer = None  # prevent self-referral
+
+    # Generate unique affiliate code for new user
+    new_code = generate_affiliate_code(db)
 
     now = datetime.now(timezone.utc)
     user = User(
@@ -103,13 +115,27 @@ def register(data: RegisterIn, db: Session = Depends(get_db)):
         trial_analyses_left = 10,
         trial_chat_left     = 20,
         telegram_link_token = secrets.token_urlsafe(16),
+        affiliate_code      = new_code,
+        referred_by_code    = clean_ref if referrer else None,
     )
     db.add(user)
     db.commit()
     db.refresh(user)
 
+    # Create affiliate profile
+    aff = Affiliate(
+        user_id             = user.id,
+        code                = new_code,
+        referred_by_code    = user.referred_by_code,
+        total_referrals     = 0,
+        pending_balance_usd = 0.0,
+        paid_out_usd        = 0.0,
+    )
+    db.add(aff)
+    db.commit()
+
     token = create_token(user.id, user.role)
-    logger.info(f"✅ New user registered: {user.email}")
+    logger.info(f"✅ New user registered: {user.email} (ref={user.referred_by_code or 'none'})")
     return {"token": token, "user": _user_info(user)}
 
 
@@ -422,6 +448,8 @@ def _user_info(user: User) -> dict:
         "notify_timeframe":      user.notify_timeframe or "1h",
         "notify_min_confidence": user.notify_min_confidence or 65,
         "notifications_enabled": bool(user.notifications_enabled),
+        "affiliate_code":        user.affiliate_code or "",
+        "referred_by_code":      user.referred_by_code or "",
     }
 
 

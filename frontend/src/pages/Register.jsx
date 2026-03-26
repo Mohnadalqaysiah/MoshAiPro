@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { TrendingUp, Mail, Lock, User, Phone, AlertCircle, CheckCircle, ShieldCheck } from 'lucide-react'
+import { TrendingUp, Mail, Lock, User, Phone, AlertCircle, CheckCircle, ShieldCheck, Gift } from 'lucide-react'
 
 // Simple math captcha — generates client-side, no external API needed
 function useCaptcha() {
@@ -17,6 +17,8 @@ export default function Register() {
   const { register } = useAuth()
   const navigate = useNavigate()
   const captcha = useCaptcha()
+  const [searchParams] = useSearchParams()
+  const ref = searchParams.get('ref') || ''
 
   const [form, setForm] = useState({ email: '', password: '', full_name: '', phone: '' })
   const [captchaVal, setCaptchaVal] = useState('')
@@ -30,7 +32,7 @@ export default function Register() {
     setError('')
     setLoading(true)
     try {
-      await register(form.email, form.password, form.full_name)
+      await register(form.email, form.password, form.full_name, ref)
       navigate('/dashboard')
     } catch (err) {
       setError(err.response?.data?.detail || 'فشل إنشاء الحساب')
@@ -49,6 +51,14 @@ export default function Register() {
           <h1 className="text-2xl font-bold text-white">Qaffel <span className="text-blue-400">AI</span></h1>
           <p className="text-gray-400 text-sm mt-1">ابدأ تجربتك المجانية</p>
         </div>
+
+        {/* Referral banner */}
+        {ref && (
+          <div className="bg-green-900/20 border border-green-700/30 rounded-xl p-3 mb-4 flex items-center gap-2">
+            <Gift size={16} className="text-green-400 flex-shrink-0" />
+            <p className="text-green-300 text-xs">تم التسجيل عبر رابط إحالة — كود: <span className="font-mono font-bold">{ref}</span></p>
+          </div>
+        )}
 
         {/* Trial benefits */}
         <div className="bg-blue-900/20 border border-blue-700/30 rounded-xl p-4 mb-6">

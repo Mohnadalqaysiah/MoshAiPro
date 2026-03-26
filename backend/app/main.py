@@ -2,15 +2,19 @@
 Mosh AI Pro v5 - Main FastAPI Application
 """
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from loguru import logger
 import sys
+import os
+import uuid
+import shutil
 
 from app.config import get_settings
 from app.database import init_db, get_db
-from app.api import signals, markets, analytics, chat, auth, subscription, admin, bot, public_chat, analyses
+from app.api import signals, markets, analytics, chat, auth, subscription, admin, bot, public_chat, analyses, affiliate
 from app.services.gemini_engine import gemini_engine
 from app.services.rate_limiter import twelvedata_client
 from app.models.site_settings import SiteSettings
@@ -34,6 +38,7 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("🚀 Starting Mosh AI Pro v5...")
     init_db()
+    os.makedirs("/app/static/uploads", exist_ok=True)
     logger.success("✅ Database initialized")
     
     yield
@@ -109,7 +114,33 @@ async def public_settings(db: Session = Depends(get_db)):
     return result
 
 
+@app.post("/api/v1/admin/upload-logo")
+async def upload_logo(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _: dict = Depends(__import__('app.services.auth_service', fromlist=['get_admin_user']).get_admin_user),
+):
+    """رفع شعار الموقع — للمشرفين فقط"""
+    allowed = {"image/png", "image/jpeg", "image/gif", "image/webp", "image/svg+xml"}
+    if file.content_type not in allowed:
+        raise HTTPException(400, "نوع الملف غير مدعوم — PNG/JPG/GIF/WebP/SVG فقط")
+    ext = file.filename.rsplit(".", 1)[-1] if "." in file.filename else "png"
+    fname = f"logo_{uuid.uuid4().hex[:8]}.{ext}"
+    dest = f"/app/static/uploads/{fname}"
+    with open(dest, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+    logo_url = f"/static/uploads/{fname}"
+    row = db.query(SiteSettings).filter(SiteSettings.key == "site_logo_url").first()
+    if row:
+        row.value = logo_url
+    else:
+        db.add(SiteSettings(key="site_logo_url", value=logo_url, description="شعار الموقع"))
+    db.commit()
+    return {"url": logo_url}
+
+
 # Include routers
+app.mount("/static", StaticFiles(directory="/app/static"), name="static")
 app.include_router(auth.router,         prefix="/api/v1/auth",         tags=["Auth"])
 app.include_router(bot.router,          prefix="/api/v1/bot",           tags=["Bot"])
 app.include_router(subscription.router, prefix="/api/v1/subscription",  tags=["Subscription"])
@@ -120,6 +151,7 @@ app.include_router(analytics.router,    prefix="/api/v1/analytics",     tags=["A
 app.include_router(chat.router,         prefix="/api/v1/chat",          tags=["Chat"])
 app.include_router(public_chat.router,  prefix="/api/v1/public",         tags=["Public"])
 app.include_router(analyses.router,     prefix="/api/v1/analyses",        tags=["Analyses"])
+app.include_router(affiliate.router,    prefix="/api/v1/affiliate",       tags=["Affiliate"])
 
 
 # WebSocket endpoint for real-time updates

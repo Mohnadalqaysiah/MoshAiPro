@@ -3,19 +3,26 @@ Mosh AI Pro v5 - Admin API
 Full control: Users, Payments, Markets
 """
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from loguru import logger
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 from app.database import get_db
 from app.models.user import User, UserRole, PlanType
 from app.models.payment import Payment, PaymentStatus, PaymentPlan
 from app.models.market_config import MarketConfig
 from app.models.site_settings import SiteSettings
+from app.models.affiliate import Affiliate, AffiliateReferral, TIER1_RATE, TIER2_RATE, TIER2_THRESHOLD
 from app.services.auth_service import get_admin_user, hash_password, verify_password
 from app.services.smart_data import smart_data as _smart_data
+from app.config import get_settings
+
+_settings = get_settings()
 
 router = APIRouter()
 
@@ -281,6 +288,35 @@ def handle_payment(
             user.is_active = True
             logger.info(f"✅ Payment approved: user={user.email} plan={payment.plan} days={days}")
 
+            # ── Affiliate commission ──────────────────────────────────────
+            if user.referred_by_code:
+                ref_aff = db.query(Affiliate).filter(
+                    Affiliate.code == user.referred_by_code
+                ).first()
+                if ref_aff:
+                    already = db.query(AffiliateReferral).filter(
+                        AffiliateReferral.payment_id == payment.id
+                    ).first()
+                    if not already:
+                        rate = TIER2_RATE if ref_aff.total_referrals >= TIER2_THRESHOLD else TIER1_RATE
+                        tier = 2 if ref_aff.total_referrals >= TIER2_THRESHOLD else 1
+                        commission = round(payment.amount_usd * rate, 4)
+                        db.add(AffiliateReferral(
+                            affiliate_id       = ref_aff.id,
+                            referred_user_id   = user.id,
+                            payment_id         = payment.id,
+                            payment_amount_usd = payment.amount_usd,
+                            commission_rate    = rate,
+                            commission_usd     = commission,
+                            tier               = tier,
+                        ))
+                        ref_aff.total_referrals     += 1
+                        ref_aff.pending_balance_usd += commission
+                        logger.info(
+                            f"💰 Affiliate commission: referrer_id={ref_aff.user_id} "
+                            f"tier={tier} rate={rate*100:.0f}% earned={commission}$"
+                        )
+
     elif data.action == "reject":
         payment.status     = PaymentStatus.REJECTED
         payment.admin_note = data.admin_note
@@ -495,6 +531,61 @@ def update_setting(
     return {"success": True, "key": key, "value": row.value}
 
 
+# ─── Email ────────────────────────────────────────────────────────────────────
+
+class EmailSendIn(BaseModel):
+    subject: str
+    body: str
+    user_id: Optional[int] = None   # None = أرسل للكل
+
+def _send_one(to_email: str, subject: str, body: str):
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"]    = f"{_settings.SMTP_FROM_NAME} <{_settings.SMTP_USER}>"
+        msg["To"]      = to_email
+        msg.attach(MIMEText(body, "html", "utf-8"))
+        with smtplib.SMTP(_settings.SMTP_HOST, _settings.SMTP_PORT, timeout=15) as s:
+            s.starttls()
+            s.login(_settings.SMTP_USER, _settings.SMTP_PASSWORD)
+            s.sendmail(_settings.SMTP_USER, [to_email], msg.as_string())
+        return True
+    except Exception as e:
+        logger.warning(f"Email failed to {to_email}: {e}")
+        return False
+
+def _send_bulk(emails: List[str], subject: str, body: str):
+    ok = fail = 0
+    for em in emails:
+        if _send_one(em, subject, body):
+            ok += 1
+        else:
+            fail += 1
+    logger.info(f"📧 Bulk email done: {ok} sent, {fail} failed")
+
+@router.post("/email/send")
+def send_email(
+    data: EmailSendIn,
+    background: BackgroundTasks,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """إرسال إيميل للكل أو لمستخدم معين"""
+    if not _settings.SMTP_USER or not _settings.SMTP_PASSWORD:
+        raise HTTPException(400, "SMTP غير مضبوط — أضف SMTP_USER و SMTP_PASSWORD في إعدادات البيئة")
+
+    if data.user_id:
+        u = db.query(User).filter(User.id == data.user_id).first()
+        if not u:
+            raise HTTPException(404, "المستخدم غير موجود")
+        background.add_task(_send_one, u.email, data.subject, data.body)
+        return {"message": f"تم إرسال الإيميل لـ {u.email}", "count": 1}
+    else:
+        emails = [u.email for u in db.query(User.email).filter(User.is_active == True).all()]
+        background.add_task(_send_bulk, emails, data.subject, data.body)
+        return {"message": f"جاري إرسال {len(emails)} إيميل في الخلفية", "count": len(emails)}
+
+
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 def _user_info(u: User) -> dict:
@@ -559,4 +650,92 @@ def _market_info(m: MarketConfig) -> dict:
         "yf_symbol":    m.yf_symbol,
         "td_symbol":    m.td_symbol,
         "sort_order":   m.sort_order,
+    }
+
+
+# ─── Admin Affiliate ───────────────────────────────────────────────────────────
+
+class PayoutIn(BaseModel):
+    amount_usd: float
+    note: str = ""
+
+
+@router.get("/affiliate/stats")
+def admin_affiliate_stats(
+    skip: int = 0,
+    limit: int = 50,
+    search: str = "",
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """قائمة كل المسوّقين"""
+    q = db.query(Affiliate).join(User, Affiliate.user_id == User.id)
+    if search:
+        q = q.filter((User.email.ilike(f"%{search}%")) | (Affiliate.code.ilike(f"%{search}%")))
+    total = q.count()
+    affiliates = q.order_by(Affiliate.pending_balance_usd.desc()).offset(skip).limit(limit).all()
+    result = []
+    for a in affiliates:
+        tier = 2 if a.total_referrals >= TIER2_THRESHOLD else 1
+        result.append({
+            "affiliate_id":        a.id,
+            "user_id":             a.user_id,
+            "user_email":          a.user.email if a.user else "",
+            "code":                a.code,
+            "total_referrals":     a.total_referrals,
+            "current_tier":        tier,
+            "commission_rate_pct": 15 if tier == 2 else 5,
+            "pending_balance_usd": a.pending_balance_usd,
+            "paid_out_usd":        a.paid_out_usd,
+        })
+    return {"total": total, "affiliates": result}
+
+
+@router.get("/affiliate/{affiliate_id}/referrals")
+def admin_affiliate_referrals(
+    affiliate_id: int,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """تفاصيل إحالات مسوّق معين"""
+    rows = db.query(AffiliateReferral).filter(
+        AffiliateReferral.affiliate_id == affiliate_id
+    ).order_by(AffiliateReferral.created_at.desc()).all()
+    return [
+        {
+            "id":                  r.id,
+            "referred_user_email": r.referred_user.email if r.referred_user else "",
+            "payment_amount_usd":  r.payment_amount_usd,
+            "commission_usd":      r.commission_usd,
+            "commission_rate_pct": int(r.commission_rate * 100),
+            "tier":                r.tier,
+            "created_at":          r.created_at.isoformat() if r.created_at else None,
+        }
+        for r in rows
+    ]
+
+
+@router.post("/affiliate/{affiliate_id}/payout")
+def admin_affiliate_payout(
+    affiliate_id: int,
+    data: PayoutIn,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """تسجيل دفعة للمسوّق"""
+    aff = db.query(Affiliate).filter(Affiliate.id == affiliate_id).first()
+    if not aff:
+        raise HTTPException(404, "المسوّق غير موجود")
+    if data.amount_usd <= 0:
+        raise HTTPException(400, "المبلغ يجب أن يكون أكبر من صفر")
+    if data.amount_usd > aff.pending_balance_usd:
+        raise HTTPException(400, f"الرصيد المتاح {aff.pending_balance_usd:.2f}$ فقط")
+    aff.pending_balance_usd = round(aff.pending_balance_usd - data.amount_usd, 4)
+    aff.paid_out_usd        = round(aff.paid_out_usd + data.amount_usd, 4)
+    db.commit()
+    logger.info(f"💸 Payout: affiliate_id={affiliate_id} amount={data.amount_usd}$ note={data.note}")
+    return {
+        "success":             True,
+        "pending_balance_usd": aff.pending_balance_usd,
+        "paid_out_usd":        aff.paid_out_usd,
     }

@@ -35,8 +35,11 @@ export function AuthProvider({ children }) {
     return r.data.user
   }
 
-  const register = async (email, password, full_name) => {
-    const r = await axios.post(`${API}/api/v1/auth/register`, { email, password, full_name })
+  const register = async (email, password, full_name, ref = '') => {
+    const url = ref
+      ? `${API}/api/v1/auth/register?ref=${encodeURIComponent(ref)}`
+      : `${API}/api/v1/auth/register`
+    const r = await axios.post(url, { email, password, full_name })
     localStorage.setItem('mosh_token', r.data.token)
     setToken(r.data.token)
     setUser(r.data.user)

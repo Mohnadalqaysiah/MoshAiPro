@@ -79,7 +79,11 @@ class Settings(BaseSettings):
     FINNHUB_RATE_LIMIT: int = 60
 
     # ----- Email / SMTP -----
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
+    SMTP_FROM_NAME: str = "Qaffel AI"
     SUPPORT_EMAIL: str = "support@qaffel.com"
 
     # ----- SaaS / Payments -----

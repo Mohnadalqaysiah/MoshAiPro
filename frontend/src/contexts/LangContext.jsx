@@ -163,8 +163,12 @@ export const translations = {
 }
 
 export function LangProvider({ children }) {
-  const [lang, setLang] = useState('ar')
-  const toggle = () => setLang(l => l === 'ar' ? 'en' : 'ar')
+  const [lang, setLang] = useState(() => localStorage.getItem('qaffel_lang') || 'ar')
+  const toggle = () => setLang(l => {
+    const next = l === 'ar' ? 'en' : 'ar'
+    localStorage.setItem('qaffel_lang', next)
+    return next
+  })
   const t = translations[lang]
   return (
     <LangContext.Provider value={{ lang, toggle, t }}>

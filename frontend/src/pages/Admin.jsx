@@ -6,7 +6,7 @@ import {
   Users, CreditCard, BarChart2, CheckCircle, XCircle, Clock,
   Search, Plus, Trash2, ToggleLeft, ToggleRight, TrendingUp,
   DollarSign, Activity, RefreshCw, Calendar,
-  X, ExternalLink, Shield, AlertTriangle, Settings
+  X, ExternalLink, Shield, AlertTriangle, Settings, Mail, Upload
 } from 'lucide-react'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -190,19 +190,45 @@ export default function Admin() {
   const [adminProfileSaving, setAdminProfileSaving] = useState(false)
   const [adminProfileMsg, setAdminProfileMsg] = useState(null)
 
+  // Email state
+  const [emailForm, setEmailForm] = useState({ subject:'', body:'', user_id:'' })
+  const [emailSending, setEmailSending] = useState(false)
+  const [emailMsg, setEmailMsg] = useState(null)
+
+  // Logo upload state
+  const [logoFile, setLogoFile] = useState(null)
+  const [logoUploading, setLogoUploading] = useState(false)
+  const [logoMsg, setLogoMsg] = useState(null)
+
+  // Affiliate state
+  const [affStats, setAffStats] = useState({ total: 0, affiliates: [] })
+  const [affLoading, setAffLoading] = useState(false)
+  const [affSearch, setAffSearch] = useState('')
+  const [affPayout, setAffPayout] = useState({ id: null, amount: '', note: '' })
+  const [affPayoutMsg, setAffPayoutMsg] = useState(null)
+
   useEffect(() => {
     if (user?.role !== 'admin') { navigate('/dashboard'); return }
     loadStats()
   }, [user])
 
   useEffect(() => {
-    if (tab === 'users')    loadUsers()
-    if (tab === 'payments') loadPayments()
-    if (tab === 'markets')  loadMarkets()
-    if (tab === 'settings') loadSettings()
+    if (tab === 'users')     loadUsers()
+    if (tab === 'payments')  loadPayments()
+    if (tab === 'markets')   loadMarkets()
+    if (tab === 'settings')  loadSettings()
+    if (tab === 'affiliate') loadAffStats()
   }, [tab])
 
   const loadStats    = async () => { const r = await axios.get(`${API}/api/v1/admin/stats`); setStats(r.data) }
+  const loadAffStats = async (q = '') => {
+    setAffLoading(true)
+    try {
+      const r = await axios.get(`${API}/api/v1/admin/affiliate/stats?search=${q}&limit=100`)
+      setAffStats(r.data)
+    } catch (e) {}
+    finally { setAffLoading(false) }
+  }
   const loadUsers    = async () => { setLoading(true); const r = await axios.get(`${API}/api/v1/admin/users?search=${search}&limit=200`); setUsers(r.data.users); setLoading(false) }
   const loadPayments = async (status='all') => { setLoading(true); const r = await axios.get(`${API}/api/v1/admin/payments?status_filter=${status}&limit=100`); setPayments(r.data.payments); setLoading(false) }
   const loadMarkets  = async () => { setLoading(true); const r = await axios.get(`${API}/api/v1/admin/markets`); setMarkets(r.data); setLoading(false) }
@@ -249,14 +275,41 @@ export default function Admin() {
   const deleteMarket  = async (symbol) => { if (!confirm(`حذف ${symbol}؟`)) return; await axios.delete(`${API}/api/v1/admin/markets/${symbol}`); loadMarkets() }
   const addMarket     = async (e) => { e.preventDefault(); await axios.post(`${API}/api/v1/admin/markets`, { ...marketForm, is_active:true }); setMarketForm({ symbol:'', display_name:'', category:'forex', yf_symbol:'', td_symbol:'', is_premium:false, sort_order:0 }); loadMarkets() }
 
+  const uploadLogo = async (e) => {
+    const file = e.target.files?.[0]; if (!file) return
+    setLogoFile(file); setLogoUploading(true); setLogoMsg(null)
+    try {
+      const fd = new FormData(); fd.append('file', file)
+      const r = await axios.post(`${API}/api/v1/admin/upload-logo`, fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+      setLogoMsg({ type:'ok', text:'تم رفع الشعار بنجاح' })
+      setSettingEdits(s => ({ ...s, site_logo_url: r.data.url }))
+      setSiteSettings(s => ({ ...s, site_logo_url: { ...(s.site_logo_url||{}), value: r.data.url } }))
+    } catch (err) { setLogoMsg({ type:'err', text: err.response?.data?.detail || 'فشل رفع الشعار' }) }
+    finally { setLogoUploading(false) }
+  }
+
+  const sendEmail = async (e) => {
+    e.preventDefault(); setEmailSending(true); setEmailMsg(null)
+    try {
+      const payload = { subject: emailForm.subject, body: emailForm.body }
+      if (emailForm.user_id) payload.user_id = parseInt(emailForm.user_id)
+      const r = await axios.post(`${API}/api/v1/admin/email/send`, payload)
+      setEmailMsg({ type:'ok', text: r.data.message })
+      setEmailForm(f => ({ ...f, subject:'', body:'' }))
+    } catch (err) { setEmailMsg({ type:'err', text: err.response?.data?.detail || 'فشل الإرسال' }) }
+    finally { setEmailSending(false) }
+  }
+
   const filteredUsers = users.filter(u => planFilter === 'all' || u.plan === planFilter)
 
   const TABS = [
-    { key:'stats',    icon:Activity,   label:'إحصائيات' },
-    { key:'users',    icon:Users,      label:'المستخدمون' },
-    { key:'payments', icon:CreditCard, label:'المدفوعات' },
-    { key:'markets',  icon:BarChart2,  label:'الأسواق' },
-    { key:'settings', icon:Settings,   label:'الإعدادات' },
+    { key:'stats',     icon:Activity,   label:'إحصائيات' },
+    { key:'users',     icon:Users,      label:'المستخدمون' },
+    { key:'payments',  icon:CreditCard, label:'المدفوعات' },
+    { key:'markets',   icon:BarChart2,  label:'الأسواق' },
+    { key:'affiliate', icon:TrendingUp, label:'الأفلييت' },
+    { key:'email',     icon:Mail,       label:'البريد' },
+    { key:'settings',  icon:Settings,   label:'الإعدادات' },
   ]
 
   return (
@@ -520,6 +573,203 @@ export default function Admin() {
             </div>
           )}
 
+          {/* ── Email ── */}
+          {tab === 'email' && (
+            <div className="max-w-2xl">
+              <h1 className="text-xl font-bold mb-6 flex items-center gap-2"><Mail size={20} className="text-blue-400"/> إرسال بريد إلكتروني</h1>
+
+              {emailMsg && (
+                <div className={`flex items-center gap-2 text-sm rounded-lg px-3 py-2 mb-4 ${emailMsg.type==='ok'?'bg-green-900/30 text-green-400':'bg-red-900/30 text-red-400'}`}>
+                  {emailMsg.type==='ok'?<CheckCircle size={14}/>:<AlertTriangle size={14}/>} {emailMsg.text}
+                </div>
+              )}
+
+              <form onSubmit={sendEmail} className="bg-gray-900 border border-gray-800 rounded-xl p-6 space-y-4">
+                {/* المستلم */}
+                <div>
+                  <label className="block text-sm text-gray-300 font-medium mb-1">المستلم</label>
+                  <select
+                    value={emailForm.user_id ? 'specific' : 'all'}
+                    onChange={e => setEmailForm(f => ({ ...f, user_id: e.target.value === 'all' ? '' : (f.user_id || '') }))}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white mb-2"
+                  >
+                    <option value="all">الكل ({users.length} مستخدم)</option>
+                    <option value="specific">مستخدم معين (بالـ ID)</option>
+                  </select>
+                  {emailForm.user_id !== '' && (
+                    <div className="flex gap-2">
+                      <input
+                        type="number" placeholder="ID المستخدم..." value={emailForm.user_id}
+                        onChange={e => setEmailForm(f => ({ ...f, user_id: e.target.value }))}
+                        className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"
+                        dir="ltr"
+                      />
+                      <select
+                        onChange={e => setEmailForm(f => ({ ...f, user_id: e.target.value }))}
+                        className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"
+                      >
+                        <option value="">— اختر مستخدم —</option>
+                        {users.map(u => <option key={u.id} value={u.id}>{u.email} (#{u.id})</option>)}
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                {/* الموضوع */}
+                <div>
+                  <label className="block text-sm text-gray-300 font-medium mb-1">الموضوع</label>
+                  <input
+                    required type="text" value={emailForm.subject}
+                    onChange={e => setEmailForm(f => ({ ...f, subject: e.target.value }))}
+                    placeholder="موضوع الرسالة..."
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"
+                  />
+                </div>
+
+                {/* المحتوى */}
+                <div>
+                  <label className="block text-sm text-gray-300 font-medium mb-1">
+                    المحتوى <span className="text-gray-500 font-normal">(يدعم HTML)</span>
+                  </label>
+                  <textarea
+                    required rows={8} value={emailForm.body}
+                    onChange={e => setEmailForm(f => ({ ...f, body: e.target.value }))}
+                    placeholder="<h2>مرحباً...</h2><p>نص الرسالة هنا</p>"
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white font-mono resize-y"
+                    dir="ltr"
+                  />
+                </div>
+
+                <div className="flex gap-3">
+                  <button type="submit" disabled={emailSending}
+                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-6 py-2 rounded-lg text-sm transition">
+                    {emailSending ? <RefreshCw size={14} className="animate-spin"/> : <Mail size={14}/>}
+                    {emailSending ? 'جاري الإرسال...' : emailForm.user_id ? 'إرسال للمستخدم' : `إرسال للكل (${users.length})`}
+                  </button>
+                  <button type="button" onClick={() => { if (!users.length) loadUsers() }}
+                    className="text-xs text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-gray-800">
+                    تحديث قائمة المستخدمين
+                  </button>
+                </div>
+              </form>
+
+              <div className="mt-4 p-4 bg-gray-900 border border-gray-800 rounded-xl text-xs text-gray-500 space-y-1">
+                <p>⚙️ يتطلب ضبط متغيرات البيئة: <span className="font-mono text-gray-400">SMTP_USER</span> و <span className="font-mono text-gray-400">SMTP_PASSWORD</span></p>
+                <p>📧 الإرسال يتم في الخلفية ولا يوقف الصفحة</p>
+                <p>🔐 <span className="font-mono text-gray-400">SMTP_HOST</span> الافتراضي: smtp.gmail.com (port 587)</p>
+              </div>
+            </div>
+          )}
+
+          {/* ── Affiliate ── */}
+          {tab === 'affiliate' && (
+            <div className="max-w-4xl">
+              <h1 className="text-xl font-bold mb-6 flex items-center gap-2"><TrendingUp size={20} className="text-green-400"/> نظام الأفلييت</h1>
+
+              {/* Search */}
+              <div className="flex gap-3 mb-4">
+                <div className="relative flex-1 max-w-sm">
+                  <Search size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500"/>
+                  <input value={affSearch} onChange={e => setAffSearch(e.target.value)}
+                    placeholder="بحث بالإيميل أو الكود..."
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg pr-9 pl-4 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    onKeyDown={e => e.key === 'Enter' && loadAffStats(affSearch)} />
+                </div>
+                <button onClick={() => loadAffStats(affSearch)}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition">
+                  <RefreshCw size={14}/> بحث
+                </button>
+              </div>
+
+              {affPayoutMsg && (
+                <div className={`flex items-center gap-2 text-sm rounded-lg px-3 py-2 mb-4 ${affPayoutMsg.type==='ok'?'bg-green-900/30 text-green-400':'bg-red-900/30 text-red-400'}`}>
+                  {affPayoutMsg.type==='ok'?<CheckCircle size={14}/>:<AlertTriangle size={14}/>} {affPayoutMsg.text}
+                </div>
+              )}
+
+              {affLoading ? (
+                <div className="flex items-center gap-2 text-gray-400 py-8 justify-center"><RefreshCw size={16} className="animate-spin"/> جاري التحميل...</div>
+              ) : (
+                <div className="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-900 text-gray-400 text-xs">
+                      <tr>
+                        <th className="text-right px-4 py-3">المستخدم</th>
+                        <th className="text-right px-4 py-3">الكود</th>
+                        <th className="text-center px-4 py-3">المرحلة</th>
+                        <th className="text-center px-4 py-3">الإحالات</th>
+                        <th className="text-right px-4 py-3">رصيد معلّق</th>
+                        <th className="text-right px-4 py-3">مدفوع</th>
+                        <th className="text-center px-4 py-3">دفع</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-700/50">
+                      {affStats.affiliates?.map(a => (
+                        <tr key={a.affiliate_id} className="hover:bg-gray-700/30 transition-colors">
+                          <td className="px-4 py-3 text-white text-xs">{a.user_email}</td>
+                          <td className="px-4 py-3 font-mono text-blue-400 text-xs">{a.code}</td>
+                          <td className="px-4 py-3 text-center">
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${a.current_tier===2?'bg-yellow-900/40 text-yellow-400':'bg-blue-900/40 text-blue-400'}`}>
+                              T{a.current_tier} · {a.commission_rate_pct}%
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center text-white">{a.total_referrals}</td>
+                          <td className="px-4 py-3 text-green-400 font-mono">${a.pending_balance_usd?.toFixed(2)}</td>
+                          <td className="px-4 py-3 text-gray-400 font-mono">${a.paid_out_usd?.toFixed(2)}</td>
+                          <td className="px-4 py-3 text-center">
+                            {affPayout.id === a.affiliate_id ? (
+                              <div className="flex items-center gap-1 justify-center">
+                                <input type="number" step="0.01" min="0.01" max={a.pending_balance_usd}
+                                  value={affPayout.amount}
+                                  onChange={e => setAffPayout(p => ({...p, amount: e.target.value}))}
+                                  className="w-20 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-white"
+                                  placeholder="$" dir="ltr" />
+                                <button
+                                  onClick={async () => {
+                                    setAffPayoutMsg(null)
+                                    try {
+                                      const r = await axios.post(`${API}/api/v1/admin/affiliate/${a.affiliate_id}/payout`, {
+                                        amount_usd: parseFloat(affPayout.amount), note: ''
+                                      })
+                                      setAffPayoutMsg({ type:'ok', text:`تم دفع $${affPayout.amount}` })
+                                      setAffPayout({ id: null, amount: '', note: '' })
+                                      loadAffStats(affSearch)
+                                    } catch (err) {
+                                      setAffPayoutMsg({ type:'err', text: err.response?.data?.detail || 'خطأ' })
+                                    }
+                                  }}
+                                  className="px-2 py-1 bg-green-700 hover:bg-green-600 text-white text-xs rounded">
+                                  ✓
+                                </button>
+                                <button onClick={() => setAffPayout({ id: null, amount: '', note: '' })}
+                                  className="px-2 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs rounded">
+                                  ✕
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                disabled={a.pending_balance_usd <= 0}
+                                onClick={() => setAffPayout({ id: a.affiliate_id, amount: a.pending_balance_usd.toFixed(2), note: '' })}
+                                className="px-3 py-1 bg-green-900/40 hover:bg-green-800/50 disabled:opacity-30 disabled:cursor-not-allowed text-green-400 text-xs rounded-lg transition">
+                                دفع
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                      {!affStats.affiliates?.length && (
+                        <tr><td colSpan={7} className="text-center py-8 text-gray-500">لا توجد بيانات</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                  <div className="px-4 py-2 border-t border-gray-700 text-xs text-gray-500">
+                    إجمالي: {affStats.total} مسوّق
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* ── Settings ── */}
           {tab === 'settings' && (
             <div>
@@ -538,7 +788,6 @@ export default function Admin() {
                   <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">إعدادات الموقع</h2>
                   {[
                     { key:'site_name',            label:'اسم الموقع', mono:false },
-                    { key:'site_logo_url',         label:'رابط الشعار (URL)', mono:true },
                     { key:'usdt_wallet',          label:'عنوان محفظة USDT (TRC20)', mono:true },
                     { key:'telegram_bot_username', label:'اسم بوت تيليجرام (بدون @)', mono:false },
                   ].map(f => {
@@ -561,18 +810,39 @@ export default function Admin() {
                     )
                   })}
 
-                  {/* Logo Preview */}
-                  {settingEdits['site_logo_url'] && (
-                    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                      <p className="text-xs text-gray-400 mb-2">معاينة الشعار:</p>
-                      <img
-                        src={settingEdits['site_logo_url']}
-                        alt="logo preview"
-                        className="h-10 object-contain rounded"
-                        onError={e => { e.target.style.display = 'none' }}
-                      />
-                    </div>
-                  )}
+                  {/* Logo Upload */}
+                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                    <label className="block text-sm text-gray-300 font-medium mb-1">شعار الموقع</label>
+                    <p className="text-xs text-gray-500 mb-3">PNG / JPG / SVG / WebP — يُعرض في شريط التنقل</p>
+
+                    {/* Current logo preview */}
+                    {settingEdits['site_logo_url'] && (
+                      <div className="mb-3 flex items-center gap-3 bg-gray-800 rounded-lg px-3 py-2">
+                        <img
+                          src={settingEdits['site_logo_url'].startsWith('http') ? settingEdits['site_logo_url'] : `${API}${settingEdits['site_logo_url']}`}
+                          alt="logo"
+                          className="h-8 object-contain rounded"
+                          onError={e => { e.target.style.display = 'none' }}
+                        />
+                        <span className="text-xs text-gray-400 font-mono truncate flex-1">{settingEdits['site_logo_url']}</span>
+                      </div>
+                    )}
+
+                    {/* Upload button */}
+                    <label className={`flex items-center justify-center gap-2 w-full cursor-pointer border-2 border-dashed rounded-lg px-4 py-3 text-sm transition
+                      ${logoUploading ? 'border-blue-700 text-blue-400 cursor-wait' : 'border-gray-700 text-gray-400 hover:border-blue-600 hover:text-blue-400'}`}>
+                      {logoUploading
+                        ? <><RefreshCw size={14} className="animate-spin"/> جاري الرفع...</>
+                        : <><Upload size={14}/> اختر صورة للرفع</>}
+                      <input type="file" accept="image/*" className="hidden" onChange={uploadLogo} disabled={logoUploading} />
+                    </label>
+
+                    {logoMsg && (
+                      <p className={`mt-2 text-xs flex items-center gap-1 ${logoMsg.type==='ok' ? 'text-green-400' : 'text-red-400'}`}>
+                        {logoMsg.type==='ok' ? <CheckCircle size={12}/> : <AlertTriangle size={12}/>} {logoMsg.text}
+                      </p>
+                    )}
+                  </div>
 
                   {/* TwelveData */}
                   <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3">

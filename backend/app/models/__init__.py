@@ -10,6 +10,7 @@ from app.models.signal import Signal, SignalType, SignalStatus, SignalQuality
 from app.models.analysis import Analysis
 from app.models.analysis_log import AnalysisLog
 from app.models.site_settings import SiteSettings
+from app.models.affiliate import Affiliate, AffiliateReferral
 
 __all__ = [
     "User", "UserRole", "PlanType",
@@ -19,4 +20,5 @@ __all__ = [
     "Analysis",
     "AnalysisLog",
     "SiteSettings",
+    "Affiliate", "AffiliateReferral",
 ]
