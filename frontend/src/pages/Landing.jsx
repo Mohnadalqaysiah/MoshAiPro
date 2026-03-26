@@ -8,6 +8,7 @@ import {
   LayoutDashboard, ArrowUpRight, Cpu, Lock, Target
 } from 'lucide-react'
 import PublicChatBot from '../components/PublicChatBot'
+import DemoSection from '../components/DemoSection'
 
 // ── Scroll reveal hook ───────────────────────────────────────────────
 function useReveal() {
@@ -232,6 +233,9 @@ export default function Landing() {
           </div>
         </div>
       </section>
+
+      {/* ── Demo Section ───────────────────────────────────────────────── */}
+      <DemoSection isAr={isAr} />
 
       {/* ── How it works ───────────────────────────────────────────────── */}
       <section className="py-24 px-4 relative overflow-hidden">
