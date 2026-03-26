@@ -68,15 +68,20 @@ export default function DemoSection({ isAr = true }) {
   const [running, setRunning] = useState(false)
   const [activeTab, setActiveTab] = useState('signal') // signal | agent
   const sectionRef = useRef(null)
+  const hasAutoRun = useRef(false)
 
-  // Auto-start when section in view
+  // Auto-start ONCE when section first comes into view
   useEffect(() => {
     const io = new IntersectionObserver(([e]) => {
-      if (e.isIntersecting && !running) startDemo()
+      if (e.isIntersecting && !hasAutoRun.current) {
+        hasAutoRun.current = true
+        io.disconnect()
+        startDemo()
+      }
     }, { threshold: 0.3 })
     if (sectionRef.current) io.observe(sectionRef.current)
     return () => io.disconnect()
-  }, [running])
+  }, [])
 
   const startDemo = () => {
     if (running) return
