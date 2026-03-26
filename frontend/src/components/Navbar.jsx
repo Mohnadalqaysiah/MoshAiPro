@@ -3,12 +3,14 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { TrendingUp, BarChart2, Activity, Zap, LogOut, Shield, User, Menu, X, Settings, History, Globe } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
+import useSiteSettings from '../hooks/useSiteSettings'
 
 export default function Navbar() {
   const location  = useLocation()
   const navigate  = useNavigate()
   const { user, logout } = useAuth()
   const { lang, toggle: toggleLang } = useLang()
+  const siteSettings = useSiteSettings()
   const [open, setOpen] = useState(false)
 
   const isAr = lang === 'ar'
@@ -35,13 +37,17 @@ export default function Navbar() {
     location.pathname === path || (path === '/dashboard' && location.pathname === '/')
 
   return (
-    <nav className="bg-gray-800 border-b border-gray-700 px-4 py-3" dir="rtl">
+    <nav className="bg-gray-800 border-b border-gray-700 px-4 py-3" dir={isAr ? 'rtl' : 'ltr'}>
       <div className="container mx-auto flex items-center justify-between">
 
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center font-bold text-white text-sm">Q</div>
-          <span className="text-white font-bold text-base">Qaffel <span className="text-blue-400">AI</span></span>
+          {siteSettings.site_logo_url ? (
+            <img src={siteSettings.site_logo_url} alt="logo" className="h-8 w-auto object-contain" />
+          ) : (
+            <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center font-bold text-white text-sm">Q</div>
+          )}
+          <span className="text-white font-bold text-base">{siteSettings.site_name || 'Qaffel AI'}</span>
         </Link>
 
         {/* Desktop Nav Links */}
@@ -101,7 +107,7 @@ export default function Navbar() {
 
       {/* Mobile Dropdown Menu */}
       {open && (
-        <div className="md:hidden mt-2 border-t border-gray-700 pt-3 space-y-1" dir="rtl">
+        <div className={`md:hidden mt-2 border-t border-gray-700 pt-3 space-y-1`} dir={isAr ? 'rtl' : 'ltr'}>
           {links.map(link => (
             <Link
               key={link.path}

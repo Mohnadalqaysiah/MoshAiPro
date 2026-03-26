@@ -537,6 +537,8 @@ export default function Admin() {
                 <div className="space-y-4">
                   <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">إعدادات الموقع</h2>
                   {[
+                    { key:'site_name',            label:'اسم الموقع', mono:false },
+                    { key:'site_logo_url',         label:'رابط الشعار (URL)', mono:true },
                     { key:'usdt_wallet',          label:'عنوان محفظة USDT (TRC20)', mono:true },
                     { key:'telegram_bot_username', label:'اسم بوت تيليجرام (بدون @)', mono:false },
                   ].map(f => {
@@ -558,6 +560,19 @@ export default function Admin() {
                       </div>
                     )
                   })}
+
+                  {/* Logo Preview */}
+                  {settingEdits['site_logo_url'] && (
+                    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                      <p className="text-xs text-gray-400 mb-2">معاينة الشعار:</p>
+                      <img
+                        src={settingEdits['site_logo_url']}
+                        alt="logo preview"
+                        className="h-10 object-contain rounded"
+                        onError={e => { e.target.style.display = 'none' }}
+                      />
+                    </div>
+                  )}
 
                   {/* TwelveData */}
                   <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3">

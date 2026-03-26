@@ -1,6 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
-import { LangProvider } from './contexts/LangContext'
+import { LangProvider, useLang } from './contexts/LangContext'
 import Dashboard  from './pages/Dashboard'
 import Signals    from './pages/Signals'
 import Markets    from './pages/Markets'
@@ -42,6 +42,7 @@ function AdminRoute({ children }) {
 
 function AppRoutes() {
   const { user } = useAuth()
+  const { lang } = useLang()
 
   return (
     <Routes>
@@ -63,11 +64,11 @@ function AppRoutes() {
       {/* Protected */}
       <Route path="/*" element={
         <ProtectedRoute>
-          <div className="min-h-screen bg-gray-900 text-gray-100">
+          <div className="min-h-screen bg-gray-900 text-gray-100" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
             <Navbar />
             <TrialBanner />
             <TelegramLinkBanner />
-            <main className="container mx-auto px-4 py-6">
+            <main className="container mx-auto px-3 sm:px-4 py-5 sm:py-6 max-w-7xl">
               <Routes>
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/signals"   element={<Signals />} />

@@ -213,6 +213,9 @@ class MoshAIEngineV5:
                 "htf_trend": analysis.get("htf_context", {}).get("trend", "UNKNOWN"),
             }
 
+            # ── التحقق الإجباري من صحة المستويات ────────────────────────────
+            analysis = self._validate_trade_levels(analysis)
+
             rec  = analysis.get("recommendation", "WAIT")
             conf = analysis.get("ai_confidence_score", 0)
             logger.success(f"✅ {symbol}/{timeframe}: {rec} | {conf}% | {int(ms)}ms")
@@ -241,6 +244,38 @@ class MoshAIEngineV5:
             import traceback
             traceback.print_exc()
             return self._error_response(symbol, str(e))
+
+    def _validate_trade_levels(self, analysis: dict) -> dict:
+        """
+        تحقق إجباري: SL أسفل entry وTP فوق entry للشراء، والعكس للبيع.
+        إذا فشل → يُحوَّل لـ WAIT تلقائياً.
+        """
+        rec    = analysis.get("recommendation")
+        levels = analysis.get("levels", {})
+        if rec not in ("BUY", "SELL") or not levels:
+            return analysis
+
+        entry = float(levels.get("entry") or 0)
+        sl    = float(levels.get("stop_loss") or 0)
+        tp1   = float(levels.get("tp1") or 0)
+        if not entry or not sl or not tp1:
+            return analysis
+
+        if rec == "BUY":
+            valid = sl < entry < tp1
+        else:
+            valid = tp1 < entry < sl
+
+        if not valid:
+            logger.warning(
+                f"⛔ Trade Validation FAILED [{rec}]: "
+                f"entry={entry} sl={sl} tp1={tp1} → تحويل إلى WAIT"
+            )
+            analysis["recommendation"] = "WAIT"
+            analysis["ai_confidence_score"] = min(
+                float(analysis.get("ai_confidence_score") or 0), 55.0
+            )
+        return analysis
 
     def _error_response(self, symbol: str, error: str) -> Dict:
         return {

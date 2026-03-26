@@ -9,10 +9,13 @@ from loguru import logger
 import sys
 
 from app.config import get_settings
-from app.database import init_db
+from app.database import init_db, get_db
 from app.api import signals, markets, analytics, chat, auth, subscription, admin, bot, public_chat, analyses
 from app.services.gemini_engine import gemini_engine
 from app.services.rate_limiter import twelvedata_client
+from app.models.site_settings import SiteSettings
+from sqlalchemy.orm import Session
+from fastapi import Depends
 
 settings = get_settings()
 
@@ -93,6 +96,17 @@ async def system_status():
             "cached_symbols": rl_status["cache"]["cached_symbols"],
         }
     }
+
+
+@app.get("/api/v1/settings/public")
+async def public_settings(db: Session = Depends(get_db)):
+    """إعدادات الموقع العامة (اسم + شعار) — متاح بدون تسجيل دخول"""
+    _PUBLIC_KEYS = {"site_name", "site_logo_url", "telegram_bot_username"}
+    rows = db.query(SiteSettings).filter(SiteSettings.key.in_(_PUBLIC_KEYS)).all()
+    result = {r.key: r.value for r in rows}
+    result.setdefault("site_name", "Qaffel AI")
+    result.setdefault("site_logo_url", "")
+    return result
 
 
 # Include routers

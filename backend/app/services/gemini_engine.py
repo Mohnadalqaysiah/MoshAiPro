@@ -155,6 +155,26 @@ Risk% حسب التصنيف: A+ = 2% | A = 1.5% | B = 1% | C = 0.5%
 - TP3 (20% من الحجم): امتداد 1.618 Fibonacci أو OB معاكس على HTF
 - Trailing Stop: بعد TP1 → SL إلى Break Even | بعد TP2 → SL إلى TP1
 
+═══════════════════════════════════════════════
+🚨 قاعدة التحقق الإجباري — Trade Validation (لا استثناء أبداً)
+═══════════════════════════════════════════════
+
+قبل إرسال أي توصية BUY أو SELL، تحقق إجبارياً من:
+
+في BUY:
+  • entry_price < tp1 < tp2 < tp3  (الأهداف فوق الدخول)
+  • stop_loss < entry_price         (الوقف أسفل الدخول)
+  • R/R ≥ 1.2
+
+في SELL:
+  • tp3 < tp2 < tp1 < entry_price  (الأهداف أسفل الدخول)
+  • stop_loss > entry_price         (الوقف فوق الدخول)
+  • R/R ≥ 1.2
+
+❌ إذا فشل أي شرط → غيّر التوصية فوراً إلى WAIT
+❌ ممنوع إطلاقاً إرسال صفقة بمستويات معكوسة أو غير منطقية
+❌ ممنوع SL فوق الدخول في BUY أو تحت الدخول في SELL
+
 الإجابة دائماً بـ JSON محدد فقط، بدون أي نص إضافي.
 """
 
@@ -525,20 +545,48 @@ class GeminiEngine:
             merged["recommendation"] = "WAIT"
 
         # مستويات الدخول والخروج من Gemini (أدق)
-        if trade_plan.get("entry_price"):
-            merged["entry_zones"] = [trade_plan["entry_price"]]
-        if trade_plan.get("stop_loss"):
-            merged["stop_loss_zone"] = trade_plan["stop_loss"]
+        g_entry = trade_plan.get("entry_price")
+        g_sl    = trade_plan.get("stop_loss")
+        g_tp1   = targets.get("tp1", {}).get("price")
+        g_tp2   = targets.get("tp2", {}).get("price")
+        g_tp3   = targets.get("tp3", {}).get("price")
 
-        tps = [
-            t.get("price") for t in [
-                targets.get("tp1", {}),
-                targets.get("tp2", {}),
-                targets.get("tp3", {}),
-            ] if t.get("price")
-        ]
+        if g_entry:
+            merged["entry_zones"] = [g_entry]
+        if g_sl:
+            merged["stop_loss_zone"] = g_sl
+
+        tps = [t for t in [g_tp1, g_tp2, g_tp3] if t]
         if tps:
             merged["take_profit_zones"] = tps
+
+        # ── مزامنة levels dict (يُقرأ من البوت والمنصة) ─────────────────
+        if g_entry or g_sl or g_tp1:
+            rec     = merged.get("recommendation", "")
+            g_e     = g_entry or 0
+            g_s     = g_sl    or 0
+            g_t1    = g_tp1   or 0
+            # تحقق اتجاه صحيح قبل المزامنة
+            buy_ok  = rec == "BUY"  and g_s < g_e < g_t1
+            sell_ok = rec == "SELL" and g_t1 < g_e < g_s
+            if buy_ok or sell_ok:
+                merged_levels = dict(ict_data.get("levels", {}))
+                if g_entry: merged_levels["entry"] = g_entry
+                if g_sl:    merged_levels["stop_loss"] = g_sl
+                if g_tp1:   merged_levels["tp1"] = g_tp1
+                if g_tp2:   merged_levels["tp2"] = g_tp2
+                if g_tp3:   merged_levels["tp3"] = g_tp3
+                # أعِد حساب zone حول entry الجديد
+                atr_val = merged_levels.get("atr", 0)
+                if atr_val and g_entry:
+                    buf = atr_val * 0.25
+                    if rec == "BUY":
+                        merged_levels["entry_zone_min"] = round(g_entry - buf, 5)
+                        merged_levels["entry_zone_max"] = round(g_entry + buf, 5)
+                    else:
+                        merged_levels["entry_zone_min"] = round(g_entry - buf, 5)
+                        merged_levels["entry_zone_max"] = round(g_entry + buf, 5)
+                merged["levels"] = merged_levels
 
         if trade_plan.get("risk_reward_avg"):
             merged["risk_reward_ratio"] = trade_plan["risk_reward_avg"]

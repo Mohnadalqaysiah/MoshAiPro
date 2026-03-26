@@ -836,18 +836,18 @@ class ICTEngine:
             if ob and ob["distance_pct"] < 0.3:
                 entry = ob["mid"]
 
-            # وقف الخسارة: تحت آخر Swing Low + ATR
-            if lows:
-                last_sl = lows[-1]["price"]
-                sl = last_sl - atr * 0.5
+            # وقف الخسارة: Swing Low أسفل entry فقط (ضروري)
+            valid_lows = [l["price"] for l in lows if l["price"] < entry]
+            if valid_lows:
+                sl = max(valid_lows) - atr * 0.5   # أقرب low أسفل entry
             else:
-                sl = current - atr * 2
+                sl = entry - atr * 2
 
-            # السيولة كهدف (BSL)
+            # الأهداف: أعلى من entry (محسوبة من entry وليس current)
             bsl = liquidity.get("nearest_bsl")
-            tp1 = current + atr * 1.5
-            tp2 = bsl if bsl and bsl > current else current + atr * 3
-            tp3 = current + atr * 5
+            tp1 = entry + atr * 1.5
+            tp2 = bsl if bsl and bsl > entry else entry + atr * 3
+            tp3 = entry + atr * 5
 
         else:  # SELL
             entry = current
@@ -855,16 +855,38 @@ class ICTEngine:
             if ob and ob["distance_pct"] < 0.3:
                 entry = ob["mid"]
 
-            if highs:
-                last_sh = highs[-1]["price"]
-                sl = last_sh + atr * 0.5
+            # وقف الخسارة: Swing High فوق entry فقط (ضروري)
+            valid_highs = [h["price"] for h in highs if h["price"] > entry]
+            if valid_highs:
+                sl = min(valid_highs) + atr * 0.5  # أقرب high فوق entry
             else:
-                sl = current + atr * 2
+                sl = entry + atr * 2
 
+            # الأهداف: أسفل من entry (محسوبة من entry وليس current)
             ssl = liquidity.get("nearest_ssl")
-            tp1 = current - atr * 1.5
-            tp2 = ssl if ssl and ssl < current else current - atr * 3
-            tp3 = current - atr * 5
+            tp1 = entry - atr * 1.5
+            tp2 = ssl if ssl and ssl < entry else entry - atr * 3
+            tp3 = entry - atr * 5
+
+        # ─── تحقق إجباري: SL/TP في الاتجاه الصحيح ───────────────────────
+        if direction == "BUY":
+            if sl >= entry:
+                sl = entry - atr * 2
+            if tp1 <= entry:
+                tp1 = entry + atr * 1.5
+            if tp2 <= entry:
+                tp2 = entry + atr * 3
+            if tp3 <= entry:
+                tp3 = entry + atr * 5
+        else:
+            if sl <= entry:
+                sl = entry + atr * 2
+            if tp1 >= entry:
+                tp1 = entry - atr * 1.5
+            if tp2 >= entry:
+                tp2 = entry - atr * 3
+            if tp3 >= entry:
+                tp3 = entry - atr * 5
 
         # Risk/Reward
         risk = abs(entry - sl)

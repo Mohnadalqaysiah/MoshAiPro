@@ -4,12 +4,43 @@ import axios from 'axios'
 import { TrendingUp, TrendingDown, Activity, Zap, AlertCircle, RefreshCw, Send, ExternalLink, Copy, CheckCircle } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import useMarkets from '../hooks/useMarkets'
+import { useLang } from '../contexts/LangContext'
+
+const T = {
+  ar: {
+    title: 'لوحة التحكم', sub: 'تحليل الأسواق بالذكاء الاصطناعي',
+    refresh: 'تحديث', analyze: 'حلل الآن', analyzing: 'جاري...',
+    signals: 'آخر الإشارات', markets: 'الأسواق',
+    buy: 'شراء', sell: 'بيع', watch: 'مراقبة',
+    entry: 'الدخول', sl: 'الإيقاف', tp: 'الهدف', rr: 'R/R', lot: 'اللوت',
+    conf: 'الثقة', price: 'السعر', limitMsg: 'وصلت للحد الأقصى',
+    tgLink: 'ربط مع Telegram', tgLinked: 'مرتبط بـ Telegram', tgRelink: 'إعادة الربط',
+    tgDesc: 'استقبل التنبيهات مباشرة على هاتفك',
+    noSignals: 'لا توجد إشارات بعد. حلل سوقاً للبدء.',
+    history: 'السجل',
+  },
+  en: {
+    title: 'Dashboard', sub: 'AI-powered market analysis',
+    refresh: 'Refresh', analyze: 'Analyze', analyzing: 'Loading...',
+    signals: 'Latest Signals', markets: 'Markets',
+    buy: 'BUY', sell: 'SELL', watch: 'WATCH',
+    entry: 'Entry', sl: 'SL', tp: 'TP', rr: 'R/R', lot: 'Lot',
+    conf: 'Conf', price: 'Price', limitMsg: 'Limit reached',
+    tgLink: 'Link Telegram', tgLinked: 'Linked to Telegram', tgRelink: 'Re-link',
+    tgDesc: 'Receive alerts directly on your phone',
+    noSignals: 'No signals yet. Analyze a market to start.',
+    history: 'History',
+  },
+}
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 export default function Dashboard() {
   const { user } = useAuth()
   const { markets } = useMarkets()
+  const { lang } = useLang()
+  const tx = T[lang] || T.ar
+  const isAr = lang === 'ar'
   const [signals, setSignals]       = useState([])
   const [signalHistory, setSignalHistory] = useState([])
   const [analyzing, setAnalyzing]   = useState(null)
@@ -119,28 +150,28 @@ export default function Dashboard() {
   }
 
   const getSignalAr = (rec) => {
-    if (rec === 'BUY') return 'شراء'
-    if (rec === 'SELL') return 'بيع'
-    return 'مراقبة'
+    if (rec === 'BUY') return tx.buy
+    if (rec === 'SELL') return tx.sell
+    return tx.watch
   }
 
   const showTgCard     = user && !user.telegram_linked && !relinkDone
   const showRelinkCard = user && user.telegram_linked && !relinkDone
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" dir={isAr ? 'rtl' : 'ltr'}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">لوحة التحكم</h1>
-          <p className="text-gray-400 text-sm mt-1">تحليل الأسواق بالذكاء الاصطناعي</p>
+          <h1 className="text-2xl font-bold text-white">{tx.title}</h1>
+          <p className="text-gray-400 text-sm mt-1">{tx.sub}</p>
         </div>
         <button
           onClick={fetchSignals}
           className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm transition-colors"
         >
           <RefreshCw size={14} />
-          تحديث
+          {tx.refresh}
         </button>
       </div>
 
@@ -227,19 +258,19 @@ export default function Dashboard() {
           </h2>
           <span className="text-xs text-gray-500">النتائج مُخزَّنة مؤقتاً · اضغط مطوّلاً للتحديث الإجباري</span>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
           {markets.map(m => (
             <button
               key={m.symbol}
               onClick={() => analyzeMarket(m.symbol, false)}
               onContextMenu={(e) => { e.preventDefault(); analyzeMarket(m.symbol, true) }}
               disabled={analyzing === m.symbol}
-              className="py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2"
+              className="py-2.5 px-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:opacity-50 text-white rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1.5"
             >
               {analyzing === m.symbol ? (
                 <>
-                  <RefreshCw size={14} className="animate-spin" />
-                  جاري...
+                  <RefreshCw size={12} className="animate-spin" />
+                  {tx.analyzing}
                 </>
               ) : m.symbol}
             </button>
@@ -248,12 +279,12 @@ export default function Dashboard() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: 'إجمالي الإشارات', value: signals.length, icon: <Activity size={20} />, color: 'text-blue-400' },
-          { label: 'إشارات شراء', value: signals.filter(s => (s.recommendation || s.signal_type) === 'BUY').length, icon: <TrendingUp size={20} />, color: 'text-green-400' },
-          { label: 'إشارات بيع', value: signals.filter(s => (s.recommendation || s.signal_type) === 'SELL').length, icon: <TrendingDown size={20} />, color: 'text-red-400' },
-          { label: 'متوسط الثقة', value: signals.length ? Math.round(signals.reduce((a, s) => a + (s.ai_confidence_score || s.ai_confidence || 0), 0) / signals.length) + '%' : 'N/A', icon: <Zap size={20} />, color: 'text-yellow-400' },
+          { label: isAr ? 'إجمالي الإشارات' : 'Total Signals', value: signals.length, icon: <Activity size={20} />, color: 'text-blue-400' },
+          { label: isAr ? 'إشارات شراء' : 'Buy Signals', value: signals.filter(s => (s.recommendation || s.signal_type) === 'BUY').length, icon: <TrendingUp size={20} />, color: 'text-green-400' },
+          { label: isAr ? 'إشارات بيع' : 'Sell Signals', value: signals.filter(s => (s.recommendation || s.signal_type) === 'SELL').length, icon: <TrendingDown size={20} />, color: 'text-red-400' },
+          { label: isAr ? 'متوسط الثقة' : 'Avg Confidence', value: signals.length ? Math.round(signals.reduce((a, s) => a + (s.ai_confidence_score || s.ai_confidence || 0), 0) / signals.length) + '%' : 'N/A', icon: <Zap size={20} />, color: 'text-yellow-400' },
         ].map((stat, i) => (
           <div key={i} className="bg-gray-800 border border-gray-700 rounded-xl p-4">
             <div className={`${stat.color} mb-2`}>{stat.icon}</div>
@@ -327,16 +358,15 @@ export default function Dashboard() {
 
                   {/* منطقة الدخول + SL + TP */}
                   {(entryMin || entryExact) && (
-                    <div className="mt-2 text-xs text-gray-400 space-y-1">
-                      <div>
-                        {entryMin && entryMax
-                          ? <>دخول: <span className="text-white">{fmt(entryMin)} — {fmt(entryMax)}</span></>
-                          : <>دخول: <span className="text-white">{fmt(entryExact)}</span></>
-                        }
-                        {sl != null && <> &nbsp;|&nbsp; SL: <span className="text-red-400">{fmt(sl)}</span></>}
-                        {tp1 != null && <> &nbsp;|&nbsp; TP1: <span className="text-green-400">{fmt(tp1)}</span></>}
-                        {tp2 != null && <> &nbsp;|&nbsp; TP2: <span className="text-green-300">{fmt(tp2)}</span></>}
-                      </div>
+                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-400">
+                      <span>
+                        {tx.entry}: <span className="text-white font-mono">
+                          {entryMin && entryMax ? `${fmt(entryMin)} — ${fmt(entryMax)}` : fmt(entryExact)}
+                        </span>
+                      </span>
+                      {sl != null && <span>{tx.sl}: <span className="text-red-400 font-mono">{fmt(sl)}</span></span>}
+                      {tp1 != null && <span>{tx.tp}1: <span className="text-green-400 font-mono">{fmt(tp1)}</span></span>}
+                      {tp2 != null && <span>{tx.tp}2: <span className="text-green-300 font-mono">{fmt(tp2)}</span></span>}
                     </div>
                   )}
                 </div>

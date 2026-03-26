@@ -2,12 +2,41 @@ import { useState } from 'react'
 import axios from 'axios'
 import { Zap, RefreshCw, AlertCircle, Calculator } from 'lucide-react'
 import useMarkets from '../hooks/useMarkets'
+import { useLang } from '../contexts/LangContext'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const TIMEFRAMES = ['15m', '1h', '4h', '1day']
 
+const T = {
+  ar: {
+    title: 'تحليل الإشارات', sub: 'تحليل متقدم بمحرك الذكاء الاصطناعي v5',
+    market: 'السوق', timeframe: 'الإطار الزمني', analyze: 'تحليل الآن', analyzing: 'جاري التحليل...',
+    conf: 'نسبة الثقة', currentPrice: 'السعر الحالي', entryZone: 'منطقة الدخول',
+    sl: 'وقف الخسارة', tp1: 'هدف 1', tp2: 'هدف 2', tp3: 'هدف 3',
+    rr: 'Risk/Reward', lot: 'حجم اللوت', balanceRisk: 'البالانس / المخاطرة',
+    entryLevels: 'مستويات الدخول', analysis: 'تفاصيل التحليل',
+    trend: 'الاتجاه', zone: 'المنطقة', liquidity: 'السيولة',
+    buy: 'شراء', sell: 'بيع', watch: 'مراقبة',
+    futuresWarn: '⚠️ السعر من عقود الآجل — قد يختلف ±5 نقاط عن سعر Spot في منصتك',
+  },
+  en: {
+    title: 'Signal Analysis', sub: 'Advanced analysis powered by AI Engine v5',
+    market: 'Market', timeframe: 'Timeframe', analyze: 'Analyze Now', analyzing: 'Analyzing...',
+    conf: 'Confidence', currentPrice: 'Current Price', entryZone: 'Entry Zone',
+    sl: 'Stop Loss', tp1: 'Target 1', tp2: 'Target 2', tp3: 'Target 3',
+    rr: 'Risk/Reward', lot: 'Lot Size', balanceRisk: 'Balance / Risk',
+    entryLevels: 'Entry Levels', analysis: 'Analysis Details',
+    trend: 'Trend', zone: 'Zone', liquidity: 'Liquidity',
+    buy: 'BUY', sell: 'SELL', watch: 'WATCH',
+    futuresWarn: '⚠️ Price from futures contracts — may differ ±5 pips from Spot on your platform',
+  },
+}
+
 export default function Signals() {
   const { markets } = useMarkets()
+  const { lang } = useLang()
+  const tx = T[lang] || T.ar
+  const isAr = lang === 'ar'
   const [symbol, setSymbol] = useState('XAUUSD')
   const [timeframe, setTimeframe] = useState('1h')
   const [result, setResult] = useState(null)
@@ -31,20 +60,20 @@ export default function Signals() {
   const rec = result?.recommendation
   const recColors = { BUY: 'text-green-400', SELL: 'text-red-400', WATCH: 'text-gray-400' }
   const recBgs = { BUY: 'bg-green-900/20 border-green-600', SELL: 'bg-red-900/20 border-red-600', WATCH: 'bg-gray-700 border-gray-600' }
-  const recAr = { BUY: 'شراء', SELL: 'بيع', WATCH: 'مراقبة' }
+  const recLabel = { BUY: tx.buy, SELL: tx.sell, WATCH: tx.watch }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" dir={isAr ? 'rtl' : 'ltr'}>
       <div>
-        <h1 className="text-2xl font-bold text-white">تحليل الإشارات</h1>
-        <p className="text-gray-400 text-sm mt-1">تحليل متقدم بمحرك الذكاء الاصطناعي v5</p>
+        <h1 className="text-2xl font-bold text-white">{tx.title}</h1>
+        <p className="text-gray-400 text-sm mt-1">{tx.sub}</p>
       </div>
 
       {/* Controls */}
       <div className="bg-gray-800 border border-gray-700 rounded-xl p-5">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label className="text-gray-400 text-sm mb-2 block">السوق</label>
+            <label className="text-gray-400 text-sm mb-2 block" htmlFor="sig-market">{tx.market}</label>
             <select
               value={symbol}
               onChange={e => setSymbol(e.target.value)}
@@ -54,7 +83,7 @@ export default function Signals() {
             </select>
           </div>
           <div>
-            <label className="text-gray-400 text-sm mb-2 block">الإطار الزمني</label>
+            <label className="text-gray-400 text-sm mb-2 block">{tx.timeframe}</label>
             <select
               value={timeframe}
               onChange={e => setTimeframe(e.target.value)}
@@ -69,7 +98,7 @@ export default function Signals() {
               disabled={loading}
               className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors"
             >
-              {loading ? <><RefreshCw size={14} className="animate-spin" /> جاري التحليل...</> : <><Zap size={14} /> تحليل الآن</>}
+              {loading ? <><RefreshCw size={14} className="animate-spin" /> {tx.analyzing}</> : <><Zap size={14} /> {tx.analyze}</>}
             </button>
           </div>
         </div>
@@ -90,11 +119,11 @@ export default function Signals() {
               <div>
                 <span className="text-gray-400 text-sm">{symbol} / {timeframe}</span>
                 <div className={`text-3xl font-bold mt-1 ${recColors[rec] || 'text-gray-400'}`}>
-                  {recAr[rec] || rec}
+                  {recLabel[rec] || rec}
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-gray-400 text-sm">نسبة الثقة</div>
+                <div className="text-gray-400 text-sm">{tx.conf}</div>
                 <div className="text-3xl font-bold text-white">{result.ai_confidence_score?.toFixed(1)}%</div>
               </div>
             </div>
@@ -104,14 +133,14 @@ export default function Signals() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Entry / SL / TP */}
             <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
-              <h3 className="text-white font-semibold mb-3">مستويات الدخول</h3>
+              <h3 className="text-white font-semibold mb-3">{tx.entryLevels}</h3>
               <div className="space-y-2 text-sm">
                 {/* السعر الفوري الحالي */}
                 {result.current_price != null && (
                   <div className="pb-2 border-b border-gray-700 space-y-1">
                     <div className="flex justify-between">
                       <span className="text-gray-400 flex items-center gap-1.5">
-                        السعر الحالي
+                        {tx.currentPrice}
                         {result.price_source === 'finnhub_spot'
                           ? <span className="text-green-500 text-xs font-medium">● spot</span>
                           : result.price_source?.includes('futures')
@@ -132,7 +161,7 @@ export default function Signals() {
                     </div>
                     {result.price_source?.includes('futures') && (
                       <p className="text-xs text-yellow-700/80 text-right">
-                        ⚠️ السعر من عقود الآجل — قد يختلف ±5 نقاط عن سعر Spot في منصتك
+                        {tx.futuresWarn}
                       </p>
                     )}
                   </div>
@@ -140,7 +169,7 @@ export default function Signals() {
                 {/* منطقة الدخول من ICT engine */}
                 {(result.levels?.entry_zone_min || result.levels?.entry) && (
                   <div className="flex justify-between">
-                    <span className="text-gray-400">منطقة الدخول</span>
+                    <span className="text-gray-400">{tx.entryZone}</span>
                     <span className="text-white font-mono">
                       {result.levels.entry_zone_min && result.levels.entry_zone_max
                         ? `${result.levels.entry_zone_min} — ${result.levels.entry_zone_max}`
@@ -158,7 +187,7 @@ export default function Signals() {
                 {/* SL */}
                 {(result.levels?.stop_loss || result.stop_loss_zone) && (
                   <div className="flex justify-between border-t border-gray-700 pt-2 mt-2">
-                    <span className="text-gray-400">وقف الخسارة</span>
+                    <span className="text-gray-400">{tx.sl}</span>
                     <span className="text-red-400 font-mono">{result.levels?.stop_loss || result.stop_loss_zone}</span>
                   </div>
                 )}
@@ -166,18 +195,18 @@ export default function Signals() {
                 {result.levels?.tp1 && (
                   <>
                     <div className="flex justify-between">
-                      <span className="text-gray-400">هدف 1</span>
+                      <span className="text-gray-400">{tx.tp1}</span>
                       <span className="text-green-400 font-mono">{result.levels.tp1}</span>
                     </div>
                     {result.levels.tp2 && (
                       <div className="flex justify-between">
-                        <span className="text-gray-400">هدف 2</span>
+                        <span className="text-gray-400">{tx.tp2}</span>
                         <span className="text-green-300 font-mono">{result.levels.tp2}</span>
                       </div>
                     )}
                     {result.levels.tp3 && (
                       <div className="flex justify-between">
-                        <span className="text-gray-400">هدف 3</span>
+                        <span className="text-gray-400">{tx.tp3}</span>
                         <span className="text-green-200 font-mono">{result.levels.tp3}</span>
                       </div>
                     )}
@@ -201,14 +230,14 @@ export default function Signals() {
                 {result.lot_size && (
                   <div className="flex justify-between border-t border-gray-700 pt-2 mt-2">
                     <span className="text-gray-400 flex items-center gap-1">
-                      <Calculator size={12} /> حجم اللوت
+                      <Calculator size={12} /> {tx.lot}
                     </span>
                     <span className="text-yellow-400 font-mono font-semibold">{result.lot_size}</span>
                   </div>
                 )}
                 {result.account_balance && (
                   <div className="flex justify-between text-xs">
-                    <span className="text-gray-600">البالانس / المخاطرة</span>
+                    <span className="text-gray-600">{tx.balanceRisk}</span>
                     <span className="text-gray-500">${result.account_balance} · {result.risk_percent}%</span>
                   </div>
                 )}
@@ -217,11 +246,11 @@ export default function Signals() {
 
             {/* Analysis */}
             <div className="bg-gray-800 border border-gray-700 rounded-xl p-4">
-              <h3 className="text-white font-semibold mb-3">تفاصيل التحليل</h3>
+              <h3 className="text-white font-semibold mb-3">{tx.analysis}</h3>
               <div className="space-y-2 text-sm">
                 {result.trend && (
                   <div className="flex justify-between">
-                    <span className="text-gray-400">الاتجاه</span>
+                    <span className="text-gray-400">{tx.trend}</span>
                     <span className="text-white">{result.trend.direction} ({result.trend.strength}%)</span>
                   </div>
                 )}
@@ -233,7 +262,7 @@ export default function Signals() {
                 )}
                 {result.premium_discount?.current_zone && (
                   <div className="flex justify-between">
-                    <span className="text-gray-400">المنطقة</span>
+                    <span className="text-gray-400">{tx.zone}</span>
                     <span className="text-white">{result.premium_discount.current_zone}</span>
                   </div>
                 )}
@@ -245,7 +274,7 @@ export default function Signals() {
                 )}
                 {result.liquidity_analysis?.bias?.direction && (
                   <div className="flex justify-between">
-                    <span className="text-gray-400">السيولة</span>
+                    <span className="text-gray-400">{tx.liquidity}</span>
                     <span className="text-white">{result.liquidity_analysis.bias.direction}</span>
                   </div>
                 )}

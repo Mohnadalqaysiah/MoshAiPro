@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
 import { BarChart2, Activity, TrendingUp } from 'lucide-react'
+import { useAuth } from '../contexts/AuthContext'
 
-const API = 'http://localhost:8000'
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 export default function Analytics() {
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'admin'
   const [signals, setSignals] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -122,26 +125,28 @@ export default function Analytics() {
         </div>
       </div>
 
-      {/* API Status */}
-      <div className="bg-gray-800 border border-gray-700 rounded-xl p-5">
-        <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
-          <Activity size={18} className="text-blue-400" />
-          حالة النظام
-        </h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[
-            { name: 'Backend API', status: true },
-            { name: 'قاعدة البيانات', status: true },
-            { name: 'TwelveData', status: true },
-            { name: 'Telegram Bot', status: true },
-          ].map(service => (
-            <div key={service.name} className="flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${service.status ? 'bg-green-400' : 'bg-red-400'}`} />
-              <span className="text-gray-300 text-sm">{service.name}</span>
-            </div>
-          ))}
+      {/* API Status — للمشرفين فقط */}
+      {isAdmin && (
+        <div className="bg-gray-800 border border-gray-700 rounded-xl p-5">
+          <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
+            <Activity size={18} className="text-blue-400" />
+            حالة النظام
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[
+              { name: 'Backend API', status: true },
+              { name: 'قاعدة البيانات', status: true },
+              { name: 'TwelveData', status: true },
+              { name: 'Telegram Bot', status: true },
+            ].map(service => (
+              <div key={service.name} className="flex items-center gap-2">
+                <div className={`w-2 h-2 rounded-full ${service.status ? 'bg-green-400' : 'bg-red-400'}`} />
+                <span className="text-gray-300 text-sm">{service.name}</span>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
