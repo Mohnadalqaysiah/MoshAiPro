@@ -374,6 +374,11 @@ export default function Profile() {
                 <p className="text-white font-bold text-lg">${affiliate.paid_out_usd?.toFixed(2)}</p>
               </div>
             </div>
+            {affiliate?.min_payout_usd != null && (
+              <p className="text-xs text-gray-500 mt-1">
+                * {isAr ? `الحد الأدنى للسحب: $${affiliate.min_payout_usd}` : `Minimum withdrawal: $${affiliate.min_payout_usd}`}
+              </p>
+            )}
 
             {/* Referral link */}
             <div>

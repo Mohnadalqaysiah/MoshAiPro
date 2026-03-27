@@ -95,8 +95,11 @@ export default function ForgotPassword() {
           {step === 2 && (
             <>
               <h2 className="text-lg font-semibold text-white mb-1">أدخل رمز التحقق</h2>
-              <p className="text-gray-400 text-sm mb-6">
+              <p className="text-gray-400 text-sm mb-1">
                 أُرسل رمز مكوّن من 6 أرقام إلى <span className="text-blue-400">{email}</span>
+              </p>
+              <p className="text-yellow-600/80 text-xs mb-5 flex items-center gap-1">
+                <span>⚠️</span> إذا لم تجد الرسالة، تحقق من مجلد Spam/Junk
               </p>
               <form onSubmit={resetPassword} className="space-y-4">
                 {/* OTP */}

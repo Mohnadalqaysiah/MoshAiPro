@@ -136,10 +136,10 @@ export default function DemoSection({ isAr = true }) {
   const { displayed: agentDisplayed, done: agentDone } = useTyping(agentText, 18, phase >= 4 && activeTab === 'agent')
 
   const pipeline = [
-    { icon: Database, label: isAr ? 'بيانات السوق' : 'Market Data', sublabel: 'yfinance · TwelveData', color: 'blue',   activeAt: 1 },
-    { icon: BarChart2, label: isAr ? 'محرك ICT' : 'ICT Engine',     sublabel: 'OB · FVG · Sweep',     color: 'purple', activeAt: 2 },
-    { icon: Brain,     label: isAr ? 'Gemini AI' : 'Gemini AI',      sublabel: 'HTF+LTF · Scoring',    color: 'pink',   activeAt: 3 },
-    { icon: Zap,       label: isAr ? 'الإشارة' : 'Signal',           sublabel: 'BUY/SELL/WAIT',        color: 'green',  activeAt: 4 },
+    { icon: Database, label: isAr ? 'بيانات السوق' : 'Market Data',        sublabel: isAr ? 'مصادر متعددة' : 'Multi-source',      color: 'blue',   activeAt: 1 },
+    { icon: BarChart2, label: isAr ? 'محرك ICT' : 'ICT Engine',            sublabel: 'OB · FVG · Sweep',                            color: 'purple', activeAt: 2 },
+    { icon: Brain,     label: isAr ? 'محرك الذكاء الاصطناعي' : 'AI Engine', sublabel: 'HTF+LTF · Scoring',                           color: 'pink',   activeAt: 3 },
+    { icon: Zap,       label: isAr ? 'الإشارة' : 'Signal',                 sublabel: 'BUY/SELL/WAIT',                               color: 'green',  activeAt: 4 },
   ]
 
   return (
@@ -382,7 +382,7 @@ export default function DemoSection({ isAr = true }) {
                     <div className="w-3 h-3 rounded-full bg-green-500/70" />
                   </div>
                   <div className="flex-1 text-center">
-                    <span className="text-xs text-gray-500 font-mono">Qaffel AI Agent — Gemini 2.0</span>
+                    <span className="text-xs text-gray-500 font-mono">Qaffel AI Engine v5</span>
                   </div>
                   <Cpu size={13} className="text-purple-400" />
                 </div>

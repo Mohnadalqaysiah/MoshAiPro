@@ -805,6 +805,11 @@ def admin_affiliate_payout(
         raise HTTPException(400, "المبلغ يجب أن يكون أكبر من صفر")
     if data.amount_usd > aff.pending_balance_usd:
         raise HTTPException(400, f"الرصيد المتاح {aff.pending_balance_usd:.2f}$ فقط")
+    # Check minimum payout setting
+    min_payout_row = db.query(SiteSettings).filter(SiteSettings.key == "affiliate_min_payout_usd").first()
+    min_payout = float(min_payout_row.value) if min_payout_row and min_payout_row.value else 10.0
+    if data.amount_usd < min_payout:
+        raise HTTPException(400, f"الحد الأدنى للسحب هو ${min_payout:.2f}")
     aff.pending_balance_usd = round(aff.pending_balance_usd - data.amount_usd, 4)
     aff.paid_out_usd        = round(aff.paid_out_usd + data.amount_usd, 4)
     db.commit()

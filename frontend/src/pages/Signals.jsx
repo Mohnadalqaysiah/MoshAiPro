@@ -224,10 +224,10 @@ export default function Signals() {
                     <span className="text-gray-400 flex items-center gap-1.5">
                       {tx.currentPrice}
                       {result.price_source === 'finnhub_spot'
-                        ? <span className="text-green-500 text-xs font-medium">● spot</span>
+                        ? <span className="text-green-500 text-xs font-medium">{isAr ? '● مباشر' : '● Live'}</span>
                         : result.price_source?.includes('futures')
-                          ? <span className="text-yellow-600 text-xs">● futures</span>
-                          : <span className="text-blue-500 text-xs">● live</span>}
+                          ? <span className="text-yellow-500 text-xs font-medium">{isAr ? '● آجل' : '● Delayed'}</span>
+                          : <span className="text-blue-500 text-xs font-medium">{isAr ? '● مباشر' : '● Live'}</span>}
                     </span>
                     <span className="text-blue-300 font-mono font-semibold">
                       {fmtPrice(result.current_price, symbol)}

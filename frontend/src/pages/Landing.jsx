@@ -1,14 +1,15 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
 import {
   TrendingUp, Shield, Zap, Bot, Bell, BarChart2,
   ChevronLeft, ChevronRight, CheckCircle, Star,
-  LayoutDashboard, ArrowUpRight, Cpu, Lock, Target
+  LayoutDashboard, ArrowUpRight, Cpu, Lock, Target, Menu, X
 } from 'lucide-react'
 import PublicChatBot from '../components/PublicChatBot'
 import DemoSection from '../components/DemoSection'
+import AffiliateSection from '../components/AffiliateSection'
 
 // ── Scroll reveal hook ───────────────────────────────────────────────
 function useReveal() {
@@ -79,6 +80,7 @@ export default function Landing() {
   const { lang, toggle, t } = useLang()
   const isAr = lang === 'ar'
   const ChevronCta = isAr ? ChevronLeft : ChevronRight
+  const [mobileOpen, setMobileOpen] = useState(false)
   useReveal()
 
   return (
@@ -113,29 +115,79 @@ export default function Landing() {
           </nav>
 
           <div className="flex items-center gap-2">
+            {/* Language toggle — always visible */}
             <button onClick={toggle}
               className="text-xs border border-white/10 hover:border-blue-500/50 text-gray-400 hover:text-white px-3 py-1.5 rounded-lg transition-all font-medium">
               {isAr ? 'EN' : 'ع'}
             </button>
+
+            {/* Desktop: login / register / dashboard */}
             {user ? (
               <Link to="/dashboard"
-                className="flex items-center gap-1.5 text-sm bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white px-4 py-2 rounded-xl font-semibold transition-all shadow-md shadow-blue-500/20 hover:shadow-blue-500/40">
+                className="hidden md:flex items-center gap-1.5 text-sm bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white px-4 py-2 rounded-xl font-semibold transition-all shadow-md shadow-blue-500/20 hover:shadow-blue-500/40">
                 <LayoutDashboard size={14} /> {t.nav.dashboard}
               </Link>
             ) : (
               <>
                 <Link to="/login"
-                  className="text-sm text-gray-400 hover:text-white px-4 py-2 rounded-xl hover:bg-white/5 transition-colors">
+                  className="hidden md:block text-sm text-gray-400 hover:text-white px-4 py-2 rounded-xl hover:bg-white/5 transition-colors">
                   {t.nav.login}
                 </Link>
                 <Link to="/register"
-                  className="text-sm bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white px-4 py-2 rounded-xl font-semibold transition-all shadow-md shadow-blue-500/20 hover:shadow-blue-500/40">
+                  className="hidden md:block text-sm bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white px-4 py-2 rounded-xl font-semibold transition-all shadow-md shadow-blue-500/20 hover:shadow-blue-500/40">
                   {t.nav.start}
                 </Link>
               </>
             )}
+
+            {/* Hamburger — mobile only */}
+            <button
+              className="md:hidden p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
+              onClick={() => setMobileOpen(o => !o)}
+              aria-label="Toggle menu"
+            >
+              {mobileOpen ? <X size={20} /> : <Menu size={20} />}
+            </button>
           </div>
         </div>
+
+        {/* Mobile dropdown */}
+        {mobileOpen && (
+          <div className="md:hidden border-t border-white/5 bg-[#070b14]/95 backdrop-blur-xl px-4 py-4 space-y-1">
+            {[
+              { href: '#features', label: t.nav.features },
+              { href: '#pricing',  label: t.nav.pricing },
+              { href: '#faq',      label: t.nav.faq },
+            ].map(({ href, label }) => (
+              <a key={href} href={href}
+                onClick={() => setMobileOpen(false)}
+                className="block py-2.5 px-3 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-colors">
+                {label}
+              </a>
+            ))}
+            <Link to="/about"   onClick={() => setMobileOpen(false)} className="block py-2.5 px-3 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-colors">{t.nav.about}</Link>
+            <Link to="/contact" onClick={() => setMobileOpen(false)} className="block py-2.5 px-3 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-colors">{t.nav.contact}</Link>
+            <div className="pt-2 border-t border-white/5 space-y-2">
+              {user ? (
+                <Link to="/dashboard" onClick={() => setMobileOpen(false)}
+                  className="flex items-center gap-2 w-full py-2.5 px-3 rounded-xl text-sm bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold">
+                  <LayoutDashboard size={14} /> {t.nav.dashboard}
+                </Link>
+              ) : (
+                <>
+                  <Link to="/login" onClick={() => setMobileOpen(false)}
+                    className="block py-2.5 px-3 rounded-xl text-sm text-center text-gray-300 hover:text-white border border-white/10 hover:border-white/20 transition-colors">
+                    {t.nav.login}
+                  </Link>
+                  <Link to="/register" onClick={() => setMobileOpen(false)}
+                    className="block py-2.5 px-3 rounded-xl text-sm text-center bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold">
+                    {t.nav.start}
+                  </Link>
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </header>
 
       {/* ── Hero ───────────────────────────────────────────────────────── */}
@@ -180,7 +232,7 @@ export default function Landing() {
           <div className="flex items-center justify-center gap-6 mt-10 flex-wrap">
             {[
               { icon: <Lock size={13}/>,   label: isAr ? 'مشفّر وآمن' : 'Encrypted & Secure' },
-              { icon: <Cpu size={13}/>,    label: isAr ? 'مدعوم بـ Gemini AI' : 'Powered by Gemini AI' },
+              { icon: <Cpu size={13}/>,    label: isAr ? 'مدعوم بمحرك الذكاء الاصطناعي' : 'Powered by AI Engine' },
               { icon: <Target size={13}/>, label: isAr ? 'دقة ICT/SMC مؤسسية' : 'Institutional ICT/SMC' },
             ].map((b, i) => (
               <div key={i} className="flex items-center gap-1.5 text-xs text-gray-500">
@@ -317,6 +369,9 @@ export default function Landing() {
           </div>
         </div>
       </section>
+
+      {/* ── Affiliate ──────────────────────────────────────────────────── */}
+      <AffiliateSection isAr={isAr} />
 
       {/* ── FAQ ────────────────────────────────────────────────────────── */}
       <section id="faq" className="py-24 px-4">

@@ -9,6 +9,7 @@ from loguru import logger
 from app.database import get_db
 from app.models.user import User
 from app.models.affiliate import Affiliate, AffiliateReferral, TIER1_RATE, TIER2_RATE, TIER2_THRESHOLD, generate_affiliate_code
+from app.models.site_settings import SiteSettings
 from app.services.auth_service import get_current_user
 from app.config import get_settings
 
@@ -68,6 +69,9 @@ def affiliate_dashboard(
         for r in rows
     ]
 
+    min_row = db.query(SiteSettings).filter(SiteSettings.key == "affiliate_min_payout_usd").first()
+    min_payout = float(min_row.value) if min_row and min_row.value else 10.0
+
     return {
         "affiliate_code":        aff.code,
         "referral_link":         link,
@@ -77,6 +81,7 @@ def affiliate_dashboard(
         "referrals_to_next_tier": to_next,
         "pending_balance_usd":   aff.pending_balance_usd,
         "paid_out_usd":          aff.paid_out_usd,
+        "min_payout_usd":        min_payout,
         "referrals":             referrals,
     }
 
