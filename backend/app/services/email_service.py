@@ -29,6 +29,11 @@ def send_email(to: str, subject: str, body_html: str, smtp_password: str = "") -
         msg["From"]    = f"{SMTP_NAME} <{SMTP_FROM}>"
         msg["To"]      = to
 
+        # Plain text fallback (helps deliverability)
+        import re
+        plain = re.sub(r'<[^>]+>', ' ', body_html).strip()
+        plain = re.sub(r' +', ' ', plain)
+        msg.attach(MIMEText(plain, "plain", "utf-8"))
         msg.attach(MIMEText(body_html, "html", "utf-8"))
 
         ctx = ssl.create_default_context()
