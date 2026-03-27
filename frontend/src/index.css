@@ -121,6 +121,25 @@ html {
   opacity: 1;
   transform: translateX(0);
 }
+/* Shorthand aliases for ReferralProgram page */
+.rv {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.7s ease, transform 0.7s ease;
+}
+.rv.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.rv-left {
+  opacity: 0;
+  transform: translateX(-24px);
+  transition: opacity 0.7s ease, transform 0.7s ease;
+}
+.rv-left.visible {
+  opacity: 1;
+  transform: translateX(0);
+}
 
 /* ── Glass morphism ─────────────────────────────────────────────────── */
 .glass {

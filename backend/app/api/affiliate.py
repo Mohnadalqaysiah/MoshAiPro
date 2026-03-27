@@ -3,6 +3,7 @@ Mosh AI Pro v5 - Affiliate / Referral API
 User-facing affiliate dashboard
 """
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from loguru import logger
 
@@ -11,6 +12,7 @@ from app.models.user import User
 from app.models.affiliate import Affiliate, AffiliateReferral, TIER1_RATE, TIER2_RATE, TIER2_THRESHOLD, generate_affiliate_code
 from app.models.site_settings import SiteSettings
 from app.services.auth_service import get_current_user
+from app.services.email_service import send_email
 from app.config import get_settings
 
 router = APIRouter()
@@ -84,6 +86,52 @@ def affiliate_dashboard(
         "min_payout_usd":        min_payout,
         "referrals":             referrals,
     }
+
+
+class PayoutRequestSchema(BaseModel):
+    amount_usd: float
+    note: str = ""
+
+
+@router.post("/payout-request")
+def request_payout(
+    data: PayoutRequestSchema,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """طلب سحب رصيد الإحالات — يُرسل إشعاراً للمشرف"""
+    aff = _get_or_create(user, db)
+
+    min_row = db.query(SiteSettings).filter(SiteSettings.key == "affiliate_min_payout_usd").first()
+    min_payout = float(min_row.value) if min_row and min_row.value else 10.0
+
+    if data.amount_usd <= 0:
+        raise HTTPException(400, "المبلغ يجب أن يكون أكبر من صفر")
+    if data.amount_usd < min_payout:
+        raise HTTPException(400, f"الحد الأدنى للسحب هو ${min_payout:.2f}")
+    if data.amount_usd > aff.pending_balance_usd:
+        raise HTTPException(400, f"الرصيد المتاح ${aff.pending_balance_usd:.2f} فقط")
+
+    # Notify admin by email
+    settings = get_settings()
+    admin_email = settings.SMTP_USER
+    if admin_email:
+        subject = f"طلب سحب رصيد إحالات — {user.email}"
+        body = (
+            f"<h2>طلب سحب جديد</h2>"
+            f"<p><b>المستخدم:</b> {user.full_name or ''} ({user.email})</p>"
+            f"<p><b>المبلغ المطلوب:</b> ${data.amount_usd:.2f} USDT</p>"
+            f"<p><b>الرصيد المتاح:</b> ${aff.pending_balance_usd:.2f}</p>"
+            f"<p><b>ملاحظة:</b> {data.note or '—'}</p>"
+            f"<p>يرجى معالجة الطلب من لوحة الإدارة.</p>"
+        )
+        try:
+            send_email(admin_email, subject, body)
+        except Exception as e:
+            logger.warning(f"Failed to notify admin of payout request: {e}")
+
+    logger.info(f"💳 Payout request: user={user.email} amount=${data.amount_usd} note={data.note}")
+    return {"success": True, "message": "تم إرسال طلب السحب بنجاح. سيتم مراجعته من قِبَل الفريق خلال 24 ساعة."}
 
 
 @router.get("/link")

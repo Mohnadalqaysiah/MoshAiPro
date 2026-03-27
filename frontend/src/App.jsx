@@ -18,6 +18,8 @@ import Vision          from './pages/Vision'
 import Profile         from './pages/Profile'
 import Analyses        from './pages/Analyses'
 import ForgotPassword  from './pages/ForgotPassword'
+import AffiliatePage   from './pages/AffiliatePage'
+import ReferralProgram from './pages/ReferralProgram'
 import Navbar     from './components/Navbar'
 import ChatBot    from './components/ChatBot'
 import TrialBanner from './components/TrialBanner'
@@ -57,6 +59,7 @@ function AppRoutes() {
       <Route path="/login"             element={user ? <Navigate to="/dashboard" /> : <Login />} />
       <Route path="/register"          element={user ? <Navigate to="/dashboard" /> : <Register />} />
       <Route path="/pricing"           element={<Pricing />} />
+      <Route path="/referral"          element={<ReferralProgram />} />
 
       {/* Admin */}
       <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
@@ -76,6 +79,7 @@ function AppRoutes() {
                 <Route path="/analytics" element={<Analytics />} />
                 <Route path="/analyses" element={<Analyses />} />
                 <Route path="/profile"   element={<Profile />} />
+                <Route path="/affiliate" element={<AffiliatePage />} />
               </Routes>
             </main>
             <ChatBot />

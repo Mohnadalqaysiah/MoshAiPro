@@ -77,6 +77,11 @@ export default function Navbar() {
             </Link>
           )}
           {user && (
+            <Link to="/affiliate" className="flex items-center gap-1 text-xs text-yellow-400/80 hover:text-yellow-400 px-2 py-1.5 rounded-lg hover:bg-gray-700 transition">
+              💰 {isAr ? 'إحالاتي' : 'Referrals'}
+            </Link>
+          )}
+          {user && (
             <Link to="/profile" className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white px-2 py-1.5 rounded-lg bg-gray-700/50 hover:bg-gray-700 transition">
               <User size={13} />
               <span className="max-w-[100px] truncate">{user.full_name || user.email}</span>
@@ -125,6 +130,11 @@ export default function Navbar() {
           {user?.role === 'admin' && (
             <Link to="/admin" onClick={() => setOpen(false)} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm text-yellow-400 hover:bg-gray-700">
               <Shield size={16} /> الإدارة
+            </Link>
+          )}
+          {user && (
+            <Link to="/affiliate" onClick={() => setOpen(false)} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm text-yellow-400 hover:bg-gray-700">
+              💰 {isAr ? 'إحالاتي' : 'Referrals'}
             </Link>
           )}
           {user && (

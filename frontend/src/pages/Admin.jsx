@@ -944,6 +944,24 @@ export default function Admin() {
                       </button>
                     </div>
                   ))}
+
+                  {/* Affiliate Settings */}
+                  <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider pt-2">إعدادات الإحالات</h2>
+                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex items-center gap-2">
+                    <div className="flex-1">
+                      <p className="text-xs text-gray-400 mb-1">الحد الأدنى للسحب (USDT)</p>
+                      <input type="number" min="0" step="0.5"
+                        value={settingEdits['affiliate_min_payout_usd'] ?? (siteSettings['affiliate_min_payout_usd']?.value || '10')}
+                        onChange={e => setSettingEdits(s => ({...s, affiliate_min_payout_usd: e.target.value}))}
+                        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        dir="ltr" />
+                    </div>
+                    <button disabled={settingSaving === 'affiliate_min_payout_usd'}
+                      onClick={() => saveSetting('affiliate_min_payout_usd')}
+                      className="mt-4 flex items-center bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-2.5 py-2 rounded-lg transition">
+                      {settingSaving === 'affiliate_min_payout_usd' ? <RefreshCw size={12} className="animate-spin"/> : <CheckCircle size={12}/>}
+                    </button>
+                  </div>
                 </div>
 
                 {/* Admin Account */}

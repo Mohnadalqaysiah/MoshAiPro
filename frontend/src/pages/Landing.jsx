@@ -110,11 +110,14 @@ export default function Landing() {
                 <span className="absolute -bottom-0.5 right-0 w-0 h-px bg-blue-400 group-hover:w-full transition-all duration-300" />
               </a>
             ))}
-            <Link to="/about"   className="hover:text-white transition-colors">{t.nav.about}</Link>
-            <Link to="/contact" className="hover:text-white transition-colors">{t.nav.contact}</Link>
+            <Link to="/about"    className="hover:text-white transition-colors">{t.nav.about}</Link>
+            <Link to="/contact"  className="hover:text-white transition-colors">{t.nav.contact}</Link>
+            <Link to="/referral" className="hover:text-yellow-400 text-yellow-500/80 transition-colors font-medium">
+              {isAr ? '💰 الإحالات' : '💰 Referrals'}
+            </Link>
           </nav>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             {/* Language toggle — always visible */}
             <button onClick={toggle}
               className="text-xs border border-white/10 hover:border-blue-500/50 text-gray-400 hover:text-white px-3 py-1.5 rounded-lg transition-all font-medium">
@@ -165,8 +168,11 @@ export default function Landing() {
                 {label}
               </a>
             ))}
-            <Link to="/about"   onClick={() => setMobileOpen(false)} className="block py-2.5 px-3 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-colors">{t.nav.about}</Link>
-            <Link to="/contact" onClick={() => setMobileOpen(false)} className="block py-2.5 px-3 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-colors">{t.nav.contact}</Link>
+            <Link to="/about"    onClick={() => setMobileOpen(false)} className="block py-2.5 px-3 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-colors">{t.nav.about}</Link>
+            <Link to="/contact"  onClick={() => setMobileOpen(false)} className="block py-2.5 px-3 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-colors">{t.nav.contact}</Link>
+            <Link to="/referral" onClick={() => setMobileOpen(false)} className="block py-2.5 px-3 rounded-lg text-sm text-yellow-400/80 hover:text-yellow-400 hover:bg-white/5 transition-colors font-medium">
+              💰 {isAr ? 'برنامج الإحالات' : 'Referral Program'}
+            </Link>
             <div className="pt-2 border-t border-white/5 space-y-2">
               {user ? (
                 <Link to="/dashboard" onClick={() => setMobileOpen(false)}
