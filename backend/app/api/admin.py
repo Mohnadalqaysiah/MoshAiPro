@@ -16,6 +16,7 @@ from app.models.payment import Payment, PaymentStatus, PaymentPlan
 from app.models.market_config import MarketConfig
 from app.models.site_settings import SiteSettings
 from app.models.affiliate import Affiliate, AffiliateReferral, TIER1_RATE, TIER2_RATE, TIER2_THRESHOLD
+from app.models.signal import Signal, SignalStatus
 from app.services.auth_service import get_admin_user, hash_password, verify_password
 from app.services.smart_data import smart_data as _smart_data
 from app.config import get_settings
@@ -661,6 +662,111 @@ def send_email(
         return {"message": f"جاري إرسال {len(emails)} إيميل في الخلفية", "count": len(emails)}
 
 
+# ─── Signal Performance ───────────────────────────────────────────────────────
+
+class SignalOutcomeIn(BaseModel):
+    status: str  # "TP1_HIT", "TP2_HIT", "SL_HIT", "EXPIRED"
+    closed_price: Optional[float] = None  # optional, auto-derived from TP/SL if not given
+
+
+def _calc_points(market: str, price_diff: float) -> float:
+    """MT4/MT5 pip points calculation"""
+    symbol = (market or "").upper()
+    if symbol in ("XAUUSD",):
+        return price_diff * 100
+    elif symbol in ("BTCUSD", "ETHUSD"):
+        return price_diff / 1.0
+    elif symbol.endswith("JPY"):
+        return price_diff * 100
+    else:
+        # Standard forex (EURUSD, GBPUSD, etc.)
+        return price_diff * 10000
+
+
+@router.get("/signals")
+def admin_list_signals(
+    status: str = "all",
+    limit: int = Query(default=100, le=500),
+    offset: int = 0,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """قائمة كل الإشارات للأدمن"""
+    q = db.query(Signal)
+    if status != "all":
+        try:
+            q = q.filter(Signal.status == SignalStatus(status))
+        except ValueError:
+            pass
+    total = q.count()
+    signals = q.order_by(Signal.created_at.desc()).offset(offset).limit(limit).all()
+    return {
+        "total": total,
+        "signals": [_signal_info(s) for s in signals],
+    }
+
+
+@router.patch("/signals/{signal_id}/outcome")
+def set_signal_outcome(
+    signal_id: int,
+    data: SignalOutcomeIn,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """تحديد نتيجة إشارة (TP1/TP2/SL/EXPIRED)"""
+    signal = db.query(Signal).filter(Signal.id == signal_id).first()
+    if not signal:
+        raise HTTPException(404, "الإشارة غير موجودة")
+
+    valid_statuses = {"TP1_HIT", "TP2_HIT", "SL_HIT", "EXPIRED"}
+    if data.status not in valid_statuses:
+        raise HTTPException(400, f"الحالة يجب أن تكون إحدى: {valid_statuses}")
+
+    entry = signal.entry_price
+    sl    = signal.stop_loss
+    tp1   = signal.take_profit_1
+    tp2   = signal.take_profit_2
+    is_buy = (signal.signal_type.value if hasattr(signal.signal_type, 'value') else signal.signal_type) == "BUY"
+
+    if data.status == "TP1_HIT":
+        exit_price = data.closed_price or tp1
+        diff = abs(tp1 - entry)
+        # For BUY: tp1 > entry so positive; for SELL: entry > tp1 so positive too
+        pts = _calc_points(signal.market, diff)
+        if not is_buy:
+            diff = abs(entry - tp1)
+            pts = _calc_points(signal.market, diff)
+        points = pts
+
+    elif data.status == "TP2_HIT":
+        exit_price = data.closed_price or tp2
+        diff = abs(tp2 - entry)
+        points = _calc_points(signal.market, diff)
+
+    elif data.status == "SL_HIT":
+        exit_price = data.closed_price or sl
+        diff = abs(entry - sl)
+        points = -_calc_points(signal.market, diff)
+
+    else:  # EXPIRED
+        exit_price = data.closed_price or entry
+        points = 0.0
+
+    try:
+        signal.status       = SignalStatus(data.status)
+    except ValueError:
+        raise HTTPException(400, f"حالة غير صحيحة: {data.status}")
+
+    signal.points_earned  = round(points, 2)
+    signal.profit_loss    = round(points, 2)
+    signal.exit_executed  = datetime.now(timezone.utc)
+
+    db.commit()
+    db.refresh(signal)
+    logger.info(f"Signal {signal_id} outcome: {data.status}, points={points:.2f}")
+    return {"success": True, "signal": _signal_info(signal)}
+
+
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 def _user_info(u: User) -> dict:
@@ -725,6 +831,25 @@ def _market_info(m: MarketConfig) -> dict:
         "yf_symbol":    m.yf_symbol,
         "td_symbol":    m.td_symbol,
         "sort_order":   m.sort_order,
+    }
+
+
+def _signal_info(s: Signal) -> dict:
+    return {
+        "id":            s.id,
+        "user_id":       s.user_id,
+        "market":        s.market,
+        "signal_type":   s.signal_type.value if hasattr(s.signal_type, 'value') else s.signal_type,
+        "status":        s.status.value if hasattr(s.status, 'value') else s.status,
+        "entry_price":   s.entry_price,
+        "stop_loss":     s.stop_loss,
+        "take_profit_1": s.take_profit_1,
+        "take_profit_2": s.take_profit_2,
+        "points_earned": s.points_earned,
+        "profit_loss":   s.profit_loss,
+        "ai_confidence": s.ai_confidence,
+        "created_at":    s.created_at.isoformat() if s.created_at else None,
+        "exit_executed": s.exit_executed.isoformat() if s.exit_executed else None,
     }
 
 

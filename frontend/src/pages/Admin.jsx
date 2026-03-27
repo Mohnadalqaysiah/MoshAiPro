@@ -6,7 +6,7 @@ import {
   Users, CreditCard, BarChart2, CheckCircle, XCircle, Clock,
   Search, Plus, Trash2, ToggleLeft, ToggleRight, TrendingUp,
   DollarSign, Activity, RefreshCw, Calendar,
-  X, ExternalLink, Shield, AlertTriangle, Settings, Mail, Upload
+  X, ExternalLink, Shield, AlertTriangle, Settings, Mail, Upload, Signal
 } from 'lucide-react'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -207,6 +207,12 @@ export default function Admin() {
   const [affPayout, setAffPayout] = useState({ id: null, amount: '', note: '' })
   const [affPayoutMsg, setAffPayoutMsg] = useState(null)
 
+  // Signals state
+  const [adminSignals, setAdminSignals] = useState([])
+  const [signalsLoading, setSignalsLoading] = useState(false)
+  const [outcomeForm, setOutcomeForm] = useState({})   // { [signal_id]: { status:'', submitting:false, msg:'' } }
+  const [openOutcome, setOpenOutcome] = useState(null) // signal_id of open inline form
+
   useEffect(() => {
     if (user?.role !== 'admin') { navigate('/dashboard'); return }
     loadStats()
@@ -218,6 +224,7 @@ export default function Admin() {
     if (tab === 'markets')   loadMarkets()
     if (tab === 'settings')  loadSettings()
     if (tab === 'affiliate') loadAffStats()
+    if (tab === 'signals')   loadAdminSignals()
   }, [tab])
 
   const loadStats    = async () => { const r = await axios.get(`${API}/api/v1/admin/stats`); setStats(r.data) }
@@ -300,6 +307,32 @@ export default function Admin() {
     finally { setEmailSending(false) }
   }
 
+  const loadAdminSignals = async () => {
+    setSignalsLoading(true)
+    try {
+      const r = await axios.get(`${API}/api/v1/admin/signals?status=all&limit=100`)
+      setAdminSignals(r.data.signals || [])
+    } catch (e) {}
+    finally { setSignalsLoading(false) }
+  }
+
+  const submitOutcome = async (signalId) => {
+    const form = outcomeForm[signalId] || {}
+    if (!form.status) return
+    setOutcomeForm(prev => ({ ...prev, [signalId]: { ...prev[signalId], submitting: true, msg: '' } }))
+    try {
+      await axios.patch(`${API}/api/v1/admin/signals/${signalId}/outcome`, {
+        status: form.status,
+        closed_price: form.closed_price ? parseFloat(form.closed_price) : undefined,
+      })
+      setOutcomeForm(prev => ({ ...prev, [signalId]: { status: '', submitting: false, msg: 'ok' } }))
+      setOpenOutcome(null)
+      loadAdminSignals()
+    } catch (e) {
+      setOutcomeForm(prev => ({ ...prev, [signalId]: { ...prev[signalId], submitting: false, msg: e.response?.data?.detail || 'خطأ' } }))
+    }
+  }
+
   const filteredUsers = users.filter(u => planFilter === 'all' || u.plan === planFilter)
 
   const TABS = [
@@ -307,6 +340,7 @@ export default function Admin() {
     { key:'users',     icon:Users,      label:'المستخدمون' },
     { key:'payments',  icon:CreditCard, label:'المدفوعات' },
     { key:'markets',   icon:BarChart2,  label:'الأسواق' },
+    { key:'signals',   icon:TrendingUp, label:'الإشارات' },
     { key:'affiliate', icon:TrendingUp, label:'الأفلييت' },
     { key:'email',     icon:Mail,       label:'البريد' },
     { key:'settings',  icon:Settings,   label:'الإعدادات' },
@@ -697,6 +731,149 @@ export default function Admin() {
                 <p>📧 الإرسال يتم في الخلفية ولا يوقف الصفحة</p>
                 <p>🔐 <span className="font-mono text-gray-400">SMTP_HOST</span> الافتراضي: smtp.hostinger.com (port 465)</p>
               </div>
+            </div>
+          )}
+
+          {/* ── Signals ── */}
+          {tab === 'signals' && (
+            <div>
+              <div className="flex items-center justify-between mb-6">
+                <h1 className="text-xl font-bold flex items-center gap-2">
+                  <TrendingUp size={20} className="text-blue-400"/>
+                  إدارة الإشارات
+                </h1>
+                <button
+                  onClick={loadAdminSignals}
+                  className="flex items-center gap-2 text-xs bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg transition"
+                >
+                  <RefreshCw size={13}/> تحديث
+                </button>
+              </div>
+
+              {signalsLoading ? (
+                <div className="text-gray-400 text-sm flex items-center gap-2">
+                  <RefreshCw size={14} className="animate-spin"/> جاري التحميل...
+                </div>
+              ) : adminSignals.length === 0 ? (
+                <p className="text-gray-500 text-center py-12">لا توجد إشارات بعد</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-gray-400 border-b border-gray-800">
+                        <th className="pb-2 text-right font-medium pr-2">ID</th>
+                        <th className="pb-2 text-right font-medium">الزوج</th>
+                        <th className="pb-2 text-right font-medium">النوع</th>
+                        <th className="pb-2 text-right font-medium">الحالة</th>
+                        <th className="pb-2 text-right font-medium">الدخول</th>
+                        <th className="pb-2 text-right font-medium">SL</th>
+                        <th className="pb-2 text-right font-medium">TP1</th>
+                        <th className="pb-2 text-right font-medium">النقاط</th>
+                        <th className="pb-2 text-right font-medium">التاريخ</th>
+                        <th className="pb-2 text-right font-medium">النتيجة</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-800/60">
+                      {adminSignals.map(s => {
+                        const typeColor = s.signal_type === 'BUY'
+                          ? 'bg-green-900/50 text-green-300'
+                          : s.signal_type === 'SELL'
+                          ? 'bg-red-900/50 text-red-300'
+                          : 'bg-gray-700 text-gray-300'
+
+                        const statusMap = {
+                          ACTIVE:  'bg-green-900/40 text-green-300',
+                          PENDING: 'bg-yellow-900/40 text-yellow-300',
+                          TP1_HIT: 'bg-blue-900/40 text-blue-300',
+                          TP2_HIT: 'bg-purple-900/40 text-purple-300',
+                          SL_HIT:  'bg-red-900/40 text-red-300',
+                          EXPIRED: 'bg-gray-700/60 text-gray-400',
+                        }
+                        const statusCls = statusMap[s.status] || 'bg-gray-700 text-gray-400'
+                        const ptColor = (pts) => pts > 0 ? 'text-green-400' : pts < 0 ? 'text-red-400' : 'text-gray-400'
+                        const isOpen = openOutcome === s.id
+                        const form = outcomeForm[s.id] || {}
+
+                        return (
+                          <>
+                            <tr key={s.id} className="hover:bg-gray-800/40 transition-colors">
+                              <td className="py-2 pr-2 text-gray-500">{s.id}</td>
+                              <td className="py-2 font-semibold text-white">{s.market}</td>
+                              <td className="py-2">
+                                <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${typeColor}`}>{s.signal_type}</span>
+                              </td>
+                              <td className="py-2">
+                                <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${statusCls}`}>{s.status}</span>
+                              </td>
+                              <td className="py-2 text-gray-300 font-mono">{s.entry_price?.toFixed(5) ?? '-'}</td>
+                              <td className="py-2 text-red-400 font-mono">{s.stop_loss?.toFixed(5) ?? '-'}</td>
+                              <td className="py-2 text-green-400 font-mono">{s.take_profit_1?.toFixed(5) ?? '-'}</td>
+                              <td className={`py-2 font-semibold font-mono ${ptColor(s.points_earned)}`}>
+                                {s.points_earned != null ? (s.points_earned > 0 ? '+' : '') + s.points_earned : '—'}
+                              </td>
+                              <td className="py-2 text-gray-500">{s.created_at?.slice(0, 10) ?? '-'}</td>
+                              <td className="py-2">
+                                {!['TP1_HIT','TP2_HIT','SL_HIT','EXPIRED'].includes(s.status) && (
+                                  <button
+                                    onClick={() => setOpenOutcome(isOpen ? null : s.id)}
+                                    className="text-xs bg-blue-700 hover:bg-blue-600 text-white px-2 py-1 rounded transition"
+                                  >
+                                    تحديد النتيجة
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                            {isOpen && (
+                              <tr key={`form-${s.id}`} className="bg-gray-900/70">
+                                <td colSpan={10} className="py-3 px-4">
+                                  <div className="flex items-center gap-3 flex-wrap">
+                                    <select
+                                      value={form.status || ''}
+                                      onChange={e => setOutcomeForm(prev => ({ ...prev, [s.id]: { ...prev[s.id], status: e.target.value } }))}
+                                      className="bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    >
+                                      <option value="">-- اختر النتيجة --</option>
+                                      <option value="TP1_HIT">TP1 HIT</option>
+                                      <option value="TP2_HIT">TP2 HIT</option>
+                                      <option value="SL_HIT">SL HIT</option>
+                                      <option value="EXPIRED">EXPIRED</option>
+                                    </select>
+                                    <input
+                                      type="number"
+                                      step="0.00001"
+                                      placeholder="سعر الإغلاق (اختياري)"
+                                      value={form.closed_price || ''}
+                                      onChange={e => setOutcomeForm(prev => ({ ...prev, [s.id]: { ...prev[s.id], closed_price: e.target.value } }))}
+                                      className="bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-1.5 text-xs w-40 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                      dir="ltr"
+                                    />
+                                    <button
+                                      onClick={() => submitOutcome(s.id)}
+                                      disabled={form.submitting || !form.status}
+                                      className="text-xs bg-green-700 hover:bg-green-600 disabled:opacity-50 text-white px-3 py-1.5 rounded-lg transition"
+                                    >
+                                      {form.submitting ? 'جاري...' : 'حفظ'}
+                                    </button>
+                                    <button
+                                      onClick={() => setOpenOutcome(null)}
+                                      className="text-xs text-gray-400 hover:text-white px-2 py-1.5 rounded-lg transition"
+                                    >
+                                      إلغاء
+                                    </button>
+                                    {form.msg && form.msg !== 'ok' && (
+                                      <span className="text-xs text-red-400">{form.msg}</span>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
 

@@ -247,6 +247,114 @@ async def get_signal_history(
     return {"signals": result}
 
 
+@router.get("/performance")
+async def get_signal_performance(
+    db: Session = Depends(get_db)
+):
+    """إحصائيات أداء الإشارات (أسبوعية + يومية) — عامة لجميع المستخدمين"""
+    from datetime import date, time as dt_time
+
+    now_utc = datetime.now(timezone.utc)
+    today   = now_utc.date()
+
+    # Current ISO week
+    iso_year, iso_week, _ = today.isocalendar()
+
+    # Closed statuses only for stats
+    closed = [SignalStatus.TP1_HIT, SignalStatus.TP2_HIT, SignalStatus.SL_HIT]
+
+    # ── Helper: fetch closed signals in date range ──
+    def _signals_in_range(start_dt, end_dt):
+        return (
+            db.query(Signal)
+            .filter(
+                Signal.status.in_(closed),
+                Signal.exit_executed >= start_dt,
+                Signal.exit_executed < end_dt,
+            )
+            .all()
+        )
+
+    # ── Current week ──
+    week_start = datetime.combine(
+        today - timedelta(days=today.weekday()), dt_time(0, 0, 0)
+    ).replace(tzinfo=timezone.utc)
+    week_end = week_start + timedelta(days=7)
+
+    week_signals = _signals_in_range(week_start, week_end)
+    wins   = [s for s in week_signals if (s.points_earned or 0) > 0]
+    losses = [s for s in week_signals if (s.points_earned or 0) < 0]
+    total_points = sum(s.points_earned or 0 for s in week_signals)
+    win_points   = sum(s.points_earned or 0 for s in wins)
+    loss_points  = sum(s.points_earned or 0 for s in losses)
+
+    current_week = {
+        "week_label":    f"الأسبوع {iso_week} / {iso_year}",
+        "total_points":  round(total_points, 2),
+        "win_points":    round(win_points, 2),
+        "loss_points":   round(loss_points, 2),
+        "total_trades":  len(week_signals),
+        "wins":          len(wins),
+        "losses":        len(losses),
+    }
+
+    # ── Daily stats: last 14 days ──
+    daily_stats = []
+    for i in range(13, -1, -1):
+        day = today - timedelta(days=i)
+        day_start = datetime.combine(day, dt_time(0, 0, 0)).replace(tzinfo=timezone.utc)
+        day_end   = day_start + timedelta(days=1)
+        day_sigs  = _signals_in_range(day_start, day_end)
+        day_wins  = [s for s in day_sigs if (s.points_earned or 0) > 0]
+        day_losses= [s for s in day_sigs if (s.points_earned or 0) < 0]
+        trades_detail = [
+            {
+                "id":     s.id,
+                "market": s.market,
+                "type":   s.signal_type.value if hasattr(s.signal_type, 'value') else s.signal_type,
+                "status": s.status.value if hasattr(s.status, 'value') else s.status,
+                "points": round(s.points_earned or 0, 2),
+                "entry":  s.entry_price,
+                "exit":   s.exit_executed.isoformat() if s.exit_executed else None,
+            }
+            for s in day_sigs
+        ]
+        daily_stats.append({
+            "date":          day.isoformat(),
+            "points":        round(sum(s.points_earned or 0 for s in day_sigs), 2),
+            "trades":        len(day_sigs),
+            "wins":          len(day_wins),
+            "losses":        len(day_losses),
+            "trades_detail": trades_detail,
+        })
+
+    # ── Weekly stats: last 8 weeks ──
+    weekly_stats = []
+    for w in range(7, -1, -1):
+        wk_start = week_start - timedelta(weeks=w)
+        wk_end   = wk_start + timedelta(days=7)
+        wk_sigs  = _signals_in_range(wk_start, wk_end)
+        wk_wins  = [s for s in wk_sigs if (s.points_earned or 0) > 0]
+        wk_losses= [s for s in wk_sigs if (s.points_earned or 0) < 0]
+        wk_pts   = sum(s.points_earned or 0 for s in wk_sigs)
+        wk_iso   = wk_start.isocalendar()
+        weekly_stats.append({
+            "week":          f"W{wk_iso[1]}/{wk_iso[0]}",
+            "total_points":  round(wk_pts, 2),
+            "win_points":    round(sum(s.points_earned or 0 for s in wk_wins), 2),
+            "loss_points":   round(sum(s.points_earned or 0 for s in wk_losses), 2),
+            "total_trades":  len(wk_sigs),
+            "wins":          len(wk_wins),
+            "losses":        len(wk_losses),
+        })
+
+    return {
+        "current_week": current_week,
+        "daily_stats":  daily_stats,
+        "weekly_stats": weekly_stats,
+    }
+
+
 @router.get("/{signal_id}")
 async def get_signal_details(
     signal_id: int,

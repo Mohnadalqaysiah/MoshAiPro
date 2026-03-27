@@ -5,6 +5,7 @@ import { TrendingUp, TrendingDown, Activity, Zap, AlertCircle, RefreshCw, Send, 
 import { useAuth } from '../contexts/AuthContext'
 import useMarkets from '../hooks/useMarkets'
 import { useLang } from '../contexts/LangContext'
+import PerformanceSection from '../components/PerformanceSection'
 
 const T = {
   ar: {
@@ -375,6 +376,9 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+
+      {/* Performance Section */}
+      <PerformanceSection />
 
       {/* Signal History */}
       <div className="bg-gray-800 border border-gray-700 rounded-xl p-5">
