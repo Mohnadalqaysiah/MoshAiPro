@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /
+
+# Block protected/private pages
+Disallow: /dashboard
+Disallow: /signals
+Disallow: /analytics
+Disallow: /analyses
+Disallow: /markets
+Disallow: /profile
+Disallow: /affiliate
+Disallow: /admin
+
+Sitemap: https://qafeel.com/sitemap.xml
