@@ -88,13 +88,12 @@ const T = {
     },
     calc: {
       title: 'احسب أرباحك',
-      sub: 'كم ستربح إذا أحلت 10 أشخاص يشتركون بالباقة الشهرية؟',
+      sub: 'مثال واقعي: 20 مشترك شهري بالباقة الشهرية',
       rows: [
-        { label: 'عدد الإحالات', val: '10 أشخاص' },
-        { label: 'قيمة الاشتراك', val: '$30 / شهر' },
-        { label: 'نسبة العمولة', val: '5% (برونزي)' },
-        { label: 'عمولتك', val: '$15 / شهر', hl: true },
-        { label: 'بعد 10 إحالات → ذهبي', val: '15% = $45 / شهر', hl: true, gold: true },
+        { label: '20 مشتركاً × $30/شهر', val: '$600 دخل للمنصة' },
+        { label: 'عمولتك (5% برونزي)', val: '$30 / شهر', hl: true },
+        { label: 'بعد 25 إحالة → ذهبي 15%', val: '$90 / شهر', hl: true, gold: true },
+        { label: '50 مشتركاً × 15% ذهبي', val: '$225 / شهر', hl: true, gold: true },
       ],
     },
     faq: {
@@ -155,13 +154,12 @@ const T = {
     },
     calc: {
       title: 'Calculate Your Earnings',
-      sub: 'How much will you earn if you refer 10 people who subscribe monthly?',
+      sub: 'Real example: 20 monthly subscribers at $30/mo',
       rows: [
-        { label: 'Number of Referrals', val: '10 people' },
-        { label: 'Subscription Value', val: '$30 / month' },
-        { label: 'Commission Rate', val: '5% (Bronze)' },
-        { label: 'Your Earnings', val: '$15 / month', hl: true },
-        { label: 'After 25 referrals → Gold', val: '15% = $45 / month', hl: true, gold: true },
+        { label: '20 subscribers × $30/mo', val: '$600 platform revenue' },
+        { label: 'Your cut (5% Bronze)', val: '$30 / month', hl: true },
+        { label: 'After 25 referrals → Gold 15%', val: '$90 / month', hl: true, gold: true },
+        { label: '50 subscribers × 15% Gold', val: '$225 / month', hl: true, gold: true },
       ],
     },
     faq: {

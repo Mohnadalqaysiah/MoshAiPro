@@ -370,8 +370,9 @@ export default function Landing() {
       </section>
 
       {/* ── Pricing ────────────────────────────────────────────────────── */}
-      <section id="pricing" className="py-24 px-4 bg-gradient-to-b from-transparent via-blue-950/10 to-transparent">
-        <div className="max-w-4xl mx-auto">
+      <section id="pricing" className="py-24 px-4 relative overflow-hidden">
+        <div className="orb w-[600px] h-[400px] bg-blue-600/6 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
+        <div className="max-w-5xl mx-auto relative">
           <div className="text-center mb-16 reveal">
             <p className="text-green-400 text-sm font-semibold mb-3 uppercase tracking-widest">
               {isAr ? 'الأسعار' : 'Pricing'}
@@ -379,47 +380,79 @@ export default function Landing() {
             <h2 className="text-3xl font-black mb-4 section-title">{t.pricingTitle}</h2>
             <p className="text-gray-400">{t.pricingSub}</p>
           </div>
-          <div className="grid md:grid-cols-3 gap-6">
-            {t.plans.map((p, i) => (
-              <div key={i}
-                className={`reveal card-hover relative rounded-2xl p-6 border transition-all ${
-                  p.highlight
-                    ? 'bg-gradient-to-b from-blue-600/20 to-indigo-600/10 border-blue-500/50 shadow-2xl shadow-blue-500/15'
-                    : 'glass border-white/8'
-                }`}
-                style={{ transitionDelay: `${i * 100}ms` }}>
-                {p.badge && (
-                  <div className="absolute -top-3 right-1/2 translate-x-1/2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-xs px-4 py-1 rounded-full font-bold shadow-lg shadow-blue-500/30">
-                    {p.badge}
+
+          <div className="grid md:grid-cols-3 gap-5 items-stretch">
+            {t.plans.map((p, i) => {
+              const isHighlight = p.highlight
+              const isFree = p.price === 'مجاني' || p.price === 'Free'
+              return (
+                <div key={i}
+                  className={`reveal relative flex flex-col rounded-2xl overflow-hidden transition-all duration-300 hover:-translate-y-1 ${
+                    isHighlight
+                      ? 'border border-blue-500/60 shadow-2xl shadow-blue-500/20'
+                      : 'border border-white/8 hover:border-white/15'
+                  }`}
+                  style={{ transitionDelay: `${i * 80}ms` }}>
+
+                  {/* Card top color stripe */}
+                  <div className={`h-1 w-full ${isHighlight ? 'bg-gradient-to-r from-blue-500 to-indigo-500' : isFree ? 'bg-gradient-to-r from-gray-600 to-gray-500' : 'bg-gradient-to-r from-purple-500 to-purple-400'}`} />
+
+                  <div className={`flex-1 flex flex-col p-7 ${isHighlight ? 'bg-gradient-to-b from-blue-900/25 to-gray-900' : 'bg-gray-900/80'}`}>
+                    {/* Badge */}
+                    {p.badge && (
+                      <div className="inline-flex self-start items-center gap-1.5 bg-gradient-to-r from-blue-600/30 to-indigo-600/20 border border-blue-500/40 text-blue-300 text-xs px-3 py-1 rounded-full font-bold mb-4">
+                        <Star size={9} fill="currentColor" />
+                        {p.badge}
+                      </div>
+                    )}
+
+                    {/* Plan name */}
+                    <h3 className="text-base font-bold text-gray-400 mb-1 uppercase tracking-wider">{p.name}</h3>
+
+                    {/* Price */}
+                    <div className="flex items-end gap-1.5 mb-6">
+                      <span className={`text-5xl font-black leading-none ${isHighlight ? 'bg-gradient-to-r from-blue-300 to-indigo-300 bg-clip-text text-transparent' : 'text-white'}`}>
+                        {p.price}
+                      </span>
+                      {p.period && <span className="text-gray-500 text-sm mb-1">{p.period}</span>}
+                    </div>
+
+                    {/* Divider */}
+                    <div className={`border-t mb-5 ${isHighlight ? 'border-blue-500/20' : 'border-white/6'}`} />
+
+                    {/* Features */}
+                    <ul className="space-y-3 flex-1 mb-6">
+                      {p.features.map((f, j) => (
+                        <li key={j} className="flex items-center gap-2.5 text-sm">
+                          <div className={`w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 ${isHighlight ? 'bg-blue-500/25' : 'bg-white/8'}`}>
+                            <CheckCircle size={10} className={isHighlight ? 'text-blue-300' : 'text-green-400'} />
+                          </div>
+                          <span className={isHighlight ? 'text-gray-200' : 'text-gray-400'}>{f}</span>
+                        </li>
+                      ))}
+                    </ul>
+
+                    {/* CTA */}
+                    <Link to={p.href}
+                      className={`block text-center py-3 rounded-xl font-bold text-sm transition-all hover:scale-[1.02] ${
+                        isHighlight
+                          ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-500/30'
+                          : isFree
+                          ? 'bg-gray-700/60 hover:bg-gray-700 text-gray-200 border border-white/10'
+                          : 'bg-gradient-to-r from-purple-700 to-purple-600 hover:from-purple-600 hover:to-purple-500 text-white shadow-lg shadow-purple-500/20'
+                      }`}>
+                      {p.cta}
+                    </Link>
                   </div>
-                )}
-                {p.highlight && (
-                  <div className="absolute inset-0 rounded-2xl animate-shimmer opacity-20 pointer-events-none" />
-                )}
-                <h3 className="font-black text-white text-lg mb-1">{p.name}</h3>
-                <div className="flex items-baseline gap-1 mb-6">
-                  <span className={`text-4xl font-black ${p.highlight ? 'gradient-text' : 'text-white'}`}>{p.price}</span>
-                  <span className="text-gray-500 text-sm">{p.period}</span>
                 </div>
-                <ul className="space-y-3 mb-6">
-                  {p.features.map((f, j) => (
-                    <li key={j} className="flex items-center gap-2 text-sm text-gray-300">
-                      <CheckCircle size={14} className="text-green-400 flex-shrink-0" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                <Link to={p.href}
-                  className={`block text-center py-3 rounded-xl font-bold text-sm transition-all ${
-                    p.highlight
-                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40'
-                      : 'glass hover:bg-white/8 text-gray-300 hover:text-white border border-white/10'
-                  }`}>
-                  {p.cta}
-                </Link>
-              </div>
-            ))}
+              )
+            })}
           </div>
+
+          {/* Footer note */}
+          <p className="text-center text-gray-600 text-xs mt-8">
+            {isAr ? '✓ لا توجد رسوم خفية · ✓ إلغاء في أي وقت · ✓ دفع آمن بـ USDT' : '✓ No hidden fees · ✓ Cancel anytime · ✓ Secure USDT payment'}
+          </p>
         </div>
       </section>
 

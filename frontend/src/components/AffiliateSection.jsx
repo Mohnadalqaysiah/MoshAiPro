@@ -191,8 +191,8 @@ export default function AffiliateSection({ isAr = true }) {
                 {isAr ? '💡 مثال تفصيلي:' : '💡 Detailed example:'}
               </p>
               {isAr
-                ? 'اشتراك شهري = $6 · عمولة 5% = $0.30 لكل مشترك · 10 مشتركين × $0.30 × 10 شهور = $30/شهر'
-                : 'Monthly plan = $6 · 5% commission = $0.30 per subscriber · 10 subscribers × $0.30 × 10 months = $30/month'}
+                ? 'باقة شهرية = $30 · عمولة 5% = $1.5 لكل مشترك · 20 مشترك = $30/شهر بشكل دائم — وبعد 25 إحالة ترتفع لـ 15% = $90/شهر'
+                : 'Monthly plan = $30 · 5% = $1.5/subscriber · 20 subscribers = $30/mo forever — reach 25 referrals → 15% = $90/mo'}
             </div>
           </div>
         </div>

@@ -185,6 +185,7 @@ export default function Admin() {
   const [settingEdits, setSettingEdits] = useState({})
   const [settingSaving, setSettingSaving] = useState('')
   const [settingMsg, setSettingMsg] = useState(null)
+  const [settingsSubTab, setSettingsSubTab] = useState('site')
 
   const [adminProfile, setAdminProfile] = useState({ current_password:'', new_email:'', new_password:'' })
   const [adminProfileSaving, setAdminProfileSaving] = useState(false)
@@ -249,7 +250,8 @@ export default function Admin() {
   const saveSetting = async (key, overrideValue) => {
     setSettingSaving(key); setSettingMsg(null)
     try {
-      const value = overrideValue !== undefined ? overrideValue : settingEdits[key]
+      const raw = overrideValue !== undefined ? overrideValue : settingEdits[key]
+      const value = raw !== undefined && raw !== null ? String(raw) : (siteSettings[key]?.value ?? '')
       await axios.put(`${API}/api/v1/admin/settings/${key}`, { value })
       setSettingMsg({ type:'ok', text:'تم الحفظ بنجاح' })
       loadSettings()
@@ -989,7 +991,27 @@ export default function Admin() {
           {/* ── Settings ── */}
           {tab === 'settings' && (
             <div>
-              <h1 className="text-xl font-bold mb-6">إعدادات الموقع</h1>
+              <h1 className="text-xl font-bold mb-4">إعدادات الموقع</h1>
+
+              {/* Sub-tab nav */}
+              <div className="flex gap-1 mb-6 border-b border-gray-800">
+                {[
+                  { id: 'site',      icon: '🌐', label: 'الموقع' },
+                  { id: 'plans',     icon: '💰', label: 'الباقات' },
+                  { id: 'affiliate', icon: '🔗', label: 'الإحالات' },
+                  { id: 'limits',    icon: '⚙️', label: 'الحدود' },
+                  { id: 'account',   icon: '👤', label: 'الحساب' },
+                ].map(st => (
+                  <button key={st.id} onClick={() => setSettingsSubTab(st.id)}
+                    className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition -mb-px ${
+                      settingsSubTab === st.id
+                        ? 'border-blue-500 text-white'
+                        : 'border-transparent text-gray-500 hover:text-gray-300'
+                    }`}>
+                    <span>{st.icon}</span> {st.label}
+                  </button>
+                ))}
+              </div>
 
               {settingMsg && (
                 <div className={`flex items-center gap-2 text-sm rounded-lg px-3 py-2 mb-4 ${settingMsg.type==='ok'?'bg-green-900/30 text-green-400':'bg-red-900/30 text-red-400'}`}>
@@ -997,152 +1019,112 @@ export default function Admin() {
                 </div>
               )}
 
-              <div className="grid md:grid-cols-3 gap-6 max-w-5xl">
-
-                {/* Site Settings */}
-                <div className="space-y-4">
-                  <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">إعدادات الموقع</h2>
-                  {[
-                    { key:'site_name',            label:'اسم الموقع', mono:false },
-                    { key:'usdt_wallet',          label:'عنوان محفظة USDT (TRC20)', mono:true },
-                    { key:'telegram_bot_username', label:'اسم بوت تيليجرام (بدون @)', mono:false },
-                  ].map(f => {
-                    const meta = siteSettings[f.key] || {}
-                    return (
-                      <div key={f.key} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                        <label className="block text-sm text-gray-300 font-medium mb-1">{f.label}</label>
-                        {meta.description && <p className="text-xs text-gray-500 mb-2">{meta.description}</p>}
-                        <div className="flex gap-2">
-                          <input type="text" value={settingEdits[f.key] ?? ''}
-                            onChange={e => setSettingEdits(s => ({...s, [f.key]: e.target.value}))}
-                            className={`flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500 ${f.mono?'font-mono':''}`}
-                            dir="ltr" />
-                          <button disabled={settingSaving === f.key} onClick={() => saveSetting(f.key)}
-                            className="flex items-center gap-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition">
-                            {settingSaving === f.key ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle size={13}/>} حفظ
-                          </button>
+              {/* ── site ── */}
+              {settingsSubTab === 'site' && (
+                <div className="grid md:grid-cols-2 gap-6 max-w-3xl">
+                  <div className="space-y-4">
+                    <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">إعدادات الموقع</h2>
+                    {[
+                      { key:'site_name',             label:'اسم الموقع', mono:false },
+                      { key:'usdt_wallet',           label:'عنوان محفظة USDT (TRC20)', mono:true },
+                      { key:'telegram_bot_username', label:'اسم بوت تيليجرام (بدون @)', mono:false },
+                    ].map(f => {
+                      const meta = siteSettings[f.key] || {}
+                      return (
+                        <div key={f.key} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                          <label className="block text-sm text-gray-300 font-medium mb-1">{f.label}</label>
+                          {meta.description && <p className="text-xs text-gray-500 mb-2">{meta.description}</p>}
+                          <div className="flex gap-2">
+                            <input type="text" value={settingEdits[f.key] ?? ''}
+                              onChange={e => setSettingEdits(s => ({...s, [f.key]: e.target.value}))}
+                              className={`flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500 ${f.mono?'font-mono':''}`}
+                              dir="ltr" />
+                            <button disabled={settingSaving === f.key} onClick={() => saveSetting(f.key)}
+                              className="flex items-center gap-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition">
+                              {settingSaving === f.key ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle size={13}/>} حفظ
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    )
-                  })}
-
-                  {/* Logo Upload */}
-                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-                    <label className="block text-sm text-gray-300 font-medium mb-1">شعار الموقع</label>
-                    <p className="text-xs text-gray-500 mb-3">PNG / JPG / SVG / WebP — يُعرض في شريط التنقل</p>
-
-                    {/* Current logo preview */}
-                    {settingEdits['site_logo_url'] && (
-                      <div className="mb-3 flex items-center gap-3 bg-gray-800 rounded-lg px-3 py-2">
-                        <img
-                          src={settingEdits['site_logo_url'].startsWith('http') ? settingEdits['site_logo_url'] : `${API}${settingEdits['site_logo_url']}`}
-                          alt="logo"
-                          className="h-8 object-contain rounded"
-                          onError={e => { e.target.style.display = 'none' }}
-                        />
-                        <span className="text-xs text-gray-400 font-mono truncate flex-1">{settingEdits['site_logo_url']}</span>
-                      </div>
-                    )}
-
-                    {/* Upload button */}
-                    <label className={`flex items-center justify-center gap-2 w-full cursor-pointer border-2 border-dashed rounded-lg px-4 py-3 text-sm transition
-                      ${logoUploading ? 'border-blue-700 text-blue-400 cursor-wait' : 'border-gray-700 text-gray-400 hover:border-blue-600 hover:text-blue-400'}`}>
-                      {logoUploading
-                        ? <><RefreshCw size={14} className="animate-spin"/> جاري الرفع...</>
-                        : <><Upload size={14}/> اختر صورة للرفع</>}
-                      <input type="file" accept="image/*" className="hidden" onChange={uploadLogo} disabled={logoUploading} />
-                    </label>
-
-                    {logoMsg && (
-                      <p className={`mt-2 text-xs flex items-center gap-1 ${logoMsg.type==='ok' ? 'text-green-400' : 'text-red-400'}`}>
-                        {logoMsg.type==='ok' ? <CheckCircle size={12}/> : <AlertTriangle size={12}/>} {logoMsg.text}
-                      </p>
-                    )}
+                      )
+                    })}
                   </div>
 
-                  {/* TwelveData */}
-                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-gray-300 font-medium">TwelveData (احتياطي)</p>
-                        <p className="text-xs text-gray-500 mt-0.5">يُستخدم فقط عند التفعيل</p>
-                      </div>
-                      <button
-                        onClick={() => {
-                          const cur = siteSettings['twelvedata_enabled']?.value === 'true'
-                          saveSetting('twelvedata_enabled', cur ? 'false' : 'true')
-                        }}
-                        className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border transition ${
-                          siteSettings['twelvedata_enabled']?.value === 'true'
-                            ? 'bg-green-900/40 border-green-700 text-green-400'
-                            : 'bg-gray-800 border-gray-700 text-gray-400'
-                        }`}>
-                        {siteSettings['twelvedata_enabled']?.value === 'true'
-                          ? <><ToggleRight size={14}/> مفعّل</>
-                          : <><ToggleLeft size={14}/> معطّل</>}
-                      </button>
-                    </div>
-                    <div className="flex gap-2">
-                      <input type="text" value={settingEdits['twelvedata_api_key'] ?? ''}
-                        onChange={e => setSettingEdits(s => ({...s, twelvedata_api_key: e.target.value}))}
-                        placeholder="API Key..."
-                        className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        dir="ltr" />
-                      <button disabled={settingSaving === 'twelvedata_api_key'} onClick={() => saveSetting('twelvedata_api_key')}
-                        className="flex items-center gap-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm px-3 py-2 rounded-lg transition">
-                        {settingSaving === 'twelvedata_api_key' ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle size={13}/>} حفظ
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                  <div className="space-y-4">
+                    {/* Logo Upload */}
+                    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                      <label className="block text-sm text-gray-300 font-medium mb-1">شعار الموقع</label>
+                      <p className="text-xs text-gray-500 mb-3">PNG / JPG / SVG / WebP — يُعرض في شريط التنقل</p>
 
-                {/* حدود الاستخدام */}
-                <div className="space-y-3">
-                  <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">حدود الاستخدام</h2>
-                  {[
-                    { key:'trial_chat_limit',       label:'محادثات التجريبي',   badge:'تجريبي', color:'gray' },
-                    { key:'trial_analysis_limit',   label:'تحليلات التجريبي',   badge:'تجريبي', color:'gray' },
-                    { key:'weekly_chat_limit',      label:'محادثات الأسبوعي',   badge:'أسبوعي', color:'blue' },
-                    { key:'weekly_analysis_limit',  label:'تحليلات الأسبوعي',  badge:'أسبوعي', color:'blue' },
-                    { key:'monthly_chat_limit',     label:'محادثات الشهري',     badge:'شهري',   color:'purple' },
-                    { key:'monthly_analysis_limit', label:'تحليلات الشهري',    badge:'شهري',   color:'purple' },
-                  ].map(f => (
-                    <div key={f.key} className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex items-center gap-2">
-                      <div className="flex-1">
-                        <p className="text-xs text-gray-400 mb-1">{f.label}</p>
-                        <input type="number" min="0" value={settingEdits[f.key] ?? (siteSettings[f.key]?.value || '')}
-                          onChange={e => setSettingEdits(s => ({...s, [f.key]: e.target.value}))}
-                          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      {/* Current logo preview */}
+                      {settingEdits['site_logo_url'] && (
+                        <div className="mb-3 flex items-center gap-3 bg-gray-800 rounded-lg px-3 py-2">
+                          <img
+                            src={settingEdits['site_logo_url'].startsWith('http') ? settingEdits['site_logo_url'] : `${API}${settingEdits['site_logo_url']}`}
+                            alt="logo"
+                            className="h-8 object-contain rounded"
+                            onError={e => { e.target.style.display = 'none' }}
+                          />
+                          <span className="text-xs text-gray-400 font-mono truncate flex-1">{settingEdits['site_logo_url']}</span>
+                        </div>
+                      )}
+
+                      {/* Upload button */}
+                      <label className={`flex items-center justify-center gap-2 w-full cursor-pointer border-2 border-dashed rounded-lg px-4 py-3 text-sm transition
+                        ${logoUploading ? 'border-blue-700 text-blue-400 cursor-wait' : 'border-gray-700 text-gray-400 hover:border-blue-600 hover:text-blue-400'}`}>
+                        {logoUploading
+                          ? <><RefreshCw size={14} className="animate-spin"/> جاري الرفع...</>
+                          : <><Upload size={14}/> اختر صورة للرفع</>}
+                        <input type="file" accept="image/*" className="hidden" onChange={uploadLogo} disabled={logoUploading} />
+                      </label>
+
+                      {logoMsg && (
+                        <p className={`mt-2 text-xs flex items-center gap-1 ${logoMsg.type==='ok' ? 'text-green-400' : 'text-red-400'}`}>
+                          {logoMsg.type==='ok' ? <CheckCircle size={12}/> : <AlertTriangle size={12}/>} {logoMsg.text}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* TwelveData */}
+                    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm text-gray-300 font-medium">TwelveData (احتياطي)</p>
+                          <p className="text-xs text-gray-500 mt-0.5">يُستخدم فقط عند التفعيل</p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            const cur = siteSettings['twelvedata_enabled']?.value === 'true'
+                            saveSetting('twelvedata_enabled', cur ? 'false' : 'true')
+                          }}
+                          className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border transition ${
+                            siteSettings['twelvedata_enabled']?.value === 'true'
+                              ? 'bg-green-900/40 border-green-700 text-green-400'
+                              : 'bg-gray-800 border-gray-700 text-gray-400'
+                          }`}>
+                          {siteSettings['twelvedata_enabled']?.value === 'true'
+                            ? <><ToggleRight size={14}/> مفعّل</>
+                            : <><ToggleLeft size={14}/> معطّل</>}
+                        </button>
+                      </div>
+                      <div className="flex gap-2">
+                        <input type="text" value={settingEdits['twelvedata_api_key'] ?? ''}
+                          onChange={e => setSettingEdits(s => ({...s, twelvedata_api_key: e.target.value}))}
+                          placeholder="API Key..."
+                          className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
                           dir="ltr" />
+                        <button disabled={settingSaving === 'twelvedata_api_key'} onClick={() => saveSetting('twelvedata_api_key')}
+                          className="flex items-center gap-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm px-3 py-2 rounded-lg transition">
+                          {settingSaving === 'twelvedata_api_key' ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle size={13}/>} حفظ
+                        </button>
                       </div>
-                      <button disabled={settingSaving === f.key} onClick={() => saveSetting(f.key)}
-                        className="mt-4 flex items-center bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-2.5 py-2 rounded-lg transition">
-                        {settingSaving === f.key ? <RefreshCw size={12} className="animate-spin"/> : <CheckCircle size={12}/>}
-                      </button>
                     </div>
-                  ))}
-
-                  {/* Affiliate Settings */}
-                  <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider pt-2">إعدادات الإحالات</h2>
-                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex items-center gap-2">
-                    <div className="flex-1">
-                      <p className="text-xs text-gray-400 mb-1">الحد الأدنى للسحب (USDT)</p>
-                      <input type="number" min="0" step="0.5"
-                        value={settingEdits['affiliate_min_payout_usd'] ?? (siteSettings['affiliate_min_payout_usd']?.value || '10')}
-                        onChange={e => setSettingEdits(s => ({...s, affiliate_min_payout_usd: e.target.value}))}
-                        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        dir="ltr" />
-                    </div>
-                    <button disabled={settingSaving === 'affiliate_min_payout_usd'}
-                      onClick={() => saveSetting('affiliate_min_payout_usd')}
-                      className="mt-4 flex items-center bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-2.5 py-2 rounded-lg transition">
-                      {settingSaving === 'affiliate_min_payout_usd' ? <RefreshCw size={12} className="animate-spin"/> : <CheckCircle size={12}/>}
-                    </button>
                   </div>
                 </div>
+              )}
 
-                {/* Pricing Plans */}
-                <div className="space-y-3">
+              {/* ── plans ── */}
+              {settingsSubTab === 'plans' && (
+                <div className="max-w-2xl space-y-3">
                   <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-2">
                     <DollarSign size={13}/> الباقات والأسعار
                   </h2>
@@ -1211,9 +1193,112 @@ export default function Admin() {
                     </div>
                   ))}
                 </div>
+              )}
 
-                {/* Admin Account */}
-                <div>
+              {/* ── affiliate ── */}
+              {settingsSubTab === 'affiliate' && (
+                <div className="max-w-xl space-y-4">
+                  <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">إعدادات الإحالات</h2>
+
+                  {/* min payout */}
+                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                    <label className="block text-sm text-gray-300 font-medium mb-1">الحد الأدنى للسحب (USDT)</label>
+                    <div className="flex gap-2">
+                      <input type="number" min="0" step="0.5"
+                        value={settingEdits['affiliate_min_payout_usd'] ?? (siteSettings['affiliate_min_payout_usd']?.value || '10')}
+                        onChange={e => setSettingEdits(s => ({...s, affiliate_min_payout_usd: e.target.value}))}
+                        className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" dir="ltr" />
+                      <button disabled={settingSaving==='affiliate_min_payout_usd'} onClick={() => saveSetting('affiliate_min_payout_usd')}
+                        className="flex items-center gap-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition">
+                        {settingSaving==='affiliate_min_payout_usd'?<RefreshCw size={13} className="animate-spin"/>:<CheckCircle size={13}/>} حفظ
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Commission Tier 1 Rate */}
+                  <div className="bg-gray-900 border border-blue-900/40 rounded-xl p-4">
+                    <label className="block text-sm text-blue-300 font-medium mb-1">عمولة المرحلة الأولى % (Bronze)</label>
+                    <p className="text-xs text-gray-500 mb-2">الافتراضي: 5%</p>
+                    <div className="flex gap-2">
+                      <input type="number" min="1" max="50" step="0.5"
+                        value={settingEdits['affiliate_tier1_rate'] ?? (siteSettings['affiliate_tier1_rate']?.value || '5')}
+                        onChange={e => setSettingEdits(s => ({...s, affiliate_tier1_rate: e.target.value}))}
+                        className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" dir="ltr" />
+                      <button disabled={settingSaving==='affiliate_tier1_rate'} onClick={() => saveSetting('affiliate_tier1_rate')}
+                        className="flex items-center gap-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition">
+                        {settingSaving==='affiliate_tier1_rate'?<RefreshCw size={13} className="animate-spin"/>:<CheckCircle size={13}/>} حفظ
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Commission Tier 2 Rate */}
+                  <div className="bg-gray-900 border border-yellow-900/40 rounded-xl p-4">
+                    <label className="block text-sm text-yellow-300 font-medium mb-1">عمولة المرحلة الثانية % (Gold)</label>
+                    <p className="text-xs text-gray-500 mb-2">الافتراضي: 15%</p>
+                    <div className="flex gap-2">
+                      <input type="number" min="1" max="50" step="0.5"
+                        value={settingEdits['affiliate_tier2_rate'] ?? (siteSettings['affiliate_tier2_rate']?.value || '15')}
+                        onChange={e => setSettingEdits(s => ({...s, affiliate_tier2_rate: e.target.value}))}
+                        className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" dir="ltr" />
+                      <button disabled={settingSaving==='affiliate_tier2_rate'} onClick={() => saveSetting('affiliate_tier2_rate')}
+                        className="flex items-center gap-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition">
+                        {settingSaving==='affiliate_tier2_rate'?<RefreshCw size={13} className="animate-spin"/>:<CheckCircle size={13}/>} حفظ
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Tier 2 Threshold */}
+                  <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                    <label className="block text-sm text-gray-300 font-medium mb-1">عدد الإحالات للترقية للذهبي</label>
+                    <p className="text-xs text-gray-500 mb-2">الافتراضي: 25 إحالة</p>
+                    <div className="flex gap-2">
+                      <input type="number" min="1" step="1"
+                        value={settingEdits['affiliate_tier2_threshold'] ?? (siteSettings['affiliate_tier2_threshold']?.value || '25')}
+                        onChange={e => setSettingEdits(s => ({...s, affiliate_tier2_threshold: e.target.value}))}
+                        className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white" dir="ltr" />
+                      <button disabled={settingSaving==='affiliate_tier2_threshold'} onClick={() => saveSetting('affiliate_tier2_threshold')}
+                        className="flex items-center gap-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition">
+                        {settingSaving==='affiliate_tier2_threshold'?<RefreshCw size={13} className="animate-spin"/>:<CheckCircle size={13}/>} حفظ
+                      </button>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-gray-600">* تأخذ التغييرات مفعولها على الاشتراكات الجديدة فقط</p>
+                </div>
+              )}
+
+              {/* ── limits ── */}
+              {settingsSubTab === 'limits' && (
+                <div className="max-w-md space-y-3">
+                  <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">حدود الاستخدام</h2>
+                  {[
+                    { key:'trial_chat_limit',       label:'محادثات التجريبي',   badge:'تجريبي', color:'gray' },
+                    { key:'trial_analysis_limit',   label:'تحليلات التجريبي',   badge:'تجريبي', color:'gray' },
+                    { key:'weekly_chat_limit',      label:'محادثات الأسبوعي',   badge:'أسبوعي', color:'blue' },
+                    { key:'weekly_analysis_limit',  label:'تحليلات الأسبوعي',  badge:'أسبوعي', color:'blue' },
+                    { key:'monthly_chat_limit',     label:'محادثات الشهري',     badge:'شهري',   color:'purple' },
+                    { key:'monthly_analysis_limit', label:'تحليلات الشهري',    badge:'شهري',   color:'purple' },
+                  ].map(f => (
+                    <div key={f.key} className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex items-center gap-2">
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-400 mb-1">{f.label}</p>
+                        <input type="number" min="0" value={settingEdits[f.key] ?? (siteSettings[f.key]?.value || '')}
+                          onChange={e => setSettingEdits(s => ({...s, [f.key]: e.target.value}))}
+                          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          dir="ltr" />
+                      </div>
+                      <button disabled={settingSaving === f.key} onClick={() => saveSetting(f.key)}
+                        className="mt-4 flex items-center bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-2.5 py-2 rounded-lg transition">
+                        {settingSaving === f.key ? <RefreshCw size={12} className="animate-spin"/> : <CheckCircle size={12}/>}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* ── account ── */}
+              {settingsSubTab === 'account' && (
+                <div className="max-w-sm">
                   <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">حساب الإدارة</h2>
                   <form onSubmit={saveAdminProfile} className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3">
                     <p className="text-xs text-gray-500">البريد الحالي: <span className="text-gray-300">{user?.email}</span></p>
@@ -1253,7 +1338,7 @@ export default function Admin() {
                     </button>
                   </form>
                 </div>
-              </div>
+              )}
             </div>
           )}
 
