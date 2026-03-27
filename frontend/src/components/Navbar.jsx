@@ -99,11 +99,18 @@ export default function Navbar() {
           </button>
         </div>
 
-        {/* Mobile: badge + hamburger */}
-        <div className="flex md:hidden items-center gap-2">
+        {/* Mobile: lang + badge + hamburger */}
+        <div className="flex md:hidden items-center gap-1.5 shrink-0">
           {user && badge && (
             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${badge.cls}`}>{badge.label}</span>
           )}
+          <button
+            onClick={toggleLang}
+            title={isAr ? 'Switch to English' : 'التبديل للعربية'}
+            className="flex items-center gap-1 text-xs text-gray-400 hover:text-blue-400 px-2 py-1.5 rounded-lg hover:bg-gray-700"
+          >
+            <Globe size={14} /> {isAr ? 'EN' : 'AR'}
+          </button>
           <button onClick={() => setOpen(!open)} className="text-gray-300 hover:text-white p-1">
             {open ? <X size={22} /> : <Menu size={22} />}
           </button>

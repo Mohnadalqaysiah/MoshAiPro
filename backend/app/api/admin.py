@@ -604,7 +604,13 @@ def update_setting(
 ):
     row = db.query(SiteSettings).filter(SiteSettings.key == key).first()
     if not row:
-        raise HTTPException(404, f"الإعداد '{key}' غير موجود")
+        # Auto-create for new keys (e.g. pricing plan overrides)
+        row = SiteSettings(key=key, value=data.value.strip(), description=f"Auto-created: {key}")
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+        logger.info(f"⚙️ Setting created: {key} = {data.value}")
+        return {"success": True, "key": key, "value": row.value}
     row.value = data.value.strip()
     db.commit()
     logger.info(f"⚙️ Setting updated: {key} = {data.value}")

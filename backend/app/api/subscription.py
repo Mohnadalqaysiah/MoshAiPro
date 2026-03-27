@@ -2,6 +2,7 @@
 Mosh AI Pro v5 - Subscription API
 Plans, Binance USDT Payment, Status
 """
+import copy, json
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -56,11 +57,46 @@ class PaymentIn(BaseModel):
 
 @router.get("/plans")
 def get_plans(db: Session = Depends(get_db)):
-    # Read wallet from DB settings; fall back to config
-    row = db.query(SiteSettings).filter(SiteSettings.key == "usdt_wallet").first()
-    wallet = row.value if (row and row.value) else USDT_WALLET
+    # Read all settings at once
+    db_settings = {r.key: r.value for r in db.query(SiteSettings).all()}
+
+    wallet = db_settings.get("usdt_wallet") or USDT_WALLET
+
+    # Build plans with DB overrides
+    plans = copy.deepcopy(PLANS)
+    for plan_key in ("weekly", "monthly"):
+        # Price override
+        price_val = db_settings.get(f"plan_{plan_key}_price")
+        if price_val:
+            try:
+                plans[plan_key]["price_usd"] = float(price_val)
+            except Exception:
+                pass
+        # Name override (Arabic)
+        name_val = db_settings.get(f"plan_{plan_key}_name")
+        if name_val:
+            plans[plan_key]["name"] = name_val
+        # English name
+        name_en_val = db_settings.get(f"plan_{plan_key}_name_en")
+        if name_en_val:
+            plans[plan_key]["name_en"] = name_en_val
+        # Features override (JSON array)
+        feat_val = db_settings.get(f"plan_{plan_key}_features")
+        if feat_val:
+            try:
+                plans[plan_key]["features"] = json.loads(feat_val)
+            except Exception:
+                pass
+        # English features
+        feat_en_val = db_settings.get(f"plan_{plan_key}_features_en")
+        if feat_en_val:
+            try:
+                plans[plan_key]["features_en"] = json.loads(feat_en_val)
+            except Exception:
+                pass
+
     return {
-        "plans": PLANS,
+        "plans": plans,
         "wallet": wallet,
         "network": USDT_NETWORK,
         "note": "أرسل المبلغ بالضبط بالـ USDT ثم أدخل رقم المعاملة (TxID) للتحقق"

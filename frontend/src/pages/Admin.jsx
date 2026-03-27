@@ -1141,6 +1141,77 @@ export default function Admin() {
                   </div>
                 </div>
 
+                {/* Pricing Plans */}
+                <div className="space-y-3">
+                  <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-2">
+                    <DollarSign size={13}/> الباقات والأسعار
+                  </h2>
+                  <p className="text-xs text-gray-600">اتركها فارغة لاستخدام القيم الافتراضية</p>
+                  {[
+                    { key: 'weekly',  label: 'الأسبوعية', color: 'blue'   },
+                    { key: 'monthly', label: 'الشهرية',   color: 'purple' },
+                  ].map(({ key, label, color }) => (
+                    <div key={key} className={`bg-gray-900 border border-${color}-900/40 rounded-xl p-4 space-y-3`}>
+                      <h3 className={`text-xs font-bold text-${color}-400 uppercase tracking-wider`}>{label}</h3>
+
+                      {/* Price */}
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1">
+                          <label className="text-xs text-gray-500 mb-1 block">السعر (USDT $)</label>
+                          <input type="number" min="0" step="0.01"
+                            value={settingEdits[`plan_${key}_price`] ?? (siteSettings[`plan_${key}_price`]?.value || '')}
+                            onChange={e => setSettingEdits(s => ({...s, [`plan_${key}_price`]: e.target.value}))}
+                            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white font-mono"
+                            placeholder="0" dir="ltr" />
+                        </div>
+                        <button disabled={settingSaving===`plan_${key}_price`} onClick={() => saveSetting(`plan_${key}_price`)}
+                          className="mt-5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-2.5 py-2 rounded-lg transition">
+                          {settingSaving===`plan_${key}_price`?<RefreshCw size={12} className="animate-spin"/>:<CheckCircle size={12}/>}
+                        </button>
+                      </div>
+
+                      {/* Names */}
+                      <div className="grid grid-cols-2 gap-2">
+                        {[
+                          { fkey:`plan_${key}_name`,    label:'الاسم (ع)', dir:'rtl', ph:'اسم الباقة' },
+                          { fkey:`plan_${key}_name_en`, label:'Name (EN)', dir:'ltr', ph:'Plan Name'  },
+                        ].map(f => (
+                          <div key={f.fkey} className="flex items-center gap-1">
+                            <div className="flex-1">
+                              <label className="text-xs text-gray-500 mb-1 block">{f.label}</label>
+                              <input type="text"
+                                value={settingEdits[f.fkey] ?? (siteSettings[f.fkey]?.value || '')}
+                                onChange={e => setSettingEdits(s => ({...s, [f.fkey]: e.target.value}))}
+                                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-white"
+                                placeholder={f.ph} dir={f.dir} />
+                            </div>
+                            <button disabled={settingSaving===f.fkey} onClick={() => saveSetting(f.fkey)}
+                              className="mt-5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-2 py-1.5 rounded-lg transition">
+                              {settingSaving===f.fkey?<RefreshCw size={11} className="animate-spin"/>:<CheckCircle size={11}/>}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Features JSON */}
+                      <div className="flex items-start gap-1">
+                        <div className="flex-1">
+                          <label className="text-xs text-gray-500 mb-1 block">المميزات (JSON عربي)</label>
+                          <textarea rows={2}
+                            value={settingEdits[`plan_${key}_features`] ?? (siteSettings[`plan_${key}_features`]?.value || '')}
+                            onChange={e => setSettingEdits(s => ({...s, [`plan_${key}_features`]: e.target.value}))}
+                            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-white font-mono resize-none"
+                            placeholder='["تحليل ICT/SMC", "تنبيهات Telegram"]' dir="ltr" />
+                        </div>
+                        <button disabled={settingSaving===`plan_${key}_features`} onClick={() => saveSetting(`plan_${key}_features`)}
+                          className="mt-5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-2 py-1.5 rounded-lg transition">
+                          {settingSaving===`plan_${key}_features`?<RefreshCw size={11} className="animate-spin"/>:<CheckCircle size={11}/>}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
                 {/* Admin Account */}
                 <div>
                   <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">حساب الإدارة</h2>
