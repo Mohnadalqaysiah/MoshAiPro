@@ -4,7 +4,7 @@
 
   <!-- الصفحة الرئيسية -->
   <url>
-    <loc>https://qafeel.com/</loc>
+    <loc>https://qaffel.com/</loc>
     <lastmod>2026-03-28</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
@@ -12,7 +12,7 @@
 
   <!-- الأسعار -->
   <url>
-    <loc>https://qafeel.com/pricing</loc>
+    <loc>https://qaffel.com/pricing</loc>
     <lastmod>2026-03-28</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
@@ -20,7 +20,7 @@
 
   <!-- برنامج الإحالات -->
   <url>
-    <loc>https://qafeel.com/referral</loc>
+    <loc>https://qaffel.com/referral</loc>
     <lastmod>2026-03-28</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
@@ -28,7 +28,7 @@
 
   <!-- تسجيل الدخول -->
   <url>
-    <loc>https://qafeel.com/register</loc>
+    <loc>https://qaffel.com/register</loc>
     <lastmod>2026-03-28</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
@@ -36,7 +36,7 @@
 
   <!-- إنشاء حساب -->
   <url>
-    <loc>https://qafeel.com/login</loc>
+    <loc>https://qaffel.com/login</loc>
     <lastmod>2026-03-28</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
@@ -44,7 +44,7 @@
 
   <!-- من نحن -->
   <url>
-    <loc>https://qafeel.com/about</loc>
+    <loc>https://qaffel.com/about</loc>
     <lastmod>2026-03-28</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
@@ -52,7 +52,7 @@
 
   <!-- رؤيتنا -->
   <url>
-    <loc>https://qafeel.com/vision</loc>
+    <loc>https://qaffel.com/vision</loc>
     <lastmod>2026-03-28</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
@@ -60,7 +60,7 @@
 
   <!-- تواصل معنا -->
   <url>
-    <loc>https://qafeel.com/contact</loc>
+    <loc>https://qaffel.com/contact</loc>
     <lastmod>2026-03-28</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
@@ -68,7 +68,7 @@
 
   <!-- سياسة الخصوصية -->
   <url>
-    <loc>https://qafeel.com/privacy</loc>
+    <loc>https://qaffel.com/privacy</loc>
     <lastmod>2026-03-28</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.4</priority>
@@ -76,7 +76,7 @@
 
   <!-- الشروط والأحكام -->
   <url>
-    <loc>https://qafeel.com/terms</loc>
+    <loc>https://qaffel.com/terms</loc>
     <lastmod>2026-03-28</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.4</priority>

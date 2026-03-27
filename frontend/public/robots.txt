@@ -11,4 +11,4 @@ Disallow: /profile
 Disallow: /affiliate
 Disallow: /admin
 
-Sitemap: https://qafeel.com/sitemap.xml
+Sitemap: https://qaffel.com/sitemap.xml
