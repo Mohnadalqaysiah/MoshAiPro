@@ -1,21 +1,9 @@
 import { Link } from 'react-router-dom'
+import PublicLayout from '../components/PublicLayout'
 
 export default function Terms() {
   return (
-    <div dir="rtl" className="min-h-screen bg-gray-950 text-gray-100">
-      {/* Navbar */}
-      <nav className="border-b border-gray-800 bg-gray-950/90 backdrop-blur sticky top-0 z-50">
-        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
-          <Link to="/" className="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-            Qaffel AI
-          </Link>
-          <div className="flex gap-4 text-sm">
-            <Link to="/login" className="text-gray-400 hover:text-white transition">تسجيل الدخول</Link>
-            <Link to="/register" className="bg-blue-600 hover:bg-blue-700 px-4 py-1.5 rounded-lg transition">ابدأ مجاناً</Link>
-          </div>
-        </div>
-      </nav>
-
+    <PublicLayout>
       {/* Content */}
       <main className="max-w-3xl mx-auto px-6 py-16">
         <h1 className="text-3xl font-bold mb-2">الشروط والأحكام</h1>
@@ -74,11 +62,6 @@ export default function Terms() {
           </section>
         </div>
       </main>
-
-      {/* Footer */}
-      <footer className="border-t border-gray-800 py-8 text-center text-gray-500 text-sm">
-        <p>© 2026 Qaffel AI · <Link to="/privacy" className="hover:text-gray-300">سياسة الخصوصية</Link> · <Link to="/contact" className="hover:text-gray-300">تواصل معنا</Link></p>
-      </footer>
-    </div>
+    </PublicLayout>
   )
 }

@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
+import { useLang } from '../contexts/LangContext'
 import { Check, Zap, Star, Copy, CheckCircle, AlertCircle } from 'lucide-react'
+import PublicLayout from '../components/PublicLayout'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -28,6 +30,8 @@ const DEFAULT_PLANS = [
 
 export default function Pricing() {
   const { user } = useAuth()
+  const { lang } = useLang()
+  const isAr = lang === 'ar'
   const [selected, setSelected] = useState('monthly')
   const [txId, setTxId]         = useState('')
   const network = 'TRC20'
@@ -70,7 +74,8 @@ export default function Pricing() {
   const plan = PLANS.find(p => p.key === selected)
 
   return (
-    <div className="min-h-screen bg-gray-950 px-4 py-12" dir="rtl">
+    <PublicLayout>
+    <div className="px-4 py-12" dir={isAr ? 'rtl' : 'ltr'}>
       <div className="max-w-3xl mx-auto">
         {/* Header */}
         <div className="text-center mb-10">
@@ -215,5 +220,6 @@ export default function Pricing() {
         )}
       </div>
     </div>
+    </PublicLayout>
   )
 }

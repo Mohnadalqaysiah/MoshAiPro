@@ -264,6 +264,53 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* ── Markets ─────────────────────────────────────────────────────── */}
+      <section className="py-20 px-4 bg-white/[0.01]">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-12 reveal">
+            <p className="text-xs text-blue-400 font-semibold uppercase tracking-widest mb-3">
+              {isAr ? 'الأسواق المدعومة' : 'Supported Markets'}
+            </p>
+            <h2 className="text-3xl font-bold mb-3 section-title">
+              {isAr ? 'تداول أقوى الأسواق العالمية' : "Trade the World's Top Markets"}
+            </h2>
+            <p className="text-gray-400 text-sm max-w-lg mx-auto">
+              {isAr
+                ? 'تحليل ICT/SMC بالذكاء الاصطناعي لأبرز الأسواق المالية العالمية في ثوانٍ'
+                : 'AI-powered ICT/SMC analysis for the world\'s top financial markets in seconds'}
+            </p>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[
+              { symbol: 'XAUUSD', name: isAr ? 'الذهب' : 'Gold', icon: '🥇', color: 'from-yellow-900/30 to-yellow-800/10', border: 'border-yellow-700/30', tag: isAr ? 'الأكثر تداولاً' : 'Most Traded' },
+              { symbol: 'BTCUSD', name: isAr ? 'البيتكوين' : 'Bitcoin', icon: '₿', color: 'from-orange-900/30 to-orange-800/10', border: 'border-orange-700/30', tag: '' },
+              { symbol: 'EURUSD', name: isAr ? 'يورو/دولار' : 'EUR/USD', icon: '€', color: 'from-blue-900/30 to-blue-800/10', border: 'border-blue-700/30', tag: '' },
+              { symbol: 'GBPUSD', name: isAr ? 'جنيه/دولار' : 'GBP/USD', icon: '£', color: 'from-purple-900/30 to-purple-800/10', border: 'border-purple-700/30', tag: '' },
+              { symbol: 'USDJPY', name: isAr ? 'دولار/ين' : 'USD/JPY', icon: '¥', color: 'from-red-900/30 to-red-800/10', border: 'border-red-700/30', tag: '' },
+              { symbol: 'ETHUSD', name: isAr ? 'إثيريوم' : 'Ethereum', icon: 'Ξ', color: 'from-indigo-900/30 to-indigo-800/10', border: 'border-indigo-700/30', tag: '' },
+              { symbol: 'USOIL', name: isAr ? 'النفط الخام' : 'Crude Oil', icon: '🛢', color: 'from-gray-800/60 to-gray-700/20', border: 'border-gray-600/30', tag: '' },
+              { symbol: 'NAS100', name: isAr ? 'ناسداك' : 'NASDAQ', icon: '📈', color: 'from-teal-900/30 to-teal-800/10', border: 'border-teal-700/30', tag: isAr ? 'قريباً' : 'Soon' },
+            ].map((m, i) => (
+              <div key={i} className={`reveal card-hover relative bg-gradient-to-br ${m.color} border ${m.border} rounded-2xl p-5 text-center`}
+                   style={{ transitionDelay: `${i * 60}ms` }}>
+                {m.tag && (
+                  <span className="absolute -top-2 left-1/2 -translate-x-1/2 text-xs bg-yellow-600/80 text-white px-2 py-0.5 rounded-full whitespace-nowrap">
+                    {m.tag}
+                  </span>
+                )}
+                <div className="text-3xl mb-2">{m.icon}</div>
+                <div className="font-bold text-white text-sm">{m.symbol}</div>
+                <div className="text-gray-400 text-xs mt-0.5">{m.name}</div>
+              </div>
+            ))}
+          </div>
+          {/* Hidden SEO keywords */}
+          <p className="text-gray-700 text-xs text-center mt-8 select-none" aria-hidden="true">
+            تحليل فوركس بالذكاء الاصطناعي · إشارات تداول الذهب · توصيات البيتكوين · بوت تداول تلجرام · منصة تداول ذكية عربية · تحليل XAUUSD · إشارات يومية
+          </p>
+        </div>
+      </section>
+
       {/* ── Features ───────────────────────────────────────────────────── */}
       <section id="features" className="py-24 px-4">
         <div className="max-w-6xl mx-auto">
@@ -434,11 +481,21 @@ export default function Landing() {
                 <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-bold text-sm">Q</div>
                 <span className="font-bold text-sm">Qaffel AI</span>
               </Link>
-              <p className="text-gray-600 text-xs leading-relaxed">
+              <p className="text-gray-600 text-xs leading-relaxed mb-4">
                 {isAr
                   ? 'منصة تداول ذكية مدعومة بالذكاء الاصطناعي وتحليل ICT/SMC المؤسسي.'
                   : 'Smart trading platform powered by AI and institutional ICT/SMC analysis.'}
               </p>
+              <div className="flex items-center gap-3">
+                <a href="https://www.instagram.com/qaffel_ai/" target="_blank" rel="noreferrer"
+                  className="text-gray-600 hover:text-pink-400 transition-colors" aria-label="Instagram">
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>
+                </a>
+                <a href="https://t.me/Qaffelbot" target="_blank" rel="noreferrer"
+                  className="text-gray-600 hover:text-blue-400 transition-colors" aria-label="Telegram">
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248l-1.97 9.289c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.932z"/></svg>
+                </a>
+              </div>
             </div>
             {[
               { title: t.footer.platform, links: [
