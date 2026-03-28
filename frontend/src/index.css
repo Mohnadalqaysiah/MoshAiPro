@@ -54,13 +54,13 @@ html {
 }
 
 @keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 20px rgba(59,130,246,0.3); }
-  50%       { box-shadow: 0 0 40px rgba(59,130,246,0.6); }
+  0%, 100% { opacity: 0.5; }
+  50%       { opacity: 1; }
 }
 
 @keyframes shimmer {
-  0%   { background-position: -200% center; }
-  100% { background-position: 200% center; }
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(100%); }
 }
 
 @keyframes spin-slow {
@@ -74,8 +74,8 @@ html {
 }
 
 @keyframes border-glow {
-  0%, 100% { border-color: rgba(59,130,246,0.3); }
-  50%       { border-color: rgba(59,130,246,0.7); }
+  0%, 100% { opacity: 0.4; }
+  50%       { opacity: 1; }
 }
 
 /* ── Animation utility classes ──────────────────────────────────────── */
@@ -83,13 +83,21 @@ html {
 .animate-fade-in   { animation: fade-in 0.5s ease both; }
 .animate-slide-right { animation: slide-right 0.6s ease both; }
 .animate-scale-in  { animation: scale-in 0.5s ease both; }
-.animate-float     { animation: float 4s ease-in-out infinite; }
-.animate-pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
-.animate-spin-slow { animation: spin-slow 20s linear infinite; }
+.animate-float     { animation: float 4s ease-in-out infinite; will-change: transform; }
+.animate-pulse-glow { animation: pulse-glow 2s ease-in-out infinite; will-change: opacity; }
+.animate-spin-slow { animation: spin-slow 20s linear infinite; will-change: transform; }
+/* Shimmer uses a composited translateX on a pseudo-element — no paint triggered */
 .animate-shimmer   {
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
-  background-size: 200% 100%;
+  position: relative;
+  overflow: hidden;
+}
+.animate-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.08) 50%, transparent 100%);
   animation: shimmer 2s infinite;
+  will-change: transform;
 }
 
 /* Stagger delays */
@@ -107,38 +115,46 @@ html {
   opacity: 0;
   transform: translateY(24px);
   transition: opacity 0.7s ease, transform 0.7s ease;
+  will-change: transform, opacity;
 }
 .reveal.visible {
   opacity: 1;
   transform: translateY(0);
+  will-change: auto;
 }
 .reveal-left {
   opacity: 0;
   transform: translateX(-24px);
   transition: opacity 0.7s ease, transform 0.7s ease;
+  will-change: transform, opacity;
 }
 .reveal-left.visible {
   opacity: 1;
   transform: translateX(0);
+  will-change: auto;
 }
 /* Shorthand aliases for ReferralProgram page */
 .rv {
   opacity: 0;
   transform: translateY(24px);
   transition: opacity 0.7s ease, transform 0.7s ease;
+  will-change: transform, opacity;
 }
 .rv.visible {
   opacity: 1;
   transform: translateY(0);
+  will-change: auto;
 }
 .rv-left {
   opacity: 0;
   transform: translateX(-24px);
   transition: opacity 0.7s ease, transform 0.7s ease;
+  will-change: transform, opacity;
 }
 .rv-left.visible {
   opacity: 1;
   transform: translateX(0);
+  will-change: auto;
 }
 
 /* ── Glass morphism ─────────────────────────────────────────────────── */
@@ -223,4 +239,6 @@ html {
   border-radius: 50%;
   filter: blur(80px);
   pointer-events: none;
+  contain: strict;
+  will-change: transform;
 }

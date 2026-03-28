@@ -1,30 +1,40 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate, Suspense, lazy } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { LangProvider, useLang } from './contexts/LangContext'
-import Dashboard  from './pages/Dashboard'
-import Signals    from './pages/Signals'
-import Markets    from './pages/Markets'
-import Analytics  from './pages/Analytics'
-import Login      from './pages/Login'
-import Register   from './pages/Register'
-import Pricing    from './pages/Pricing'
-import Admin      from './pages/Admin'
-import Landing         from './pages/Landing'
-import Terms           from './pages/Terms'
-import Privacy         from './pages/Privacy'
-import Contact         from './pages/Contact'
-import About           from './pages/About'
-import Vision          from './pages/Vision'
-import Profile         from './pages/Profile'
-import Analyses        from './pages/Analyses'
-import ForgotPassword  from './pages/ForgotPassword'
-import AffiliatePage   from './pages/AffiliatePage'
-import ReferralProgram from './pages/ReferralProgram'
-import Navbar     from './components/Navbar'
-import ChatBot    from './components/ChatBot'
-import TrialBanner from './components/TrialBanner'
-import TelegramLinkBanner from './components/TelegramLinkBanner'
 import './App.css'
+
+// Eagerly load only the most critical shared components
+import Navbar             from './components/Navbar'
+import TrialBanner        from './components/TrialBanner'
+import TelegramLinkBanner from './components/TelegramLinkBanner'
+
+// Lazy-load all pages — each becomes its own JS chunk
+const Landing        = lazy(() => import('./pages/Landing'))
+const Login          = lazy(() => import('./pages/Login'))
+const Register       = lazy(() => import('./pages/Register'))
+const Pricing        = lazy(() => import('./pages/Pricing'))
+const Terms          = lazy(() => import('./pages/Terms'))
+const Privacy        = lazy(() => import('./pages/Privacy'))
+const Contact        = lazy(() => import('./pages/Contact'))
+const About          = lazy(() => import('./pages/About'))
+const Vision         = lazy(() => import('./pages/Vision'))
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
+const ReferralProgram = lazy(() => import('./pages/ReferralProgram'))
+const Admin          = lazy(() => import('./pages/Admin'))
+const Dashboard      = lazy(() => import('./pages/Dashboard'))
+const Signals        = lazy(() => import('./pages/Signals'))
+const Markets        = lazy(() => import('./pages/Markets'))
+const Analytics      = lazy(() => import('./pages/Analytics'))
+const Analyses       = lazy(() => import('./pages/Analyses'))
+const Profile        = lazy(() => import('./pages/Profile'))
+const AffiliatePage  = lazy(() => import('./pages/AffiliatePage'))
+const ChatBot        = lazy(() => import('./components/ChatBot'))
+
+const PageLoader = () => (
+  <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+    <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+  </div>
+)
 
 // صفحات تحتاج تسجيل دخول
 function ProtectedRoute({ children }) {
@@ -47,46 +57,48 @@ function AppRoutes() {
   const { lang } = useLang()
 
   return (
-    <Routes>
-      {/* Landing & Public Pages — accessible to all */}
-      <Route path="/"                  element={<Landing />} />
-      <Route path="/terms"             element={<Terms />} />
-      <Route path="/privacy"           element={<Privacy />} />
-      <Route path="/contact"           element={<Contact />} />
-      <Route path="/about"             element={<About />} />
-      <Route path="/vision"            element={<Vision />} />
-      <Route path="/forgot-password"   element={<ForgotPassword />} />
-      <Route path="/login"             element={user ? <Navigate to="/dashboard" /> : <Login />} />
-      <Route path="/register"          element={user ? <Navigate to="/dashboard" /> : <Register />} />
-      <Route path="/pricing"           element={<Pricing />} />
-      <Route path="/referral"          element={<ReferralProgram />} />
+    <Suspense fallback={<PageLoader />}>
+      <Routes>
+        {/* Landing & Public Pages — accessible to all */}
+        <Route path="/"                  element={<Landing />} />
+        <Route path="/terms"             element={<Terms />} />
+        <Route path="/privacy"           element={<Privacy />} />
+        <Route path="/contact"           element={<Contact />} />
+        <Route path="/about"             element={<About />} />
+        <Route path="/vision"            element={<Vision />} />
+        <Route path="/forgot-password"   element={<ForgotPassword />} />
+        <Route path="/login"             element={user ? <Navigate to="/dashboard" /> : <Login />} />
+        <Route path="/register"          element={user ? <Navigate to="/dashboard" /> : <Register />} />
+        <Route path="/pricing"           element={<Pricing />} />
+        <Route path="/referral"          element={<ReferralProgram />} />
 
-      {/* Admin */}
-      <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
+        {/* Admin */}
+        <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
 
-      {/* Protected */}
-      <Route path="/*" element={
-        <ProtectedRoute>
-          <div className="min-h-screen bg-gray-900 text-gray-100" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-            <Navbar />
-            <TrialBanner />
-            <TelegramLinkBanner />
-            <main className="container mx-auto px-3 sm:px-4 py-5 sm:py-6 max-w-7xl">
-              <Routes>
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/signals"   element={<Signals />} />
-                <Route path="/markets"   element={<Markets />} />
-                <Route path="/analytics" element={<Analytics />} />
-                <Route path="/analyses" element={<Analyses />} />
-                <Route path="/profile"   element={<Profile />} />
-                <Route path="/affiliate" element={<AffiliatePage />} />
-              </Routes>
-            </main>
-            <ChatBot />
-          </div>
-        </ProtectedRoute>
-      } />
-    </Routes>
+        {/* Protected */}
+        <Route path="/*" element={
+          <ProtectedRoute>
+            <div className="min-h-screen bg-gray-900 text-gray-100" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
+              <Navbar />
+              <TrialBanner />
+              <TelegramLinkBanner />
+              <main className="container mx-auto px-3 sm:px-4 py-5 sm:py-6 max-w-7xl">
+                <Routes>
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/signals"   element={<Signals />} />
+                  <Route path="/markets"   element={<Markets />} />
+                  <Route path="/analytics" element={<Analytics />} />
+                  <Route path="/analyses"  element={<Analyses />} />
+                  <Route path="/profile"   element={<Profile />} />
+                  <Route path="/affiliate" element={<AffiliatePage />} />
+                </Routes>
+              </main>
+              <ChatBot />
+            </div>
+          </ProtectedRoute>
+        } />
+      </Routes>
+    </Suspense>
   )
 }
 
