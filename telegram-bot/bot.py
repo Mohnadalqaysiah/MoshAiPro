@@ -1,103 +1,63 @@
 """
-Qaffel AI v5 - Telegram Bot
-بوت تيليجرام مع ربط الحسابات وإشعارات انتهاء الاشتراك
+Qaffel AI Bot v2 — Professional Edition
+إعادة كتابة كاملة: تصفح احترافي، بث إشارات الأدمن، إحصائيات، إحالات
 """
 
-import os
-import asyncio
-import aiohttp
+import os, asyncio, aiohttp
 from datetime import datetime, timezone
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
-    Application, CommandHandler, CallbackQueryHandler,
-    ContextTypes,
+    Application, CommandHandler, CallbackQueryHandler, ContextTypes,
 )
 from loguru import logger
 
 # ─── Config ───────────────────────────────────────────────────────────────────
-API_URL      = os.getenv("API_URL", "http://backend:8000")
-BOT_TOKEN    = os.getenv("TELEGRAM_BOT_TOKEN", "")
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
-BOT_SECRET   = os.getenv("BOT_SECRET", "mosh-bot-secret-2026")
-
-# Header ترسله لكل طلب للـ API
+API_URL      = os.getenv("API_URL",             "http://backend:8000")
+BOT_TOKEN    = os.getenv("TELEGRAM_BOT_TOKEN",  "")
+FRONTEND_URL = os.getenv("FRONTEND_URL",        "https://qaffel.com")
+BOT_SECRET   = os.getenv("BOT_SECRET",          "mosh-bot-secret-2026")
 BOT_HEADERS  = {"X-Bot-Secret": BOT_SECRET}
 
-# ─── قوائم الأزواج — تُحدَّث من API عند البدء ────────────────────────────────
-MARKETS = ["XAUUSD", "BTCUSD", "EURUSD", "GBPUSD", "USDJPY", "USDCHF"]  # fallback
-TIMEFRAMES = ["15m", "1h", "4h", "1day"]
-
-# emoji لكل فئة
-_CATEGORY_EMOJI = {
-    "forex":     {"XAUUSD":"🥇","EURUSD":"💶","GBPUSD":"💷","USDJPY":"💴","USDCHF":"🇨🇭","AUDUSD":"🦘","default":"💱"},
-    "crypto":    "₿",
-    "commodity": "🛢️",
-    "stock":     "📈",
+# ─── Market catalogue ─────────────────────────────────────────────────────────
+CATEGORIES: dict[str, dict] = {
+    "metals":      {"label": "🥇 معادن",   "symbols": ["XAUUSD", "XAGUSD"]},
+    "crypto":      {"label": "₿ كريبتو",  "symbols": ["BTCUSD", "ETHUSD", "BNBUSD"]},
+    "forex":       {"label": "💱 فوركس",   "symbols": ["EURUSD", "GBPUSD", "USDJPY", "USDCHF", "AUDUSD", "USDCAD"]},
+    "commodities": {"label": "🛢 سلع",    "symbols": ["USOIL", "NATGAS"]},
+    "indices":     {"label": "📈 مؤشرات", "symbols": ["NAS100", "US30", "SP500"]},
 }
 
 MARKET_NAMES: dict[str, str] = {
-    "XAUUSD": "🥇 الذهب",
-    "BTCUSD": "₿ بيتكوين",
-    "EURUSD": "💶 يورو/دولار",
-    "GBPUSD": "💷 جنيه/دولار",
-    "USDJPY": "💴 دولار/ين",
-    "USDCHF": "🇨🇭 دولار/فرنك",
+    "XAUUSD":"🥇 الذهب",    "XAGUSD":"🥈 الفضة",
+    "BTCUSD":"₿ بيتكوين",  "ETHUSD":"Ξ إيثيريوم", "BNBUSD":"🔷 BNB",
+    "EURUSD":"💶 EUR/USD",  "GBPUSD":"💷 GBP/USD",
+    "USDJPY":"💴 USD/JPY",  "USDCHF":"🇨🇭 USD/CHF", "AUDUSD":"🦘 AUD/USD", "USDCAD":"🍁 USD/CAD",
+    "USOIL": "🛢 نفط",     "NATGAS":"🔥 غاز",
+    "NAS100":"📈 ناسداك",  "US30":  "📊 داو",       "SP500": "📉 S&P500",
 }
 
-# الأسواق التي تُغلق في عطلة نهاية الأسبوع (فوركس وسلع)
-FOREX_MARKETS: set[str] = {"XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "USDCHF",
-                            "XAGUSD", "USOIL", "NATGAS", "NAS100", "SP500", "US30"}
+FOREX_MARKETS = {
+    "XAUUSD","XAGUSD","EURUSD","GBPUSD","USDJPY","USDCHF","AUDUSD","USDCAD",
+    "USOIL","NATGAS","NAS100","US30","SP500",
+}
 
+TF_LABELS = {"15m":"15 دقيقة", "1h":"1 ساعة", "4h":"4 ساعات", "1day":"يومي"}
+TIMEFRAMES = ["15m", "1h", "4h", "1day"]
 
-async def load_markets_from_api(retries: int = 6, delay: int = 10):
-    """يجلب الأزواج النشطة من /api/v1/markets/list ويحدّث MARKETS و MARKET_NAMES
-    يُعيد المحاولة حتى `retries` مرة بفاصل `delay` ثانية (لانتظار جهوزية الـ backend)."""
-    global MARKETS, MARKET_NAMES
-    for attempt in range(1, retries + 1):
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    f"{API_URL}/api/v1/markets/list",
-                    timeout=aiohttp.ClientTimeout(total=10)
-                ) as resp:
-                    if resp.status == 200:
-                        data = (await resp.json()).get("data", [])
-                        if data:
-                            MARKETS = [m["symbol"] for m in data]
-                            new_names = {}
-                            for m in data:
-                                sym  = m["symbol"]
-                                cat  = m.get("category", "forex")
-                                name = m.get("name_ar") or m.get("name", sym)
-                                if cat == "crypto":
-                                    emoji = "₿" if sym == "BTCUSD" else "🔷"
-                                elif cat == "stock":
-                                    emoji = "📈"
-                                elif cat == "commodity":
-                                    emoji = "🛢️"
-                                else:
-                                    emoji = MARKET_NAMES.get(sym, "💱").split()[0]
-                                new_names[sym] = f"{emoji} {name}"
-                            MARKET_NAMES = new_names
-                            logger.info(f"✅ تحميل {len(MARKETS)} زوج من API")
-                            return
-        except Exception as e:
-            if attempt < retries:
-                logger.warning(f"load_markets_from_api (محاولة {attempt}/{retries}): {e} — إعادة المحاولة بعد {delay}s")
-                await asyncio.sleep(delay)
-            else:
-                logger.warning(f"load_markets_from_api: فشل بعد {retries} محاولات — سيُستخدم الافتراضي")
+# ─── Intervals ────────────────────────────────────────────────────────────────
+MONITOR_INTERVAL   = 900    # 15 min — watchlist monitoring
+BROADCAST_INTERVAL = 60     # 1 min  — new admin signals
+EXPIRY_INTERVAL    = 3600   # 1 hr   — subscription expiry
+ALERT_COOLDOWN     = 60     # min    — per-user per-symbol cooldown
 
-ALERT_COOLDOWN_MINUTES = 60
-MONITOR_INTERVAL = 900       # 15 دقيقة
-EXPIRY_CHECK_INTERVAL = 3600  # كل ساعة
-
-# ─── State ────────────────────────────────────────────────────────────────────
-user_watchlist: dict      = {}
-user_timeframe: dict      = {}
-user_min_confidence: dict = {}
-last_alert: dict          = {}
-notified_expiry: set      = set()   # user telegram_ids that got expiry notice today
+# ─── In-memory state ──────────────────────────────────────────────────────────
+# uid → set of symbols
+_wl_symbols:  dict[int, set]  = {}
+_wl_tf:       dict[int, str]  = {}
+_wl_conf:     dict[int, int]  = {}
+_wl_notif:    dict[int, bool] = {}
+last_alert:   dict            = {}
+notified_expiry: set          = set()
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -107,726 +67,987 @@ def is_market_open(symbol: str) -> bool:
     return datetime.now(timezone.utc).weekday() < 5
 
 
-def format_analysis(data: dict, symbol: str, timeframe: str) -> str:
+def _fmt_price(v) -> str:
+    if v is None:
+        return "—"
+    f = float(v)
+    if f > 999:
+        return f"{f:,.2f}"
+    return f"{f:.5f}".rstrip("0").rstrip(".")
+
+
+def _fmt_pts(v) -> str:
+    return f"{float(v):.2f}" if v is not None else "—"
+
+
+async def _get(path: str, params: dict = None, timeout: int = 15) -> dict:
+    try:
+        async with aiohttp.ClientSession() as s:
+            async with s.get(
+                f"{API_URL}{path}", params=params,
+                headers=BOT_HEADERS,
+                timeout=aiohttp.ClientTimeout(total=timeout),
+            ) as r:
+                if r.status == 200:
+                    return await r.json()
+    except Exception as e:
+        logger.error(f"GET {path}: {e}")
+    return {}
+
+
+async def _post(path: str, json: dict = None, params: dict = None, timeout: int = 15) -> dict:
+    try:
+        async with aiohttp.ClientSession() as s:
+            async with s.post(
+                f"{API_URL}{path}", json=json, params=params,
+                headers=BOT_HEADERS,
+                timeout=aiohttp.ClientTimeout(total=timeout),
+            ) as r:
+                return await r.json() if r.status == 200 else {}
+    except Exception as e:
+        logger.error(f"POST {path}: {e}")
+    return {}
+
+
+async def _load_wl_from_db(uid: int, telegram_id: str):
+    """يحمّل إعدادات المراقبة من DB إلى الذاكرة"""
+    d = await _get("/api/v1/bot/watchlist", {"telegram_id": telegram_id})
+    if d.get("linked"):
+        _wl_symbols[uid] = set(d.get("watchlist", []))
+        _wl_tf[uid]      = d.get("timeframe", "1h")
+        _wl_conf[uid]    = d.get("min_confidence", 65)
+        _wl_notif[uid]   = d.get("notifications_enabled", True)
+
+
+async def _save_wl_to_db(uid: int, telegram_id: str):
+    """يحفظ إعدادات المراقبة من الذاكرة إلى DB"""
+    await _post(
+        "/api/v1/bot/save-watchlist",
+        params={
+            "telegram_id":           telegram_id,
+            "timeframe":             _wl_tf.get(uid, "1h"),
+            "min_confidence":        str(_wl_conf.get(uid, 65)),
+            "notifications_enabled": str(_wl_notif.get(uid, True)).lower(),
+        },
+        json=list(_wl_symbols.get(uid, set())),
+    )
+
+
+# ─── Keyboards ────────────────────────────────────────────────────────────────
+def kb_main():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📊 تحليل فوري",  callback_data="m_analyze"),
+         InlineKeyboardButton("📡 الإشارات",    callback_data="m_signals")],
+        [InlineKeyboardButton("👁 المراقبة",     callback_data="m_watchlist"),
+         InlineKeyboardButton("📈 إحصائياتي",   callback_data="m_stats")],
+        [InlineKeyboardButton("🎁 الإحالة",      callback_data="m_referral"),
+         InlineKeyboardButton("⚙️ الإعدادات",    callback_data="m_settings")],
+    ])
+
+
+def kb_categories(action: str):
+    rows = []
+    items = list(CATEGORIES.items())
+    for i in range(0, len(items), 2):
+        row = [InlineKeyboardButton(v["label"], callback_data=f"cat_{action}_{k}")
+               for k, v in items[i:i+2]]
+        rows.append(row)
+    rows.append([InlineKeyboardButton("🔙 رجوع", callback_data="m_back")])
+    return InlineKeyboardMarkup(rows)
+
+
+def kb_pairs(cat: str, action: str):
+    syms = CATEGORIES.get(cat, {}).get("symbols", [])
+    rows = []
+    for i in range(0, len(syms), 2):
+        row = [InlineKeyboardButton(MARKET_NAMES.get(m, m), callback_data=f"{action}_{m}")
+               for m in syms[i:i+2]]
+        rows.append(row)
+    rows.append([InlineKeyboardButton("🔙 رجوع", callback_data="m_analyze")])
+    return InlineKeyboardMarkup(rows)
+
+
+def kb_timeframe(symbol: str):
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(TF_LABELS["15m"], callback_data=f"an_{symbol}_15m"),
+         InlineKeyboardButton(TF_LABELS["1h"],  callback_data=f"an_{symbol}_1h")],
+        [InlineKeyboardButton(TF_LABELS["4h"],  callback_data=f"an_{symbol}_4h"),
+         InlineKeyboardButton(TF_LABELS["1day"],callback_data=f"an_{symbol}_1day")],
+        [InlineKeyboardButton("🔙 رجوع", callback_data="m_analyze")],
+    ])
+
+
+def kb_watchlist(uid: int):
+    wl = _wl_symbols.get(uid, set())
+    rows = []
+    for cat_k, cat_v in CATEGORIES.items():
+        rows.append([InlineKeyboardButton(f"── {cat_v['label']} ──", callback_data="noop")])
+        syms = cat_v["symbols"]
+        for i in range(0, len(syms), 2):
+            row = []
+            for m in syms[i:i+2]:
+                icon = "✅" if m in wl else "○"
+                row.append(InlineKeyboardButton(f"{icon} {MARKET_NAMES.get(m,m)}", callback_data=f"wl_t_{m}"))
+            rows.append(row)
+    rows.append([
+        InlineKeyboardButton("✅ تحديد الكل", callback_data="wl_all"),
+        InlineKeyboardButton("✖ إلغاء الكل", callback_data="wl_none"),
+    ])
+    notif = _wl_notif.get(uid, True)
+    notif_icon = "🔔" if notif else "🔕"
+    rows.append([
+        InlineKeyboardButton("⏱ الإطار الزمني",       callback_data="wl_tf"),
+        InlineKeyboardButton("🎯 الحد الأدنى للثقة", callback_data="wl_conf"),
+    ])
+    rows.append([
+        InlineKeyboardButton(f"{notif_icon} الإشعارات: {'مفعّل' if notif else 'موقف'}", callback_data="wl_notif"),
+    ])
+    rows.append([
+        InlineKeyboardButton("💾 حفظ الإعدادات", callback_data="wl_save"),
+        InlineKeyboardButton("🔙 رجوع",           callback_data="m_back"),
+    ])
+    return InlineKeyboardMarkup(rows)
+
+
+def kb_tf_select(back: str = "m_watchlist"):
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(TF_LABELS["15m"], callback_data="wltf_15m"),
+         InlineKeyboardButton(TF_LABELS["1h"],  callback_data="wltf_1h")],
+        [InlineKeyboardButton(TF_LABELS["4h"],  callback_data="wltf_4h"),
+         InlineKeyboardButton(TF_LABELS["1day"],callback_data="wltf_1day")],
+        [InlineKeyboardButton("🔙 رجوع", callback_data=back)],
+    ])
+
+
+def kb_conf_select():
+    lvls = [50, 60, 65, 70, 75, 80]
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(f"{l}%", callback_data=f"wlconf_{l}") for l in lvls[:3]],
+        [InlineKeyboardButton(f"{l}%", callback_data=f"wlconf_{l}") for l in lvls[3:]],
+        [InlineKeyboardButton("🔙 رجوع", callback_data="m_watchlist")],
+    ])
+
+
+# ─── Formatters ───────────────────────────────────────────────────────────────
+def fmt_analysis(data: dict, symbol: str, timeframe: str) -> str:
     if not data or data.get("error"):
         return f"❌ تعذر تحليل {symbol}."
 
     rec    = data.get("recommendation", "WATCH")
-    emoji  = {"BUY": "🟢", "SELL": "🔴", "WATCH": "⚪", "WAIT": "⚪"}.get(rec, "⚪")
-    rec_ar = {"BUY": "شراء", "SELL": "بيع", "WATCH": "مراقبة", "WAIT": "انتظار"}.get(rec, rec)
+    emoji  = {"BUY":"🟢","SELL":"🔴","WATCH":"⚪","WAIT":"⚪"}.get(rec, "⚪")
+    rec_ar = {"BUY":"شراء","SELL":"بيع","WATCH":"مراقبة","WAIT":"انتظار"}.get(rec, rec)
     conf   = data.get("ai_confidence_score", 0)
     price  = data.get("current_price", 0)
+    lvls   = data.get("levels", {})
+
+    entry_min = lvls.get("entry_zone_min")
+    entry_max = lvls.get("entry_zone_max")
+    entry_v   = lvls.get("entry") or (data.get("entry_zones") or [None])[0]
+    sl  = lvls.get("stop_loss") or data.get("stop_loss_zone")
+    tp1 = lvls.get("tp1") or (data.get("take_profit_zones") or [None])[0]
+    tp2 = lvls.get("tp2")
+    if not tp2 and len(data.get("take_profit_zones") or []) > 1:
+        tp2 = data["take_profit_zones"][1]
+    rr  = lvls.get("risk_reward") or data.get("risk_reward_ratio")
 
     msg = (
         f"🤖 *Qaffel AI — تحليل*\n"
-        f"━━━━━━━━━━━━━━━━━━\n"
-        f"📌 `{symbol}` | `{timeframe}` | السعر: `{price}`\n\n"
-        f"{emoji} *التوصية: {rec_ar}*\n"
-        f"📊 الثقة: `{conf:.1f}%`\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📌 *{MARKET_NAMES.get(symbol,symbol)}*  │  `{timeframe}`  │  `{_fmt_price(price)}`\n\n"
+        f"{emoji} *{rec_ar}*   ·   ثقة `{conf:.1f}%`\n\n"
     )
-
-    levels = data.get("levels", {})
-    # support both ICT engine v5 (levels.*) and legacy Gemini fields
-    entry_v = levels.get("entry") or (data.get("entry_zones") or [None])[0]
-    entry_min = levels.get("entry_zone_min")
-    entry_max = levels.get("entry_zone_max")
-    sl    = levels.get("stop_loss") or data.get("stop_loss_zone")
-    tp1   = levels.get("tp1") or (data.get("take_profit_zones") or [None])[0]
-    tp2   = levels.get("tp2") or (data.get("take_profit_zones") or [None, None])[1] if len(data.get("take_profit_zones") or []) > 1 else levels.get("tp2")
-    rr    = levels.get("risk_reward") or data.get("risk_reward_ratio") or data.get("risk_reward")
-
     if entry_min and entry_max:
-        msg += f"🎯 *دخول:* `{entry_min} — {entry_max}`\n"
+        msg += f"🎯 دخول:  `{_fmt_price(entry_min)} – {_fmt_price(entry_max)}`\n"
     elif entry_v:
-        msg += f"🎯 *دخول:* `{entry_v}`\n"
-    if sl:     msg += f"🛑 *وقف الخسارة:* `{sl}`\n"
-    if tp1:    msg += f"✅ *هدف 1:* `{tp1}`\n"
-    if tp2:    msg += f"✅ *هدف 2:* `{tp2}`\n"
-    if rr:     msg += f"\n⚖️ *R/R:* `{float(rr):.2f}x`\n"
+        msg += f"🎯 دخول:  `{_fmt_price(entry_v)}`\n"
+    if sl:  msg += f"🛑 وقف:   `{_fmt_price(sl)}`\n"
+    if tp1: msg += f"✅ هدف 1: `{_fmt_price(tp1)}`\n"
+    if tp2: msg += f"✅ هدف 2: `{_fmt_price(tp2)}`\n"
+    if rr:  msg += f"⚖️ R/R:   `{float(rr):.2f}x`\n"
 
-    ob      = data.get("order_blocks", {})
-    wyckoff = data.get("wyckoff_analysis") or data.get("wyckoff", {})
-    pd_z    = data.get("premium_discount", {})
-    liq     = data.get("liquidity_analysis") or data.get("liquidity", {})
-
-    def fmt_ob(o):
-        """تحويل dict الـ OB إلى نص مقروء"""
-        if isinstance(o, dict):
-            low  = o.get("low",  "")
-            high = o.get("high", "")
-            mid  = o.get("mid",  "")
-            strength = o.get("strength", "")
-            if low and high:
-                return f"{low} — {high}" + (f" (وسط: {round(float(mid),2)})" if mid else "") + (f" [{strength}]" if strength else "")
-        return str(o)
+    ob  = data.get("order_blocks", {})
+    wyc = data.get("wyckoff_analysis") or data.get("wyckoff", {})
+    pdz = data.get("premium_discount", {})
+    liq = data.get("liquidity_analysis") or data.get("liquidity", {})
 
     bull_obs = ob.get("bullish_obs") or []
     bear_obs = ob.get("bearish_obs") or []
+    if bull_obs and isinstance(bull_obs[0], dict):
+        o = bull_obs[0]
+        msg += f"🟢 OB دعم:      `{_fmt_price(o.get('low'))} – {_fmt_price(o.get('high'))}`\n"
+    if bear_obs and isinstance(bear_obs[0], dict):
+        o = bear_obs[0]
+        msg += f"🔴 OB مقاومة:   `{_fmt_price(o.get('low'))} – {_fmt_price(o.get('high'))}`\n"
 
-    if bull_obs:
-        msg += f"🟢 *OB دعم:* `{fmt_ob(bull_obs[0])}`\n"
-    if bear_obs:
-        msg += f"🔴 *OB مقاومة:* `{fmt_ob(bear_obs[0])}`\n"
+    liq_bias = (liq.get("bias", {}) if isinstance(liq, dict) else {})
+    liq_bias = liq_bias if isinstance(liq_bias, dict) else {}
+    ssl = (liq.get("nearest_ssl") if isinstance(liq, dict) else None) or liq_bias.get("below_price")
+    bsl = (liq.get("nearest_bsl") if isinstance(liq, dict) else None) or liq_bias.get("above_price")
+    if ssl: msg += f"🧲 سيولة تحت:  `{_fmt_price(ssl)}`\n"
+    if bsl: msg += f"🧲 سيولة فوق:  `{_fmt_price(bsl)}`\n"
 
-    # ICT engine nests under bias.below_price / above_price; legacy uses nearest_ssl/nearest_bsl
-    _liq_bias_raw = liq.get("bias", {}) if isinstance(liq, dict) else {}
-    liq_bias = _liq_bias_raw if isinstance(_liq_bias_raw, dict) else {}
-    ssl = liq.get("nearest_ssl") or liq_bias.get("below_price")
-    bsl = liq.get("nearest_bsl") or liq_bias.get("above_price")
-    if ssl:
-        msg += f"🧲 *سيولة تحت:* `{ssl}`\n"
-    if bsl:
-        msg += f"🧲 *سيولة فوق:* `{bsl}`\n"
+    PHASE_AR = {"ACCUMULATION":"تراكم","DISTRIBUTION":"توزيع","MARKUP":"صعود",
+                "MARKDOWN":"هبوط","RE_ACCUMULATION":"إعادة تراكم","ACCUMULATION_START":"بداية تراكم"}
+    ZONE_AR  = {"PREMIUM":"منطقة مرتفعة","DISCOUNT":"منطقة منخفضة","EQUILIBRIUM":"توازن"}
+    phase = wyc.get("phase") if isinstance(wyc, dict) else None
+    zone  = (pdz.get("current_zone") or pdz.get("zone")) if isinstance(pdz, dict) else None
+    if phase: msg += f"📐 Wyckoff:     `{PHASE_AR.get(phase, phase)}`\n"
+    if zone:  msg += f"💹 Zone:        `{ZONE_AR.get(zone, zone)}`\n"
 
-    phase = wyckoff.get("phase") if isinstance(wyckoff, dict) else None
-    # ICT engine uses current_zone; legacy uses zone
-    zone  = pd_z.get("current_zone") or pd_z.get("zone") if isinstance(pd_z, dict) else None
-    if phase:
-        phase_ar = {
-            "ACCUMULATION": "تراكم", "DISTRIBUTION": "توزيع",
-            "ACCUMULATION_START": "بداية تراكم", "DISTRIBUTION_START": "بداية توزيع",
-            "MARKUP": "صعود", "MARKDOWN": "هبوط", "RE_ACCUMULATION": "إعادة تراكم",
-        }.get(phase, phase)
-        msg += f"📐 *Wyckoff:* `{phase_ar}`\n"
-    if zone:
-        zone_ar = {"PREMIUM": "منطقة مرتفعة", "DISCOUNT": "منطقة منخفضة", "EQUILIBRIUM": "توازن"}.get(zone, zone)
-        msg += f"💹 *Zone:* `{zone_ar}`\n"
-
-    msg += "\n━━━━━━━━━━━━━━━━━━\n"
+    msg += "\n━━━━━━━━━━━━━━━━━━━━━━\n"
     msg += "⚠️ _للمعلومات فقط، ليس توصية استثمارية._"
     return msg
 
 
-async def fetch_analysis(symbol: str, timeframe: str, telegram_id: str = "") -> dict:
-    """جلب التحليل عبر bot endpoint المحمي بـ BOT_SECRET"""
-    try:
-        params = {"symbol": symbol, "timeframe": timeframe}
-        if telegram_id:
-            params["telegram_id"] = telegram_id
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{API_URL}/api/v1/bot/analyze",
-                params=params,
-                headers=BOT_HEADERS,
-                timeout=aiohttp.ClientTimeout(total=40)
-            ) as resp:
-                data = await resp.json()
-                if resp.status == 200:
-                    return data.get("data", {})
-                elif resp.status == 403:
-                    return {"_error": data.get("detail", "غير مصرح")}
-    except Exception as e:
-        logger.error(f"fetch_analysis error: {e}")
-    return {}
+def fmt_new_signal(s: dict) -> str:
+    """تنسيق إشارة الأدمن للبث الفوري"""
+    stype  = s.get("signal_type", "BUY")
+    emoji  = "🟢" if stype == "BUY" else "🔴"
+    rec_ar = "شراء" if stype == "BUY" else "بيع"
+    mname  = MARKET_NAMES.get(s.get("market",""), s.get("market",""))
+    conf   = s.get("ai_confidence", 0)
+    tf     = TF_LABELS.get(s.get("timeframe",""), s.get("timeframe",""))
+    entry  = _fmt_price(s.get("entry_price"))
+    sl     = _fmt_price(s.get("stop_loss"))
+    tp1    = _fmt_price(s.get("take_profit_1"))
+    tp2    = _fmt_price(s.get("take_profit_2"))
+    rr     = s.get("risk_reward_ratio")
+
+    msg = (
+        f"🚨 *إشارة جديدة │ Qaffel AI*\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"{emoji} *{rec_ar}*  ─  {mname}\n"
+        f"📊 ثقة: *{conf:.0f}%*   ⏱ {tf}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🎯 دخول:  `{entry}`\n"
+        f"🛑 وقف:   `{sl}`\n"
+        f"✅ هدف 1: `{tp1}`\n"
+        f"✅ هدف 2: `{tp2}`\n"
+    )
+    if rr:
+        msg += f"⚖️ R/R:   `{float(rr):.1f}x`\n"
+
+    PHASE_AR = {"ACCUMULATION":"تراكم","DISTRIBUTION":"توزيع","MARKUP":"صعود","MARKDOWN":"هبوط"}
+    ZONE_AR  = {"PREMIUM":"مرتفعة","DISCOUNT":"منخفضة","EQUILIBRIUM":"توازن"}
+    phase = PHASE_AR.get(s.get("wyckoff_phase",""), "")
+    zone  = ZONE_AR.get(s.get("premium_discount",""), "")
+    if phase: msg += f"📐 Wyckoff: `{phase}`\n"
+    if zone:  msg += f"💹 Zone:    `{zone}`\n"
+
+    msg += "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+    msg += "⚠️ _للمعلومات فقط، ليس توصية استثمارية._"
+    return msg
 
 
-async def get_user_status(telegram_id: str) -> dict:
-    """يجلب حالة المستخدم من API"""
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{API_URL}/api/v1/bot/user-status",
-                params={"telegram_id": str(telegram_id)},
-                headers=BOT_HEADERS,
-                timeout=aiohttp.ClientTimeout(total=10)
-            ) as resp:
-                if resp.status == 200:
-                    return await resp.json()
-    except Exception as e:
-        logger.error(f"get_user_status error: {e}")
-    return {"linked": False}
+def fmt_outcome(o: dict) -> str:
+    status = o["status"]
+    market = o["market"]
+    stype  = o["signal_type"]
+    entry  = _fmt_price(o["entry"])
+    price  = _fmt_price(o["current_price"])
+    tp1    = _fmt_price(o["tp1"])
+    tp2    = _fmt_price(o["tp2"])
+    sl_p   = _fmt_price(o["sl"])
+    pnl    = float(o["pnl_points"])
+    rec_ar = "شراء" if stype == "BUY" else "بيع"
+    mname  = MARKET_NAMES.get(market, market)
 
+    if status == "TP2_HIT":
+        header  = f"🏆 *الهدف 2 تحقق!*"
+        pnl_txt = f"📈 الربح: *+{_fmt_pts(pnl)} نقطة*"
+        tip     = "صفقة ممتازة — الهدف الكامل 🎯"
+    elif status == "TP1_HIT":
+        header  = f"✅ *الهدف 1 تحقق!*"
+        pnl_txt = f"📈 الربح: *+{_fmt_pts(pnl)} نقطة*"
+        tip     = "فكّر بنقل الإيقاف لنقطة التعادل 💡"
+    else:
+        header  = f"🔴 *وقف الخسارة ضُرب*"
+        pnl_txt = f"📉 الخسارة: *{_fmt_pts(pnl)} نقطة*"
+        tip     = "الخسارة جزء من التداول — ثق بالاستراتيجية 💪"
 
-async def fetch_latest_signals() -> list:
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{API_URL}/api/v1/signals/latest",
-                params={"limit": 5},
-                timeout=aiohttp.ClientTimeout(total=15)
-            ) as resp:
-                if resp.status == 200:
-                    return (await resp.json()).get("data", [])
-    except Exception as e:
-        logger.error(f"fetch_latest_signals error: {e}")
-    return []
-
-
-async def verify_telegram_link(token: str, telegram_id: str, telegram_username: str, telegram_name: str) -> dict:
-    """ربط حساب تيليجرام بالمنصة"""
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{API_URL}/api/v1/auth/bot-verify",
-                json={
-                    "token": token,
-                    "telegram_id": str(telegram_id),
-                    "telegram_username": telegram_username,
-                    "telegram_name": telegram_name,
-                },
-                timeout=aiohttp.ClientTimeout(total=10)
-            ) as resp:
-                data = await resp.json()
-                if resp.status == 200:
-                    return {"success": True, **data}
-                return {"success": False, "detail": data.get("detail", "خطأ غير معروف")}
-    except Exception as e:
-        logger.error(f"verify_telegram_link error: {e}")
-        return {"success": False, "detail": "فشل الاتصال بالخادم"}
-
-
-async def get_expiring_users() -> list:
-    """جلب المستخدمين الذين اشتراكهم ينتهي قريباً"""
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{API_URL}/api/v1/bot/expiring-soon",
-                headers=BOT_HEADERS,
-                timeout=aiohttp.ClientTimeout(total=10)
-            ) as resp:
-                if resp.status == 200:
-                    return (await resp.json()).get("users", [])
-    except Exception as e:
-        logger.error(f"get_expiring_users error: {e}")
-    return []
-
-
-# ─── Keyboards ────────────────────────────────────────────────────────────────
-def main_menu_keyboard():
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📊 تحليل سوق",     callback_data="menu_analyze"),
-         InlineKeyboardButton("📡 آخر الإشارات",  callback_data="menu_latest")],
-        [InlineKeyboardButton("👁 قائمة المراقبة", callback_data="menu_watchlist"),
-         InlineKeyboardButton("ℹ️ مساعدة",          callback_data="menu_help")],
-    ])
-
-
-def watchlist_keyboard(uid: int):
-    wl = user_watchlist.get(uid, set())
-    rows = []
-    for i in range(0, len(MARKETS), 2):
-        row = []
-        for m in MARKETS[i:i+2]:
-            tick = "✅ " if m in wl else ""
-            row.append(InlineKeyboardButton(f"{tick}{MARKET_NAMES.get(m,m)}", callback_data=f"wl_toggle_{m}"))
-        rows.append(row)
-    rows.append([
-        InlineKeyboardButton("⏱ الإطار الزمني",      callback_data="wl_timeframe"),
-        InlineKeyboardButton("🎯 الحد الأدنى للثقة", callback_data="wl_confidence"),
-    ])
-    rows.append([InlineKeyboardButton("🔙 رجوع", callback_data="menu_back")])
-    return InlineKeyboardMarkup(rows)
-
-
-def timeframe_keyboard():
-    tf_labels = {"15m": "15 دقيقة", "1h": "ساعة", "4h": "4 ساعات", "1day": "يومي"}
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton(tf_labels[tf], callback_data=f"wl_tf_{tf}") for tf in TIMEFRAMES[:2]],
-        [InlineKeyboardButton(tf_labels[tf], callback_data=f"wl_tf_{tf}") for tf in TIMEFRAMES[2:]],
-        [InlineKeyboardButton("🔙 رجوع", callback_data="menu_watchlist")],
-    ])
-
-
-def confidence_keyboard():
-    levels = [50, 60, 65, 70, 75, 80]
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton(f"{l}%", callback_data=f"wl_conf_{l}") for l in levels[:3]],
-        [InlineKeyboardButton(f"{l}%", callback_data=f"wl_conf_{l}") for l in levels[3:]],
-        [InlineKeyboardButton("🔙 رجوع", callback_data="menu_watchlist")],
-    ])
+    return (
+        f"{header}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📌 {mname}  ─  {rec_ar}\n"
+        f"💲 دخول:  `{entry}`  →  الآن: `{price}`\n"
+        f"🎯 TP1: `{tp1}`  │  TP2: `{tp2}`  │  SL: `{sl_p}`\n\n"
+        f"{pnl_txt}\n"
+        f"_{tip}_\n\n"
+        f"⚠️ _للمعلومات فقط، ليس توصية استثمارية._"
+    )
 
 
 # ─── /start ───────────────────────────────────────────────────────────────────
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    args = context.args  # رمز الربط إذا وجد
+    args = context.args
 
-    # /start TOKEN — ربط الحساب
-    if args and len(args) > 0:
+    if args:
         token = args[0].strip()
-        result = await verify_telegram_link(
-            token=token,
-            telegram_id=str(user.id),
-            telegram_username=user.username or "",
-            telegram_name=user.full_name or user.first_name or "",
-        )
-        if result["success"]:
-            plan_ar = {
-                "trial": "تجريبي",
-                "weekly": "أسبوعي",
-                "monthly": "شهري",
-            }.get(result.get("plan", ""), result.get("plan", ""))
+        async with aiohttp.ClientSession() as s:
+            try:
+                async with s.post(
+                    f"{API_URL}/api/v1/auth/bot-verify",
+                    json={
+                        "token":            token,
+                        "telegram_id":      str(user.id),
+                        "telegram_username":user.username or "",
+                        "telegram_name":    user.full_name or user.first_name or "",
+                    },
+                    timeout=aiohttp.ClientTimeout(total=10),
+                ) as r:
+                    res = await r.json()
+                    ok  = r.status == 200
+            except Exception as e:
+                logger.error(f"bot-verify error: {e}")
+                res, ok = {}, False
 
+        if ok:
+            plan_ar = {"trial":"تجريبي","weekly":"أسبوعي","monthly":"شهري"}.get(
+                res.get("plan",""), res.get("plan",""))
+            left_an = res.get("trial_analyses_left", "∞")
+            left_ch = res.get("trial_chat_left", "∞")
             await update.message.reply_text(
                 f"✅ *تم ربط حسابك بنجاح!*\n\n"
-                f"مرحباً {result.get('user_name', '')} 👋\n"
-                f"خطتك الحالية: *{plan_ar}*\n\n"
-                f"🔥 *تحليلات متبقية:* {result.get('trial_analyses_left', '∞')}\n"
-                f"💬 *رسائل شات متبقية:* {result.get('trial_chat_left', '∞')}\n\n"
-                f"الآن ستصلك إشعارات فرص التداول مباشرة هنا! 🚀",
+                f"أهلاً *{res.get('user_name','')}* 👋\n"
+                f"خطتك: *{plan_ar}*   │   تحليلات متبقية: *{left_an}*\n\n"
+                f"🚨 ستصلك إشارات التداول مباشرة هنا!\n"
+                f"فعّل *👁 المراقبة* لتلقي تنبيهات تلقائية.",
                 parse_mode="Markdown",
-                reply_markup=main_menu_keyboard()
+                reply_markup=kb_main(),
             )
         else:
             await update.message.reply_text(
                 f"❌ *فشل ربط الحساب*\n\n"
-                f"{result.get('detail', 'الرابط غير صالح أو استُخدم مسبقاً.')}\n\n"
-                f"للحصول على رابط جديد: سجّل دخول للمنصة → إعدادات → ربط تيليجرام",
+                f"{res.get('detail','الرابط غير صالح أو استُخدم مسبقاً.')}\n\n"
+                f"للحصول على رابط جديد: افتح المنصة ← إعدادات ← ربط تيليجرام",
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup([[
                     InlineKeyboardButton("🌐 فتح المنصة", url=FRONTEND_URL)
-                ]])
+                ]]),
             )
         return
 
-    # /start عادي
     await update.message.reply_text(
-        "🤖 *مرحباً في Qaffel AI*\n\n"
-        "نظام تحليل الأسواق المالية بالذكاء الاصطناعي\n"
-        "مع تنبيهات تلقائية عند ظهور الفرص 🚨\n\n"
-        "━━━━━━━━━━━━━━━━\n"
-        "🔗 *لربط حسابك في المنصة:*\n"
-        "افتح المنصة ← انقر 'ربط تيليجرام'\n"
-        "أو أرسل الرابط الخاص بك هنا\n\n"
-        "━━━━━━━━━━━━━━━━\n"
-        "اختر *👁 قائمة المراقبة* لتفعيل التنبيهات التلقائية.",
+        "🤖 *Qaffel AI*\n\n"
+        "منصة تداول ذكية بتقنية ICT/SMC والذكاء الاصطناعي\n\n"
+        "🔗 *لربط حسابك:*\n"
+        "افتح المنصة ← اضغط «ربط تيليجرام» ← افتح الرابط\n\n"
+        "بعد الربط ستصلك الإشارات والتنبيهات تلقائياً 🚀",
         parse_mode="Markdown",
-        reply_markup=main_menu_keyboard()
+        reply_markup=kb_main(),
     )
 
 
-# ─── Button Handler ────────────────────────────────────────────────────────────
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    data = query.data
-    uid  = query.from_user.id
+async def cmd_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "🤖 *Qaffel AI — القائمة الرئيسية*",
+        parse_mode="Markdown",
+        reply_markup=kb_main(),
+    )
 
-    if data == "menu_back":
-        await query.edit_message_text(
+
+# ─── Button Handler ───────────────────────────────────────────────────────────
+async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q   = update.callback_query
+    await q.answer()
+    d   = q.data
+    uid = q.from_user.id
+    tgid= str(uid)
+
+    # ── Ignore separator buttons
+    if d == "noop":
+        return
+
+    # ── Back to main menu
+    if d in ("m_back", "m_main"):
+        await q.edit_message_text(
             "🤖 *Qaffel AI — القائمة الرئيسية*",
-            parse_mode="Markdown", reply_markup=main_menu_keyboard()
+            parse_mode="Markdown", reply_markup=kb_main(),
         )
+        return
 
-    elif data == "menu_analyze":
-        kb = []
-        for i in range(0, len(MARKETS), 2):
-            kb.append([InlineKeyboardButton(MARKET_NAMES.get(m,m), callback_data=f"market_{m}")
-                       for m in MARKETS[i:i+2]])
-        kb.append([InlineKeyboardButton("🔙 رجوع", callback_data="menu_back")])
-        await query.edit_message_text("📊 *اختر السوق:*", parse_mode="Markdown",
-                                      reply_markup=InlineKeyboardMarkup(kb))
+    # ─────────────────────── ANALYZE ──────────────────────────────────────────
+    if d == "m_analyze":
+        await q.edit_message_text(
+            "📊 *تحليل فوري*\nاختر الفئة:",
+            parse_mode="Markdown", reply_markup=kb_categories("an"),
+        )
+        return
 
-    elif data == "menu_latest":
-        await query.edit_message_text("⏳ جاري الجلب...")
-        signals = await fetch_latest_signals()
-        if not signals:
-            msg = "📡 لا توجد إشارات حتى الآن."
-        else:
-            msg = "📡 *آخر الإشارات:*\n━━━━━━━━━━━━━━━━━━\n"
-            for s in signals:
-                e = {"BUY": "🟢", "SELL": "🔴"}.get(s.get("signal_type",""), "⚪")
-                msg += f"{e} `{s.get('market','N/A')}` | {s.get('ai_confidence',0):.0f}% | {s.get('status','N/A')}\n"
-        await query.edit_message_text(msg, parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 رجوع", callback_data="menu_back")]]))
+    if d.startswith("cat_an_"):
+        cat = d[7:]
+        info = CATEGORIES.get(cat, {})
+        await q.edit_message_text(
+            f"📊 *{info.get('label',cat)}* — اختر الزوج:",
+            parse_mode="Markdown", reply_markup=kb_pairs(cat, "sym"),
+        )
+        return
 
-    elif data == "menu_help":
-        await query.edit_message_text(
-            "📚 *المساعدة:*\n\n"
-            "👁 *قائمة المراقبة*\n"
-            "اختر الأزواج وسيحللها البوت كل 15 دقيقة.\n\n"
-            "🔗 *ربط حسابك*\n"
-            "افتح المنصة ← انقر 'ربط تيليجرام' وستصلك فرص مخصصة.\n\n"
-            "🔴 *توقف السوق*\n"
-            "الفوركس والذهب مغلقان عطلة نهاية الأسبوع.\n"
-            "البيتكوين والكريبتو مفتوح 24/7.\n\n"
-            "⚙️ *الإعدادات*\n"
-            "• الإطار الزمني للتحليل\n"
-            "• الحد الأدنى للثقة (الافتراضي 65%)",
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🌐 فتح المنصة", url=FRONTEND_URL)],
-                [InlineKeyboardButton("🔙 رجوع", callback_data="menu_back")]
-            ]))
-
-    elif data.startswith("market_"):
-        market = data.replace("market_", "")
-        tf_labels = {"15m": "15 دقيقة", "1h": "ساعة", "4h": "4 ساعات", "1day": "يومي"}
-        kb = [
-            [InlineKeyboardButton(tf_labels[tf], callback_data=f"analyze_{market}_{tf}") for tf in TIMEFRAMES[:2]],
-            [InlineKeyboardButton(tf_labels[tf], callback_data=f"analyze_{market}_{tf}") for tf in TIMEFRAMES[2:]],
-            [InlineKeyboardButton("🔙 رجوع", callback_data="menu_analyze")],
-        ]
-        await query.edit_message_text(
-            f"⏱ اختر الإطار لـ *{MARKET_NAMES.get(market, market)}*:",
-            parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
-
-    elif data.startswith("analyze_"):
-        _, market, timeframe = data.split("_", 2)
-
-        if not is_market_open(market):
-            await query.edit_message_text(
+    if d.startswith("sym_"):
+        symbol = d[4:]
+        if not is_market_open(symbol):
+            await q.edit_message_text(
                 f"🔴 *السوق مغلق*\n\n"
-                f"{MARKET_NAMES.get(market, market)} مغلق خلال عطلة نهاية الأسبوع.\n"
-                f"يفتح السوق يوم الاثنين.",
+                f"{MARKET_NAMES.get(symbol,symbol)} مغلق خلال عطلة نهاية الأسبوع.\n"
+                f"يفتح مجدداً يوم الاثنين.",
                 parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 رجوع", callback_data="menu_analyze")]]))
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🔙 رجوع", callback_data="m_analyze")]
+                ]),
+            )
             return
+        await q.edit_message_text(
+            f"⏱ *{MARKET_NAMES.get(symbol,symbol)}* — اختر الإطار الزمني:",
+            parse_mode="Markdown", reply_markup=kb_timeframe(symbol),
+        )
+        return
 
-        # تحقق من ارتباط الحساب أولاً
-        status = await get_user_status(str(uid))
+    if d.startswith("an_"):
+        parts  = d.split("_", 2)
+        symbol = parts[1]
+        tf     = parts[2]
+
+        # Check subscription
+        status = await _get("/api/v1/bot/user-status", {"telegram_id": tgid})
         if not status.get("linked"):
-            await query.edit_message_text(
+            await q.edit_message_text(
                 "🔗 *ربط الحساب مطلوب*\n\n"
-                "لاستخدام التحليلات، يجب ربط حسابك في المنصة أولاً.\n\n"
-                "📌 الخطوات:\n"
                 "1️⃣ افتح المنصة وسجّل دخول\n"
-                "2️⃣ اضغط على 'احصل على الرابط' في شريط الربط\n"
-                "3️⃣ افتح الرابط وسيتم الربط تلقائياً\n\n"
-                "✅ بعد الربط، ستتمكن من الحصول على جميع التحليلات هنا!",
+                "2️⃣ اضغط «ربط تيليجرام»\n"
+                "3️⃣ افتح الرابط",
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton("🌐 فتح المنصة", url=FRONTEND_URL)],
-                    [InlineKeyboardButton("🔙 رجوع", callback_data="menu_back")],
-                ]))
+                    [InlineKeyboardButton("🔙 رجوع", callback_data="m_back")],
+                ]),
+            )
             return
-
         if not status.get("allowed"):
-            reason = status.get("reason", "الاشتراك منتهي")
-            await query.edit_message_text(
-                f"⛔ *{reason}*\n\n"
-                f"جدد اشتراكك للاستمرار في الحصول على التحليلات.",
+            await q.edit_message_text(
+                f"⛔ *{status.get('reason','الاشتراك منتهي')}*\n\nجدد اشتراكك للمتابعة.",
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton("💳 تجديد الاشتراك", url=f"{FRONTEND_URL}/pricing")],
-                    [InlineKeyboardButton("🔙 رجوع", callback_data="menu_back")],
-                ]))
+                    [InlineKeyboardButton("🔙 رجوع", callback_data="m_back")],
+                ]),
+            )
             return
 
-        await query.edit_message_text(f"⏳ جاري تحليل {MARKET_NAMES.get(market, market)}...")
-        result = await fetch_analysis(market, timeframe, telegram_id=str(uid))
+        await q.edit_message_text(f"⏳ جاري تحليل {MARKET_NAMES.get(symbol,symbol)}…")
 
-        # خطأ من API
-        if result.get("_error"):
-            await query.edit_message_text(
-                f"⚠️ {result['_error']}",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 رجوع", callback_data="menu_back")]]))
+        try:
+            async with aiohttp.ClientSession() as s:
+                async with s.post(
+                    f"{API_URL}/api/v1/bot/analyze",
+                    params={"symbol": symbol, "timeframe": tf, "telegram_id": tgid},
+                    headers=BOT_HEADERS,
+                    timeout=aiohttp.ClientTimeout(total=40),
+                ) as r:
+                    res  = await r.json()
+                    data = res.get("data", {}) if r.status == 200 else {"_error": res.get("detail","")}
+        except Exception as e:
+            data = {"_error": str(e)}
+
+        if data.get("_error"):
+            await q.edit_message_text(
+                f"⚠️ {data['_error']}",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 رجوع", callback_data="m_back")]]),
+            )
             return
 
-        msg = format_analysis(result, market, timeframe)
-        kb = [
-            [InlineKeyboardButton("🔄 تحديث", callback_data=f"analyze_{market}_{timeframe}"),
-             InlineKeyboardButton("📊 سوق آخر", callback_data="menu_analyze")],
-            [InlineKeyboardButton("🏠 الرئيسية", callback_data="menu_back")],
-        ]
-        await query.edit_message_text(msg, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
-
-    elif data == "menu_watchlist":
-        wl = user_watchlist.get(uid, set())
-        tf = user_timeframe.get(uid, "1h")
-        mc = user_min_confidence.get(uid, 65)
-        txt = (
-            f"👁 *قائمة المراقبة*\n\n"
-            f"الأزواج المراقبة: *{len(wl)}* من {len(MARKETS)}\n"
-            f"الإطار الزمني: *{tf}*\n"
-            f"الحد الأدنى للثقة: *{mc}%*\n\n"
-            f"اضغط على الزوج لإضافته أو إزالته:"
+        msg = fmt_analysis(data, symbol, tf)
+        await q.edit_message_text(
+            msg, parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔄 تحديث",    callback_data=f"an_{symbol}_{tf}"),
+                 InlineKeyboardButton("📊 سوق آخر", callback_data="m_analyze")],
+                [InlineKeyboardButton("🏠 الرئيسية", callback_data="m_back")],
+            ]),
         )
-        await query.edit_message_text(txt, parse_mode="Markdown", reply_markup=watchlist_keyboard(uid))
+        return
 
-    elif data.startswith("wl_toggle_"):
-        market = data.replace("wl_toggle_", "")
-        if uid not in user_watchlist:
-            user_watchlist[uid] = set()
-        if market in user_watchlist[uid]:
-            user_watchlist[uid].remove(market)
-            await query.answer(f"❌ إزالة {market}")
+    # ─────────────────────── SIGNALS ──────────────────────────────────────────
+    if d == "m_signals":
+        await q.edit_message_text("⏳ جاري جلب الإشارات…")
+        res  = await _get("/api/v1/signals/latest", {"limit": 6})
+        sigs = res.get("data", [])
+        if not sigs:
+            msg = "📡 لا توجد إشارات حتى الآن."
         else:
-            user_watchlist[uid].add(market)
-            await query.answer(f"✅ إضافة {market}")
-        wl = user_watchlist.get(uid, set())
-        tf = user_timeframe.get(uid, "1h")
-        mc = user_min_confidence.get(uid, 65)
-        await query.edit_message_text(
-            f"👁 *قائمة المراقبة*\n\nالأزواج: *{len(wl)}* | الإطار: *{tf}* | الحد: *{mc}%*\n\nاضغط للإضافة/الإزالة:",
-            parse_mode="Markdown", reply_markup=watchlist_keyboard(uid))
+            msg = "📡 *آخر الإشارات*\n━━━━━━━━━━━━━━━━━━━━━━\n"
+            STATUS_AR = {"ACTIVE":"نشطة","TP1_HIT":"هدف 1 ✅","TP2_HIT":"هدف 2 🏆","SL_HIT":"وقف خسارة ❌","PENDING":"معلقة","EXPIRED":"منتهية"}
+            for s in sigs:
+                e      = "🟢" if s.get("signal_type") == "BUY" else "🔴"
+                status = STATUS_AR.get(s.get("status",""), s.get("status",""))
+                conf   = s.get("ai_confidence", 0)
+                mname  = MARKET_NAMES.get(s.get("market",""), s.get("market",""))
+                entry  = _fmt_price(s.get("entry_price"))
+                tp1    = _fmt_price(s.get("take_profit_1"))
+                sl     = _fmt_price(s.get("stop_loss"))
+                msg += (
+                    f"{e} *{mname}*  ·  `{s.get('timeframe','')}` · {conf:.0f}%\n"
+                    f"   دخول `{entry}` │ TP1 `{tp1}` │ SL `{sl}`\n"
+                    f"   الحالة: *{status}*\n"
+                    f"─────────────────────\n"
+                )
+        await q.edit_message_text(
+            msg, parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔄 تحديث",    callback_data="m_signals"),
+                 InlineKeyboardButton("🏠 الرئيسية", callback_data="m_back")],
+            ]),
+        )
+        return
 
-    elif data == "wl_timeframe":
-        await query.edit_message_text("⏱ *اختر الإطار الزمني:*",
-                                      parse_mode="Markdown", reply_markup=timeframe_keyboard())
+    # ─────────────────────── WATCHLIST ────────────────────────────────────────
+    if d == "m_watchlist":
+        await _load_wl_from_db(uid, tgid)
+        wl   = _wl_symbols.get(uid, set())
+        tf   = _wl_tf.get(uid, "1h")
+        conf = _wl_conf.get(uid, 65)
+        notif= _wl_notif.get(uid, True)
+        count = len(wl)
+        await q.edit_message_text(
+            f"👁 *قائمة المراقبة*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"الأزواج المراقبة: *{count}* من {sum(len(v['symbols']) for v in CATEGORIES.values())}\n"
+            f"الإطار: *{TF_LABELS.get(tf,tf)}*  │  الحد الأدنى للثقة: *{conf}%*\n"
+            f"الإشعارات: *{'مفعّل 🔔' if notif else 'موقف 🔕'}*\n\n"
+            f"اضغط على الزوج لإضافته أو إزالته:",
+            parse_mode="Markdown",
+            reply_markup=kb_watchlist(uid),
+        )
+        return
 
-    elif data.startswith("wl_tf_"):
-        tf = data.replace("wl_tf_", "")
-        user_timeframe[uid] = tf
-        await query.answer(f"✅ الإطار: {tf}")
-        wl = user_watchlist.get(uid, set())
-        mc = user_min_confidence.get(uid, 65)
-        await query.edit_message_text(
-            f"👁 *قائمة المراقبة*\n\nالأزواج: *{len(wl)}* | الإطار: *{tf}* | الحد: *{mc}%*\n\nاضغط للإضافة/الإزالة:",
-            parse_mode="Markdown", reply_markup=watchlist_keyboard(uid))
+    if d.startswith("wl_t_"):
+        m = d[5:]
+        if uid not in _wl_symbols:
+            _wl_symbols[uid] = set()
+        if m in _wl_symbols[uid]:
+            _wl_symbols[uid].remove(m)
+            await q.answer(f"○ أُزيل {MARKET_NAMES.get(m,m)}")
+        else:
+            _wl_symbols[uid].add(m)
+            await q.answer(f"✅ أُضيف {MARKET_NAMES.get(m,m)}")
+        wl = _wl_symbols[uid]; tf = _wl_tf.get(uid,"1h"); conf = _wl_conf.get(uid,65); notif = _wl_notif.get(uid,True)
+        await q.edit_message_text(
+            f"👁 *قائمة المراقبة*\nالأزواج: *{len(wl)}*  │  الإطار: *{TF_LABELS.get(tf,tf)}*  │  الحد: *{conf}%*\n\nاضغط للإضافة/الإزالة:",
+            parse_mode="Markdown", reply_markup=kb_watchlist(uid),
+        )
+        return
 
-    elif data == "wl_confidence":
-        await query.edit_message_text(
-            "🎯 *اختر الحد الأدنى لنسبة الثقة:*\n(نسبة أعلى = إشارات أقل لكن أقوى)",
-            parse_mode="Markdown", reply_markup=confidence_keyboard())
+    if d == "wl_all":
+        _wl_symbols[uid] = set(m for cat in CATEGORIES.values() for m in cat["symbols"])
+        await q.answer("✅ تم تحديد الكل")
+        await q.edit_message_text(
+            f"👁 *قائمة المراقبة*\nالأزواج: *{len(_wl_symbols[uid])}* — جميعها محددة\n\nاضغط للإضافة/الإزالة:",
+            parse_mode="Markdown", reply_markup=kb_watchlist(uid),
+        )
+        return
 
-    elif data.startswith("wl_conf_"):
-        conf = int(data.replace("wl_conf_", ""))
-        user_min_confidence[uid] = conf
-        await query.answer(f"✅ الحد الأدنى: {conf}%")
-        wl = user_watchlist.get(uid, set())
-        tf = user_timeframe.get(uid, "1h")
-        await query.edit_message_text(
-            f"👁 *قائمة المراقبة*\n\nالأزواج: *{len(wl)}* | الإطار: *{tf}* | الحد: *{conf}%*\n\nاضغط للإضافة/الإزالة:",
-            parse_mode="Markdown", reply_markup=watchlist_keyboard(uid))
+    if d == "wl_none":
+        _wl_symbols[uid] = set()
+        await q.answer("✖ تم إلغاء الكل")
+        await q.edit_message_text(
+            "👁 *قائمة المراقبة*\nلا توجد أزواج محددة.\n\nاضغط للإضافة/الإزالة:",
+            parse_mode="Markdown", reply_markup=kb_watchlist(uid),
+        )
+        return
+
+    if d == "wl_notif":
+        _wl_notif[uid] = not _wl_notif.get(uid, True)
+        st = "مفعّل 🔔" if _wl_notif[uid] else "موقف 🔕"
+        await q.answer(f"الإشعارات: {st}")
+        wl = _wl_symbols.get(uid, set()); tf = _wl_tf.get(uid,"1h"); conf = _wl_conf.get(uid,65)
+        await q.edit_message_text(
+            f"👁 *قائمة المراقبة*\nالأزواج: *{len(wl)}*  │  الإطار: *{TF_LABELS.get(tf,tf)}*  │  الحد: *{conf}%*\nالإشعارات: *{st}*\n\nاضغط للإضافة/الإزالة:",
+            parse_mode="Markdown", reply_markup=kb_watchlist(uid),
+        )
+        return
+
+    if d == "wl_tf":
+        await q.edit_message_text("⏱ *اختر الإطار الزمني للمراقبة:*",
+                                   parse_mode="Markdown", reply_markup=kb_tf_select())
+        return
+
+    if d.startswith("wltf_"):
+        tf = d[5:]
+        _wl_tf[uid] = tf
+        await q.answer(f"✅ الإطار: {TF_LABELS.get(tf,tf)}")
+        wl = _wl_symbols.get(uid,set()); conf = _wl_conf.get(uid,65); notif = _wl_notif.get(uid,True)
+        await q.edit_message_text(
+            f"👁 *قائمة المراقبة*\nالأزواج: *{len(wl)}*  │  الإطار: *{TF_LABELS.get(tf,tf)}*  │  الحد: *{conf}%*\n\nاضغط للإضافة/الإزالة:",
+            parse_mode="Markdown", reply_markup=kb_watchlist(uid),
+        )
+        return
+
+    if d == "wl_conf":
+        await q.edit_message_text(
+            "🎯 *الحد الأدنى للثقة*\n\nنسبة أعلى = إشارات أقل لكن أقوى:",
+            parse_mode="Markdown", reply_markup=kb_conf_select(),
+        )
+        return
+
+    if d.startswith("wlconf_"):
+        conf = int(d[7:])
+        _wl_conf[uid] = conf
+        await q.answer(f"✅ الحد: {conf}%")
+        wl = _wl_symbols.get(uid,set()); tf = _wl_tf.get(uid,"1h"); notif = _wl_notif.get(uid,True)
+        await q.edit_message_text(
+            f"👁 *قائمة المراقبة*\nالأزواج: *{len(wl)}*  │  الإطار: *{TF_LABELS.get(tf,tf)}*  │  الحد: *{conf}%*\n\nاضغط للإضافة/الإزالة:",
+            parse_mode="Markdown", reply_markup=kb_watchlist(uid),
+        )
+        return
+
+    if d == "wl_save":
+        await q.edit_message_text("⏳ جاري الحفظ…")
+        await _save_wl_to_db(uid, tgid)
+        wl = _wl_symbols.get(uid,set())
+        await q.edit_message_text(
+            f"✅ *تم الحفظ بنجاح!*\n\n"
+            f"الأزواج المراقبة: *{len(wl)}*\n"
+            f"الإطار: *{TF_LABELS.get(_wl_tf.get(uid,'1h'),'—')}*\n"
+            f"الحد الأدنى للثقة: *{_wl_conf.get(uid,65)}%*\n"
+            f"الإشعارات: *{'مفعّل 🔔' if _wl_notif.get(uid,True) else 'موقف 🔕'}*",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("👁 تعديل",     callback_data="m_watchlist"),
+                 InlineKeyboardButton("🏠 الرئيسية", callback_data="m_back")],
+            ]),
+        )
+        return
+
+    # ─────────────────────── STATS ────────────────────────────────────────────
+    if d == "m_stats":
+        await q.edit_message_text("⏳ جاري جلب إحصائياتك…")
+        st = await _get("/api/v1/bot/user-stats", {"telegram_id": tgid})
+        if not st.get("linked"):
+            await q.edit_message_text(
+                "🔗 *ربط الحساب مطلوب لعرض الإحصائيات.*",
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🌐 فتح المنصة", url=FRONTEND_URL)],
+                    [InlineKeyboardButton("🔙 رجوع",       callback_data="m_back")],
+                ]),
+            )
+            return
+        total = st.get("total_signals", 0)
+        wins  = st.get("wins", 0)
+        loss  = st.get("losses", 0)
+        wr    = st.get("win_rate", 0)
+        pts   = st.get("total_points", 0)
+        plan  = st.get("plan_label","")
+        ends  = st.get("ends_at","")
+        name  = st.get("full_name","")
+        wr_bar = "🟩" * int(wr/10) + "⬜" * (10 - int(wr/10))
+        await q.edit_message_text(
+            f"📈 *إحصائياتك*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"👤 *{name}*\n"
+            f"💳 خطة: *{plan}*" + (f"  │  تنتهي: {ends}" if ends else "") + "\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📊 الصفقات: *{total}*  │  ✅ رابحة: *{wins}*  │  ❌ خاسرة: *{loss}*\n"
+            f"🏆 نسبة الربح: *{wr:.1f}%*\n"
+            f"{wr_bar}\n"
+            f"⚡ إجمالي النقاط: *{pts:+.2f}*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🌐 فتح المنصة",  url=FRONTEND_URL),
+                 InlineKeyboardButton("🔙 رجوع",        callback_data="m_back")],
+            ]),
+        )
+        return
+
+    # ─────────────────────── REFERRAL ─────────────────────────────────────────
+    if d == "m_referral":
+        st = await _get("/api/v1/bot/user-stats", {"telegram_id": tgid})
+        if not st.get("linked"):
+            await q.edit_message_text(
+                "🔗 *ربط الحساب مطلوب للوصول لبرنامج الإحالة.*",
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🌐 فتح المنصة", url=FRONTEND_URL)],
+                    [InlineKeyboardButton("🔙 رجوع",       callback_data="m_back")],
+                ]),
+            )
+            return
+        code  = st.get("affiliate_code","")
+        count = st.get("referral_count", 0)
+        link  = f"{FRONTEND_URL}/register?ref={code}" if code else f"{FRONTEND_URL}/register"
+        await q.edit_message_text(
+            f"🎁 *برنامج الإحالة*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"رابطك الخاص:\n"
+            f"`{link}`\n\n"
+            f"👥 إجمالي إحالاتك: *{count}*\n\n"
+            f"كل مشترك تُحيله يمنحك عمولة شهرية مستمرة 💰\n"
+            f"5% برونزي → 15% ذهبي بعد 25 إحالة",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🌐 تفاصيل البرنامج", url=f"{FRONTEND_URL}/referral")],
+                [InlineKeyboardButton("🔙 رجوع",            callback_data="m_back")],
+            ]),
+        )
+        return
+
+    # ─────────────────────── SETTINGS ─────────────────────────────────────────
+    if d == "m_settings":
+        await _load_wl_from_db(uid, tgid)
+        tf   = _wl_tf.get(uid, "1h")
+        conf = _wl_conf.get(uid, 65)
+        notif= _wl_notif.get(uid, True)
+        await q.edit_message_text(
+            f"⚙️ *الإعدادات*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🔔 الإشعارات:          *{'مفعّل' if notif else 'موقف'}*\n"
+            f"⏱ الإطار الزمني:      *{TF_LABELS.get(tf,tf)}*\n"
+            f"🎯 الحد الأدنى للثقة: *{conf}%*\n",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔔 تبديل الإشعارات",    callback_data="cfg_notif")],
+                [InlineKeyboardButton("⏱ تغيير الإطار الزمني", callback_data="cfg_tf")],
+                [InlineKeyboardButton("🎯 تغيير الحد الأدنى",   callback_data="cfg_conf")],
+                [InlineKeyboardButton("🔙 رجوع",                callback_data="m_back")],
+            ]),
+        )
+        return
+
+    if d == "cfg_notif":
+        _wl_notif[uid] = not _wl_notif.get(uid, True)
+        await _save_wl_to_db(uid, tgid)
+        await q.answer(f"الإشعارات: {'مفعّل 🔔' if _wl_notif[uid] else 'موقف 🔕'}")
+        await on_button(update, context)  # re-render settings
+        return
+
+    if d == "cfg_tf":
+        await q.edit_message_text("⏱ *اختر الإطار الزمني الافتراضي:*",
+                                   parse_mode="Markdown",
+                                   reply_markup=kb_tf_select(back="m_settings"))
+        return
+
+    if d == "cfg_conf":
+        await q.edit_message_text(
+            "🎯 *اختر الحد الأدنى للثقة:*\n(أعلى = إشارات أقل لكن أقوى)",
+            parse_mode="Markdown", reply_markup=kb_conf_select(),
+        )
+        return
+
+    # ─────────────────────── HELP ─────────────────────────────────────────────
+    if d == "m_help":
+        await q.edit_message_text(
+            "📚 *المساعدة*\n\n"
+            "📊 *تحليل فوري*\nاختر الفئة ثم الزوج والإطار الزمني.\n\n"
+            "👁 *المراقبة*\nاختر الأزواج التي تريد مراقبتها.\n"
+            "البوت يحللها كل 15 دقيقة تلقائياً.\n\n"
+            "📡 *الإشارات*\nآخر الإشارات المنشورة من الأدمن.\n\n"
+            "📈 *إحصائياتي*\nعرض نسبة ربحك ومجموع نقاطك.\n\n"
+            "🎁 *الإحالة*\nرابطك الخاص + تفاصيل العمولة.",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🌐 فتح المنصة", url=FRONTEND_URL)],
+                [InlineKeyboardButton("🔙 رجوع",       callback_data="m_back")],
+            ]),
+        )
+        return
 
 
-# ─── Background Monitor ───────────────────────────────────────────────────────
-async def fetch_all_db_watchlists() -> list:
-    """يجلب قوائم المراقبة من DB عبر API"""
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{API_URL}/api/v1/bot/all-watchlists",
-                headers=BOT_HEADERS,
-                timeout=aiohttp.ClientTimeout(total=15)
-            ) as resp:
-                if resp.status == 200:
-                    return (await resp.json()).get("users", [])
-    except Exception as e:
-        logger.error(f"fetch_all_db_watchlists error: {e}")
-    return []
+# ─── Background: Broadcast new admin signals ──────────────────────────────────
+async def broadcast_new_signals(app: Application):
+    """يبث إشارات الأدمن الجديدة لجميع المشتركين النشطين — كل 60 ثانية"""
+    logger.info("📡 بدء مهمة بث الإشارات الجديدة…")
+    await asyncio.sleep(45)
 
-
-async def fetch_signal_outcomes() -> list:
-    """يجلب الإشارات التي ضربت TP أو SL"""
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                f"{API_URL}/api/v1/bot/check-outcomes",
-                headers=BOT_HEADERS,
-                timeout=aiohttp.ClientTimeout(total=30)
-            ) as resp:
-                if resp.status == 200:
-                    return (await resp.json()).get("triggered", [])
-    except Exception as e:
-        logger.error(f"fetch_signal_outcomes error: {e}")
-    return []
-
-
-async def monitor_markets(app: Application):
-    logger.info("🔍 بدء المراقبة التلقائية...")
-    await asyncio.sleep(30)
-
-    _market_reload_counter = 0
     while True:
         try:
-            # تحديث قائمة الأزواج كل 4 دورات (~ساعة)
-            _market_reload_counter += 1
-            if _market_reload_counter % 4 == 0:
-                await load_markets_from_api()
+            sigs_data = await _get("/api/v1/bot/new-signals")
+            sigs      = sigs_data.get("signals", [])
 
-            # ── 1. فحص نتائج الإشارات (TP/SL) ──────────────────────────────
-            outcomes = await fetch_signal_outcomes()
+            if sigs:
+                subs_data = await _get("/api/v1/bot/active-subscribers")
+                subs      = [s["telegram_id"] for s in subs_data.get("subscribers", [])]
+                logger.info(f"📡 {len(sigs)} إشارة جديدة → {len(subs)} مشترك")
+
+                for sig in sigs:
+                    msg = fmt_new_signal(sig)
+                    kb  = InlineKeyboardMarkup([[
+                        InlineKeyboardButton("📊 تحليل هذا الزوج", callback_data=f"sym_{sig['market']}"),
+                        InlineKeyboardButton("📡 كل الإشارات",     callback_data="m_signals"),
+                    ]])
+                    sent = 0
+                    for tid in subs:
+                        try:
+                            await app.bot.send_message(
+                                chat_id=int(tid), text=msg,
+                                parse_mode="Markdown", reply_markup=kb,
+                            )
+                            sent += 1
+                        except Exception as _e:
+                            logger.warning(f"فشل إرسال إلى {tid}: {_e}")
+                        await asyncio.sleep(0.05)  # rate limit
+
+                    await _post(f"/api/v1/bot/mark-broadcast/{sig['id']}")
+                    logger.info(f"✅ إشارة #{sig['id']} بُثّت لـ {sent} مشترك")
+
+        except Exception as e:
+            logger.error(f"broadcast_new_signals: {e}", exc_info=True)
+
+        await asyncio.sleep(BROADCAST_INTERVAL)
+
+
+# ─── Background: Monitor watchlists ───────────────────────────────────────────
+async def monitor_watchlists(app: Application):
+    logger.info("🔍 بدء مراقبة قوائم المشتركين…")
+    await asyncio.sleep(60)
+
+    _market_cycle = 0
+    while True:
+        try:
+            _market_cycle += 1
+
+            # ── 1. نتائج الإشارات (TP/SL)
+            outcomes = (await _get("/api/v1/bot/check-outcomes", timeout=45)).get("triggered", [])
             for o in outcomes:
                 try:
-                    tid    = int(o["telegram_id"])
-                    status = o["status"]
-                    market = o["market"]
-                    pnl    = o["pnl_points"]
-                    price  = o["current_price"]
-                    entry  = o["entry"]
-                    tp1    = o["tp1"]
-                    tp2    = o["tp2"]
-                    sl     = o["sl"]
-                    stype  = o["signal_type"]
-
-                    if status == "SL_HIT":
-                        header = f"🔴 *وقف الخسارة ضُرب!*"
-                        pnl_txt = f"📉 الخسارة: `{abs(pnl):.5f}` نقطة"
-                        pnl_usd = f"⚠️ الصفقة أُغلقت بخسارة"
-                    elif status == "TP2_HIT":
-                        header = f"🎯 *الهدف 2 تحقق!*"
-                        pnl_txt = f"📈 الربح: `{pnl:.5f}` نقطة"
-                        pnl_usd = f"🏆 صفقة ناجحة — الهدف الكامل"
-                    else:
-                        header = f"✅ *الهدف 1 تحقق!*"
-                        pnl_txt = f"📈 الربح: `{pnl:.5f}` نقطة"
-                        pnl_usd = f"💡 فكّر بنقل الإيقاف لنقطة التعادل"
-
-                    rec_ar = "شراء" if stype == "BUY" else "بيع"
-                    outcome_msg = (
-                        f"{header}\n\n"
-                        f"📌 `{market}` — {rec_ar}\n"
-                        f"💲 سعر الدخول: `{entry}`\n"
-                        f"💲 السعر الحالي: `{price}`\n"
-                        f"🎯 TP1: `{tp1}` | TP2: `{tp2}`\n"
-                        f"🛑 SL: `{sl}`\n\n"
-                        f"{pnl_txt}\n"
-                        f"{pnl_usd}\n\n"
-                        f"⚠️ _للمعلومات فقط، ليس توصية استثمارية._"
+                    await app.bot.send_message(
+                        chat_id=int(o["telegram_id"]),
+                        text=fmt_outcome(o),
+                        parse_mode="Markdown",
+                        reply_markup=InlineKeyboardMarkup([[
+                            InlineKeyboardButton("📈 إحصائياتي", callback_data="m_stats"),
+                            InlineKeyboardButton("📡 الإشارات",  callback_data="m_signals"),
+                        ]]),
                     )
-                    await app.bot.send_message(chat_id=tid, text=outcome_msg, parse_mode="Markdown")
-                    logger.info(f"🏁 نتيجة إشارة → {tid} | {market} | {status} | {pnl:+.5f}")
                 except Exception as _e:
-                    logger.error(f"خطأ إرسال نتيجة: {_e}")
+                    logger.warning(f"outcome send error: {_e}")
 
-            # ── 2. مراقبة الأزواج وإرسال تنبيهات جديدة ───────────────────
-            db_users = await fetch_all_db_watchlists()
+            # ── 2. مراقبة الأزواج
+            db_users = (await _get("/api/v1/bot/all-watchlists")).get("users", [])
             merged: dict[int, tuple[set, str, int]] = {}
-
-            for entry in db_users:
+            for u in db_users:
                 try:
-                    tid = int(entry["telegram_id"])
-                    wl  = set(s.upper() for s in entry.get("watchlist", []))
+                    tid = int(u["telegram_id"])
+                    wl  = set(s.upper() for s in u.get("watchlist", []))
                     if wl:
-                        merged[tid] = (wl, entry.get("timeframe", "1h"), entry.get("min_confidence", 65))
+                        merged[tid] = (wl, u.get("timeframe","1h"), u.get("min_confidence",65))
                 except Exception:
                     pass
+            for uid_, wl in list(_wl_symbols.items()):
+                if uid_ not in merged and wl:
+                    merged[uid_] = (set(s.upper() for s in wl), _wl_tf.get(uid_,"1h"), _wl_conf.get(uid_,65))
 
-            # fallback: قوائم in-memory من أزرار البوت
-            for uid, watchlist in list(user_watchlist.items()):
-                if uid not in merged and watchlist:
-                    merged[uid] = (
-                        set(s.upper() for s in watchlist),
-                        user_timeframe.get(uid, "1h"),
-                        user_min_confidence.get(uid, 65),
-                    )
+            logger.info(f"🔍 دورة مراقبة — {len(merged)} مستخدم")
+            now = datetime.now(timezone.utc)
 
-            logger.info(f"🔍 دورة مراقبة — {len(merged)} مستخدم نشط")
-
-            for uid, (watchlist, tf, min_conf) in merged.items():
+            for uid_, (watchlist, tf, min_conf) in merged.items():
                 for symbol in list(watchlist):
-                    now = datetime.now(timezone.utc)
-
                     if not is_market_open(symbol):
-                        # إشعار واحد فقط عند الإغلاق
-                        key = (uid, f"{symbol}_closed_{now.date()}")
+                        key = (uid_, f"{symbol}_closed_{now.date()}")
                         if key not in last_alert:
                             last_alert[key] = now
                             try:
                                 await app.bot.send_message(
-                                    chat_id=uid,
-                                    text=(f"🔴 *السوق مغلق*\n"
-                                          f"{MARKET_NAMES.get(symbol, symbol)} مغلق الآن.\n"
-                                          f"ستُستأنف التنبيهات يوم الاثنين."),
+                                    chat_id=uid_,
+                                    text=f"🔴 *{MARKET_NAMES.get(symbol,symbol)} مغلق*\nيفتح يوم الاثنين.",
                                     parse_mode="Markdown")
                             except Exception:
                                 pass
                         continue
 
-                    # التحليل بدون خصم كريدت (telegram_id="")
-                    result = await fetch_analysis(symbol, tf, telegram_id="")
-                    if not result or result.get("error") or result.get("_error"):
-                        logger.warning(f"⚠️ تحليل فاشل: {symbol}/{tf} → {result.get('_error', result.get('error', '?'))}")
+                    try:
+                        async with aiohttp.ClientSession() as s:
+                            async with s.post(
+                                f"{API_URL}/api/v1/bot/analyze",
+                                params={"symbol":symbol,"timeframe":tf},
+                                headers=BOT_HEADERS,
+                                timeout=aiohttp.ClientTimeout(total=40),
+                            ) as r:
+                                res  = await r.json() if r.status == 200 else {}
+                                data = res.get("data", {})
+                    except Exception as _e:
+                        logger.warning(f"analyze {symbol}: {_e}")
                         continue
 
-                    rec  = result.get("recommendation", "WATCH")
-                    conf = result.get("ai_confidence_score", 0)
-
-                    logger.debug(f"  {symbol}/{tf}: {rec} {conf:.1f}% (حد:{min_conf}%)")
-
-                    if rec not in ("BUY", "SELL") or conf < min_conf:
+                    rec  = data.get("recommendation","WATCH")
+                    conf = data.get("ai_confidence_score", 0)
+                    if rec not in ("BUY","SELL") or conf < min_conf:
                         continue
 
-                    # cooldown check
-                    key  = (uid, symbol)
+                    key  = (uid_, symbol)
                     last = last_alert.get(key)
-                    if last and (now - last).total_seconds() < ALERT_COOLDOWN_MINUTES * 60:
-                        logger.debug(f"  ⏳ cooldown نشط لـ {symbol} ({uid})")
+                    if last and (now - last).total_seconds() < ALERT_COOLDOWN * 60:
                         continue
 
                     last_alert[key] = now
                     emoji  = "🟢" if rec == "BUY" else "🔴"
                     rec_ar = "شراء" if rec == "BUY" else "بيع"
-
-                    # بناء الرسالة مع حماية من الأخطاء
-                    try:
-                        analysis_text = format_analysis(result, symbol, tf)
-                    except Exception as _fe:
-                        logger.warning(f"format_analysis خطأ: {_fe}")
-                        analysis_text = ""
-
-                    alert_msg = (
-                        f"🚨 *فرصة تداول!*\n\n"
-                        f"{emoji} *{rec_ar}* — {MARKET_NAMES.get(symbol, symbol)}\n"
+                    alert  = (
+                        f"🚨 *تنبيه مراقبة!*\n\n"
+                        f"{emoji} *{rec_ar}* — {MARKET_NAMES.get(symbol,symbol)}\n"
                         f"📊 الثقة: *{conf:.1f}%*\n\n"
-                        f"{analysis_text}"
-                    )[:4000]  # حد Telegram
+                        f"{fmt_analysis(data, symbol, tf)}"
+                    )[:4000]
 
                     try:
-                        await app.bot.send_message(chat_id=uid, text=alert_msg, parse_mode="Markdown")
-                        logger.info(f"📨 تنبيه أُرسل → {uid} | {symbol} | {rec} | {conf:.1f}%")
-                    except Exception as e:
-                        logger.error(f"فشل إرسال تنبيه {uid}/{symbol}: {e}")
+                        await app.bot.send_message(
+                            chat_id=uid_, text=alert, parse_mode="Markdown",
+                            reply_markup=InlineKeyboardMarkup([[
+                                InlineKeyboardButton("🔄 تحديث", callback_data=f"an_{symbol}_{tf}"),
+                                InlineKeyboardButton("🏠 رئيسية", callback_data="m_back"),
+                            ]]),
+                        )
+                        logger.info(f"📨 تنبيه → {uid_} | {symbol} | {rec} | {conf:.1f}%")
+                    except Exception as _e:
+                        logger.error(f"alert send {uid_}/{symbol}: {_e}")
 
                     await asyncio.sleep(0.5)
 
         except Exception as e:
-            logger.error(f"خطأ عام في المراقبة: {e}", exc_info=True)
+            logger.error(f"monitor_watchlists: {e}", exc_info=True)
 
         await asyncio.sleep(MONITOR_INTERVAL)
 
 
-# ─── Expiry Notification ──────────────────────────────────────────────────────
-async def check_expiry_and_notify(app: Application):
-    """يرسل إشعار تجديد للمستخدمين قبل انتهاء الاشتراك بيومين"""
-    logger.info("🔔 بدء مراقبة انتهاء الاشتراكات...")
-    await asyncio.sleep(60)
+# ─── Background: Expiry notifications ────────────────────────────────────────
+async def notify_expiry(app: Application):
+    logger.info("🔔 بدء مراقبة انتهاء الاشتراكات…")
+    await asyncio.sleep(120)
 
     while True:
         try:
-            users = await get_expiring_users()
+            users = (await _get("/api/v1/bot/expiring-soon")).get("users", [])
             for u in users:
-                tg_id = u.get("telegram_id")
-                if not tg_id:
+                tid = u.get("telegram_id")
+                if not tid:
                     continue
-
-                key = f"expiry_{tg_id}_{u.get('days_left', 0)}"
+                key = f"expiry_{tid}_{u.get('days_left',0)}"
                 if key in notified_expiry:
                     continue
-
-                days_left = u.get("days_left", 0)
-                name      = u.get("full_name") or u.get("email", "")
-                plan_ar   = {"weekly": "الأسبوعية", "monthly": "الشهرية", "trial": "التجريبية"}.get(
-                    u.get("plan", ""), ""
+                days  = u.get("days_left", 0)
+                name  = u.get("full_name","") or u.get("email","")
+                plan  = {"weekly":"الأسبوعية","monthly":"الشهرية","trial":"التجريبية"}.get(
+                    str(u.get("plan","")), str(u.get("plan","")))
+                msg = (
+                    f"⏰ *انتهى اشتراكك!*\n\nمرحباً {name} 👋\nانتهت باقتك {plan}.\n\nجدد الآن للاستمرار 📊"
+                    if days == 0 else
+                    f"⚠️ *اشتراكك ينتهي قريباً!*\n\nمرحباً {name} 👋\n"
+                    f"باقتك {plan} ستنتهي خلال *{days} {'يوم' if days==1 else 'أيام'}*.\n\nجدد الآن 🚀"
                 )
-
-                if days_left == 0:
-                    msg = (
-                        f"⏰ *انتهى اشتراكك!*\n\n"
-                        f"مرحباً {name} 👋\n"
-                        f"انتهت باقتك {plan_ar}.\n\n"
-                        f"جدد الآن للاستمرار في الحصول على إشارات التداول 📊\n"
-                    )
-                else:
-                    msg = (
-                        f"⚠️ *اشتراكك ينتهي قريباً!*\n\n"
-                        f"مرحباً {name} 👋\n"
-                        f"باقتك {plan_ar} ستنتهي خلال *{days_left} {'يوم' if days_left == 1 else 'أيام'}*.\n\n"
-                        f"جدد الآن لضمان استمرار خدمتك 🚀\n"
-                    )
-
-                kb = InlineKeyboardMarkup([[
-                    InlineKeyboardButton("💳 تجديد الاشتراك", url=f"{FRONTEND_URL}/pricing")
-                ]])
-
                 try:
                     await app.bot.send_message(
-                        chat_id=int(tg_id),
-                        text=msg,
-                        parse_mode="Markdown",
-                        reply_markup=kb
+                        chat_id=int(tid), text=msg, parse_mode="Markdown",
+                        reply_markup=InlineKeyboardMarkup([[
+                            InlineKeyboardButton("💳 تجديد الاشتراك", url=f"{FRONTEND_URL}/pricing")
+                        ]]),
                     )
                     notified_expiry.add(key)
-                    logger.info(f"🔔 إشعار انتهاء → {tg_id} | {days_left} أيام")
-                except Exception as e:
-                    logger.error(f"فشل إشعار انتهاء لـ {tg_id}: {e}")
-
+                    logger.info(f"🔔 إشعار انتهاء → {tid} | {days} أيام")
+                except Exception as _e:
+                    logger.error(f"expiry notify {tid}: {_e}")
         except Exception as e:
-            logger.error(f"خطأ في مراقبة الاشتراكات: {e}")
-
-        await asyncio.sleep(EXPIRY_CHECK_INTERVAL)
+            logger.error(f"notify_expiry: {e}")
+        await asyncio.sleep(EXPIRY_INTERVAL)
 
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
@@ -835,21 +1056,21 @@ def main():
         logger.error("❌ TELEGRAM_BOT_TOKEN غير محدد!")
         return
 
-    logger.info("🤖 بدء تشغيل Qaffel AI Bot...")
-
+    logger.info("🤖 Qaffel AI Bot v2 — بدء التشغيل…")
     app = Application.builder().token(BOT_TOKEN).build()
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(button_handler))
+    app.add_handler(CommandHandler("start", cmd_start))
+    app.add_handler(CommandHandler("menu",  cmd_menu))
+    app.add_handler(CallbackQueryHandler(on_button))
 
     async def post_init(application: Application):
-        await load_markets_from_api()   # تحميل الأزواج فور البدء
-        asyncio.create_task(monitor_markets(application))
-        asyncio.create_task(check_expiry_and_notify(application))
+        asyncio.create_task(broadcast_new_signals(application))
+        asyncio.create_task(monitor_watchlists(application))
+        asyncio.create_task(notify_expiry(application))
 
     app.post_init = post_init
 
-    logger.success("✅ البوت يعمل مع المراقبة التلقائية!")
+    logger.success("✅ البوت يعمل — 3 مهام خلفية نشطة")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 

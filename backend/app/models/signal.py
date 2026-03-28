@@ -3,7 +3,7 @@ Mosh AI Pro v5 - Signal Model
 Database model for trading signals
 """
 
-from sqlalchemy import Column, Integer, String, Float, DateTime, JSON, ForeignKey, Enum as SQLEnum
+from sqlalchemy import Column, Integer, String, Float, DateTime, JSON, ForeignKey, Enum as SQLEnum, Boolean
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -74,6 +74,7 @@ class Signal(Base):
     profit_loss = Column(Float, default=0.0)
     profit_loss_percentage = Column(Float, default=0.0)
     points_earned = Column(Float, nullable=True)  # calculated when admin marks TP/SL
+    broadcast_sent = Column(Boolean, default=False, nullable=False)
     entry_executed = Column(DateTime(timezone=True), nullable=True)
     exit_executed = Column(DateTime(timezone=True), nullable=True)
     

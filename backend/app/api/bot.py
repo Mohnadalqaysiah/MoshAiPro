@@ -256,3 +256,145 @@ def bot_all_watchlists(
                 "min_confidence": u.notify_min_confidence or 65,
             })
     return {"users": result, "count": len(result)}
+
+
+@router.get("/new-signals")
+def bot_new_signals(
+    _: bool = Depends(verify_bot),
+    db: Session = Depends(get_db),
+):
+    """إشارات جديدة لم تُبث بعد (broadcast_sent=False)"""
+    signals = db.query(Signal).filter(
+        Signal.status == SignalStatus.ACTIVE,
+        Signal.broadcast_sent == False,
+    ).order_by(Signal.created_at.desc()).limit(20).all()
+
+    result = []
+    for s in signals:
+        result.append({
+            "id":             s.id,
+            "market":         s.market,
+            "timeframe":      s.timeframe,
+            "signal_type":    s.signal_type.value,
+            "ai_confidence":  s.ai_confidence,
+            "entry_price":    s.entry_price,
+            "stop_loss":      s.stop_loss,
+            "take_profit_1":  s.take_profit_1,
+            "take_profit_2":  s.take_profit_2,
+            "risk_reward_ratio": s.risk_reward_ratio,
+            "wyckoff_phase":  s.wyckoff_phase,
+            "premium_discount": s.premium_discount,
+        })
+    return {"signals": result, "count": len(result)}
+
+
+@router.post("/mark-broadcast/{signal_id}")
+def bot_mark_broadcast(
+    signal_id: int,
+    _: bool = Depends(verify_bot),
+    db: Session = Depends(get_db),
+):
+    sig = db.query(Signal).filter(Signal.id == signal_id).first()
+    if not sig:
+        raise HTTPException(404, "Signal not found")
+    sig.broadcast_sent = True
+    db.commit()
+    return {"success": True}
+
+
+@router.get("/active-subscribers")
+def bot_active_subscribers(
+    _: bool = Depends(verify_bot),
+    db: Session = Depends(get_db),
+):
+    """كل المشتركين النشطين الذين لديهم telegram_id"""
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    users = db.query(User).filter(
+        User.telegram_id != None,
+        User.is_active == True,
+        User.plan != PlanType.BANNED,
+    ).all()
+
+    result = []
+    for u in users:
+        if u.plan in [PlanType.WEEKLY, PlanType.MONTHLY]:
+            if not u.subscription_ends_at or u.subscription_ends_at < now:
+                continue
+        elif u.plan == PlanType.TRIAL:
+            if u.trial_ends_at and u.trial_ends_at < now:
+                continue
+        result.append({"telegram_id": u.telegram_id})
+
+    return {"subscribers": result, "count": len(result)}
+
+
+@router.get("/user-stats")
+def bot_user_stats(
+    telegram_id: str,
+    _: bool = Depends(verify_bot),
+    db: Session = Depends(get_db),
+):
+    """إحصائيات المستخدم للبوت"""
+    from sqlalchemy import func as sqlfunc
+    user = _get_linked_user(telegram_id, db)
+    if not user:
+        return {"linked": False}
+
+    closed = [SignalStatus.TP1_HIT, SignalStatus.TP2_HIT, SignalStatus.SL_HIT]
+    total  = db.query(Signal).filter(Signal.user_id == user.id, Signal.status.in_(closed)).count()
+    wins   = db.query(Signal).filter(Signal.user_id == user.id,
+                Signal.status.in_([SignalStatus.TP1_HIT, SignalStatus.TP2_HIT])).count()
+    pts    = db.query(sqlfunc.sum(Signal.points_earned)).filter(
+                Signal.user_id == user.id,
+                Signal.points_earned != None).scalar() or 0.0
+
+    aff_count = 0
+    if user.affiliate:
+        aff_count = len(user.affiliate.referrals)
+
+    plan_label = {"trial":"تجريبي","weekly":"أسبوعي","monthly":"شهري"}.get(
+        str(user.plan.value if hasattr(user.plan,"value") else user.plan).lower(), str(user.plan))
+
+    ends_at = None
+    if user.plan in [PlanType.WEEKLY, PlanType.MONTHLY] and user.subscription_ends_at:
+        ends_at = user.subscription_ends_at.strftime("%d/%m/%Y")
+    elif user.trial_ends_at:
+        ends_at = user.trial_ends_at.strftime("%d/%m/%Y")
+
+    return {
+        "linked":         True,
+        "full_name":      user.full_name or user.email,
+        "plan_label":     plan_label,
+        "ends_at":        ends_at,
+        "total_signals":  total,
+        "wins":           wins,
+        "losses":         total - wins,
+        "win_rate":       round(wins / total * 100, 1) if total > 0 else 0.0,
+        "total_points":   round(float(pts), 2),
+        "referral_count": aff_count,
+        "affiliate_code": user.affiliate_code,
+        "trial_analyses_left": user.trial_analyses_left,
+        "trial_chat_left":     user.trial_chat_left,
+    }
+
+
+@router.post("/save-watchlist")
+def bot_save_watchlist(
+    telegram_id: str,
+    watchlist: list,
+    timeframe: str = "1h",
+    min_confidence: int = 65,
+    notifications_enabled: bool = True,
+    _: bool = Depends(verify_bot),
+    db: Session = Depends(get_db),
+):
+    user = _get_linked_user(telegram_id, db)
+    if not user:
+        raise HTTPException(404, "User not linked")
+    user.notify_watchlist       = watchlist
+    user.notify_timeframe       = timeframe
+    user.notify_min_confidence  = min_confidence
+    user.notifications_enabled  = notifications_enabled
+    db.commit()
+    return {"success": True}
