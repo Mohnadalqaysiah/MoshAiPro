@@ -39,8 +39,14 @@ export default function PublicPerformance({ isAr = true }) {
 
   useEffect(() => {
     fetch(`${API}/api/v1/signals/public-results`)
-      .then(r => r.json())
-      .then(d => { setData(d); setLoading(false) })
+      .then(r => { if (!r.ok) throw new Error(r.status); return r.json() })
+      .then(d => {
+        // Validate response structure before setting
+        if (d && d.trades && d.week && d.all_time) {
+          setData(d)
+        }
+        setLoading(false)
+      })
       .catch(() => setLoading(false))
   }, [])
 
