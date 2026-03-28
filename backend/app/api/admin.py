@@ -676,17 +676,21 @@ class SignalOutcomeIn(BaseModel):
 
 
 def _calc_points(market: str, price_diff: float) -> float:
-    """MT4/MT5 pip points calculation"""
+    """
+    Unified pip points — 1 point = 1 pip per market standard
+    All metals use ×100  →  $0.01 move = 1 pt (XAUUSD $47 move = 4700 pts)
+    Crypto uses ×1       →  $1   move = 1 pt (BTC $500 move = 500 pts)
+    Forex/JPY uses ×10000/×100 → standard pips
+    """
     symbol = (market or "").upper()
-    if symbol in ("XAUUSD",):
-        return price_diff * 100
-    elif symbol in ("BTCUSD", "ETHUSD"):
-        return price_diff / 1.0
+    if symbol in ("XAUUSD", "XAGUSD", "XPTUSD", "XPDUSD"):
+        return round(price_diff * 100, 2)    # metals: $0.01 per pip
+    elif symbol in ("BTCUSD", "ETHUSD", "BNBUSD"):
+        return round(price_diff * 1.0, 2)    # crypto: $1 per pip
     elif symbol.endswith("JPY"):
-        return price_diff * 100
+        return round(price_diff * 100, 2)    # yen pairs
     else:
-        # Standard forex (EURUSD, GBPUSD, etc.)
-        return price_diff * 10000
+        return round(price_diff * 10000, 2)  # standard forex
 
 
 @router.get("/signals")

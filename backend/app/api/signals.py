@@ -355,6 +355,84 @@ async def get_signal_performance(
     }
 
 
+@router.get("/public-results")
+def get_public_results(db: Session = Depends(get_db)):
+    """
+    آخر الصفقات المغلقة + إحصائيات الأسبوع — عامة للزوار (Proof of Performance)
+    لا تحتوي على بيانات شخصية
+    """
+    from datetime import date, time as dt_time
+
+    now_utc   = datetime.now(timezone.utc)
+    today     = now_utc.date()
+    week_start = datetime.combine(
+        today - timedelta(days=today.weekday()), dt_time(0, 0, 0)
+    ).replace(tzinfo=timezone.utc)
+
+    closed_statuses = [SignalStatus.TP1_HIT, SignalStatus.TP2_HIT, SignalStatus.SL_HIT]
+
+    # ── Last 12 closed trades (most recent first) ──
+    recent = (
+        db.query(Signal)
+        .filter(Signal.status.in_(closed_statuses))
+        .order_by(Signal.exit_executed.desc())
+        .limit(12)
+        .all()
+    )
+
+    trades = []
+    for s in recent:
+        status_val = s.status.value if hasattr(s.status, "value") else str(s.status)
+        type_val   = s.signal_type.value if hasattr(s.signal_type, "value") else str(s.signal_type)
+        pts        = round(s.points_earned or 0, 1)
+        is_win     = pts > 0
+        trades.append({
+            "market":   s.market or "—",
+            "type":     type_val,
+            "result":   status_val,
+            "points":   pts,
+            "win":      is_win,
+            "closed_at": s.exit_executed.strftime("%Y-%m-%d") if s.exit_executed else None,
+        })
+
+    # ── Week stats ──
+    week_sigs = (
+        db.query(Signal)
+        .filter(
+            Signal.status.in_(closed_statuses),
+            Signal.exit_executed >= week_start,
+        )
+        .all()
+    )
+    wins   = [s for s in week_sigs if (s.points_earned or 0) > 0]
+    losses = [s for s in week_sigs if (s.points_earned or 0) < 0]
+    total_pts   = round(sum(s.points_earned or 0 for s in week_sigs), 1)
+    win_rate    = round(len(wins) / len(week_sigs) * 100) if week_sigs else 0
+    best_trade  = max((s.points_earned or 0 for s in wins), default=0)
+
+    # ── All-time totals ──
+    all_closed = db.query(Signal).filter(Signal.status.in_(closed_statuses)).all()
+    all_wins   = [s for s in all_closed if (s.points_earned or 0) > 0]
+    all_rate   = round(len(all_wins) / len(all_closed) * 100) if all_closed else 0
+
+    return {
+        "trades": trades,
+        "week": {
+            "wins":       len(wins),
+            "losses":     len(losses),
+            "total":      len(week_sigs),
+            "points":     total_pts,
+            "win_rate":   win_rate,
+            "best_trade": round(best_trade, 1),
+        },
+        "all_time": {
+            "total":    len(all_closed),
+            "wins":     len(all_wins),
+            "win_rate": all_rate,
+        },
+    }
+
+
 @router.get("/{signal_id}")
 async def get_signal_details(
     signal_id: int,

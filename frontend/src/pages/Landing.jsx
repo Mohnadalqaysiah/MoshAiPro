@@ -10,6 +10,7 @@ import {
 import PublicChatBot from '../components/PublicChatBot'
 import DemoSection from '../components/DemoSection'
 import AffiliateSection from '../components/AffiliateSection'
+import PublicPerformance from '../components/PublicPerformance'
 
 // ── Scroll reveal hook ───────────────────────────────────────────────
 function useReveal() {
@@ -368,6 +369,9 @@ export default function Landing() {
           </div>
         </div>
       </section>
+
+      {/* ── Performance ────────────────────────────────────────────────── */}
+      <PublicPerformance isAr={isAr} />
 
       {/* ── Pricing ────────────────────────────────────────────────────── */}
       <section id="pricing" className="py-24 px-4 relative overflow-hidden">
