@@ -86,9 +86,8 @@ html {
 .animate-float     { animation: float 4s ease-in-out infinite; will-change: transform; }
 .animate-pulse-glow { animation: pulse-glow 2s ease-in-out infinite; will-change: opacity; }
 .animate-spin-slow { animation: spin-slow 20s linear infinite; will-change: transform; }
-/* Shimmer uses a composited translateX on a pseudo-element — no paint triggered */
-.animate-shimmer   {
-  position: relative;
+/* Shimmer uses composited translateX on ::after — no paint triggered */
+.animate-shimmer {
   overflow: hidden;
 }
 .animate-shimmer::after {

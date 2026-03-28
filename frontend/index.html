@@ -3,6 +3,14 @@
   <head>
     <meta charset="UTF-8" />
 
+    <!-- Critical inline styles — prevent white flash before CSS loads -->
+    <style>
+      *,::before,::after{box-sizing:border-box;margin:0;padding:0}
+      html{scroll-behavior:smooth}
+      body{background:#030712;color:#f9fafb;font-family:'Cairo','Segoe UI',Tahoma,sans-serif;-webkit-font-smoothing:antialiased}
+      #root{min-height:100vh}
+    </style>
+
     <!-- Fonts — non-blocking async load to eliminate render-blocking -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
