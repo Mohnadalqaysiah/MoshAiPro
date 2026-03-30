@@ -140,9 +140,9 @@ class SmartDataProvider:
         self.td_key  = settings.TWELVEDATA_API_KEY
         self.td_base = "https://api.twelvedata.com"
         self._cache: Dict[str, tuple] = {}
-        # كاش السعر الفوري — TTL ثلاث دقائق (يحمي من استنزاف API)
+        # كاش السعر الفوري — TTL 30 ثانية (أسرع تحديث لمنع فوارق السعر)
         self._price_cache: Dict[str, tuple] = {}   # symbol → (price, source, fetched_at, ts)
-        self._PRICE_TTL = 180  # ثانية
+        self._PRICE_TTL = 30  # ثانية (كان 180 — خُفِّض لأن الذهب يتحرك $1+ كل دقيقة)
 
         # Finnhub (مجاني 60 req/min) — بديل TwelveData
         self._fh_key  = getattr(settings, "FINNHUB_API_KEY", None)
@@ -424,11 +424,21 @@ class SmartDataProvider:
         }
         return ttls.get(timeframe, 300)
 
+    # الأسواق التي تستخدم Futures في yfinance — البيانات التاريخية والسعر الفوري
+    # يجب أن يكونا من نفس المصدر لتفادي فارق Spot vs Futures
+    _FUTURES_SYMBOLS = {"XAUUSD", "XAGUSD", "NAS100", "US30", "SP500", "USOIL", "NATGAS"}
+
     def get_realtime_price_with_meta(self, symbol: str) -> Optional[Dict]:
         """
         جلب السعر الفوري مع المصدر والوقت.
-        الأولوية: كاش (3 دقائق) → yfinance 1m (مجاني) → Finnhub (مجاني 60/min) → None
-        TwelveData معطّل تماماً لحماية الكوتا الشهرية.
+
+        ⚠️  مبدأ الاتساق: يجب أن يكون السعر الفوري من نفس المصدر الذي جُلبت منه
+        البيانات التاريخية (OHLCV)، لأن مستويات ICT (Entry/SL/TP) محسوبة على
+        أساس تلك البيانات. خلط Spot مع Futures يُنتج فوارق $5-20 للذهب.
+
+        الأولوية:
+        - Futures (XAUUSD/NAS100...): yfinance دائماً (نفس مصدر الكاندلز)
+        - Forex/Crypto: Finnhub أولاً (spot حقيقي) → yfinance
         """
         sym = symbol.upper()
         now_ts = datetime.utcnow().timestamp()
@@ -442,7 +452,42 @@ class SmartDataProvider:
 
         fetched_at = datetime.utcnow().isoformat() + "Z"
 
-        # ─── 1. Finnhub quote — spot حقيقي (ليس futures) ────────────────────
+        # ─── 1. Futures symbols → yfinance دائماً (تطابق مصدر الكاندلز) ──────
+        if sym in self._FUTURES_SYMBOLS:
+            try:
+                if YFINANCE_AVAILABLE:
+                    yf_symbol = YFINANCE_MAP.get(sym, sym)
+                    ticker = yf.Ticker(yf_symbol)
+                    hist = ticker.history(period="1d", interval="1m")
+                    if hist is not None and len(hist) > 0:
+                        price = float(hist["Close"].iloc[-1])
+                        src = "yfinance_futures"
+                        self._price_cache[sym] = (price, src, fetched_at, now_ts)
+                        logger.debug(f"💱 [{src}] {sym}: {price}")
+                        return {"price": price, "source": src, "fetched_at": fetched_at}
+            except Exception as e:
+                logger.warning(f"yfinance futures price error for {symbol}: {e}")
+            # Finnhub كـ fallback للفيوتشرز فقط عند فشل yfinance
+            if self._fh_key:
+                try:
+                    fh_symbol = FINNHUB_MAP.get(sym)
+                    if fh_symbol:
+                        resp = requests.get(
+                            f"{self._fh_base}/quote",
+                            params={"symbol": fh_symbol, "token": self._fh_key},
+                            timeout=5,
+                        )
+                        data = resp.json()
+                        price = data.get("c") or data.get("l")
+                        if price and float(price) > 0:
+                            price = float(price)
+                            self._price_cache[sym] = (price, "finnhub_fallback", fetched_at, now_ts)
+                            return {"price": price, "source": "finnhub_fallback", "fetched_at": fetched_at}
+                except Exception as e:
+                    logger.warning(f"Finnhub fallback price error for {symbol}: {e}")
+            return None
+
+        # ─── 2. Forex / Crypto → Finnhub spot أولاً ──────────────────────────
         if self._fh_key:
             try:
                 fh_symbol = FINNHUB_MAP.get(sym)
@@ -461,7 +506,7 @@ class SmartDataProvider:
             except Exception as e:
                 logger.warning(f"Finnhub price error for {symbol}: {e}")
 
-        # ─── 2. yfinance 1m — مجاني (futures للمعادن، قريب من spot) ──────────
+        # ─── 3. yfinance fallback ─────────────────────────────────────────────
         try:
             if YFINANCE_AVAILABLE:
                 yf_symbol = YFINANCE_MAP.get(sym, sym)
@@ -469,10 +514,8 @@ class SmartDataProvider:
                 hist = ticker.history(period="1d", interval="1m")
                 if hist is not None and len(hist) > 0:
                     price = float(hist["Close"].iloc[-1])
-                    # للذهب والفضة: GC=F هي futures — نضيف label
-                    src = "yfinance_futures" if sym in ("XAUUSD", "XAGUSD") else "yfinance"
-                    self._price_cache[sym] = (price, src, fetched_at, now_ts)
-                    return {"price": price, "source": src, "fetched_at": fetched_at}
+                    self._price_cache[sym] = (price, "yfinance", fetched_at, now_ts)
+                    return {"price": price, "source": "yfinance", "fetched_at": fetched_at}
         except Exception as e:
             logger.warning(f"yfinance price error for {symbol}: {e}")
 

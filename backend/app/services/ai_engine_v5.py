@@ -21,21 +21,22 @@ from app.config import get_settings
 settings = get_settings()
 
 # مدة الكاش بالثواني حسب الإطار الزمني
+# مُخفَّضة: المستويات تصبح قديمة بسرعة للأسواق المتحركة كالذهب
 _SIGNAL_CACHE_TTL = {
-    "15m":   3 * 60,   # 3 دقائق فقط (السوق يتغير سريعاً)
-    "30m":   8 * 60,   # 8 دقائق
-    "1h":   20 * 60,   # 20 دقيقة
-    "4h":   90 * 60,   # 90 دقيقة
-    "1d":  300 * 60,   # 5 ساعات
+    "15m":   3 * 60,   # 3 دقائق
+    "30m":   5 * 60,   # 5 دقائق
+    "1h":   10 * 60,   # 10 دقائق
+    "4h":   20 * 60,   # 20 دقيقة (كان 90 — خُفِّض لأن الذهب يتحرك $30+ في ساعة)
+    "1d":   90 * 60,   # 90 دقيقة
 }
 
-# نسبة تغير السعر التي تُلغي الكاش (0.3% = 0.003)
+# نسبة تغير السعر التي تُلغي الكاش — مُشدَّدة لمنع إرسال مستويات قديمة
 _CACHE_PRICE_DRIFT = {
-    "15m": 0.003,   # 0.3%
-    "30m": 0.005,   # 0.5%
-    "1h":  0.008,   # 0.8%
-    "4h":  0.015,   # 1.5%
-    "1d":  0.030,   # 3%
+    "15m": 0.002,   # 0.2%
+    "30m": 0.003,   # 0.3%
+    "1h":  0.004,   # 0.4%
+    "4h":  0.005,   # 0.5% (كان 1.5% — خُفِّض: $3000 ذهب × 0.5% = $15 فرق مقبول)
+    "1d":  0.015,   # 1.5%
 }
 
 
@@ -123,14 +124,40 @@ class MoshAIEngineV5:
             account_balance: رأس مال الحساب لحساب حجم الصفقة
             max_risk_percent: نسبة المخاطرة القصوى
         """
-        # ── الكاش: فحص أولي بدون سعر ─────────────────────────────────────────
+        # ── الكاش: فحص أولي مع تحديث السعر الفوري دائماً ────────────────────
         if not force_refresh:
             # جلب السعر الحالي السريع للمقارنة مع الكاش
-            quick_price = smart_data.get_current_price(symbol)
+            live_price_meta = smart_data.get_realtime_price_with_meta(symbol)
+            quick_price = live_price_meta["price"] if live_price_meta else None
             cached = self._get_cached(symbol, timeframe, current_price=quick_price)
             if cached is not None:
-                cached["from_cache"] = True
-                return cached
+                # ⚡ تحديث السعر الحالي دائماً حتى من الكاش — هذا يمنع إظهار سعر قديم
+                if quick_price:
+                    cached["current_price"]    = quick_price
+                    cached["price_source"]     = live_price_meta.get("source", "cached")
+                    cached["price_fetched_at"] = live_price_meta.get("fetched_at", "")
+
+                # تحقق: هل تجاوز السعر الحالي منطقة الدخول؟ → أبطل الكاش
+                rec    = cached.get("recommendation")
+                levels = cached.get("levels", {})
+                entry  = float(levels.get("entry") or levels.get("entry_zone_max") or 0)
+                if quick_price and entry and rec in ("BUY", "SELL"):
+                    overshoot = (quick_price - entry) / entry
+                    if (rec == "BUY"  and overshoot >  0.003) or \
+                       (rec == "SELL" and overshoot < -0.003):
+                        logger.info(
+                            f"⚠️  Entry overshoot detected {symbol}/{timeframe}: "
+                            f"current={quick_price:.5f} entry={entry:.5f} "
+                            f"drift={overshoot*100:+.2f}% — إعادة التحليل"
+                        )
+                        self._signal_cache.pop(self._cache_key(symbol, timeframe), None)
+                        # fall through to fresh analysis
+                    else:
+                        cached["from_cache"] = True
+                        return cached
+                else:
+                    cached["from_cache"] = True
+                    return cached
 
         logger.info(f"📊 Starting analysis v2: {symbol} / {timeframe}")
         start = datetime.now()
