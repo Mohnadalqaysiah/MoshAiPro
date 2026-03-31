@@ -409,18 +409,51 @@ class MoshAIEngineV5:
         بعد كل التحليل وتصحيح Futures-Spot، نجلب السعر الحي مرة أخيرة
         ونتأكد أن current_price لا يختلف عن السوق الفعلي بأكثر من الحد المسموح.
 
+        ⚠️ تنبيه مهم للمعادن (XAUUSD/XAGUSD):
+        - بعد _apply_spot_basis، صار current_price = سعر Spot (Finnhub ≈ 4641)
+        - لكن get_realtime_price_with_meta يُعيد GC=F Futures (≈ 4661)
+        - لذلك يجب مقارنة current_price بـ Finnhub Spot وليس yfinance
+
         إذا كان الفارق > _MAX_PRICE_GAP_USD[symbol]:
           • نُحدِّث current_price بالسعر الصحيح
           • نرفض الإشارة (WAIT) ونمسح المستويات
           • نحذف الكاش لإجبار إعادة التحليل في الطلب القادم
           • نرسل رسالة واضحة للمستخدم بسبب الرفض
         """
-        # نجلب سعراً طازجاً (TTL 5 ثواني) للمقارنة
-        live_meta = smart_data.get_realtime_price_with_meta(symbol)
-        if not live_meta:
-            return analysis
+        sym_upper = symbol.upper()
 
-        live_price = float(live_meta["price"])
+        # ── للمعادن: نجلب Finnhub Spot (نفس ما طبّقه _apply_spot_basis) ──────
+        # مقارنة بـ yfinance GC=F ستُنتج دائماً فجوة $20 وهذا خطأ
+        if sym_upper in self._FUTURES_SPOT_SYMBOLS and smart_data._fh_key:
+            try:
+                import requests as _req
+                from app.services.smart_data import FINNHUB_MAP
+                fh_sym = FINNHUB_MAP.get(sym_upper)
+                if fh_sym:
+                    resp = _req.get(
+                        f"{smart_data._fh_base}/quote",
+                        params={"symbol": fh_sym, "token": smart_data._fh_key},
+                        timeout=4,
+                    )
+                    spot = float((resp.json().get("c") or resp.json().get("l")) or 0)
+                    if spot > 0:
+                        live_price = spot
+                        live_source = "finnhub_spot"
+                    else:
+                        return analysis  # لا يمكن التحقق
+                else:
+                    return analysis
+            except Exception as _fe:
+                logger.debug(f"   price freshness: finnhub fallback error: {_fe}")
+                return analysis
+        else:
+            # ── للبقية: نجلب السعر الحي العادي ──────────────────────────────
+            live_meta = smart_data.get_realtime_price_with_meta(symbol)
+            if not live_meta:
+                return analysis
+            live_price = float(live_meta["price"])
+            live_source = live_meta.get("source", "live")
+
         if live_price <= 0:
             return analysis
 
@@ -441,7 +474,7 @@ class MoshAIEngineV5:
             )
             # ── تصحيح السعر ───────────────────────────────────────────────
             analysis["current_price"] = live_price
-            analysis["price_source"]  = live_meta.get("source", "live")
+            analysis["price_source"]  = live_source
 
             # ── رفض الإشارة ───────────────────────────────────────────────
             analysis["recommendation"]   = "WAIT"
@@ -469,7 +502,7 @@ class MoshAIEngineV5:
         else:
             # السعر سليم — نحدّث بالأحدث
             analysis["current_price"] = live_price
-            analysis["price_source"]  = live_meta.get("source", "live")
+            analysis["price_source"]  = live_source
 
         return analysis
 
