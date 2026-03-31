@@ -313,6 +313,61 @@ class MoshAIEngineV5:
     # الأسواق التي تستخدم Futures في yfinance (GC=F, SI=F ...)
     _FUTURES_SPOT_SYMBOLS = {"XAUUSD", "XAGUSD"}
 
+    # رموز yfinance للسعر الفوري (Spot) — مختلفة عن رموز العقود الآجلة
+    _YF_SPOT_SYMBOLS = {
+        "XAUUSD": "XAUUSD=X",   # ذهب OTC Spot
+        "XAGUSD": "XAGUSD=X",   # فضة OTC Spot
+    }
+
+    def _fetch_spot_price(self, symbol: str) -> float:
+        """
+        يجلب سعر Spot الفوري للمعادن.
+        المصادر بالترتيب:
+          1. yfinance XAUUSD=X (OTC Spot — مجاني، موثوق)
+          2. Finnhub quote (كـ fallback)
+        يُعيد 0 إذا فشل الكل.
+        """
+        sym_upper = symbol.upper()
+
+        # ── 1. yfinance Spot ──────────────────────────────────────────────
+        yf_spot_sym = self._YF_SPOT_SYMBOLS.get(sym_upper)
+        if yf_spot_sym:
+            try:
+                import yfinance as _yf
+                ticker = _yf.Ticker(yf_spot_sym)
+                fi = ticker.fast_info
+                price = getattr(fi, "last_price", None) or getattr(fi, "regular_market_price", None)
+                if price and float(price) > 0:
+                    logger.debug(f"   💰 yfinance spot [{yf_spot_sym}]: {price:.5f}")
+                    return float(price)
+            except Exception as _ye:
+                logger.debug(f"   yfinance spot fetch failed [{yf_spot_sym}]: {_ye}")
+
+        # ── 2. Finnhub fallback ───────────────────────────────────────────
+        if smart_data._fh_key:
+            try:
+                import requests as _req
+                from app.services.smart_data import FINNHUB_MAP
+                fh_sym = FINNHUB_MAP.get(sym_upper)
+                if fh_sym:
+                    resp = _req.get(
+                        f"{smart_data._fh_base}/quote",
+                        params={"symbol": fh_sym, "token": smart_data._fh_key},
+                        timeout=4,
+                    )
+                    data = resp.json()
+                    # نتجاهل القيم الصفرية (Finnhub يُعيد 0 للأزواج غير المدعومة)
+                    price = data.get("c")
+                    if not price or float(price) <= 0:
+                        price = data.get("l")
+                    if price and float(price) > 0:
+                        logger.debug(f"   💰 Finnhub spot [{fh_sym}]: {price:.5f}")
+                        return float(price)
+            except Exception as _fe:
+                logger.debug(f"   Finnhub spot fetch failed: {_fe}")
+
+        return 0.0
+
     def _apply_spot_basis(self, symbol: str, analysis: dict) -> dict:
         """
         يُصحِّح فارق Futures-Spot لأسواق المعادن.
@@ -321,22 +376,9 @@ class MoshAIEngineV5:
         """
         if symbol.upper() not in self._FUTURES_SPOT_SYMBOLS:
             return analysis
-        if not smart_data._fh_key:
-            return analysis
 
         try:
-            import requests as _req
-            from app.services.smart_data import FINNHUB_MAP
-            fh_sym = FINNHUB_MAP.get(symbol.upper())
-            if not fh_sym:
-                return analysis
-
-            resp = _req.get(
-                f"{smart_data._fh_base}/quote",
-                params={"symbol": fh_sym, "token": smart_data._fh_key},
-                timeout=4,
-            )
-            spot = float((resp.json().get("c") or resp.json().get("l")) or 0)
+            spot = self._fetch_spot_price(symbol)
             if spot <= 0:
                 return analysis
 
@@ -422,30 +464,13 @@ class MoshAIEngineV5:
         """
         sym_upper = symbol.upper()
 
-        # ── للمعادن: نجلب Finnhub Spot (نفس ما طبّقه _apply_spot_basis) ──────
+        # ── للمعادن: نجلب Spot (نفس ما طبّقه _apply_spot_basis) ──────────────
         # مقارنة بـ yfinance GC=F ستُنتج دائماً فجوة $20 وهذا خطأ
-        if sym_upper in self._FUTURES_SPOT_SYMBOLS and smart_data._fh_key:
-            try:
-                import requests as _req
-                from app.services.smart_data import FINNHUB_MAP
-                fh_sym = FINNHUB_MAP.get(sym_upper)
-                if fh_sym:
-                    resp = _req.get(
-                        f"{smart_data._fh_base}/quote",
-                        params={"symbol": fh_sym, "token": smart_data._fh_key},
-                        timeout=4,
-                    )
-                    spot = float((resp.json().get("c") or resp.json().get("l")) or 0)
-                    if spot > 0:
-                        live_price = spot
-                        live_source = "finnhub_spot"
-                    else:
-                        return analysis  # لا يمكن التحقق
-                else:
-                    return analysis
-            except Exception as _fe:
-                logger.debug(f"   price freshness: finnhub fallback error: {_fe}")
-                return analysis
+        if sym_upper in self._FUTURES_SPOT_SYMBOLS:
+            live_price = self._fetch_spot_price(sym_upper)
+            if live_price <= 0:
+                return analysis  # لا يمكن التحقق — نتجاوز الفحص
+            live_source = "spot_check"
         else:
             # ── للبقية: نجلب السعر الحي العادي ──────────────────────────────
             live_meta = smart_data.get_realtime_price_with_meta(symbol)
