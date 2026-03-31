@@ -250,14 +250,21 @@ class MoshAIEngineV5:
             conf = analysis.get("ai_confidence_score", 0)
             logger.success(f"✅ {symbol}/{timeframe}: {rec} | {conf}% | {int(ms)}ms")
 
-            # ── السعر الفوري الحقيقي (TwelveData spot أو yfinance 1m) ──────
+            # ── السعر الفوري + تصحيح Futures→Spot للمعادن والعقود الآجلة ──
             try:
                 rt_price = smart_data.get_realtime_price_with_meta(symbol)
                 if rt_price:
-                    analysis["current_price"]   = rt_price["price"]
-                    analysis["price_source"]    = rt_price["source"]
+                    analysis["current_price"]    = rt_price["price"]
+                    analysis["price_source"]     = rt_price["source"]
                     analysis["price_fetched_at"] = rt_price["fetched_at"]
                     logger.info(f"   💱 Live price [{rt_price['source']}]: {rt_price['price']}")
+
+                    # ── تصحيح Futures-Spot لأسواق المعادن والعقود ──────────
+                    # المشكلة: مستويات ICT محسوبة من بيانات GC=F (Futures)
+                    # بينما المتداول يرى سعر XAUUSD Spot في MT4/MT5
+                    # الحل: جلب Spot من Finnhub وتطبيق الفارق على كل المستويات
+                    analysis = self._apply_spot_basis(symbol, analysis)
+
             except Exception as _pe:
                 logger.warning(f"   ⚠️ Could not fetch live price: {_pe}")
 
@@ -274,6 +281,98 @@ class MoshAIEngineV5:
             import traceback
             traceback.print_exc()
             return self._error_response(symbol, str(e))
+
+    # الأسواق التي تستخدم Futures في yfinance (GC=F, SI=F ...)
+    _FUTURES_SPOT_SYMBOLS = {"XAUUSD", "XAGUSD"}
+
+    def _apply_spot_basis(self, symbol: str, analysis: dict) -> dict:
+        """
+        يُصحِّح فارق Futures-Spot لأسواق المعادن.
+        GC=F (ذهب futures) دائماً أعلى من XAUUSD spot بـ $10-40.
+        نطرح هذا الفارق من كل المستويات ليتطابق مع ما يراه المتداول في MT4/MT5.
+        """
+        if symbol.upper() not in self._FUTURES_SPOT_SYMBOLS:
+            return analysis
+        if not smart_data._fh_key:
+            return analysis
+
+        try:
+            import requests as _req
+            from app.services.smart_data import FINNHUB_MAP
+            fh_sym = FINNHUB_MAP.get(symbol.upper())
+            if not fh_sym:
+                return analysis
+
+            resp = _req.get(
+                f"{smart_data._fh_base}/quote",
+                params={"symbol": fh_sym, "token": smart_data._fh_key},
+                timeout=4,
+            )
+            spot = float((resp.json().get("c") or resp.json().get("l")) or 0)
+            if spot <= 0:
+                return analysis
+
+            futures = float(analysis.get("current_price") or 0)
+            if futures <= 0:
+                return analysis
+
+            basis = spot - futures  # عادةً سالب: spot أقل من futures
+
+            # sanity check: الفارق يجب أن يكون معقولاً (0.01% – 3%)
+            ratio = abs(basis) / futures
+            if ratio < 0.0001 or ratio > 0.03:
+                logger.debug(f"   ⚠️  Basis out of range for {symbol}: {basis:+.2f} ({ratio*100:.2f}%) — skipped")
+                return analysis
+
+            logger.info(f"   🔧 Spot-Futures basis [{symbol}]: {basis:+.2f}  (futures={futures:.2f} → spot={spot:.2f})")
+
+            # ── تطبيق الفارق على current_price ───────────────────────────
+            analysis["current_price"]  = round(spot, 5)
+            analysis["price_source"]   = "finnhub_spot"
+            analysis["futures_basis"]  = round(basis, 2)
+
+            def _shift(v):
+                return round(float(v) + basis, 5) if v else v
+
+            # ── المستويات الرئيسية (levels dict) ─────────────────────────
+            lvls = analysis.get("levels", {})
+            for k in ("entry", "entry_zone_min", "entry_zone_max", "stop_loss", "tp1", "tp2"):
+                if lvls.get(k):
+                    lvls[k] = _shift(lvls[k])
+
+            # ── entry_zones / stop_loss_zone / take_profit_zones (legacy) ─
+            if analysis.get("entry_zones"):
+                analysis["entry_zones"] = [_shift(z) for z in analysis["entry_zones"] if z]
+            if analysis.get("stop_loss_zone"):
+                analysis["stop_loss_zone"] = _shift(analysis["stop_loss_zone"])
+            if analysis.get("take_profit_zones"):
+                analysis["take_profit_zones"] = [_shift(z) for z in analysis["take_profit_zones"] if z]
+
+            # ── Order Blocks ──────────────────────────────────────────────
+            ob = analysis.get("order_blocks", {})
+            for ob_list in (ob.get("bullish_obs", []), ob.get("bearish_obs", [])):
+                for o in ob_list:
+                    if isinstance(o, dict):
+                        for k in ("low", "high", "mid"):
+                            if o.get(k):
+                                o[k] = _shift(o[k])
+
+            # ── Liquidity levels ──────────────────────────────────────────
+            liq = analysis.get("liquidity_analysis") or analysis.get("liquidity") or {}
+            if isinstance(liq, dict):
+                for k in ("nearest_ssl", "nearest_bsl"):
+                    if liq.get(k):
+                        liq[k] = _shift(liq[k])
+                bias = liq.get("bias", {})
+                if isinstance(bias, dict):
+                    for k in ("below_price", "above_price"):
+                        if bias.get(k):
+                            bias[k] = _shift(bias[k])
+
+        except Exception as e:
+            logger.warning(f"   ⚠️  _apply_spot_basis failed for {symbol}: {e}")
+
+        return analysis
 
     def _validate_sweep_gate(self, analysis: dict) -> dict:
         """
@@ -343,6 +442,13 @@ class MoshAIEngineV5:
         # حقل مستقل لسهولة الـ debugging
         analysis["sweep_gate_blocked"] = True
         analysis["sweep_gate_reason"]  = short
+
+        # مسح مستويات الدخول المرفوضة — لا نعرض SL/TP من إشارة محظورة
+        # (تجنب عرض مستويات SELL مقلوبة عند تحويل التوصية إلى WAIT)
+        analysis["levels"] = {}
+        analysis["entry_zones"] = []
+        analysis["stop_loss_zone"] = None
+        analysis["take_profit_zones"] = []
 
         return analysis
 
