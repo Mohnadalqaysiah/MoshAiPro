@@ -313,57 +313,59 @@ class MoshAIEngineV5:
     # الأسواق التي تستخدم Futures في yfinance (GC=F, SI=F ...)
     _FUTURES_SPOT_SYMBOLS = {"XAUUSD", "XAGUSD"}
 
-    # ETF proxy للسعر الفوري: (يf_symbol, oz_per_share)
-    # كل سهم GLD = 0.0967 oz → spot ≈ GLD × 10.34
-    # كل سهم SLV = 0.0954 oz → spot ≈ SLV × 10.48
-    _ETF_SPOT_PROXY = {
-        "XAUUSD": ("GLD", 10.34),
-        "XAGUSD": ("SLV", 10.48),
-    }
-
     def _fetch_spot_price(self, symbol: str) -> float:
         """
         يجلب سعر Spot الفوري للمعادن — 3 مصادر بالتسلسل:
-          1. metals.live (مجاني، بدون مفتاح)
-          2. yfinance ETF proxy (GLD×10.34 للذهب، SLV×10.48 للفضة)
-          3. Finnhub quote (كـ fallback أخير)
-        يُعيد 0 إذا فشل الكل.
+          1. @fawazahmed0/currency-api CDN  (مجاني، بدون مفتاح، 24/7)
+          2. yfinance GC=F - theoretical basis (حساب الـ carry من تاريخ الانتهاء)
+          3. Finnhub quote (fallback أخير)
+        يُعيد 0 إذا فشل الكل (يُتجاوز التصحيح بأمان).
         """
         import requests as _req
         sym_upper = symbol.upper()
 
-        # ── 1. metals.live (public API, no key) ──────────────────────────
-        try:
-            metal = {"XAUUSD": "gold", "XAGUSD": "silver"}.get(sym_upper)
-            if metal:
-                resp = _req.get(
-                    f"https://api.metals.live/v1/spot/{metal}",
-                    timeout=4,
-                    headers={"Accept": "application/json"},
-                )
-                if resp.status_code == 200:
-                    price = resp.json().get("price") or resp.json().get(metal)
-                    if price and float(price) > 0:
-                        logger.debug(f"   💰 metals.live spot [{metal}]: {price:.5f}")
-                        return float(price)
-        except Exception as _me:
-            logger.debug(f"   metals.live spot failed: {_me}")
+        # رمز XAU في currency-api و yfinance futures
+        _CURRENCY_API_SYM = {"XAUUSD": "xau", "XAGUSD": "xag"}
+        _FUTURES_SYM      = {"XAUUSD": "GC=F", "XAGUSD": "SI=F"}
 
-        # ── 2. yfinance ETF proxy ─────────────────────────────────────────
-        etf_info = self._ETF_SPOT_PROXY.get(sym_upper)
-        if etf_info:
-            etf_sym, ratio = etf_info
+        # ── 1. @fawazahmed0/currency-api CDN (24/7، لا مفتاح، يدعم المعادن) ──
+        currency_sym = _CURRENCY_API_SYM.get(sym_upper)
+        if currency_sym:
+            for url in [
+                f"https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/{currency_sym}.json",
+                f"https://latest.currency-api.pages.dev/v1/currencies/{currency_sym}.json",
+            ]:
+                try:
+                    resp = _req.get(url, timeout=5)
+                    if resp.status_code == 200:
+                        usd = resp.json().get(currency_sym, {}).get("usd")
+                        if usd and float(usd) > 0:
+                            logger.debug(f"   💰 currency-api spot [{sym_upper}]: {usd:.5f}")
+                            return float(usd)
+                except Exception:
+                    continue
+
+        # ── 2. yfinance: حساب Spot من Futures - theoretical carry basis ────
+        futures_sym = _FUTURES_SYM.get(sym_upper)
+        if futures_sym:
             try:
-                import yfinance as _yf
-                ticker = _yf.Ticker(etf_sym)
-                fi = ticker.fast_info
-                etf_price = getattr(fi, "last_price", None) or getattr(fi, "regularMarketPrice", None)
-                if etf_price and float(etf_price) > 0:
-                    spot = round(float(etf_price) * ratio, 5)
-                    logger.debug(f"   💰 ETF proxy [{etf_sym}×{ratio}]: {spot:.5f}")
+                import yfinance as _yf, time as _time
+                ticker = _yf.Ticker(futures_sym)
+                info = ticker.info
+                futures_price = info.get("regularMarketPrice") or info.get("previousClose")
+                expire_ts     = info.get("expireDate")  # Unix timestamp
+                if futures_price and expire_ts:
+                    days = max(1, (expire_ts - _time.time()) / 86400)
+                    # حساب carry: ~4.5% معدل سنوي للذهب
+                    basis = futures_price * 0.045 * (days / 365)
+                    spot  = round(futures_price - basis, 5)
+                    logger.debug(
+                        f"   💰 theoretical spot [{sym_upper}]: futures={futures_price:.2f} "
+                        f"days={days:.0f} basis={basis:.2f} → spot={spot:.2f}"
+                    )
                     return spot
             except Exception as _ye:
-                logger.debug(f"   ETF proxy failed [{etf_sym}]: {_ye}")
+                logger.debug(f"   theoretical basis failed [{sym_upper}]: {_ye}")
 
         # ── 3. Finnhub fallback ───────────────────────────────────────────
         if smart_data._fh_key:

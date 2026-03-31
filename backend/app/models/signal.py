@@ -75,7 +75,7 @@ class Signal(Base):
     profit_loss_percentage = Column(Float, default=0.0)
     points_earned = Column(Float, nullable=True)  # calculated when admin marks TP/SL
     broadcast_sent        = Column(Boolean, default=False, nullable=False)
-    result_broadcast_sent = Column(Boolean, default=False, nullable=False)  # إشعار النتيجة (TP/SL) لكل المشتركين
+    result_broadcast_sent = Column(Boolean, default=False, nullable=True)   # إشعار النتيجة (TP/SL) لكل المشتركين
     entry_executed = Column(DateTime(timezone=True), nullable=True)
     exit_executed = Column(DateTime(timezone=True), nullable=True)
     
