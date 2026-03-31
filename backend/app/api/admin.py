@@ -767,13 +767,23 @@ def set_signal_outcome(
     except ValueError:
         raise HTTPException(400, f"حالة غير صحيحة: {data.status}")
 
-    signal.points_earned  = round(points, 2)
-    signal.profit_loss    = round(points, 2)
-    signal.exit_executed  = datetime.now(timezone.utc)
+    # نسبة الربح/الخسارة المئوية بناءً على سعر الدخول
+    if entry and entry > 0:
+        if is_buy:
+            pnl_pct = round((exit_price - entry) / entry * 100, 3)
+        else:
+            pnl_pct = round((entry - exit_price) / entry * 100, 3)
+    else:
+        pnl_pct = 0.0
+
+    signal.points_earned            = round(points, 2)
+    signal.profit_loss              = round(points, 2)
+    signal.profit_loss_percentage   = pnl_pct
+    signal.exit_executed            = datetime.now(timezone.utc)
 
     db.commit()
     db.refresh(signal)
-    logger.info(f"Signal {signal_id} outcome: {data.status}, points={points:.2f}")
+    logger.info(f"Signal {signal_id} outcome: {data.status}, points={points:.2f}, pnl%={pnl_pct:.3f}%")
     return {"success": True, "signal": _signal_info(signal)}
 
 

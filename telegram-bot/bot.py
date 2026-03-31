@@ -340,38 +340,54 @@ def fmt_new_signal(s: dict) -> str:
 
 
 def fmt_outcome(o: dict) -> str:
-    status = o["status"]
-    market = o["market"]
-    stype  = o["signal_type"]
-    entry  = _fmt_price(o["entry"])
-    price  = _fmt_price(o["current_price"])
-    tp1    = _fmt_price(o["tp1"])
-    tp2    = _fmt_price(o["tp2"])
-    sl_p   = _fmt_price(o["sl"])
-    pnl    = float(o["pnl_points"])
-    rec_ar = "شراء" if stype == "BUY" else "بيع"
-    mname  = MARKET_NAMES.get(market, market)
+    status  = o["status"]
+    market  = o["market"]
+    stype   = o["signal_type"]
+    entry   = _fmt_price(o["entry"])
+    price   = _fmt_price(o["current_price"])
+    tp1     = _fmt_price(o["tp1"])
+    tp2     = _fmt_price(o["tp2"])
+    sl_p    = _fmt_price(o["sl"])
+    pnl     = float(o.get("pnl_points", 0))
+    pnl_pct = float(o.get("pnl_pct", 0))
+    rec_ar  = "شراء" if stype == "BUY" else "بيع"
+    mname   = MARKET_NAMES.get(market, market)
+
+    # علامة الإشارة +/-
+    sign_pts = "+" if pnl >= 0 else ""
+    sign_pct = "+" if pnl_pct >= 0 else ""
 
     if status == "TP2_HIT":
-        header  = f"🏆 *الهدف 2 تحقق!*"
-        pnl_txt = f"📈 الربح: *+{_fmt_pts(pnl)} نقطة*"
-        tip     = "صفقة ممتازة — الهدف الكامل 🎯"
+        header  = "🏆 *الهدف 2 تحقق!*"
+        pnl_line = (
+            f"📈 الربح: *{sign_pts}{_fmt_pts(pnl)} نقطة*"
+            + (f"  │  *{sign_pct}{pnl_pct:.2f}%*" if pnl_pct else "")
+        )
+        tip = "صفقة ممتازة — الهدف الكامل 🎯"
     elif status == "TP1_HIT":
-        header  = f"✅ *الهدف 1 تحقق!*"
-        pnl_txt = f"📈 الربح: *+{_fmt_pts(pnl)} نقطة*"
-        tip     = "فكّر بنقل الإيقاف لنقطة التعادل 💡"
+        header  = "✅ *الهدف 1 تحقق!*"
+        pnl_line = (
+            f"📈 الربح: *{sign_pts}{_fmt_pts(pnl)} نقطة*"
+            + (f"  │  *{sign_pct}{pnl_pct:.2f}%*" if pnl_pct else "")
+        )
+        tip = "فكّر بنقل الإيقاف لنقطة التعادل 💡"
     else:
-        header  = f"🔴 *وقف الخسارة ضُرب*"
-        pnl_txt = f"📉 الخسارة: *{_fmt_pts(pnl)} نقطة*"
-        tip     = "الخسارة جزء من التداول — ثق بالاستراتيجية 💪"
+        header  = "🔴 *وقف الخسارة ضُرب*"
+        pnl_line = (
+            f"📉 الخسارة: *{sign_pts}{_fmt_pts(pnl)} نقطة*"
+            + (f"  │  *{sign_pct}{pnl_pct:.2f}%*" if pnl_pct else "")
+        )
+        tip = "الخسارة جزء من التداول — ثق بالاستراتيجية 💪"
 
     return (
         f"{header}\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"📌 {mname}  ─  {rec_ar}\n"
-        f"💲 دخول:  `{entry}`  →  الآن: `{price}`\n"
-        f"🎯 TP1: `{tp1}`  │  TP2: `{tp2}`  │  SL: `{sl_p}`\n\n"
-        f"{pnl_txt}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📌 *{mname}*  ─  {rec_ar}\n"
+        f"💲 دخول: `{entry}`  ➜  إغلاق: `{price}`\n"
+        f"🎯 TP1: `{tp1}`  │  TP2: `{tp2}`\n"
+        f"🛑 SL:  `{sl_p}`\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"{pnl_line}\n"
         f"_{tip}_\n\n"
         f"⚠️ _للمعلومات فقط، ليس توصية استثمارية._"
     )
@@ -906,8 +922,11 @@ async def monitor_watchlists(app: Application):
         try:
             _market_cycle += 1
 
-            # ── 1. نتائج الإشارات (TP/SL)
+            # ── 1. نتائج الإشارات (TP/SL) ─────────────────────────────────
             outcomes = (await _get("/api/v1/bot/check-outcomes", timeout=45)).get("triggered", [])
+
+            # نجمع الإشارات المُغلقة لنُعلّم كل واحدة مرة واحدة
+            sent_result_ids: set = set()
             for o in outcomes:
                 try:
                     await app.bot.send_message(
@@ -919,8 +938,18 @@ async def monitor_watchlists(app: Application):
                             InlineKeyboardButton("📡 الإشارات",  callback_data="m_signals"),
                         ]]),
                     )
+                    sent_result_ids.add(o.get("signal_id"))
+                    await asyncio.sleep(0.05)
                 except Exception as _e:
                     logger.warning(f"outcome send error: {_e}")
+
+            # علامة أن النتيجة بُثّت (لا نُرسل مجدداً)
+            for sid in sent_result_ids:
+                if sid:
+                    try:
+                        await _post(f"/api/v1/bot/mark-result-broadcast/{sid}")
+                    except Exception:
+                        pass
 
             # ── 2. مراقبة الأزواج
             db_users = (await _get("/api/v1/bot/all-watchlists")).get("users", [])

@@ -15,6 +15,36 @@ from app.services.ai_engine_v5 import mosh_ai_engine_v5
 from app.services.smart_data import smart_data as _smart_data
 from app.config import get_settings
 
+
+def _pnl_for_outcome(entry: float, exit_price: float, sl: float, tp1: float, tp2: float,
+                     market: str, is_buy: bool, status: SignalStatus):
+    """
+    يحسب PnL الفعلي للإشارة عند إغلاقها.
+    يُعيد: (points, pnl_pct, pnl_usd_raw)
+    """
+    from app.api.admin import _calc_points  # دالة النقاط الموحّدة
+
+    if status == SignalStatus.SL_HIT:
+        diff   = abs(entry - sl)
+        points = -_calc_points(market, diff)
+        ep     = sl
+    elif status == SignalStatus.TP2_HIT:
+        diff   = abs(tp2 - entry)
+        points = _calc_points(market, diff)
+        ep     = tp2
+    else:  # TP1_HIT
+        diff   = abs(tp1 - entry)
+        points = _calc_points(market, diff)
+        ep     = tp1
+
+    # نسبة الربح/الخسارة
+    if is_buy:
+        pnl_pct = round((ep - entry) / entry * 100, 3)
+    else:
+        pnl_pct = round((entry - ep) / entry * 100, 3)
+
+    return round(points, 2), pnl_pct, round(ep, 5)
+
 router = APIRouter()
 settings = get_settings()
 
@@ -180,34 +210,57 @@ async def bot_check_outcomes(
                 elif price <= tp1: new_status = SignalStatus.TP1_HIT
 
             if new_status and new_status != sig.status:
-                sig.status = new_status
-                sig.current_price = price
+                is_buy  = sig.signal_type.value == "BUY"
+                points, pnl_pct, exit_p = _pnl_for_outcome(
+                    entry, price, sl, tp1, tp2, sig.market, is_buy, new_status
+                )
+
+                # حفظ النتيجة على الإشارة
+                sig.status                  = new_status
+                sig.current_price           = price
+                sig.points_earned           = points
+                sig.profit_loss             = points
+                sig.profit_loss_percentage  = pnl_pct
+                sig.exit_executed           = datetime.now(timezone.utc)
                 db.commit()
 
-                if new_status == SignalStatus.SL_HIT:
-                    pnl = -round(abs(entry - sl), 5)
-                elif new_status == SignalStatus.TP2_HIT:
-                    pnl = round(abs(tp2 - entry), 5)
-                else:
-                    pnl = round(abs(tp1 - entry), 5)
+                payload = {
+                    "signal_id":    sig.id,
+                    "market":       sig.market,
+                    "timeframe":    sig.timeframe,
+                    "signal_type":  sig.signal_type.value,
+                    "status":       new_status.value,
+                    "entry":        entry,
+                    "sl":           sl,
+                    "tp1":          tp1,
+                    "tp2":          tp2,
+                    "current_price":price,
+                    "pnl_points":   points,
+                    "pnl_pct":      pnl_pct,
+                    "confidence":   sig.ai_confidence,
+                }
 
-                user = db.query(User).filter(User.id == sig.user_id).first()
-                if user and user.telegram_id:
-                    triggered.append({
-                        "telegram_id":  user.telegram_id,
-                        "signal_id":    sig.id,
-                        "market":       sig.market,
-                        "timeframe":    sig.timeframe,
-                        "signal_type":  sig.signal_type.value,
-                        "status":       new_status.value,
-                        "entry":        entry,
-                        "sl":           sl,
-                        "tp1":          tp1,
-                        "tp2":          tp2,
-                        "current_price":price,
-                        "pnl_points":   pnl,
-                        "confidence":   sig.ai_confidence,
-                    })
+                # إذا كانت الإشارة مُبثّة لكل المشتركين → نُضيف كل المشتركين
+                if sig.broadcast_sent:
+                    active_subs = db.query(User).filter(
+                        User.telegram_id != None,
+                        User.is_active == True,
+                        User.plan != PlanType.BANNED,
+                    ).all()
+                    now_utc = datetime.now(timezone.utc)
+                    for sub in active_subs:
+                        valid = False
+                        if sub.plan in [PlanType.WEEKLY, PlanType.MONTHLY]:
+                            valid = sub.subscription_ends_at and sub.subscription_ends_at > now_utc
+                        elif sub.plan == PlanType.TRIAL:
+                            valid = not sub.trial_ends_at or sub.trial_ends_at > now_utc
+                        if valid and sub.telegram_id:
+                            triggered.append({"telegram_id": sub.telegram_id, **payload})
+                else:
+                    # إشارة خاصة بمستخدم واحد
+                    user = db.query(User).filter(User.id == sig.user_id).first()
+                    if user and user.telegram_id:
+                        triggered.append({"telegram_id": user.telegram_id, **payload})
         except Exception as _e:
             logger.warning(f"check_outcomes signal {sig.id}: {_e}")
 
@@ -298,6 +351,21 @@ def bot_mark_broadcast(
     if not sig:
         raise HTTPException(404, "Signal not found")
     sig.broadcast_sent = True
+    db.commit()
+    return {"success": True}
+
+
+@router.post("/mark-result-broadcast/{signal_id}")
+def bot_mark_result_broadcast(
+    signal_id: int,
+    _: bool = Depends(verify_bot),
+    db: Session = Depends(get_db),
+):
+    """علامة أن نتيجة الإشارة (TP/SL) قد بُثّت لكل المشتركين"""
+    sig = db.query(Signal).filter(Signal.id == signal_id).first()
+    if not sig:
+        raise HTTPException(404, "Signal not found")
+    sig.result_broadcast_sent = True
     db.commit()
     return {"success": True}
 

@@ -20,6 +20,31 @@ from app.config import get_settings
 
 settings = get_settings()
 
+# الحد الأقصى لفجوة السعر المسموحة بين current_price في التحليل والسعر الحي (بالدولار/النقطة)
+# إذا تجاوز الفارق هذا الحد → التحليل مرفوض ويُعاد كـ WAIT
+_MAX_PRICE_GAP_USD = {
+    "XAUUSD":  5.0,       # الذهب: $5
+    "XAGUSD":  0.30,      # الفضة: $0.30
+    "BTCUSD":  200.0,     # بيتكوين: $200
+    "ETHUSD":  15.0,      # إيثيريوم: $15
+    "BNBUSD":  3.0,
+    "SOLUSD":  1.5,
+    "NAS100":  25.0,      # ناسداك: 25 نقطة
+    "US30":    35.0,      # داو جونز: 35 نقطة
+    "SP500":   12.0,
+    "USOIL":   0.30,
+    "EURUSD":  0.0010,    # فوركس: ~10 pips
+    "GBPUSD":  0.0012,
+    "USDJPY":  0.18,
+    "USDCHF":  0.0010,
+    "AUDUSD":  0.0010,
+    "USDCAD":  0.0010,
+    "NZDUSD":  0.0010,
+    "EURGBP":  0.0008,
+    "EURJPY":  0.18,
+    "GBPJPY":  0.22,
+}
+
 # مدة الكاش بالثواني حسب الإطار الزمني
 # مُخفَّضة: المستويات تصبح قديمة بسرعة للأسواق المتحركة كالذهب
 _SIGNAL_CACHE_TTL = {
@@ -265,6 +290,9 @@ class MoshAIEngineV5:
                     # الحل: جلب Spot من Finnhub وتطبيق الفارق على كل المستويات
                     analysis = self._apply_spot_basis(symbol, analysis)
 
+                    # ── حارس جودة السعر: رفض أي إشارة يختلف سعرها > الحد ──
+                    analysis = self._validate_price_freshness(symbol, analysis)
+
             except Exception as _pe:
                 logger.warning(f"   ⚠️ Could not fetch live price: {_pe}")
 
@@ -371,6 +399,77 @@ class MoshAIEngineV5:
 
         except Exception as e:
             logger.warning(f"   ⚠️  _apply_spot_basis failed for {symbol}: {e}")
+
+        return analysis
+
+    def _validate_price_freshness(self, symbol: str, analysis: dict) -> dict:
+        """
+        ✅ حارس جودة السعر (Price Freshness Guard)
+        ─────────────────────────────────────────
+        بعد كل التحليل وتصحيح Futures-Spot، نجلب السعر الحي مرة أخيرة
+        ونتأكد أن current_price لا يختلف عن السوق الفعلي بأكثر من الحد المسموح.
+
+        إذا كان الفارق > _MAX_PRICE_GAP_USD[symbol]:
+          • نُحدِّث current_price بالسعر الصحيح
+          • نرفض الإشارة (WAIT) ونمسح المستويات
+          • نحذف الكاش لإجبار إعادة التحليل في الطلب القادم
+          • نرسل رسالة واضحة للمستخدم بسبب الرفض
+        """
+        # نجلب سعراً طازجاً (TTL 5 ثواني) للمقارنة
+        live_meta = smart_data.get_realtime_price_with_meta(symbol)
+        if not live_meta:
+            return analysis
+
+        live_price = float(live_meta["price"])
+        if live_price <= 0:
+            return analysis
+
+        analysis_price = float(analysis.get("current_price") or 0)
+        if analysis_price <= 0:
+            # لا يوجد سعر في التحليل — نضع السعر الحي
+            analysis["current_price"] = live_price
+            return analysis
+
+        max_gap = _MAX_PRICE_GAP_USD.get(symbol.upper(), live_price * 0.003)  # 0.3% fallback
+        gap = abs(analysis_price - live_price)
+
+        if gap > max_gap:
+            logger.warning(
+                f"⛔ Price freshness REJECTED [{symbol}]: "
+                f"analysis_price={analysis_price:.5f}  live={live_price:.5f}  "
+                f"gap={gap:.5f} > max_allowed={max_gap:.5f}"
+            )
+            # ── تصحيح السعر ───────────────────────────────────────────────
+            analysis["current_price"] = live_price
+            analysis["price_source"]  = live_meta.get("source", "live")
+
+            # ── رفض الإشارة ───────────────────────────────────────────────
+            analysis["recommendation"]   = "WAIT"
+            analysis["signal_type"]      = "WAIT"
+            analysis["price_gap_rejected"] = True
+            analysis["price_gap_value"]    = round(gap, 5)
+            analysis["price_gap_max"]      = round(max_gap, 5)
+            analysis["rejection_reason"] = (
+                f"⚠️ تم رفض الإشارة: السعر في التحليل ({analysis_price:.2f}) "
+                f"يختلف عن السوق الفعلي ({live_price:.2f}) "
+                f"بمقدار {gap:.2f} — الحد المسموح {max_gap:.2f}.\n"
+                f"أعد طلب التحليل للحصول على إشارة محدّثة."
+            )
+
+            # ── مسح المستويات (لا نعرض entry/SL/TP خاطئة) ────────────────
+            analysis["levels"]          = {}
+            analysis["entry_zones"]     = []
+            analysis["stop_loss_zone"]  = None
+            analysis["take_profit_zones"] = []
+
+            # ── حذف الكاش → سيُعاد التحليل في الطلب القادم ───────────────
+            cache_key = self._cache_key(symbol, analysis.get("timeframe", "1h"))
+            self._signal_cache.pop(cache_key, None)
+            logger.info(f"   🗑️  Cache cleared for {cache_key} — will re-analyze next request")
+        else:
+            # السعر سليم — نحدّث بالأحدث
+            analysis["current_price"] = live_price
+            analysis["price_source"]  = live_meta.get("source", "live")
 
         return analysis
 
