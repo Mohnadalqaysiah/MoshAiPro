@@ -88,13 +88,15 @@ async def analyze_market(
                 db.commit()
 
 
-        # استخراج المستويات
+        # استخراج المستويات (safe — entry_zones / take_profit_zones قد تكون فارغة)
         rec    = analysis.get("recommendation", "WAIT")
         levels = analysis.get("levels", {})
-        entry  = levels.get("entry") or analysis.get("entry_zones", [None])[0]
+        _ez    = analysis.get("entry_zones") or []
+        _tz    = analysis.get("take_profit_zones") or []
+        entry  = levels.get("entry") or (_ez[0] if _ez else None)
         sl     = levels.get("stop_loss") or analysis.get("stop_loss_zone")
-        tp1    = levels.get("tp1") or (analysis.get("take_profit_zones", [None])[0] if analysis.get("take_profit_zones") else None)
-        tp2    = levels.get("tp2") or (analysis.get("take_profit_zones", [None, None])[1] if len(analysis.get("take_profit_zones", [])) > 1 else None)
+        tp1    = levels.get("tp1") or (_tz[0] if _tz else None)
+        tp2    = levels.get("tp2") or (_tz[1] if len(_tz) > 1 else None)
         conf   = analysis.get("ai_confidence_score", 0)
         rr     = levels.get("risk_reward")
 
