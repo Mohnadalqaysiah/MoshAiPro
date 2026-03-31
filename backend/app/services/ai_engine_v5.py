@@ -313,40 +313,61 @@ class MoshAIEngineV5:
     # الأسواق التي تستخدم Futures في yfinance (GC=F, SI=F ...)
     _FUTURES_SPOT_SYMBOLS = {"XAUUSD", "XAGUSD"}
 
-    # رموز yfinance للسعر الفوري (Spot) — مختلفة عن رموز العقود الآجلة
-    _YF_SPOT_SYMBOLS = {
-        "XAUUSD": "XAUUSD=X",   # ذهب OTC Spot
-        "XAGUSD": "XAGUSD=X",   # فضة OTC Spot
+    # ETF proxy للسعر الفوري: (يf_symbol, oz_per_share)
+    # كل سهم GLD = 0.0967 oz → spot ≈ GLD × 10.34
+    # كل سهم SLV = 0.0954 oz → spot ≈ SLV × 10.48
+    _ETF_SPOT_PROXY = {
+        "XAUUSD": ("GLD", 10.34),
+        "XAGUSD": ("SLV", 10.48),
     }
 
     def _fetch_spot_price(self, symbol: str) -> float:
         """
-        يجلب سعر Spot الفوري للمعادن.
-        المصادر بالترتيب:
-          1. yfinance XAUUSD=X (OTC Spot — مجاني، موثوق)
-          2. Finnhub quote (كـ fallback)
+        يجلب سعر Spot الفوري للمعادن — 3 مصادر بالتسلسل:
+          1. metals.live (مجاني، بدون مفتاح)
+          2. yfinance ETF proxy (GLD×10.34 للذهب، SLV×10.48 للفضة)
+          3. Finnhub quote (كـ fallback أخير)
         يُعيد 0 إذا فشل الكل.
         """
+        import requests as _req
         sym_upper = symbol.upper()
 
-        # ── 1. yfinance Spot ──────────────────────────────────────────────
-        yf_spot_sym = self._YF_SPOT_SYMBOLS.get(sym_upper)
-        if yf_spot_sym:
+        # ── 1. metals.live (public API, no key) ──────────────────────────
+        try:
+            metal = {"XAUUSD": "gold", "XAGUSD": "silver"}.get(sym_upper)
+            if metal:
+                resp = _req.get(
+                    f"https://api.metals.live/v1/spot/{metal}",
+                    timeout=4,
+                    headers={"Accept": "application/json"},
+                )
+                if resp.status_code == 200:
+                    price = resp.json().get("price") or resp.json().get(metal)
+                    if price and float(price) > 0:
+                        logger.debug(f"   💰 metals.live spot [{metal}]: {price:.5f}")
+                        return float(price)
+        except Exception as _me:
+            logger.debug(f"   metals.live spot failed: {_me}")
+
+        # ── 2. yfinance ETF proxy ─────────────────────────────────────────
+        etf_info = self._ETF_SPOT_PROXY.get(sym_upper)
+        if etf_info:
+            etf_sym, ratio = etf_info
             try:
                 import yfinance as _yf
-                ticker = _yf.Ticker(yf_spot_sym)
+                ticker = _yf.Ticker(etf_sym)
                 fi = ticker.fast_info
-                price = getattr(fi, "last_price", None) or getattr(fi, "regular_market_price", None)
-                if price and float(price) > 0:
-                    logger.debug(f"   💰 yfinance spot [{yf_spot_sym}]: {price:.5f}")
-                    return float(price)
+                etf_price = getattr(fi, "last_price", None) or getattr(fi, "regularMarketPrice", None)
+                if etf_price and float(etf_price) > 0:
+                    spot = round(float(etf_price) * ratio, 5)
+                    logger.debug(f"   💰 ETF proxy [{etf_sym}×{ratio}]: {spot:.5f}")
+                    return spot
             except Exception as _ye:
-                logger.debug(f"   yfinance spot fetch failed [{yf_spot_sym}]: {_ye}")
+                logger.debug(f"   ETF proxy failed [{etf_sym}]: {_ye}")
 
-        # ── 2. Finnhub fallback ───────────────────────────────────────────
+        # ── 3. Finnhub fallback ───────────────────────────────────────────
         if smart_data._fh_key:
             try:
-                import requests as _req
                 from app.services.smart_data import FINNHUB_MAP
                 fh_sym = FINNHUB_MAP.get(sym_upper)
                 if fh_sym:
@@ -356,7 +377,6 @@ class MoshAIEngineV5:
                         timeout=4,
                     )
                     data = resp.json()
-                    # نتجاهل القيم الصفرية (Finnhub يُعيد 0 للأزواج غير المدعومة)
                     price = data.get("c")
                     if not price or float(price) <= 0:
                         price = data.get("l")
@@ -364,8 +384,9 @@ class MoshAIEngineV5:
                         logger.debug(f"   💰 Finnhub spot [{fh_sym}]: {price:.5f}")
                         return float(price)
             except Exception as _fe:
-                logger.debug(f"   Finnhub spot fetch failed: {_fe}")
+                logger.debug(f"   Finnhub spot failed: {_fe}")
 
+        logger.warning(f"   ⚠️  _fetch_spot_price: all sources failed for {symbol}")
         return 0.0
 
     def _apply_spot_basis(self, symbol: str, analysis: dict) -> dict:
