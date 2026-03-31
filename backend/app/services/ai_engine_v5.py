@@ -328,7 +328,31 @@ class MoshAIEngineV5:
         _CURRENCY_API_SYM = {"XAUUSD": "xau", "XAGUSD": "xag"}
         _FUTURES_SYM      = {"XAUUSD": "GC=F", "XAGUSD": "SI=F"}
 
-        # ── 1. @fawazahmed0/currency-api CDN (24/7، لا مفتاح، يدعم المعادن) ──
+        # ── 1. yfinance: Spot من Futures - theoretical carry basis (الأدق) ─
+        # المعادلة: spot ≈ futures - (futures × rate × days_to_expiry / 365)
+        # معدل الفائدة الأمريكي 2026: ~5.25% سنوياً
+        futures_sym = _FUTURES_SYM.get(sym_upper)
+        if futures_sym:
+            try:
+                import yfinance as _yf, time as _time
+                ticker = _yf.Ticker(futures_sym)
+                info = ticker.info
+                futures_price = info.get("regularMarketPrice") or info.get("previousClose")
+                expire_ts     = info.get("expireDate")  # Unix timestamp
+                if futures_price and expire_ts:
+                    days = max(1, (expire_ts - _time.time()) / 86400)
+                    rate = 0.0525  # US risk-free rate 2026
+                    basis = futures_price * rate * (days / 365)
+                    spot  = round(futures_price - basis, 5)
+                    logger.debug(
+                        f"   💰 theoretical spot [{sym_upper}]: futures={futures_price:.2f} "
+                        f"days={days:.0f} basis={basis:.2f} → spot={spot:.2f}"
+                    )
+                    return spot
+            except Exception as _ye:
+                logger.debug(f"   theoretical basis failed [{sym_upper}]: {_ye}")
+
+        # ── 2. @fawazahmed0/currency-api CDN (backup — قد يكون متأخر 24h) ─
         currency_sym = _CURRENCY_API_SYM.get(sym_upper)
         if currency_sym:
             for url in [
@@ -344,28 +368,6 @@ class MoshAIEngineV5:
                             return float(usd)
                 except Exception:
                     continue
-
-        # ── 2. yfinance: حساب Spot من Futures - theoretical carry basis ────
-        futures_sym = _FUTURES_SYM.get(sym_upper)
-        if futures_sym:
-            try:
-                import yfinance as _yf, time as _time
-                ticker = _yf.Ticker(futures_sym)
-                info = ticker.info
-                futures_price = info.get("regularMarketPrice") or info.get("previousClose")
-                expire_ts     = info.get("expireDate")  # Unix timestamp
-                if futures_price and expire_ts:
-                    days = max(1, (expire_ts - _time.time()) / 86400)
-                    # حساب carry: ~4.5% معدل سنوي للذهب
-                    basis = futures_price * 0.045 * (days / 365)
-                    spot  = round(futures_price - basis, 5)
-                    logger.debug(
-                        f"   💰 theoretical spot [{sym_upper}]: futures={futures_price:.2f} "
-                        f"days={days:.0f} basis={basis:.2f} → spot={spot:.2f}"
-                    )
-                    return spot
-            except Exception as _ye:
-                logger.debug(f"   theoretical basis failed [{sym_upper}]: {_ye}")
 
         # ── 3. Finnhub fallback ───────────────────────────────────────────
         if smart_data._fh_key:
@@ -411,9 +413,10 @@ class MoshAIEngineV5:
 
             basis = spot - futures  # عادةً سالب: spot أقل من futures
 
-            # sanity check: الفارق يجب أن يكون معقولاً (0.01% – 3%)
+            # sanity check: الفارق يجب أن يكون معقولاً (0.01% – 4%)
+            # الذهب near-month قد يصل 2.6%+ مع معدلات فائدة مرتفعة
             ratio = abs(basis) / futures
-            if ratio < 0.0001 or ratio > 0.03:
+            if ratio < 0.0001 or ratio > 0.04:
                 logger.debug(f"   ⚠️  Basis out of range for {symbol}: {basis:+.2f} ({ratio*100:.2f}%) — skipped")
                 return analysis
 
