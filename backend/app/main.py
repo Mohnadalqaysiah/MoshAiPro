@@ -40,11 +40,23 @@ async def lifespan(app: FastAPI):
     init_db()
     os.makedirs("/app/static/uploads", exist_ok=True)
     logger.success("✅ Database initialized")
-    
+
+    # بدء خدمة TradingView WebSocket (أسعار Spot حقيقية)
+    try:
+        from app.services.tv_price_feed import tv_feed
+        await tv_feed.start()
+    except Exception as _tv_err:
+        logger.warning(f"⚠️ TradingView feed failed to start: {_tv_err} — will use fallback pricing")
+
     yield
-    
+
     # Shutdown
     logger.info("👋 Shutting down Mosh AI Pro v5...")
+    try:
+        from app.services.tv_price_feed import tv_feed
+        await tv_feed.stop()
+    except Exception:
+        pass
 
 
 # Create FastAPI app

@@ -323,9 +323,10 @@ class MoshAIEngineV5:
 
     def _fetch_spot_price(self, symbol: str) -> float:
         """
-        يجلب سعر Spot الفوري للمعادن — 3 مصادر بالتسلسل:
-          1. @fawazahmed0/currency-api CDN  (مجاني، بدون مفتاح، 24/7)
-          2. yfinance GC=F - theoretical basis (حساب الـ carry من تاريخ الانتهاء)
+        يجلب سعر Spot الفوري للمعادن — 4 مصادر بالتسلسل:
+          0. TradingView WebSocket  (OANDA Spot — أدق مصدر، لحظي)
+          1. yfinance GC=F theoretical carry basis (حساب رياضي دقيق)
+          2. @fawazahmed0/currency-api CDN  (مجاني، 24/7)
           3. Finnhub quote (fallback أخير)
         يُعيد 0 إذا فشل الكل (يُتجاوز التصحيح بأمان).
         """
@@ -335,6 +336,16 @@ class MoshAIEngineV5:
         # رمز XAU في currency-api و yfinance futures
         _CURRENCY_API_SYM = {"XAUUSD": "xau", "XAGUSD": "xag"}
         _FUTURES_SYM      = {"XAUUSD": "GC=F", "XAGUSD": "SI=F"}
+
+        # ── 0. TradingView WebSocket (OANDA Spot — الأدق والأسرع) ───────────
+        try:
+            from app.services.tv_price_feed import tv_feed
+            tv_price = tv_feed.get_price_sync(sym_upper)
+            if tv_price and float(tv_price) > 0:
+                logger.debug(f"   💰 TV spot [{sym_upper}]: {tv_price:.5f}")
+                return float(tv_price)
+        except Exception as _tv_e:
+            logger.debug(f"   TV spot unavailable [{sym_upper}]: {_tv_e}")
 
         # ── 1. yfinance: Spot من Futures - theoretical carry basis (الأدق) ─
         # المعادلة: spot ≈ futures - (futures × rate × days_to_expiry / 365)
