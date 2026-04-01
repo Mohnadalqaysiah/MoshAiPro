@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from loguru import logger
+import asyncio
 import sys
 import os
 import uuid
@@ -45,6 +46,8 @@ async def lifespan(app: FastAPI):
     try:
         from app.services.tv_price_feed import tv_feed
         await tv_feed.start()
+        # انتظر قليلاً حتى تصل أسعار TV قبل أول طلب تحليل
+        await asyncio.sleep(5)
     except Exception as _tv_err:
         logger.warning(f"⚠️ TradingView feed failed to start: {_tv_err} — will use fallback pricing")
 
