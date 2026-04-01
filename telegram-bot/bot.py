@@ -881,18 +881,35 @@ async def broadcast_new_signals(app: Application):
             sigs      = sigs_data.get("signals", [])
 
             if sigs:
+                # جلب قوائم المراقبة — كل مستخدم يستلم فقط إشارات أزواجه
+                wl_data = await _get("/api/v1/bot/all-watchlists")
+                wl_users = wl_data.get("users", [])
+
+                # بناء map: telegram_id → set of symbols
+                user_wl: dict[str, set] = {}
+                for u in wl_users:
+                    tid_str = str(u["telegram_id"])
+                    user_wl[tid_str] = set(s.upper() for s in u.get("watchlist", []))
+
+                # المستخدمون بدون watchlist يستلمون كل الإشارات (لم يضبطوا تفضيلاتهم بعد)
                 subs_data = await _get("/api/v1/bot/active-subscribers")
-                subs      = [s["telegram_id"] for s in subs_data.get("subscribers", [])]
-                logger.info(f"📡 {len(sigs)} إشارة جديدة → {len(subs)} مشترك")
+                all_subs  = [str(s["telegram_id"]) for s in subs_data.get("subscribers", [])]
+
+                logger.info(f"📡 {len(sigs)} إشارة جديدة → {len(all_subs)} مشترك ({len(user_wl)} لديهم watchlist)")
 
                 for sig in sigs:
+                    market = sig.get("market", "").upper()
                     msg = fmt_new_signal(sig)
                     kb  = InlineKeyboardMarkup([[
                         InlineKeyboardButton("📊 تحليل هذا الزوج", callback_data=f"sym_{sig['market']}"),
                         InlineKeyboardButton("📡 كل الإشارات",     callback_data="m_signals"),
                     ]])
                     sent = 0
-                    for tid in subs:
+                    for tid in all_subs:
+                        # مستخدم بدون watchlist → يستلم كل شيء
+                        # مستخدم بـ watchlist → يستلم فقط أزواجه
+                        if tid in user_wl and market not in user_wl[tid]:
+                            continue
                         try:
                             await app.bot.send_message(
                                 chat_id=int(tid), text=msg,
@@ -904,7 +921,7 @@ async def broadcast_new_signals(app: Application):
                         await asyncio.sleep(0.05)  # rate limit
 
                     await _post(f"/api/v1/bot/mark-broadcast/{sig['id']}")
-                    logger.info(f"✅ إشارة #{sig['id']} بُثّت لـ {sent} مشترك")
+                    logger.info(f"✅ إشارة #{sig['id']} [{market}] بُثّت لـ {sent} مشترك")
 
         except Exception as e:
             logger.error(f"broadcast_new_signals: {e}", exc_info=True)
