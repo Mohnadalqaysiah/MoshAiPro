@@ -50,7 +50,7 @@ TV_SYMBOL_MAP: dict[str, str] = {
 _TV_REVERSE_MAP: dict[str, str] = {v: k for k, v in TV_SYMBOL_MAP.items()}
 
 _TV_URL = "wss://data.tradingview.com/socket.io/websocket"
-_PRICE_CACHE_TTL = 3.0   # ثوانٍ — التحديث شبه لحظي من WebSocket
+_PRICE_CACHE_TTL = 60.0  # ثانية — TV يرسل عند التغيير فقط، وليس كل ثانية
 _RECONNECT_DELAY = 5.0   # ثوانٍ انتظار قبل إعادة الاتصال
 
 
