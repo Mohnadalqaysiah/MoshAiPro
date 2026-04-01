@@ -268,6 +268,11 @@ class MoshAIEngineV5:
                 "htf_trend": analysis.get("htf_context", {}).get("trend", "UNKNOWN"),
             }
 
+            # ── نسخ بيانات السياق من ICT إلى Analysis ───────────────────────
+            if "market_mode"    not in analysis: analysis["market_mode"]    = ltf_analysis.get("market_mode", {})
+            if "momentum"       not in analysis: analysis["momentum"]       = ltf_analysis.get("momentum", {})
+            if "range_conflict" not in analysis: analysis["range_conflict"] = ltf_analysis.get("range_conflict", {})
+
             # ── بوابة السيولة الذكية (Smart Money Gate) ──────────────────────
             analysis = self._validate_sweep_gate(analysis)
 
@@ -566,78 +571,101 @@ class MoshAIEngineV5:
 
     def _validate_sweep_gate(self, analysis: dict) -> dict:
         """
-        بوابة السيولة الصارمة — ICT Hard Gate (شرط قاطع لا استثناء)
+        بوابة السيولة المحدّثة — تعتمد على Market Mode:
 
-        مبدأ: الصفقة تُمنع كلياً ما لم يُكتشف Stop Hunt مؤكد:
-            ✅ sweep + rejection_confirmed → يُسمح بالدخول
-            ❌ sweep بدون rejection       → WAIT فوري
-            ❌ لا sweep على الإطلاق       → WAIT فوري
+        RANGE Mode: Sweep إجباري (كما كان دائماً)
+        TREND Mode: Sweep اختياري إذا توفر Momentum + BOS
         """
         rec = analysis.get("recommendation")
         if rec not in ("BUY", "SELL"):
             return analysis
 
-        # جلب بيانات الـ Sweep من ICT أو من Liquidity dict
+        # ── جلب بيانات السياق ─────────────────────────────────────────────
         sweep = (
             analysis.get("liquidity_sweep")
             or analysis.get("liquidity", {}).get("sweep_analysis")
             or {}
         )
+        market_mode    = analysis.get("market_mode", {}).get("mode", "RANGE")
+        momentum_str   = analysis.get("momentum", {}).get("strength", "WEAK")
+        range_conflict = analysis.get("range_conflict", {}).get("avoid_entry", False)
 
         has_confirmed_sweep = (
             sweep.get("has_bullish_sweep") if rec == "BUY"
             else sweep.get("has_bearish_sweep")
         )
 
-        # ✅ الحالة الوحيدة المسموح بها: Sweep + Rejection مؤكد
+        # ── حالة 1: Range Trap — يُمنع دائماً بغض النظر عن أي شيء ─────────
+        if range_conflict:
+            reason = "تداخل OBs بدون BOS واضح — سوق Range متضارب"
+            short  = "RANGE_TRAP"
+            return self._block_signal(analysis, rec, reason, short)
+
+        # ── حالة 2: Sweep موجود ومؤكد → مسموح دائماً ─────────────────────
         if has_confirmed_sweep:
             sweep_quality = sweep.get("sweep_quality", "MODERATE")
             logger.debug(f"✅ Sweep Gate PASSED [{rec}]: quality={sweep_quality}")
             return analysis
 
-        # ─── كل الحالات الأخرى → WAIT فوري ───────────────────────────────────
+        # ── حالة 3: TREND Mode → Sweep اختياري ────────────────────────────
+        if market_mode == "TREND":
+            bos_present = analysis.get("market_mode", {}).get("has_bos", False)
+            if bos_present and momentum_str in ("STRONG", "MODERATE"):
+                # الدخول مسموح في Trend — لكن نخفّض الثقة
+                logger.info(
+                    f"✅ Sweep Gate BYPASSED [TREND mode] [{rec}]: "
+                    f"momentum={momentum_str} BOS=True"
+                )
+                current_conf = float(analysis.get("ai_confidence_score") or 0)
+                analysis["ai_confidence_score"] = max(0, current_conf - 15)
+                analysis["trend_entry_no_sweep"] = True
+                return analysis
+            elif bos_present and momentum_str == "WEAK":
+                reason = "Trend Mode لكن Momentum ضعيف — انتظر Pullback أو Retest"
+                short  = "TREND_WEAK_MOMENTUM"
+                return self._block_signal(analysis, rec, reason, short)
+            else:
+                reason = "Trend بدون BOS مؤكد — غير مؤهل للدخول"
+                short  = "TREND_NO_BOS"
+                return self._block_signal(analysis, rec, reason, short)
 
-        # تحديد السبب الدقيق للرفض
+        # ── حالة 4: RANGE Mode بدون Sweep ─────────────────────────────────
         has_any_sweep = (
             bool(sweep.get("ssl_sweep")) if rec == "BUY"
             else bool(sweep.get("bsl_sweep"))
         )
-
         if has_any_sweep:
             reason = "اكتساح سيولة بدون رفض مؤكد (Sweep ≠ Rejection)"
             short  = "SWEEP_NO_REJECTION"
         else:
-            reason = "لم يُكتشف اكتساح سيولة (شرط ICT الأساسي غير متحقق)"
+            reason = "Range Mode — لم يُكتشف اكتساح سيولة (شرط ICT الأساسي)"
             short  = "NO_SWEEP"
 
+        return self._block_signal(analysis, rec, reason, short)
+
+    def _block_signal(self, analysis: dict, rec: str, reason: str, short: str) -> dict:
+        """تحويل إشارة لـ WAIT مع مسح المستويات وتسجيل السبب"""
         logger.warning(
-            f"🚫 Sweep Hard Gate BLOCKED [{rec}] → WAIT | reason={short} | "
-            f"has_bullish={sweep.get('has_bullish_sweep')} "
-            f"has_bearish={sweep.get('has_bearish_sweep')}"
+            f"🚫 Sweep Gate BLOCKED [{rec}] → WAIT | reason={short}"
         )
-
-        # تحويل إجباري لـ WAIT
-        analysis["recommendation"]    = "WAIT"
+        analysis["recommendation"]      = "WAIT"
+        analysis["signal_type"]         = "WAIT"
         analysis["ai_confidence_score"] = min(
-            float(analysis.get("ai_confidence_score") or 0), 54.0
+            float(analysis.get("ai_confidence_score") or 0), 39.0
         )
+        analysis["sweep_gate_blocked"]  = True
+        analysis["sweep_gate_reason"]   = short
 
-        # تسجيل السبب في الـ factors
         conf_data = analysis.get("confluence", {})
         if isinstance(conf_data, dict):
             factors = conf_data.get("factors", [])
             if isinstance(factors, list):
                 factors.insert(0, f"🚫 Sweep Gate: {reason}")
 
-        # حقل مستقل لسهولة الـ debugging
-        analysis["sweep_gate_blocked"] = True
-        analysis["sweep_gate_reason"]  = short
-
-        # مسح مستويات الدخول المرفوضة — لا نعرض SL/TP من إشارة محظورة
-        # (تجنب عرض مستويات SELL مقلوبة عند تحويل التوصية إلى WAIT)
-        analysis["levels"] = {}
-        analysis["entry_zones"] = []
-        analysis["stop_loss_zone"] = None
+        # مسح المستويات — لا نعرض entry/SL/TP من إشارة محظورة
+        analysis["levels"]            = {}
+        analysis["entry_zones"]       = []
+        analysis["stop_loss_zone"]    = None
         analysis["take_profit_zones"] = []
 
         return analysis

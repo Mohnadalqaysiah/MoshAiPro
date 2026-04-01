@@ -176,21 +176,81 @@ Risk% حسب التصنيف: A+ = 2% | A = 1.5% | B = 1% | C = 0.5%
 ❌ ممنوع SL فوق الدخول في BUY أو تحت الدخول في SELL
 
 ═══════════════════════════════════════════════
-💧 قاعدة السيولة الإجبارية — ICT Liquidity Gate
+📊 وضع السوق (Market Mode) — الأساس في القرار
 ═══════════════════════════════════════════════
 
-هذا شرط لا تفاوض فيه قبل أي توصية BUY أو SELL:
+### TREND Mode (حقل market_mode.mode = "TREND"):
+- الشرط: Wyckoff Markup/Markdown + BOS موجود
+- القاعدة: يمكن الدخول بدون Sweep إذا توفر:
+  ✔️ BOS في اتجاه الصفقة
+  ✔️ Momentum قوي أو متوسط (momentum.strength ≠ WEAK)
+  ✔️ Retest لمستوى BOS أو OB
+  ✔️ HTF يؤكد نفس الاتجاه
+- عند الدخول في TREND بدون Sweep: خفّض الثقة 15 نقطة
 
-1. تحقق من حقل "stop_hunt_analysis" في البيانات المدخلة
-2. إذا كان "has_bullish_sweep" = false وأنت تفكر بـ BUY → WAIT
-3. إذا كان "has_bearish_sweep" = false وأنت تفكر بـ SELL → WAIT
-4. استثناء: إذا كان sweep_quality = NONE لكن توجد عوامل تقاطع أخرى قوية جداً (score > 85) → يمكن الدخول مع تخفيض الثقة 20 نقطة
+### RANGE Mode (حقل market_mode.mode = "RANGE"):
+- الشرط: Wyckoff Accumulation/Distribution أو Sideways
+- القاعدة: Sweep إجباري بالكامل
+  ❌ لا Sweep = WAIT حتماً
+  ❌ OBs متداخلة + لا BOS = WAIT حتماً
 
-عند الإشارة للسيولة في analysis_notes يجب ذكر:
-- نوع Stop Hunt (SSL/BSL)
-- عدد الشموع منذ الاكتساح (candles_since)
-- جودة الاكتساح (STRONG/MODERATE/WEAK/NONE)
-- هل يوجد Equal Highs/Lows كهدف للسعر
+═══════════════════════════════════════════════
+💧 قاعدة السيولة (ICT Liquidity Gate) — محدّثة
+═══════════════════════════════════════════════
+
+هذه القاعدة تعتمد على Market Mode:
+
+### في RANGE Mode:
+1. تحقق من "stop_hunt_analysis" في البيانات
+2. إذا كان "has_bullish_sweep" = false وتفكر بـ BUY → WAIT
+3. إذا كان "has_bearish_sweep" = false وتفكر بـ SELL → WAIT
+4. Sweep + Rejection = دخول مسموح
+5. Sweep بدون Rejection = WAIT
+
+### في TREND Mode:
+1. Sweep مفضّل لكن ليس إجبارياً
+2. إذا توفر: BOS + momentum.strength = "STRONG" + HTF alignment → يمكن الدخول
+3. إذا توفر: BOS + momentum.strength = "MODERATE" + 3 عوامل تقاطع → يمكن الدخول مع تخفيض 15 نقطة ثقة
+4. إذا momentum.strength = "WEAK" → WAIT حتى في TREND
+
+═══════════════════════════════════════════════
+⚡ فلتر الزخم (Momentum Filter)
+═══════════════════════════════════════════════
+
+البيانات من حقل "momentum" في المدخلات:
+
+- strength = "STRONG"   (score ≥ 70): يدعم الدخول في TREND
+- strength = "MODERATE" (score ≥ 40): يدعم الدخول مع احتياط
+- strength = "WEAK"     (score < 40):  يمنع الدخول إلا في A+ setup
+
+### ما تبحث عنه:
+- is_expanded = true + body_ratio > 0.7 = Institutional Displacement → قوي جداً
+- consecutive_candles ≥ 3 = trend momentum → استمرار مؤكد
+- expansion_ratio > 2.0 = spike مؤسسي → انتبه للاتجاه
+
+═══════════════════════════════════════════════
+🚫 منع Range Trap
+═══════════════════════════════════════════════
+
+حقل "range_conflict" في البيانات:
+- إذا range_conflict.avoid_entry = true → WAIT إجباري
+- لا تدخل عند تداخل OBs بدون BOS واضح
+- هذا يمنع الدخول في وسط Range متضارب
+
+═══════════════════════════════════════════════
+📤 قاعدة المخرجات — WAIT vs Active Signal
+═══════════════════════════════════════════════
+
+### إذا recommendation = "WAIT":
+❌ ممنوع إطلاقاً وضع: entry_price, stop_loss, tp1, tp2, tp3
+✔️ ضع: watch_zones (مناطق المراقبة)
+✔️ ضع: wait_reason (سبب الانتظار)
+✔️ ضع: watch_level (أهم مستوى للمراقبة)
+
+### إذا recommendation = "BUY" أو "SELL":
+✔️ يجب أن تكون كل المستويات منطقية ومرتبة
+BUY: stop_loss < entry_price < tp1 < tp2
+SELL: tp2 < tp1 < entry_price < stop_loss
 
 الإجابة دائماً بـ JSON محدد فقط، بدون أي نص إضافي.
 """
@@ -391,6 +451,10 @@ def _build_professional_prompt(
 
         "news_filter": news_filter,
 
+        "market_mode":    ltf_data.get("market_mode", {"mode": "RANGE", "sweep_required": True}),
+        "momentum":       ltf_data.get("momentum", {"strength": "WEAK", "score": 0}),
+        "range_conflict": ltf_data.get("range_conflict", {"avoid_entry": False}),
+
         "candles_ltf_last_20": df_tail,
     }
 
@@ -473,7 +537,13 @@ def _build_professional_prompt(
     "min_rr_met": <true/false>
   }},
 
-  "arabic_summary": "<ملخص احترافي في 2-3 جمل: الإشارة + المستويات + حجم الصفقة>"
+  "arabic_summary": "<ملخص احترافي في 2-3 جمل: الإشارة + المستويات + حجم الصفقة>",
+
+  "wait_info": {{
+    "watch_zones": ["<منطقة مراقبة 1>", "<منطقة مراقبة 2>"],
+    "wait_reason": "<سبب الانتظار الرئيسي>",
+    "watch_level": <أهم سعر للمراقبة أو null>
+  }}
 }}
 """
 

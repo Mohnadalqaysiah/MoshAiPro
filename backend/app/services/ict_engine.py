@@ -1079,6 +1079,130 @@ class ICTEngine:
             "atr": round(atr, 5),
         }
 
+    # ─── Market Mode Detection ────────────────────────────────────────────────
+
+    def detect_market_mode(self, df: pd.DataFrame, wyckoff: dict, structure: dict) -> dict:
+        """
+        تحديد وضع السوق: TREND أو RANGE
+        TREND: Wyckoff Markup/Markdown + BOS + اتجاه واضح → Sweep اختياري
+        RANGE: Accumulation/Distribution أو Sideways → Sweep إجباري
+        """
+        phase = (wyckoff.get("phase") or "").upper()
+        trend = (structure.get("trend") or "SIDEWAYS").upper()
+        has_bos = bool(structure.get("last_bos"))
+
+        trend_indicators = ["MARKUP", "MARKDOWN", "UPTREND", "DOWNTREND"]
+        range_indicators  = ["ACCUMULATION", "DISTRIBUTION", "SIDEWAYS", "RANGING"]
+
+        is_trend_phase = any(p in phase for p in trend_indicators)
+        is_range_phase = any(p in phase for p in range_indicators) or trend == "SIDEWAYS"
+
+        if is_trend_phase and has_bos:
+            mode, confidence, sweep_required = "TREND", 85, False
+        elif has_bos and trend in ("BULLISH", "BEARISH"):
+            mode, confidence, sweep_required = "TREND", 65, False
+        else:
+            mode, confidence, sweep_required = "RANGE", 70, True
+
+        return {
+            "mode":           mode,
+            "confidence":     confidence,
+            "sweep_required": sweep_required,
+            "wyckoff_phase":  wyckoff.get("phase"),
+            "trend":          trend,
+            "has_bos":        has_bos,
+            "reason":         f"Wyckoff:{wyckoff.get('phase')} Trend:{trend} BOS:{has_bos}",
+        }
+
+    # ─── Momentum Filter ─────────────────────────────────────────────────────
+
+    def detect_momentum(self, df: pd.DataFrame) -> dict:
+        """
+        فلتر الزخم — يكشف الحركات المؤسسية الحقيقية
+
+        1. Candle Expansion: range > ATR×1.5 → حركة مؤسسية
+        2. Consecutive candles: 2-3+ شموع متتالية → استمرارية
+        3. Displacement: body > 70% من range → دفع حقيقي بدون wick
+        """
+        if len(df) < 5:
+            return {"strength": "WEAK", "score": 0, "consecutive_direction": "NEUTRAL"}
+
+        atr = float(df["atr"].iloc[-1]) if "atr" in df.columns else float((df["high"] - df["low"]).mean())
+        if atr <= 0:
+            atr = float((df["high"] - df["low"]).mean())
+
+        last5 = df.tail(5)
+        last_c = last5.iloc[-1]
+
+        # 1. Candle Expansion
+        c_range = float(last_c["high"]) - float(last_c["low"])
+        exp_ratio = c_range / atr if atr > 0 else 0
+        is_expanded = exp_ratio >= 1.5
+
+        # 2. Consecutive same-direction (آخر 3 شموع)
+        last3 = last5.tail(3)
+        bull_n = sum(1 for _, r in last3.iterrows() if float(r["close"]) > float(r["open"]))
+        bear_n = sum(1 for _, r in last3.iterrows() if float(r["close"]) < float(r["open"]))
+        consecutive = max(bull_n, bear_n)
+        consecutive_dir = "BULLISH" if bull_n >= bear_n else "BEARISH"
+
+        # 3. Displacement
+        body = abs(float(last_c["close"]) - float(last_c["open"]))
+        body_ratio = body / c_range if c_range > 0 else 0
+        is_displacement = body_ratio >= 0.70 and exp_ratio >= 1.2
+
+        score = 0
+        if is_expanded:       score += 40
+        if consecutive >= 2:  score += 30
+        if consecutive >= 3:  score += 10
+        if is_displacement:   score += 30
+        score = min(100, score)
+
+        strength = "STRONG" if score >= 70 else "MODERATE" if score >= 40 else "WEAK"
+
+        return {
+            "score":                 score,
+            "strength":              strength,
+            "is_expanded":           is_expanded,
+            "expansion_ratio":       round(exp_ratio, 2),
+            "consecutive_candles":   consecutive,
+            "consecutive_direction": consecutive_dir,
+            "is_displacement":       is_displacement,
+            "body_ratio":            round(body_ratio, 2),
+        }
+
+    # ─── Range Conflict Detection ────────────────────────────────────────────
+
+    def detect_range_conflict(self, order_blocks: dict, structure: dict) -> dict:
+        """
+        كشف Range Trap: OBs صاعدة وهابطة متداخلة + لا BOS → لا دخول
+        """
+        bullish_obs = order_blocks.get("bullish_obs", [])
+        bearish_obs = order_blocks.get("bearish_obs", [])
+        has_bos = bool(structure.get("last_bos"))
+        trend = (structure.get("trend") or "SIDEWAYS").upper()
+
+        overlap = False
+        overlap_details = []
+        for bob in bullish_obs[:2]:
+            for bearob in bearish_obs[:2]:
+                b_hi, b_lo = bob.get("high", 0), bob.get("low", 0)
+                r_hi, r_lo = bearob.get("high", 0), bearob.get("low", 0)
+                if b_lo < r_hi and r_lo < b_hi:
+                    overlap = True
+                    overlap_details.append(f"Bullish[{b_lo:.2f}-{b_hi:.2f}] ∩ Bearish[{r_lo:.2f}-{r_hi:.2f}]")
+
+        avoid_entry = overlap and not has_bos and trend == "SIDEWAYS"
+
+        return {
+            "in_range_trap":   avoid_entry,
+            "has_ob_overlap":  overlap,
+            "has_bos":         has_bos,
+            "avoid_entry":     avoid_entry,
+            "overlap_details": overlap_details[:2],
+            "reason":          "تداخل OBs بدون BOS واضح — سوق Range" if avoid_entry else "لا تعارض",
+        }
+
     # ─── Full Analysis ────────────────────────────────────────────────────────
 
     def full_analysis(self, df: pd.DataFrame, symbol: str, timeframe: str) -> Dict:
@@ -1103,6 +1227,11 @@ class ICTEngine:
                 structure, order_blocks, fvg, liquidity,
                 premium_discount, kill_zone, wyckoff, df
             )
+
+            # ── الإضافات الجديدة ────────────────────────────────────────────
+            market_mode    = self.detect_market_mode(df, wyckoff, structure)
+            momentum       = self.detect_momentum(df)
+            range_conflict = self.detect_range_conflict(order_blocks, structure)
 
             levels = {}
             if confluence["direction"] in ["BUY", "SELL"]:
@@ -1140,6 +1269,11 @@ class ICTEngine:
                 "stop_loss_zone": levels.get("stop_loss", 0),
                 "take_profit_zones": [levels.get("tp1", 0), levels.get("tp2", 0), levels.get("tp3", 0)] if levels else [],
                 "risk_reward_ratio": levels.get("risk_reward", 0),
+
+                # وضع السوق والزخم
+                "market_mode":    market_mode,
+                "momentum":       momentum,
+                "range_conflict": range_conflict,
 
                 # المؤشرات
                 "indicators": {
