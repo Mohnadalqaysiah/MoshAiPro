@@ -304,6 +304,14 @@ class MoshAIEngineV5:
             except Exception as _pe:
                 logger.warning(f"   ⚠️ Could not fetch live price: {_pe}")
 
+            # ── [PRICE SOURCE] log — يساعد في مقارنة Telegram vs Chat ────────
+            logger.info(
+                f"[PRICE SOURCE] {symbol}/{timeframe}: "
+                f"price={analysis.get('current_price', 0):.5f}  "
+                f"source={analysis.get('price_source', 'unknown')}  "
+                f"rec={analysis.get('recommendation', 'WAIT')}"
+            )
+
             # ── حفظ في الكاش ─────────────────────────────────────────────
             analysis["from_cache"] = False
             analysis["cached_at"] = datetime.now().isoformat()
@@ -321,14 +329,14 @@ class MoshAIEngineV5:
     # الأسواق التي تستخدم Futures في yfinance (GC=F, SI=F ...)
     _FUTURES_SPOT_SYMBOLS = {"XAUUSD", "XAGUSD"}
 
-    def _fetch_spot_price(self, symbol: str) -> float:
+    def _fetch_spot_price(self, symbol: str) -> tuple[float, str]:
         """
         يجلب سعر Spot الفوري للمعادن — 4 مصادر بالتسلسل:
           0. TradingView WebSocket  (OANDA Spot — أدق مصدر، لحظي)
           1. yfinance GC=F theoretical carry basis (حساب رياضي دقيق)
           2. @fawazahmed0/currency-api CDN  (مجاني، 24/7)
           3. Finnhub quote (fallback أخير)
-        يُعيد 0 إذا فشل الكل (يُتجاوز التصحيح بأمان).
+        يُعيد (0.0, "none") إذا فشل الكل (يُتجاوز التصحيح بأمان).
         """
         import requests as _req
         sym_upper = symbol.upper()
@@ -343,7 +351,7 @@ class MoshAIEngineV5:
             tv_price = tv_feed.get_price_sync(sym_upper)
             if tv_price and float(tv_price) > 0:
                 logger.info(f"   💰 TV spot [{sym_upper}]: {tv_price:.5f}")
-                return float(tv_price)
+                return float(tv_price), "tv_spot"
             else:
                 logger.info(f"   📡 TV spot None for [{sym_upper}] (alive={tv_feed.is_alive()}) — falling to theoretical carry")
         except Exception as _tv_e:
@@ -369,7 +377,7 @@ class MoshAIEngineV5:
                         f"   💰 theoretical spot [{sym_upper}]: futures={futures_price:.2f} "
                         f"days={days:.0f} basis={basis:.2f} → spot={spot:.2f}"
                     )
-                    return spot
+                    return spot, "theoretical_carry"
             except Exception as _ye:
                 logger.debug(f"   theoretical basis failed [{sym_upper}]: {_ye}")
 
@@ -386,7 +394,7 @@ class MoshAIEngineV5:
                         usd = resp.json().get(currency_sym, {}).get("usd")
                         if usd and float(usd) > 0:
                             logger.debug(f"   💰 currency-api spot [{sym_upper}]: {usd:.5f}")
-                            return float(usd)
+                            return float(usd), "currency_api"
                 except Exception:
                     continue
 
@@ -407,12 +415,12 @@ class MoshAIEngineV5:
                         price = data.get("l")
                     if price and float(price) > 0:
                         logger.debug(f"   💰 Finnhub spot [{fh_sym}]: {price:.5f}")
-                        return float(price)
+                        return float(price), "finnhub_spot"
             except Exception as _fe:
                 logger.debug(f"   Finnhub spot failed: {_fe}")
 
         logger.warning(f"   ⚠️  _fetch_spot_price: all sources failed for {symbol}")
-        return 0.0
+        return 0.0, "none"
 
     def _apply_spot_basis(self, symbol: str, analysis: dict) -> dict:
         """
@@ -424,7 +432,7 @@ class MoshAIEngineV5:
             return analysis
 
         try:
-            spot = self._fetch_spot_price(symbol)
+            spot, spot_source = self._fetch_spot_price(symbol)
             if spot <= 0:
                 return analysis
 
@@ -432,9 +440,10 @@ class MoshAIEngineV5:
             if futures <= 0:
                 return analysis
 
-            # احفظ السعر الفوري ليُعاد استخدامه في _validate_price_freshness
+            # احفظ السعر الفوري ومصدره ليُعادا استخدامهما في _validate_price_freshness
             # دون استدعاء _fetch_spot_price مرة ثانية (يمنع تفاوت السعر بين الاستدعاءين)
-            analysis["_cached_spot_price"] = spot
+            analysis["_cached_spot_price"]  = spot
+            analysis["_cached_spot_source"] = spot_source
 
             basis = spot - futures  # عادةً سالب: spot أقل من futures
 
@@ -449,7 +458,7 @@ class MoshAIEngineV5:
 
             # ── تطبيق الفارق على current_price ───────────────────────────
             analysis["current_price"]  = round(spot, 5)
-            analysis["price_source"]   = "finnhub_spot"
+            analysis["price_source"]   = spot_source   # tv_spot / theoretical_carry / etc.
             analysis["futures_basis"]  = round(basis, 2)
 
             def _shift(v):
@@ -518,10 +527,12 @@ class MoshAIEngineV5:
         # ── للمعادن: نستخدم الـ spot المحفوظ من _apply_spot_basis (لا نجلبه مرة ثانية) ──
         # استدعاء _fetch_spot_price مرتين يُسبب تفاوتاً في الأسعار → رفض زائف
         if sym_upper in self._FUTURES_SPOT_SYMBOLS:
-            live_price = analysis.pop("_cached_spot_price", 0) or self._fetch_spot_price(sym_upper)
+            live_price  = analysis.pop("_cached_spot_price", 0)
+            live_source = analysis.pop("_cached_spot_source", "spot")
+            if not live_price:
+                live_price, live_source = self._fetch_spot_price(sym_upper)
             if live_price <= 0:
                 return analysis  # لا يمكن التحقق — نتجاوز الفحص
-            live_source = "spot_check"
         else:
             # ── للبقية: نجلب السعر الحي العادي ──────────────────────────────
             live_meta = smart_data.get_realtime_price_with_meta(symbol)
