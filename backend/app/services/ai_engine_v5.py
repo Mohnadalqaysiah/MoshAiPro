@@ -342,10 +342,12 @@ class MoshAIEngineV5:
             from app.services.tv_price_feed import tv_feed
             tv_price = tv_feed.get_price_sync(sym_upper)
             if tv_price and float(tv_price) > 0:
-                logger.debug(f"   💰 TV spot [{sym_upper}]: {tv_price:.5f}")
+                logger.info(f"   💰 TV spot [{sym_upper}]: {tv_price:.5f}")
                 return float(tv_price)
+            else:
+                logger.info(f"   📡 TV spot None for [{sym_upper}] (alive={tv_feed.is_alive()}) — falling to theoretical carry")
         except Exception as _tv_e:
-            logger.debug(f"   TV spot unavailable [{sym_upper}]: {_tv_e}")
+            logger.info(f"   TV spot unavailable [{sym_upper}]: {_tv_e}")
 
         # ── 1. yfinance: Spot من Futures - theoretical carry basis (الأدق) ─
         # المعادلة: spot ≈ futures - (futures × rate × days_to_expiry / 365)
