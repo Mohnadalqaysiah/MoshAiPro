@@ -185,11 +185,33 @@ async def bot_check_outcomes(
         Signal.expires_at > now,
     ).all()
 
+    # رموز المعادن — مستوياتها محفوظة بسعر Spot (بعد basis correction)
+    # يجب استخدام نفس مصدر السعر (TV OANDA Spot) للمقارنة الصحيحة
+    _SPOT_SYMBOLS = {"XAUUSD", "XAGUSD"}
+
     triggered = []
     for sig in active:
         try:
-            price_info = await _smart_data.get_realtime_price_with_meta(sig.market)
-            price = price_info.get("price") if price_info else None
+            market_upper = sig.market.upper()
+
+            # ── للمعادن: استخدم TV Spot (نفس مصدر الإشارة) ─────────────────
+            if market_upper in _SPOT_SYMBOLS:
+                try:
+                    from app.services.tv_price_feed import tv_feed
+                    tv_p = tv_feed.get_price_sync(market_upper)
+                    if tv_p and float(tv_p) > 0:
+                        price = float(tv_p)
+                    else:
+                        # fallback: theoretical carry
+                        from app.services.ai_engine_v5 import mosh_ai_engine_v5
+                        price_raw, _ = mosh_ai_engine_v5._fetch_spot_price(market_upper)
+                        price = float(price_raw) if price_raw > 0 else None
+                except Exception:
+                    price = None
+            else:
+                price_info = await _smart_data.get_realtime_price_with_meta(sig.market)
+                price = float(price_info["price"]) if price_info and price_info.get("price") else None
+
             if not price:
                 continue
             price  = float(price)
