@@ -416,6 +416,36 @@ def bot_user_stats(
     pts    = db.query(sqlfunc.sum(Signal.points_earned)).filter(
                 Signal.user_id == user.id,
                 Signal.points_earned != None).scalar() or 0.0
+    active = db.query(Signal).filter(
+                Signal.user_id == user.id,
+                Signal.status == SignalStatus.ACTIVE).count()
+    best   = db.query(sqlfunc.max(Signal.points_earned)).filter(
+                Signal.user_id == user.id,
+                Signal.points_earned > 0).scalar() or 0.0
+    worst  = db.query(sqlfunc.min(Signal.points_earned)).filter(
+                Signal.user_id == user.id,
+                Signal.points_earned < 0).scalar() or 0.0
+
+    # آخر 5 صفقات مغلقة
+    recent_sigs = (
+        db.query(Signal)
+        .filter(Signal.user_id == user.id, Signal.status.in_(closed))
+        .order_by(Signal.exit_executed.desc())
+        .limit(5)
+        .all()
+    )
+    recent = []
+    for s in recent_sigs:
+        st = s.status.value if hasattr(s.status, "value") else str(s.status)
+        icon = "✅" if st in ("TP1_HIT", "TP2_HIT") else "❌"
+        recent.append({
+            "market":  s.market,
+            "type":    s.signal_type.value if hasattr(s.signal_type, "value") else str(s.signal_type),
+            "status":  st,
+            "icon":    icon,
+            "points":  round(s.points_earned or 0, 2),
+            "closed_at": s.exit_executed.strftime("%d/%m %H:%M") if s.exit_executed else "",
+        })
 
     aff_count = 0
     if user.affiliate:
@@ -440,11 +470,80 @@ def bot_user_stats(
         "losses":         total - wins,
         "win_rate":       round(wins / total * 100, 1) if total > 0 else 0.0,
         "total_points":   round(float(pts), 2),
+        "active_signals": active,
+        "best_trade":     round(float(best), 2),
+        "worst_trade":    round(float(worst), 2),
+        "recent_trades":  recent,
         "referral_count": aff_count,
         "affiliate_code": user.affiliate_code,
         "trial_analyses_left": user.trial_analyses_left,
         "trial_chat_left":     user.trial_chat_left,
     }
+
+
+@router.post("/save-alert-signal")
+def bot_save_alert_signal(
+    telegram_id: str,
+    symbol: str,
+    timeframe: str,
+    signal_type: str,
+    entry: float,
+    sl: float,
+    tp1: float,
+    tp2: float,
+    confidence: float,
+    rr: float = 0.0,
+    _: bool = Depends(verify_bot),
+    db: Session = Depends(get_db),
+):
+    """
+    يحفظ إشارة التنبيه (watchlist alert) في DB لتتبع PnL تلقائياً.
+    broadcast_sent=False → check-outcomes يُرسل النتيجة لهذا المستخدم فقط.
+    """
+    import hashlib
+    from datetime import timedelta
+    from app.models.signal import SignalType as ST, SignalQuality
+
+    user = _get_linked_user(telegram_id, db)
+    if not user:
+        return {"saved": False, "reason": "user not linked"}
+
+    if signal_type not in ("BUY", "SELL"):
+        return {"saved": False, "reason": "invalid signal_type"}
+
+    tf_hours   = {"1m": 2, "5m": 4, "15m": 8, "30m": 12, "1h": 24, "4h": 72, "1d": 168}
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=tf_hours.get(timeframe, 24))
+
+    sig_hash = hashlib.md5(
+        f"{user.id}-{symbol}-{timeframe}-{signal_type}-{entry:.5f}".encode()
+    ).hexdigest()
+
+    existing = db.query(Signal).filter(Signal.signal_hash == sig_hash).first()
+    if existing:
+        return {"saved": False, "reason": "duplicate", "signal_id": existing.id}
+
+    sig = Signal(
+        user_id           = user.id,
+        market            = symbol,
+        timeframe         = timeframe,
+        signal_type       = ST(signal_type),
+        signal_quality    = SignalQuality.PREMIUM if confidence >= 80 else SignalQuality.STANDARD,
+        status            = SignalStatus.ACTIVE,
+        entry_price       = round(entry, 5),
+        stop_loss         = round(sl, 5),
+        take_profit_1     = round(tp1, 5),
+        take_profit_2     = round(tp2, 5),
+        ai_confidence     = confidence,
+        risk_reward_ratio = rr,
+        signal_hash       = sig_hash,
+        expires_at        = expires_at,
+        broadcast_sent    = False,   # إشارة خاصة بهذا المستخدم
+    )
+    db.add(sig)
+    db.commit()
+    db.refresh(sig)
+    logger.info(f"💾 Alert signal saved: {symbol}/{timeframe} {signal_type} entry={entry:.5f} user={user.id}")
+    return {"saved": True, "signal_id": sig.id}
 
 
 @router.post("/save-watchlist")

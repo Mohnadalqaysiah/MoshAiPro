@@ -748,26 +748,51 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ]),
             )
             return
-        total = st.get("total_signals", 0)
-        wins  = st.get("wins", 0)
-        loss  = st.get("losses", 0)
-        wr    = st.get("win_rate", 0)
-        pts   = st.get("total_points", 0)
-        plan  = st.get("plan_label","")
-        ends  = st.get("ends_at","")
-        name  = st.get("full_name","")
-        wr_bar = "🟩" * int(wr/10) + "⬜" * (10 - int(wr/10))
-        await q.edit_message_text(
+        total   = st.get("total_signals", 0)
+        wins    = st.get("wins", 0)
+        loss    = st.get("losses", 0)
+        wr      = st.get("win_rate", 0)
+        pts     = st.get("total_points", 0)
+        active  = st.get("active_signals", 0)
+        best    = st.get("best_trade", 0)
+        worst   = st.get("worst_trade", 0)
+        recent  = st.get("recent_trades", [])
+        plan    = st.get("plan_label","")
+        ends    = st.get("ends_at","")
+        name    = st.get("full_name","")
+        wr_bar  = "🟩" * int(wr/10) + "⬜" * (10 - int(wr/10))
+
+        pts_sign = "+" if pts >= 0 else ""
+        recent_lines = ""
+        if recent:
+            recent_lines = "\n*آخر الصفقات:*\n"
+            for t in recent:
+                pts_r = t.get("points", 0)
+                sign_r = "+" if pts_r >= 0 else ""
+                recent_lines += (
+                    f"{t['icon']} {t['market']} {t['type']}  "
+                    f"`{sign_r}{pts_r:.1f}` نقطة  {t['closed_at']}\n"
+                )
+
+        text = (
             f"📈 *إحصائياتك*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"👤 *{name}*\n"
             f"💳 خطة: *{plan}*" + (f"  │  تنتهي: {ends}" if ends else "") + "\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"📊 الصفقات: *{total}*  │  ✅ رابحة: *{wins}*  │  ❌ خاسرة: *{loss}*\n"
+            f"📊 مغلقة: *{total}*  │  ✅ رابحة: *{wins}*  │  ❌ خاسرة: *{loss}*\n"
+            f"⏳ نشطة حالياً: *{active}*\n"
             f"🏆 نسبة الربح: *{wr:.1f}%*\n"
             f"{wr_bar}\n"
-            f"⚡ إجمالي النقاط: *{pts:+.2f}*\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━",
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"⚡ إجمالي النقاط: *{pts_sign}{pts:.2f}*\n"
+            + (f"🥇 أفضل صفقة:  `+{best:.2f}` نقطة\n" if best else "")
+            + (f"💔 أسوأ صفقة:  `{worst:.2f}` نقطة\n" if worst else "")
+            + recent_lines
+            + f"━━━━━━━━━━━━━━━━━━━━━━"
+        )
+        await q.edit_message_text(
+            text,
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("🌐 فتح المنصة",  url=FRONTEND_URL),
@@ -1044,6 +1069,33 @@ async def monitor_watchlists(app: Application):
                             ]]),
                         )
                         logger.info(f"📨 تنبيه → {uid_} | {symbol} | {rec} | {conf:.1f}%")
+
+                        # ── حفظ الإشارة في DB لتتبع PnL تلقائياً ─────────────
+                        try:
+                            levels = data.get("levels", {})
+                            _ez    = data.get("entry_zones") or []
+                            _tz    = data.get("take_profit_zones") or []
+                            _entry = levels.get("entry") or (_ez[0] if _ez else None)
+                            _sl    = levels.get("stop_loss") or data.get("stop_loss_zone")
+                            _tp1   = levels.get("tp1") or (_tz[0] if _tz else None)
+                            _tp2   = levels.get("tp2") or (_tz[1] if len(_tz) > 1 else _tp1)
+                            _rr    = data.get("risk_reward_ratio") or levels.get("risk_reward") or 0
+                            if _entry and _sl and _tp1:
+                                await _post("/api/v1/bot/save-alert-signal", params={
+                                    "telegram_id": str(uid_),
+                                    "symbol":      symbol,
+                                    "timeframe":   tf,
+                                    "signal_type": rec,
+                                    "entry":       _entry,
+                                    "sl":          _sl,
+                                    "tp1":         _tp1,
+                                    "tp2":         _tp2 or _tp1,
+                                    "confidence":  conf,
+                                    "rr":          _rr,
+                                })
+                        except Exception as _save_e:
+                            logger.warning(f"save-alert-signal: {_save_e}")
+
                     except Exception as _e:
                         logger.error(f"alert send {uid_}/{symbol}: {_e}")
 
