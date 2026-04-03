@@ -196,6 +196,11 @@ export default function Admin() {
   const [emailSending, setEmailSending] = useState(false)
   const [emailMsg, setEmailMsg] = useState(null)
 
+  // Messages state
+  const [messageForm, setMessageForm] = useState({ title:'', message:'', user_ids:[] })
+  const [messageSending, setMessageSending] = useState(false)
+  const [messageMsg, setMessageMsg] = useState(null)
+
   // Logo upload state
   const [logoFile, setLogoFile] = useState(null)
   const [logoUploading, setLogoUploading] = useState(false)
@@ -226,6 +231,7 @@ export default function Admin() {
     if (tab === 'settings')  loadSettings()
     if (tab === 'affiliate') loadAffStats()
     if (tab === 'signals')   loadAdminSignals()
+    if (tab === 'messages')  loadUsers()  // للحصول على قائمة المستخدمين للاختيار
   }, [tab])
 
   const loadStats    = async () => { const r = await axios.get(`${API}/api/v1/admin/stats`); setStats(r.data) }
@@ -309,6 +315,18 @@ export default function Admin() {
     finally { setEmailSending(false) }
   }
 
+  const sendMessage = async (e) => {
+    e.preventDefault(); setMessageSending(true); setMessageMsg(null)
+    try {
+      const payload = { title: messageForm.title || undefined, message: messageForm.message }
+      if (messageForm.user_ids.length > 0) payload.user_ids = messageForm.user_ids.map(id => parseInt(id))
+      const r = await axios.post(`${API}/api/v1/admin/telegram/send`, payload)
+      setMessageMsg({ type:'ok', text: r.data.message })
+      setMessageForm(f => ({ ...f, title:'', message:'', user_ids:[] }))
+    } catch (err) { setMessageMsg({ type:'err', text: err.response?.data?.detail || 'فشل الإرسال' }) }
+    finally { setMessageSending(false) }
+  }
+
   const loadAdminSignals = async () => {
     setSignalsLoading(true)
     try {
@@ -344,6 +362,7 @@ export default function Admin() {
     { key:'markets',   icon:BarChart2,  label:'الأسواق' },
     { key:'signals',   icon:TrendingUp, label:'الإشارات' },
     { key:'affiliate', icon:TrendingUp, label:'الأفلييت' },
+    { key:'messages',  icon:Mail,       label:'الرسائل' },
     { key:'email',     icon:Mail,       label:'البريد' },
     { key:'settings',  icon:Settings,   label:'الإعدادات' },
   ]
@@ -732,6 +751,79 @@ export default function Admin() {
                 <p>⚙️ يتطلب ضبط متغيرات البيئة: <span className="font-mono text-gray-400">SMTP_USER</span> و <span className="font-mono text-gray-400">SMTP_PASSWORD</span></p>
                 <p>📧 الإرسال يتم في الخلفية ولا يوقف الصفحة</p>
                 <p>🔐 <span className="font-mono text-gray-400">SMTP_HOST</span> الافتراضي: smtp.hostinger.com (port 465)</p>
+              </div>
+            </div>
+          )}
+
+          {/* ── Messages ── */}
+          {tab === 'messages' && (
+            <div className="max-w-2xl">
+              <h1 className="text-xl font-bold mb-6 flex items-center gap-2"><Mail size={20} className="text-green-400"/> إرسال رسائل تيليجرام</h1>
+
+              {messageMsg && (
+                <div className={`flex items-center gap-2 text-sm rounded-lg px-3 py-2 mb-4 ${messageMsg.type==='ok'?'bg-green-900/30 text-green-400':'bg-red-900/30 text-red-400'}`}>
+                  {messageMsg.type==='ok'?<CheckCircle size={14}/>:<AlertTriangle size={14}/>} {messageMsg.text}
+                </div>
+              )}
+
+              <form onSubmit={sendMessage} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">العنوان الرئيسي (اختياري)</label>
+                  <input
+                    type="text" value={messageForm.title}
+                    onChange={e => setMessageForm(f => ({ ...f, title: e.target.value }))}
+                    placeholder="مثال: Qaffel Ai"
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-green-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">نص الرسالة</label>
+                  <textarea
+                    required rows={6} value={messageForm.message}
+                    onChange={e => setMessageForm(f => ({ ...f, message: e.target.value }))}
+                    placeholder="اكتب الرسالة التي تريد إرسالها..."
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white resize-y"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">المستخدمون (اتركه فارغاً للإرسال للجميع)</label>
+                  <select
+                    multiple value={messageForm.user_ids}
+                    onChange={e => {
+                      const selected = Array.from(e.target.selectedOptions, option => option.value)
+                      setMessageForm(f => ({ ...f, user_ids: selected }))
+                    }}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white h-32"
+                  >
+                    {users.filter(u => u.telegram_username).map(u => (
+                      <option key={u.id} value={u.id}>
+                        {u.full_name || u.email} (@{u.telegram_username})
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">يمكن اختيار عدة مستخدمين (Ctrl+Click)</p>
+                </div>
+
+                <div className="flex gap-3">
+                  <button type="submit" disabled={messageSending}
+                    className="flex items-center gap-2 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white px-6 py-2 rounded-lg text-sm transition">
+                    {messageSending ? <RefreshCw size={14} className="animate-spin"/> : <Mail size={14}/>}
+                    {messageSending ? 'جاري الإرسال...' : messageForm.user_ids.length > 0 ? `إرسال للمحددين (${messageForm.user_ids.length})` : `إرسال للجميع (${users.filter(u => u.telegram_username).length})`}
+                  </button>
+                  <button type="button" onClick={() => { if (!users.length) loadUsers() }}
+                    className="text-xs text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-gray-800">
+                    تحديث قائمة المستخدمين
+                  </button>
+                </div>
+              </form>
+
+              <div className="mt-4 p-4 bg-gray-900 border border-gray-800 rounded-xl text-xs text-gray-500 space-y-1">
+                <p>📱 يرسل الرسائل عبر تيليجرام بوت</p>
+                <p>⚙️ يتطلب ضبط <span className="font-mono text-gray-400">TELEGRAM_BOT_TOKEN</span></p>
+                <p>🚀 الإرسال يتم في الخلفية للمستخدمين الذين لديهم telegram_id</p>
+                <p>💬 يدعم HTML formatting في الرسائل</p>
               </div>
             </div>
           )}

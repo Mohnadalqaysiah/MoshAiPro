@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional, List
 from loguru import logger
+import requests
 from app.services.email_service import send_email as _send_email_svc
 
 from app.database import get_db
@@ -55,6 +56,11 @@ class MarketIn(BaseModel):
     yf_symbol:    str = ""
     td_symbol:    str = ""
     sort_order:   int = 0
+
+class TelegramMessageIn(BaseModel):
+    title: Optional[str] = None  # العنوان الرئيسي مثل "Qaffel Ai"
+    message: str  # الرسالة
+    user_ids: Optional[List[int]] = None  # إذا None، يرسل لجميع المستخدمين الذين لديهم telegram_id
 
 
 # ─── Dashboard Stats ──────────────────────────────────────────────────────────
@@ -666,6 +672,57 @@ def send_email(
         emails = [u.email for u in db.query(User.email).filter(User.is_active == True).all()]
         background.add_task(_send_bulk, emails, data.subject, data.body)
         return {"message": f"جاري إرسال {len(emails)} إيميل في الخلفية", "count": len(emails)}
+
+
+# ─── Telegram Messages ────────────────────────────────────────────────────────
+
+def _send_telegram_message(chat_id: str, text: str) -> bool:
+    """إرسال رسالة تيليجرام"""
+    url = f"https://api.telegram.org/bot{_settings.TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
+    try:
+        resp = requests.post(url, json=payload, timeout=10)
+        return resp.status_code == 200
+    except:
+        return False
+
+@router.post("/telegram/send")
+def send_telegram_message(
+    data: TelegramMessageIn,
+    background: BackgroundTasks,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """إرسال رسالة تيليجرام للمستخدمين"""
+    if not _settings.TELEGRAM_BOT_TOKEN:
+        raise HTTPException(400, "TELEGRAM_BOT_TOKEN غير مضبوط")
+
+    # بناء الرسالة
+    text = ""
+    if data.title:
+        text += f"<b>{data.title}</b>\n\n"
+    text += data.message
+
+    if data.user_ids:
+        # إرسال لمستخدمين محددين
+        users = db.query(User).filter(User.id.in_(data.user_ids), User.telegram_id != None).all()
+        sent = 0
+        for u in users:
+            if _send_telegram_message(u.telegram_id, text):
+                sent += 1
+        return {"message": f"تم إرسال {sent} رسالة من {len(users)}", "sent": sent, "total": len(users)}
+    else:
+        # إرسال لجميع المستخدمين الذين لديهم telegram_id
+        users = db.query(User).filter(User.telegram_id != None, User.is_active == True).all()
+        sent = 0
+        for u in users:
+            if background:
+                background.add_task(_send_telegram_message, u.telegram_id, text)
+                sent += 1
+            else:
+                if _send_telegram_message(u.telegram_id, text):
+                    sent += 1
+        return {"message": f"جاري إرسال {sent} رسالة في الخلفية", "sent": sent, "total": len(users)}
 
 
 # ─── Signal Performance ───────────────────────────────────────────────────────
