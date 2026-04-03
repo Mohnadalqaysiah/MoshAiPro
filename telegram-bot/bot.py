@@ -62,9 +62,25 @@ notified_expiry: set          = set()
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 def is_market_open(symbol: str) -> bool:
-    if symbol not in FOREX_MARKETS:
+    """
+    فحص دقيق لحالة السوق:
+    - كريبتو: مفتوح 24/7
+    - فوركس/ذهب/نفط/مؤشرات: مغلق السبت كاملاً + الأحد حتى 22:00 UTC + الجمعة بعد 22:00 UTC
+    """
+    if symbol.upper() not in FOREX_MARKETS:
         return True
-    return datetime.now(timezone.utc).weekday() < 5
+    now = datetime.now(timezone.utc)
+    wd  = now.weekday()   # 0=Mon … 4=Fri 5=Sat 6=Sun
+    # السبت كله مغلق
+    if wd == 5:
+        return False
+    # الجمعة بعد 22:00 UTC → مغلق
+    if wd == 4 and now.hour >= 22:
+        return False
+    # الأحد قبل 22:00 UTC → مغلق
+    if wd == 6 and now.hour < 22:
+        return False
+    return True
 
 
 def _fmt_price(v) -> str:

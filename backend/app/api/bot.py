@@ -394,11 +394,26 @@ def bot_new_signals(
         Signal.broadcast_sent == False,
     ).order_by(Signal.created_at.desc()).limit(20).all()
 
+    # عمر الإشارة الأقصى قبل إلغاء البث (بالدقائق حسب الإطار)
+    _MAX_SIGNAL_AGE = {"1m":5,"5m":10,"15m":20,"30m":30,"1h":60,"4h":180,"1d":720}
+
     result = []
     for s in signals:
         # ── لا تبث إشارة إذا السوق مغلق (إلا الكريبتو) ──────────────────
         if not _smart_data.is_market_open(s.market):
             continue
+
+        # ── لا تبث إشارة قديمة (سعرها لم يعد صالحاً) ────────────────────
+        if s.created_at:
+            age_min = (now - s.created_at).total_seconds() / 60
+            max_age = _MAX_SIGNAL_AGE.get(s.timeframe or "1h", 60)
+            if age_min > max_age:
+                # الإشارة قديمة جداً — علّمها كمُبثّة لتجنب إعادة محاولتها
+                s.broadcast_sent = True
+                db.commit()
+                logger.info(f"⏭️  Signal #{s.id} [{s.market}/{s.timeframe}] skipped — age {age_min:.0f}min > {max_age}min")
+                continue
+
         result.append({
             "id":             s.id,
             "market":         s.market,

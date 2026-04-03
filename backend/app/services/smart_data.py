@@ -553,16 +553,22 @@ class SmartDataProvider:
         return meta["price"] if meta else None
 
     def is_market_open(self, symbol: str) -> bool:
-        """فحص إذا السوق مفتوح"""
-        crypto = {"BTCUSD", "ETHUSD", "BNBUSD"}
+        """
+        فحص دقيق لحالة السوق:
+        - كريبتو: مفتوح 24/7
+        - فوركس/ذهب/نفط/مؤشرات: مغلق السبت كاملاً + الأحد حتى 22:00 UTC + الجمعة بعد 22:00 UTC
+        """
+        crypto = {"BTCUSD", "ETHUSD", "BNBUSD", "SOLUSD", "BNBUSD"}
         if symbol.upper() in crypto:
             return True
-        now = datetime.utcnow()
-        # Forex/Gold: مغلق السبت والأحد
-        if now.weekday() >= 5:
+        from datetime import timezone as _tz
+        now = datetime.now(_tz.utc)
+        wd  = now.weekday()   # 0=Mon … 4=Fri 5=Sat 6=Sun
+        if wd == 5:                         # السبت كاملاً
             return False
-        # مغلق بعد 22:00 UTC جمعة وقبل 22:00 UTC أحد
-        if now.weekday() == 4 and now.hour >= 22:
+        if wd == 4 and now.hour >= 22:      # الجمعة بعد 22:00 UTC
+            return False
+        if wd == 6 and now.hour < 22:       # الأحد قبل 22:00 UTC
             return False
         return True
 
