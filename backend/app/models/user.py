@@ -47,9 +47,10 @@ class User(Base):
     chat_total            = Column(Integer, default=0)
     last_usage_reset      = Column(DateTime(timezone=True), server_default=func.now())
 
-    # Trial credits (lifetime)
+    # Trial credits (lifetime, يتجدد كل شهر)
     trial_analyses_left   = Column(Integer, default=10)
     trial_chat_left       = Column(Integer, default=20)
+    trial_renewed_at      = Column(DateTime(timezone=True), nullable=True)  # آخر تجديد تلقائي
 
     # Telegram link token (for bot linking)
     telegram_link_token   = Column(String, unique=True, nullable=True, index=True)

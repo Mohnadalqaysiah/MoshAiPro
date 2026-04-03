@@ -314,6 +314,7 @@ def bot_all_watchlists(
     db: Session = Depends(get_db),
 ):
     """كل المستخدمين الذين لديهم قائمة مراقبة مفعّلة — يستخدمها البوت للإشعارات"""
+    from app.services.auth_service import check_subscription
     users = db.query(User).filter(
         User.telegram_id != None,
         User.notifications_enabled == True,
@@ -323,14 +324,56 @@ def bot_all_watchlists(
     result = []
     for u in users:
         wl = u.notify_watchlist or []
-        if wl:
-            result.append({
-                "telegram_id":    u.telegram_id,
-                "watchlist":      wl,
-                "timeframe":      u.notify_timeframe      or "1h",
-                "min_confidence": u.notify_min_confidence or 65,
-            })
+        if not wl:
+            continue
+        # ── تحقق من صلاحية الاشتراك — لا تنبيهات لمن انتهت تجربته ──────
+        status = check_subscription(u, db)
+        if not status["allowed"]:
+            continue
+        result.append({
+            "telegram_id":    u.telegram_id,
+            "watchlist":      wl,
+            "timeframe":      u.notify_timeframe      or "1h",
+            "min_confidence": u.notify_min_confidence or 65,
+        })
     return {"users": result, "count": len(result)}
+
+
+@router.post("/renew-trials")
+def bot_renew_trials(
+    _: bool = Depends(verify_bot),
+    db: Session = Depends(get_db),
+):
+    """
+    يجدّد الفترة التجريبية لكل مستخدم تجريبي مضى عليه شهر أو أكثر.
+    يُستدعى من البوت مرة يومياً.
+    القاعدة: إذا trial_renewed_at (أو created_at) < الآن - 30 يوم → تجديد.
+    """
+    from datetime import timedelta
+    now    = datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=30)
+
+    # المستخدمون التجريبيون الذين مضى شهر على آخر تجديد (أو على إنشاء الحساب)
+    candidates = db.query(User).filter(
+        User.plan == PlanType.TRIAL,
+        User.is_active == True,
+    ).all()
+
+    renewed = []
+    for u in candidates:
+        last_renewal = u.trial_renewed_at or u.created_at
+        if last_renewal and last_renewal < cutoff:
+            u.trial_analyses_left = 10
+            u.trial_chat_left     = 20
+            u.trial_ends_at       = now + timedelta(days=7)  # 7 أيام جديدة
+            u.trial_renewed_at    = now
+            renewed.append(u.id)
+            logger.info(f"🔄 Trial renewed for user {u.id} ({u.email})")
+
+    if renewed:
+        db.commit()
+
+    return {"renewed_count": len(renewed), "user_ids": renewed}
 
 
 @router.get("/new-signals")

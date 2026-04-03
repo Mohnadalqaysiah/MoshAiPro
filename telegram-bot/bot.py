@@ -960,9 +960,20 @@ async def monitor_watchlists(app: Application):
     await asyncio.sleep(60)
 
     _market_cycle = 0
+    # كل 96 دورة × 15 دقيقة = 24 ساعة → تجديد التجارب اليومي
+    _DAILY_CYCLES = 96
     while True:
         try:
             _market_cycle += 1
+
+            # ── 0. تجديد الفترة التجريبية (مرة يومياً) ────────────────────
+            if _market_cycle % _DAILY_CYCLES == 1:
+                try:
+                    result = await _post("/api/v1/bot/renew-trials")
+                    if result.get("renewed_count", 0) > 0:
+                        logger.info(f"🔄 تجديد تلقائي: {result['renewed_count']} مستخدم تجريبي")
+                except Exception as _re:
+                    logger.warning(f"renew-trials: {_re}")
 
             # ── 1. نتائج الإشارات (TP/SL) ─────────────────────────────────
             outcomes = (await _get("/api/v1/bot/check-outcomes", timeout=45)).get("triggered", [])
