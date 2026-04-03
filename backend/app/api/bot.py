@@ -194,6 +194,10 @@ async def bot_check_outcomes(
         try:
             market_upper = sig.market.upper()
 
+            # ── لا تفحص إذا السوق مغلق (إلا الكريبتو) ───────────────────────
+            if not _smart_data.is_market_open(sig.market):
+                continue
+
             # ── للمعادن: استخدم TV Spot (نفس مصدر الإشارة) ─────────────────
             if market_upper in _SPOT_SYMBOLS:
                 try:
@@ -381,7 +385,10 @@ def bot_new_signals(
     _: bool = Depends(verify_bot),
     db: Session = Depends(get_db),
 ):
-    """إشارات جديدة لم تُبث بعد (broadcast_sent=False)"""
+    """
+    إشارات جديدة لم تُبث بعد (broadcast_sent=False).
+    لا تُعيد إشارات للأسواق المغلقة — تمنع البث بسعر قديم/خاطئ.
+    """
     signals = db.query(Signal).filter(
         Signal.status == SignalStatus.ACTIVE,
         Signal.broadcast_sent == False,
@@ -389,6 +396,9 @@ def bot_new_signals(
 
     result = []
     for s in signals:
+        # ── لا تبث إشارة إذا السوق مغلق (إلا الكريبتو) ──────────────────
+        if not _smart_data.is_market_open(s.market):
+            continue
         result.append({
             "id":             s.id,
             "market":         s.market,
@@ -575,6 +585,10 @@ def bot_save_alert_signal(
 
     if signal_type not in ("BUY", "SELL"):
         return {"saved": False, "reason": "invalid signal_type"}
+
+    # لا نحفظ إشارة إذا السوق مغلق — السعر قد يكون قديماً
+    if not _smart_data.is_market_open(symbol):
+        return {"saved": False, "reason": "market_closed"}
 
     tf_hours   = {"1m": 2, "5m": 4, "15m": 8, "30m": 12, "1h": 24, "4h": 72, "1d": 168}
     expires_at = datetime.now(timezone.utc) + timedelta(hours=tf_hours.get(timeframe, 24))

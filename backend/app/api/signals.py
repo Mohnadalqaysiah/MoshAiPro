@@ -133,9 +133,11 @@ async def analyze_market(
         except Exception as _le:
             logger.warning(f"AnalysisLog save error: {_le}")
 
-        # حفظ الإشارة (BUY/SELL قوية فقط)
+        # حفظ الإشارة (BUY/SELL قوية فقط — السوق مفتوح فقط)
+        from app.services.smart_data import smart_data as _sd
         try:
-            if rec in ("BUY", "SELL") and entry and sl and tp1 and conf >= 60:
+            if rec in ("BUY", "SELL") and entry and sl and tp1 and conf >= 60 \
+                    and analysis.get("market_open", True) and _sd.is_market_open(symbol):
                 sig_type = SignalType.BUY if rec == "BUY" else SignalType.SELL
                 tf_hours = {"1m":2,"5m":4,"15m":8,"30m":12,"1h":24,"4h":72,"1d":168,"1w":336}
                 expires_h = tf_hours.get(timeframe, 24)
