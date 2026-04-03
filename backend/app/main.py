@@ -96,6 +96,38 @@ async def health_check():
     return {"status": "healthy"}
 
 
+@app.get("/prices")
+async def live_prices():
+    """
+    أسعار لحظية من كل المصادر للمقارنة — مفيد للتشخيص.
+    يُظهر: TV Spot, yfinance Futures, الفارق (basis), مصدر التحليل.
+    """
+    import time as _time
+    from app.services.tv_price_feed import tv_feed
+    from app.services.smart_data import smart_data as _sd
+
+    symbols = ["XAUUSD", "XAGUSD", "BTCUSD", "EURUSD", "GBPUSD"]
+    result = {}
+    for sym in symbols:
+        tv_p    = tv_feed.get_price_sync(sym)
+        yf_meta = _sd.get_realtime_price_with_meta(sym)
+        yf_p    = yf_meta["price"] if yf_meta else None
+        market_open = _sd.is_market_open(sym)
+        entry = {
+            "tv_spot":      round(float(tv_p), 5)  if tv_p  else None,
+            "yfinance":     round(float(yf_p), 5)  if yf_p  else None,
+            "yf_source":    yf_meta.get("source")  if yf_meta else None,
+            "basis":        round(float(tv_p) - float(yf_p), 2) if tv_p and yf_p else None,
+            "market_open":  market_open,
+        }
+        result[sym] = entry
+
+    return {
+        "tv_feed_alive": tv_feed.is_alive(),
+        "prices": result,
+    }
+
+
 @app.get("/status")
 async def system_status():
     """حالة النظام والـ API Keys"""

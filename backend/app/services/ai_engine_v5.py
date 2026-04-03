@@ -425,8 +425,12 @@ class MoshAIEngineV5:
     def _apply_spot_basis(self, symbol: str, analysis: dict) -> dict:
         """
         يُصحِّح فارق Futures-Spot لأسواق المعادن.
-        GC=F (ذهب futures) دائماً أعلى من XAUUSD spot بـ $10-40.
+        GC=F (ذهب futures) دائماً أعلى من XAUUSD spot بـ $10-60.
         نطرح هذا الفارق من كل المستويات ليتطابق مع ما يراه المتداول في MT4/MT5.
+
+        ملاحظة: current_price قد يكون TV Spot (إذا نجح get_realtime_price_with_meta)
+        أو GC=F Futures. في كلتا الحالتين نجلب GC=F مباشرة كمرجع لحساب الفارق
+        لأن ICT candles دائماً من GC=F.
         """
         if symbol.upper() not in self._FUTURES_SPOT_SYMBOLS:
             return analysis
@@ -436,22 +440,40 @@ class MoshAIEngineV5:
             if spot <= 0:
                 return analysis
 
-            futures = float(analysis.get("current_price") or 0)
+            # ── جلب سعر Futures مباشرة (GC=F) كمرجع ثابت ──────────────────
+            # لا نستخدم current_price لأنه قد يكون TV Spot بالفعل
+            _FUTURES_SYM = {"XAUUSD": "GC=F", "XAGUSD": "SI=F"}
+            futures_sym = _FUTURES_SYM.get(symbol.upper())
+            futures = 0.0
+            if futures_sym:
+                try:
+                    import yfinance as _yf
+                    _info = _yf.Ticker(futures_sym).info
+                    futures = float(_info.get("regularMarketPrice") or _info.get("previousClose") or 0)
+                except Exception:
+                    pass
+            # fallback: إذا فشل yfinance استخدم current_price إذا كان أكبر من spot
+            if futures <= 0:
+                cp = float(analysis.get("current_price") or 0)
+                futures = cp if cp > spot else 0.0
             if futures <= 0:
                 return analysis
 
             # احفظ السعر الفوري ومصدره ليُعادا استخدامهما في _validate_price_freshness
-            # دون استدعاء _fetch_spot_price مرة ثانية (يمنع تفاوت السعر بين الاستدعاءين)
             analysis["_cached_spot_price"]  = spot
             analysis["_cached_spot_source"] = spot_source
 
             basis = spot - futures  # عادةً سالب: spot أقل من futures
 
             # sanity check: الفارق يجب أن يكون معقولاً (0.01% – 4%)
-            # الذهب near-month قد يصل 2.6%+ مع معدلات فائدة مرتفعة
             ratio = abs(basis) / futures
             if ratio < 0.0001 or ratio > 0.04:
-                logger.debug(f"   ⚠️  Basis out of range for {symbol}: {basis:+.2f} ({ratio*100:.2f}%) — skipped")
+                logger.info(f"   ⚠️  Basis out of range for {symbol}: {basis:+.2f} ({ratio*100:.2f}%) — skipped")
+                # تصحيح current_price على الأقل
+                analysis["current_price"] = round(spot, 5)
+                analysis["price_source"]  = spot_source
+                analysis["_cached_spot_price"]  = spot
+                analysis["_cached_spot_source"] = spot_source
                 return analysis
 
             logger.info(f"   🔧 Spot-Futures basis [{symbol}]: {basis:+.2f}  (futures={futures:.2f} → spot={spot:.2f})")

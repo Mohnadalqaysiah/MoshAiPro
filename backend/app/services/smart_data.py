@@ -452,6 +452,22 @@ class SmartDataProvider:
 
         fetched_at = datetime.utcnow().isoformat() + "Z"
 
+        # ─── 0.5 للمعادن: TV Spot أولاً — هذا ما يراه المستخدم في MT4 ─────────
+        # GC=F Futures تختلف عن XAUUSD Spot بـ $10-60 → نعرض Spot للمستخدم
+        _METALS = {"XAUUSD", "XAGUSD"}
+        if sym in _METALS:
+            try:
+                from app.services.tv_price_feed import tv_feed
+                tv_p = tv_feed.get_price_sync(sym)
+                if tv_p and float(tv_p) > 0:
+                    price = float(tv_p)
+                    self._price_cache[sym] = (price, "tv_spot", fetched_at, now_ts)
+                    logger.debug(f"💱 [tv_spot] {sym}: {price}")
+                    return {"price": price, "source": "tv_spot", "fetched_at": fetched_at}
+            except Exception as _tv_e:
+                logger.debug(f"TV spot fallback for {sym}: {_tv_e}")
+            # إذا TV غير متاح → نكمل بـ yfinance Futures وتطبيق basis لاحقاً
+
         # ─── 1. Futures symbols → yfinance دائماً (تطابق مصدر الكاندلز) ──────
         if sym in self._FUTURES_SYMBOLS:
             try:
