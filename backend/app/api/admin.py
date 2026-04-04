@@ -677,14 +677,28 @@ def send_email(
 # ─── Telegram Messages ────────────────────────────────────────────────────────
 
 def _send_telegram_message(chat_id: str, text: str) -> bool:
-    """إرسال رسالة تيليجرام"""
+    """إرسال رسالة تيليجرام واحدة"""
     url = f"https://api.telegram.org/bot{_settings.TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
     try:
         resp = requests.post(url, json=payload, timeout=10)
+        if resp.status_code == 429:
+            import time as _t
+            retry_after = resp.json().get("parameters", {}).get("retry_after", 5)
+            _t.sleep(retry_after)
+            resp = requests.post(url, json=payload, timeout=10)
         return resp.status_code == 200
-    except:
+    except Exception:
         return False
+
+
+def _broadcast_task(chat_ids: list, text: str):
+    """يُرسل للقائمة في الخلفية مع rate limiting"""
+    import time as _t
+    for cid in chat_ids:
+        _send_telegram_message(cid, text)
+        _t.sleep(0.05)  # Telegram: max 30 msg/s
+
 
 @router.post("/telegram/send")
 def send_telegram_message(
@@ -693,36 +707,46 @@ def send_telegram_message(
     admin: User = Depends(get_admin_user),
     db: Session = Depends(get_db),
 ):
-    """إرسال رسالة تيليجرام للمستخدمين"""
+    """إرسال رسالة تيليجرام — للمحددين أو للجميع"""
     if not _settings.TELEGRAM_BOT_TOKEN:
         raise HTTPException(400, "TELEGRAM_BOT_TOKEN غير مضبوط")
 
-    # بناء الرسالة
-    text = ""
+    # ── بناء الرسالة ───────────────────────────────────────────────────────
+    lines = []
     if data.title:
-        text += f"<b>{data.title}</b>\n\n"
-    text += data.message
+        lines.append(f"<b>📢 {data.title}</b>")
+        lines.append("")
+    lines.append(data.message)
+    lines.append("")
+    lines.append("<i>— Qaffel AI</i>")
+    text = "\n".join(lines)
 
+    # ── تحديد المستلمين ────────────────────────────────────────────────────
     if data.user_ids:
-        # إرسال لمستخدمين محددين
-        users = db.query(User).filter(User.id.in_(data.user_ids), User.telegram_id != None).all()
-        sent = 0
-        for u in users:
-            if _send_telegram_message(u.telegram_id, text):
-                sent += 1
-        return {"message": f"تم إرسال {sent} رسالة من {len(users)}", "sent": sent, "total": len(users)}
+        users = db.query(User).filter(
+            User.id.in_(data.user_ids),
+            User.telegram_id != None,
+        ).all()
     else:
-        # إرسال لجميع المستخدمين الذين لديهم telegram_id
-        users = db.query(User).filter(User.telegram_id != None, User.is_active == True).all()
-        sent = 0
-        for u in users:
-            if background:
-                background.add_task(_send_telegram_message, u.telegram_id, text)
-                sent += 1
-            else:
-                if _send_telegram_message(u.telegram_id, text):
-                    sent += 1
-        return {"message": f"جاري إرسال {sent} رسالة في الخلفية", "sent": sent, "total": len(users)}
+        users = db.query(User).filter(
+            User.telegram_id != None,
+            User.is_active == True,
+            User.plan != PlanType.BANNED,
+        ).all()
+
+    chat_ids = [u.telegram_id for u in users if u.telegram_id]
+    total    = len(chat_ids)
+
+    if total == 0:
+        return {"message": "لا يوجد مستخدمون لديهم تيليجرام", "sent": 0, "total": 0}
+
+    # ── إرسال فوري للأعداد الصغيرة، خلفية للكبيرة ─────────────────────────
+    if total <= 5:
+        sent = sum(1 for cid in chat_ids if _send_telegram_message(cid, text))
+        return {"message": f"✅ تم إرسال {sent}/{total} رسالة", "sent": sent, "total": total}
+    else:
+        background.add_task(_broadcast_task, chat_ids, text)
+        return {"message": f"⏳ جاري إرسال {total} رسالة في الخلفية", "sent": total, "total": total}
 
 
 # ─── Signal Performance ───────────────────────────────────────────────────────

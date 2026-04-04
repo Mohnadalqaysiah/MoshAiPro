@@ -6,7 +6,7 @@ import {
   Users, CreditCard, BarChart2, CheckCircle, XCircle, Clock,
   Search, Plus, Trash2, ToggleLeft, ToggleRight, TrendingUp,
   DollarSign, Activity, RefreshCw, Calendar,
-  X, ExternalLink, Shield, AlertTriangle, Settings, Mail, Upload, Signal
+  X, ExternalLink, Shield, AlertTriangle, Settings, Mail, Upload, Signal, Send
 } from 'lucide-react'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -362,7 +362,7 @@ export default function Admin() {
     { key:'markets',   icon:BarChart2,  label:'الأسواق' },
     { key:'signals',   icon:TrendingUp, label:'الإشارات' },
     { key:'affiliate', icon:TrendingUp, label:'الأفلييت' },
-    { key:'messages',  icon:Mail,       label:'الرسائل' },
+    { key:'messages',  icon:Send,       label:'رسائل تيليجرام' },
     { key:'email',     icon:Mail,       label:'البريد' },
     { key:'settings',  icon:Settings,   label:'الإعدادات' },
   ]
