@@ -54,7 +54,8 @@ export default function Dashboard() {
   const [relinking, setRelinking]   = useState(false)
   const [relinkDone, setRelinkDone] = useState(false)
   const [quickResult, setQuickResult] = useState(null)   // modal result
-  const [historyLimit, setHistoryLimit] = useState(10)   // show more
+  const [historyLimit, setHistoryLimit] = useState(10)   // show more — signal history
+  const [signalsLimit, setSignalsLimit] = useState(10)   // show more — recent signals
 
   // جلب آخر الإشارات
   useEffect(() => { fetchSignals(); fetchSignalHistory() }, [])
@@ -393,84 +394,111 @@ export default function Dashboard() {
       </div>
 
       {/* Recent Signals */}
-      <div className="bg-gray-800 border border-gray-700 rounded-xl p-5">
-        <h2 className="text-white font-semibold mb-4">آخر الإشارات</h2>
+      <div className="bg-gray-800/60 border border-gray-700/80 rounded-2xl overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-700/60">
+          <h2 className="text-white font-semibold flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse inline-block" />
+            آخر الإشارات
+            {signals.length > 0 && <span className="text-xs text-gray-500 font-normal">({signals.length})</span>}
+          </h2>
+          <button onClick={fetchSignals} className="text-gray-500 hover:text-gray-300 transition-colors p-1 rounded-lg hover:bg-gray-700">
+            <RefreshCw size={14} />
+          </button>
+        </div>
+
         {signals.length === 0 ? (
-          <p className="text-gray-500 text-center py-8">لا توجد إشارات. اضغط على زر التحليل أعلاه.</p>
+          <p className="text-gray-500 text-center py-10 text-sm">لا توجد إشارات. اضغط على زر التحليل أعلاه.</p>
         ) : (
-          <div className="space-y-3">
-            {signals.map((sig, i) => {
-              const rec = sig.recommendation || sig.signal_type || 'WATCH'
+          <div className="divide-y divide-gray-700/40">
+            {signals.slice(0, signalsLimit).map((sig, i) => {
+              const rec        = sig.recommendation || sig.signal_type || 'WATCH'
               const confidence = sig.ai_confidence_score || sig.ai_confidence || 0
-              const market = sig.market || sig.symbol || 'N/A'
-
-              // مستويات من ICT engine (الجديد) أو Gemini (القديم)
-              const levels = sig.levels || {}
-              const entryMin  = levels.entry_zone_min  || sig.entry_zone_min
-              const entryMax  = levels.entry_zone_max  || sig.entry_zone_max
+              const market     = sig.market || sig.symbol || 'N/A'
+              const levels     = sig.levels || {}
+              const entryMin   = levels.entry_zone_min || sig.entry_zone_min
+              const entryMax   = levels.entry_zone_max || sig.entry_zone_max
               const entryExact = levels.entry || sig.entry_zones?.[0]
-              const sl   = levels.stop_loss  || sig.stop_loss_zone
-              const tp1  = levels.tp1        || sig.take_profit_zones?.[0]
-              const tp2  = levels.tp2        || sig.take_profit_zones?.[1]
-              const rr   = sig.risk_reward   || levels.risk_reward
-
-              // السعر الفوري + المصدر + الوقت
-              const livePrice    = sig.current_price
-              const priceSource  = sig.price_source
-              const priceFetchAt = sig.price_fetched_at
-                ? new Date(sig.price_fetched_at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })
-                : null
-
+              const sl         = levels.stop_loss || sig.stop_loss_zone
+              const tp1        = levels.tp1 || sig.take_profit_zones?.[0]
+              const tp2        = levels.tp2 || sig.take_profit_zones?.[1]
+              const rr         = sig.risk_reward || levels.risk_reward
+              const livePrice  = sig.current_price
               const fmt = (v, d = 5) => v != null ? (typeof v === 'number' ? v.toFixed(d) : v) : null
 
+              const isBuy  = rec === 'BUY'
+              const isSell = rec === 'SELL'
+              const accentBg   = isBuy ? 'bg-green-500' : isSell ? 'bg-red-500' : 'bg-gray-500'
+              const recLabel   = isBuy ? '▲ شراء' : isSell ? '▼ بيع' : '◈ مراقبة'
+              const recBadge   = isBuy
+                ? 'bg-green-500/15 text-green-400 border border-green-500/30'
+                : isSell
+                ? 'bg-red-500/15 text-red-400 border border-red-500/30'
+                : 'bg-gray-600/30 text-gray-400 border border-gray-600/40'
+              const confColor  = confidence >= 75 ? 'bg-green-500' : confidence >= 60 ? 'bg-yellow-500' : 'bg-red-400'
+
               return (
-                <div key={sig.id || i} className={`border rounded-lg p-4 ${getSignalBg(rec)}`}>
-                  {/* الصف الأول: رمز + توصية + مؤشرات */}
-                  <div className="flex items-center justify-between flex-wrap gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-white font-bold">{market}</span>
-                      <span className={`font-semibold ${getSignalColor(rec)}`}>{getSignalAr(rec)}</span>
-                      {sig.from_cache && (
-                        <span className="text-xs text-gray-500 bg-gray-700 px-2 py-0.5 rounded">محفوظ</span>
-                      )}
+                <div key={sig.id || i}
+                  className="flex gap-0 hover:bg-gray-700/20 transition-colors cursor-pointer"
+                  onClick={() => setQuickResult({ ...sig, market })}
+                >
+                  {/* شريط اللون الجانبي */}
+                  <div className={`w-1 flex-shrink-0 ${accentBg} opacity-70`} />
+
+                  <div className="flex-1 px-4 py-3">
+                    {/* الصف الأول */}
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-white font-bold text-sm tracking-wide">{market}</span>
+                        <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${recBadge}`}>{recLabel}</span>
+                        {sig.from_cache && <span className="text-xs text-gray-600 bg-gray-700/50 px-1.5 py-0.5 rounded">كاش</span>}
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {rr != null && (
+                          <span className="text-xs text-gray-400">R/R <span className="text-white font-medium">{typeof rr === 'number' ? rr.toFixed(1) : rr}</span></span>
+                        )}
+                        {/* شريط الثقة */}
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-16 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                            <div className={`h-full rounded-full ${confColor}`} style={{ width: `${confidence}%` }} />
+                          </div>
+                          <span className="text-xs text-gray-300 font-medium w-9 text-left">{Math.round(confidence)}%</span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3 text-sm">
-                      <span className="text-gray-400">ثقة: <span className="text-white font-medium">{confidence.toFixed ? confidence.toFixed(1) : confidence}%</span></span>
-                      {rr != null && (
-                        <span className="text-gray-400">R/R: <span className="text-white font-medium">{typeof rr === 'number' ? rr.toFixed(2) : rr}x</span></span>
-                      )}
-                    </div>
+
+                    {/* الصف الثاني: مستويات */}
+                    {(entryMin || entryExact || sl || tp1) && (
+                      <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
+                        {(entryMin || entryExact) && (
+                          <span className="text-xs">
+                            <span className="text-gray-500">دخول </span>
+                            <span className="text-white font-mono">{entryMin && entryMax ? `${fmt(entryMin)}–${fmt(entryMax)}` : fmt(entryExact)}</span>
+                          </span>
+                        )}
+                        {sl != null && <span className="text-xs"><span className="text-gray-500">SL </span><span className="text-red-400 font-mono">{fmt(sl)}</span></span>}
+                        {tp1 != null && <span className="text-xs"><span className="text-gray-500">TP1 </span><span className="text-green-400 font-mono">{fmt(tp1)}</span></span>}
+                        {tp2 != null && <span className="text-xs"><span className="text-gray-500">TP2 </span><span className="text-green-300 font-mono">{fmt(tp2)}</span></span>}
+                        {livePrice != null && (
+                          <span className="text-xs"><span className="text-gray-500">السعر </span><span className="text-blue-300 font-mono">{fmt(livePrice, market === 'BTCUSD' ? 2 : 4)}</span></span>
+                        )}
+                      </div>
+                    )}
                   </div>
-
-                  {/* السعر الفوري */}
-                  {livePrice != null && (
-                    <div className="mt-2 flex items-center gap-2 text-xs">
-                      <span className="text-gray-500">السعر الحالي:</span>
-                      <span className="text-blue-300 font-semibold">{fmt(livePrice, market === 'BTCUSD' ? 2 : 5)}</span>
-                      {priceFetchAt && <span className="text-gray-600">({priceFetchAt})</span>}
-                      {priceSource === 'twelvedata' && (
-                        <span className="text-green-700 text-xs px-1 py-0.5 bg-green-900/30 rounded">● live</span>
-                      )}
-                    </div>
-                  )}
-
-                  {/* منطقة الدخول + SL + TP */}
-                  {(entryMin || entryExact) && (
-                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-400">
-                      <span>
-                        {tx.entry}: <span className="text-white font-mono">
-                          {entryMin && entryMax ? `${fmt(entryMin)} — ${fmt(entryMax)}` : fmt(entryExact)}
-                        </span>
-                      </span>
-                      {sl != null && <span>{tx.sl}: <span className="text-red-400 font-mono">{fmt(sl)}</span></span>}
-                      {tp1 != null && <span>{tx.tp}1: <span className="text-green-400 font-mono">{fmt(tp1)}</span></span>}
-                      {tp2 != null && <span>{tx.tp}2: <span className="text-green-300 font-mono">{fmt(tp2)}</span></span>}
-                    </div>
-                  )}
                 </div>
               )
             })}
           </div>
+        )}
+
+        {signals.length > signalsLimit && (
+          <button
+            onClick={() => setSignalsLimit(l => l + 10)}
+            className="w-full py-3 text-sm text-gray-400 hover:text-white hover:bg-gray-700/30 transition-colors flex items-center justify-center gap-2 border-t border-gray-700/60"
+          >
+            <ChevronDown size={15} />
+            عرض المزيد ({signals.length - signalsLimit} متبقية)
+          </button>
         )}
       </div>
 
@@ -478,73 +506,91 @@ export default function Dashboard() {
       <PerformanceSection />
 
       {/* Signal History */}
-      <div className="bg-gray-800 border border-gray-700 rounded-xl p-5">
-        <h2 className="text-white font-semibold mb-4 flex items-center gap-2">
-          <Activity size={18} className="text-purple-400" />
-          سجل التوصيات
-        </h2>
-        {signalHistory.length === 0 ? (
-          <p className="text-gray-500 text-center py-6 text-sm">لا يوجد سجل بعد. قم بتحليل سوق للبدء.</p>
-        ) : (
-          <>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm" dir="rtl">
-                <thead>
-                  <tr className="text-gray-400 border-b border-gray-700 text-xs">
-                    <th className="pb-2 text-right font-medium">السوق</th>
-                    <th className="pb-2 text-right font-medium">النوع</th>
-                    <th className="pb-2 text-right font-medium">الحالة</th>
-                    <th className="pb-2 text-right font-medium">الثقة</th>
-                    <th className="pb-2 text-right font-medium">الدخول</th>
-                    <th className="pb-2 text-right font-medium">التاريخ</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-700/50">
-                  {signalHistory.slice(0, historyLimit).map((s) => {
-                    const statusMap = {
-                      ACTIVE:  { label: 'نشطة 🟢',   cls: 'bg-green-900/40 text-green-300' },
-                      TP1_HIT: { label: 'TP1 ✅',     cls: 'bg-blue-900/40 text-blue-300' },
-                      TP2_HIT: { label: 'TP2 🎯',     cls: 'bg-purple-900/40 text-purple-300' },
-                      SL_HIT:  { label: 'SL ❌',      cls: 'bg-red-900/40 text-red-300' },
-                      EXPIRED: { label: 'منتهية ⏰',  cls: 'bg-gray-700/60 text-gray-400' },
-                    }
-                    const st = statusMap[s.status] || { label: s.status, cls: 'bg-gray-700 text-gray-400' }
-                    const typeColor = s.type === 'BUY' ? 'bg-green-900/40 text-green-300' : 'bg-red-900/40 text-red-300'
-                    const typeLabel = s.type === 'BUY' ? 'شراء' : 'بيع'
-                    const createdAt = s.created_at ? new Date(s.created_at).toLocaleDateString('ar-EG', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'
-                    return (
-                      <tr key={s.id} className="hover:bg-gray-700/30 transition-colors">
-                        <td className="py-2 pr-1 font-semibold text-white">{s.market}</td>
-                        <td className="py-2">
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${typeColor}`}>{typeLabel}</span>
-                        </td>
-                        <td className="py-2">
-                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${st.cls}`}>{st.label}</span>
-                        </td>
-                        <td className="py-2 text-yellow-300 font-medium">{s.confidence ? `${Math.round(s.confidence)}%` : '-'}</td>
-                        <td className="py-2 text-gray-300">{s.entry ? (typeof s.entry === 'number' ? s.entry.toFixed(5) : s.entry) : '-'}</td>
-                        <td className="py-2 text-gray-500 text-xs">{createdAt}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
+      <div className="bg-gray-800/60 border border-gray-700/80 rounded-2xl overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-700/60">
+          <h2 className="text-white font-semibold flex items-center gap-2">
+            <Activity size={16} className="text-purple-400" />
+            سجل الصفقات المغلقة
+            {signalHistory.length > 0 && <span className="text-xs text-gray-500 font-normal">({signalHistory.length})</span>}
+          </h2>
+        </div>
 
-            {/* Show More */}
-            {signalHistory.length > historyLimit && (
-              <button
-                onClick={() => setHistoryLimit(l => l + 10)}
-                className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 text-sm text-gray-400 hover:text-white bg-gray-700/40 hover:bg-gray-700 rounded-xl transition-colors"
-              >
-                <ChevronDown size={16} />
-                عرض المزيد ({signalHistory.length - historyLimit} متبقية)
-              </button>
-            )}
-            {historyLimit > 10 && signalHistory.length <= historyLimit && (
-              <p className="mt-3 text-center text-xs text-gray-600">تم عرض جميع السجلات ({signalHistory.length})</p>
-            )}
-          </>
+        {signalHistory.length === 0 ? (
+          <p className="text-gray-500 text-center py-10 text-sm">لا يوجد سجل بعد. قم بتحليل سوق للبدء.</p>
+        ) : (
+          <div className="divide-y divide-gray-700/40">
+            {signalHistory.slice(0, historyLimit).map((s) => {
+              const STATUS = {
+                ACTIVE:  { label: 'نشطة',    icon: '🟢', bar: 'bg-green-500',  txt: 'text-green-400' },
+                TP1_HIT: { label: 'هدف 1',   icon: '✅', bar: 'bg-blue-500',   txt: 'text-blue-400'  },
+                TP2_HIT: { label: 'هدف 2',   icon: '🎯', bar: 'bg-purple-500', txt: 'text-purple-400'},
+                SL_HIT:  { label: 'وقف خسارة',icon: '❌',bar: 'bg-red-500',    txt: 'text-red-400'   },
+                EXPIRED: { label: 'منتهية',  icon: '⏰', bar: 'bg-gray-600',   txt: 'text-gray-500'  },
+              }
+              const st      = STATUS[s.status] || { label: s.status, icon: '•', bar: 'bg-gray-600', txt: 'text-gray-400' }
+              const isBuy   = s.type === 'BUY'
+              const isWin   = ['TP1_HIT','TP2_HIT'].includes(s.status)
+              const isLoss  = s.status === 'SL_HIT'
+              const createdAt = s.created_at
+                ? new Date(s.created_at).toLocaleDateString('ar-EG', { month: 'short', day: 'numeric' })
+                : '—'
+
+              return (
+                <div key={s.id} className="flex items-center gap-0 hover:bg-gray-700/20 transition-colors">
+                  {/* شريط اللون */}
+                  <div className={`w-1 self-stretch flex-shrink-0 ${st.bar} opacity-60`} />
+
+                  <div className="flex-1 flex items-center justify-between gap-3 px-4 py-3 flex-wrap">
+                    {/* يسار: رمز + نوع */}
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <span className="font-bold text-white text-sm">{s.market}</span>
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${isBuy ? 'bg-green-500/15 text-green-400' : 'bg-red-500/15 text-red-400'}`}>
+                        {isBuy ? '▲' : '▼'} {isBuy ? 'شراء' : 'بيع'}
+                      </span>
+                      <span className="text-xs text-gray-500">{createdAt}</span>
+                    </div>
+
+                    {/* يمين: الدخول + الثقة + الحالة */}
+                    <div className="flex items-center gap-3 flex-wrap">
+                      {s.entry != null && (
+                        <span className="text-xs text-gray-500 font-mono">
+                          {typeof s.entry === 'number' ? s.entry.toFixed(4) : s.entry}
+                        </span>
+                      )}
+                      {s.confidence != null && (
+                        <span className="text-xs text-yellow-400 font-medium">{Math.round(s.confidence)}%</span>
+                      )}
+                      {/* بادج الحالة */}
+                      <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full ${
+                        isWin  ? 'bg-green-500/15 text-green-400 border border-green-500/30' :
+                        isLoss ? 'bg-red-500/15 text-red-400 border border-red-500/30' :
+                        s.status === 'ACTIVE' ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30' :
+                        'bg-gray-600/30 text-gray-400 border border-gray-600/40'
+                      }`}>
+                        {st.icon} {st.label}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {signalHistory.length > historyLimit && (
+          <button
+            onClick={() => setHistoryLimit(l => l + 10)}
+            className="w-full py-3 text-sm text-gray-400 hover:text-white hover:bg-gray-700/30 transition-colors flex items-center justify-center gap-2 border-t border-gray-700/60"
+          >
+            <ChevronDown size={15} />
+            عرض المزيد ({signalHistory.length - historyLimit} متبقية)
+          </button>
+        )}
+        {historyLimit > 10 && signalHistory.length <= historyLimit && (
+          <p className="py-3 text-center text-xs text-gray-600 border-t border-gray-700/40">
+            تم عرض جميع السجلات ({signalHistory.length})
+          </p>
         )}
       </div>
     </div>
