@@ -300,13 +300,48 @@ export default function ChatBot() {
 
   return (
     <>
-      {/* Floating Button — يختفي على الموبايل عند فتح الشات */}
+      {/* Floating Button */}
       <button
         onClick={() => setOpen(o => !o)}
-        className={`fixed bottom-5 left-4 md:left-auto md:right-6 z-50 flex items-center gap-2 rounded-full bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white px-4 py-2.5 shadow-xl shadow-blue-500/30 text-sm font-medium transition-all ${open ? 'hidden md:flex' : 'flex'}`}
+        className={`fixed bottom-5 left-4 md:left-auto md:right-6 z-50 group transition-all duration-300 ${open ? 'hidden md:flex' : 'flex'}`}
+        style={{ filter: open ? 'none' : 'drop-shadow(0 0 18px rgba(99,102,241,0.7))' }}
       >
-        {open ? <X size={18} /> : <MessageCircle size={18} />}
-        <span>كفيل AI</span>
+        {open ? (
+          /* زر الإغلاق */
+          <div className="flex items-center gap-2 rounded-full bg-gray-800 border border-gray-700 hover:bg-gray-700 text-gray-300 px-4 py-2.5 shadow-xl text-sm font-medium transition-all">
+            <X size={16} />
+            <span>إغلاق</span>
+          </div>
+        ) : (
+          /* زر الفتح — متحرك */
+          <div className="relative flex items-center gap-2.5 rounded-full px-4 py-2.5 text-sm font-semibold text-white overflow-visible"
+            style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #2563eb 100%)' }}>
+
+            {/* حلقات نبض خارجية */}
+            <span className="absolute inset-0 rounded-full animate-ping opacity-30"
+              style={{ background: 'linear-gradient(135deg,#4f46e5,#7c3aed)', animationDuration: '2s' }} />
+            <span className="absolute inset-0 rounded-full animate-ping opacity-15"
+              style={{ background: 'linear-gradient(135deg,#4f46e5,#7c3aed)', animationDuration: '2.8s', animationDelay:'0.4s' }} />
+
+            {/* أيقونة AI دوّارة */}
+            <div className="relative w-6 h-6 flex items-center justify-center flex-shrink-0">
+              {/* دائرة خارجية تدور */}
+              <svg className="absolute inset-0 w-6 h-6 animate-spin" style={{ animationDuration:'4s' }} viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" strokeDasharray="4 3" />
+              </svg>
+              {/* نجمة في المنتصف */}
+              <Sparkles size={13} className="relative z-10 text-yellow-300 drop-shadow-sm" />
+            </div>
+
+            <span className="relative z-10 tracking-wide">شات كفيل AI</span>
+
+            {/* نقطة خضراء "متصل" */}
+            <span className="relative flex h-2.5 w-2.5 flex-shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" style={{ animationDuration:'1.5s' }} />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-400" />
+            </span>
+          </div>
+        )}
       </button>
 
       {/* Panel */}
