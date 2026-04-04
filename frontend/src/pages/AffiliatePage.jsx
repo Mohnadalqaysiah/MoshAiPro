@@ -14,6 +14,7 @@ export default function AffiliatePage() {
   const { lang }   = useLang()
   const isAr       = lang === 'ar'
   const [data, setData]         = useState(null)
+  const [refLimit, setRefLimit] = useState(10)
   const [loading, setLoading]   = useState(true)
   const [copied, setCopied]     = useState(false)
   const [payoutAmt, setPayoutAmt] = useState('')
@@ -256,7 +257,7 @@ export default function AffiliatePage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-800">
-                {data.referrals.map((r, i) => (
+                {data.referrals.slice(0, refLimit).map((r, i) => (
                   <tr key={i} className="hover:bg-gray-800/30 transition-colors">
                     <td className="px-4 py-3 text-gray-300 font-mono text-xs">
                       {r.referred_user_email.replace(/(.{3}).*(@.*)/, '$1***$2')}
@@ -273,6 +274,15 @@ export default function AffiliatePage() {
                 ))}
               </tbody>
             </table>
+            {data.referrals.length > refLimit && (
+              <button
+                onClick={() => setRefLimit(l => l + 10)}
+                className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 text-sm text-gray-400 hover:text-white bg-gray-800/60 hover:bg-gray-800 rounded-xl transition-colors border border-gray-700/50"
+              >
+                <ArrowUpRight size={15} />
+                {isAr ? `عرض المزيد (${data.referrals.length - refLimit} متبقية)` : `Show more (${data.referrals.length - refLimit} remaining)`}
+              </button>
+            )}
           </div>
         </div>
       )}

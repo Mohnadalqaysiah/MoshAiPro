@@ -75,6 +75,7 @@ export default function Analyses() {
   const [expanded, setExpanded] = useState(null)
   const [reanalyzing, setReanalyzing] = useState(null)
   const [error,    setError]    = useState(null)
+  const [logsLimit, setLogsLimit] = useState(10)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -130,12 +131,12 @@ export default function Analyses() {
 
       {/* Filter */}
       <div className="flex gap-2 flex-wrap">
-        <button onClick={() => setFilterM('')}
+        <button onClick={() => { setFilterM(''); setLogsLimit(10) }}
           className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${!filterM ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
           {tx.all}
         </button>
         {markets.map(m => (
-          <button key={m.symbol} onClick={() => setFilterM(filterM === m.symbol ? '' : m.symbol)}
+          <button key={m.symbol} onClick={() => { setFilterM(filterM === m.symbol ? '' : m.symbol); setLogsLimit(10) }}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${filterM === m.symbol ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
             {m.symbol}
           </button>
@@ -165,7 +166,7 @@ export default function Analyses() {
                 </tr>
               </thead>
               <tbody>
-                {logs.map((log) => {
+                {logs.slice(0, logsLimit).map((log) => {
                   const style = REC_STYLE[log.recommendation] || REC_STYLE.WATCH
                   const isExp = expanded === log.id
                   return (
@@ -226,6 +227,15 @@ export default function Analyses() {
                 })}
               </tbody>
             </table>
+            {logs.length > logsLimit && (
+              <button
+                onClick={() => setLogsLimit(l => l + 10)}
+                className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 text-sm text-gray-400 hover:text-white bg-gray-700/40 hover:bg-gray-700 rounded-xl transition-colors border border-gray-700/50"
+              >
+                <ChevronDown size={16} />
+                {isAr ? `عرض المزيد (${logs.length - logsLimit} متبقية)` : `Show more (${logs.length - logsLimit} remaining)`}
+              </button>
+            )}
           </div>
         )}
       </div>

@@ -244,8 +244,15 @@ export default function Admin() {
   // Signals state
   const [adminSignals, setAdminSignals] = useState([])
   const [signalsLoading, setSignalsLoading] = useState(false)
-  const [outcomeForm, setOutcomeForm] = useState({})   // { [signal_id]: { status:'', submitting:false, msg:'' } }
-  const [openOutcome, setOpenOutcome] = useState(null) // signal_id of open inline form
+  const [outcomeForm, setOutcomeForm] = useState({})
+  const [openOutcome, setOpenOutcome] = useState(null)
+
+  // "show more" limits
+  const [usersLimit,    setUsersLimit]    = useState(10)
+  const [paymentsLimit, setPaymentsLimit] = useState(10)
+  const [signalsLimit,  setSignalsLimit]  = useState(10)
+  const [reportLimit,   setReportLimit]   = useState(10)
+  const [affLimit,      setAffLimit]      = useState(10)
 
   useEffect(() => {
     if (user?.role !== 'admin') { navigate('/dashboard'); return }
@@ -383,6 +390,14 @@ export default function Admin() {
 
   const filteredUsers = users.filter(u => planFilter === 'all' || u.plan === planFilter)
 
+  const ShowMore = ({ total, limit, onMore }) => total <= limit ? null : (
+    <button onClick={onMore}
+      className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 text-sm text-gray-400 hover:text-white bg-gray-800/60 hover:bg-gray-800 rounded-xl transition-colors border border-gray-700/50">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      عرض المزيد ({total - limit} متبقية)
+    </button>
+  )
+
   const TABS = [
     { key:'stats',     icon:Activity,   label:'إحصائيات' },
     { key:'users',     icon:Users,      label:'المستخدمون' },
@@ -494,7 +509,7 @@ export default function Admin() {
                     <input value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key==='Enter'&&loadUsers()}
                       placeholder="بحث..." className="bg-gray-800 border border-gray-700 rounded-lg pr-8 pl-3 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500 w-40" dir="ltr"/>
                   </div>
-                  <button onClick={loadUsers} className="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded-lg">بحث</button>
+                  <button onClick={() => { setUsersLimit(10); loadUsers() }} className="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded-lg">بحث</button>
                 </div>
               </div>
 
@@ -512,7 +527,7 @@ export default function Admin() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-800/50">
-                    {filteredUsers.map(u => (
+                    {filteredUsers.slice(0, usersLimit).map(u => (
                       <tr key={u.id} className="hover:bg-gray-900/50 cursor-pointer" onClick={() => setSelectedUser(u)}>
                         <td className="py-2 px-3 text-gray-500 text-xs font-mono select-all" title="User ID">#{u.id}</td>
                         <td className="py-2.5 px-3">
@@ -549,6 +564,7 @@ export default function Admin() {
                   </tbody>
                 </table>
                 {filteredUsers.length === 0 && !loading && <p className="text-center text-gray-500 py-8">لا يوجد مستخدمون</p>}
+                <ShowMore total={filteredUsers.length} limit={usersLimit} onMore={() => setUsersLimit(l => l + 10)} />
               </div>
             </div>
           )}
@@ -568,7 +584,7 @@ export default function Admin() {
                 </div>
               </div>
               <div className="space-y-3">
-                {payments.map(p => (
+                {payments.slice(0, paymentsLimit).map(p => (
                   <div key={p.id} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
@@ -600,6 +616,7 @@ export default function Admin() {
                   </div>
                 ))}
                 {payments.length===0 && !loading && <p className="text-center text-gray-500 py-8">لا توجد مدفوعات</p>}
+                <ShowMore total={payments.length} limit={paymentsLimit} onMore={() => setPaymentsLimit(l => l + 10)} />
               </div>
             </div>
           )}
@@ -897,7 +914,7 @@ export default function Admin() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-800/60">
-                      {adminSignals.map(s => {
+                      {adminSignals.slice(0, signalsLimit).map(s => {
                         const typeColor = s.signal_type === 'BUY'
                           ? 'bg-green-900/50 text-green-300'
                           : s.signal_type === 'SELL'
@@ -995,6 +1012,7 @@ export default function Admin() {
                       })}
                     </tbody>
                   </table>
+                  <ShowMore total={adminSignals.length} limit={signalsLimit} onMore={() => setSignalsLimit(l => l + 10)} />
                 </div>
               )}
             </div>
@@ -1085,7 +1103,7 @@ export default function Admin() {
                           </tr>
                         </thead>
                         <tbody>
-                          {reportData.signals.map((s,i) => {
+                          {reportData.signals.slice(0, reportLimit).map((s,i) => {
                             const isWin = ['TP1_HIT','TP2_HIT'].includes(s.status)
                             const statusLabel = {TP1_HIT:'هدف 1 ✅',TP2_HIT:'هدف 2 🏆',SL_HIT:'وقف ❌'}[s.status]||s.status
                             return (
@@ -1101,6 +1119,7 @@ export default function Admin() {
                           })}
                         </tbody>
                       </table>
+                      <ShowMore total={reportData.signals.length} limit={reportLimit} onMore={() => setReportLimit(l => l + 10)} />
                     </div>
                   ) : (
                     <p className="text-gray-500 text-center py-4">لا توجد صفقات مغلقة في هذه الفترة</p>
@@ -1174,7 +1193,7 @@ export default function Admin() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-700/50">
-                      {affStats.affiliates?.map(a => (
+                      {affStats.affiliates?.slice(0, affLimit).map(a => (
                         <tr key={a.affiliate_id} className="hover:bg-gray-700/30 transition-colors">
                           <td className="px-4 py-3 text-white text-xs">{a.user_email}</td>
                           <td className="px-4 py-3 font-mono text-blue-400 text-xs">{a.code}</td>
@@ -1235,6 +1254,7 @@ export default function Admin() {
                   <div className="px-4 py-2 border-t border-gray-700 text-xs text-gray-500">
                     إجمالي: {affStats.total} مسوّق
                   </div>
+                  <ShowMore total={affStats.affiliates?.length || 0} limit={affLimit} onMore={() => setAffLimit(l => l + 10)} />
                 </div>
               )}
             </div>
