@@ -36,9 +36,9 @@ MARKET_NAMES: dict[str, str] = {
     "NAS100":"📈 ناسداك",  "US30":  "📊 داو",       "SP500": "📉 S&P500",
 }
 
-FOREX_MARKETS = {
-    "XAUUSD","XAGUSD","EURUSD","GBPUSD","USDJPY","USDCHF","AUDUSD","USDCAD",
-    "USOIL","NATGAS","NAS100","US30","SP500",
+CRYPTO_MARKETS = {
+    "BTCUSD","ETHUSD","BNBUSD","SOLUSD","XRPUSD","ADAUSD","DOTUSD",
+    "LTCUSD","LINKUSD","MATICUSD","AVAXUSD","ATOMUSD","UNIUSD","TRXUSD",
 }
 
 TF_LABELS = {"15m":"15 دقيقة", "1h":"1 ساعة", "4h":"4 ساعات", "1day":"يومي"}
@@ -67,8 +67,8 @@ def is_market_open(symbol: str) -> bool:
     - كريبتو: مفتوح 24/7
     - فوركس/ذهب/نفط/مؤشرات: مغلق السبت كاملاً + الأحد حتى 22:00 UTC + الجمعة بعد 22:00 UTC
     """
-    if symbol.upper() not in FOREX_MARKETS:
-        return True
+    if symbol.upper() in CRYPTO_MARKETS:
+        return True  # كريبتو 24/7
     now = datetime.now(timezone.utc)
     wd  = now.weekday()   # 0=Mon … 4=Fri 5=Sat 6=Sun
     # السبت كله مغلق
@@ -1041,17 +1041,7 @@ async def monitor_watchlists(app: Application):
             for uid_, (watchlist, tf, min_conf) in merged.items():
                 for symbol in list(watchlist):
                     if not is_market_open(symbol):
-                        key = (uid_, f"{symbol}_closed_{now.date()}")
-                        if key not in last_alert:
-                            last_alert[key] = now
-                            try:
-                                await app.bot.send_message(
-                                    chat_id=uid_,
-                                    text=f"🔴 *{MARKET_NAMES.get(symbol,symbol)} مغلق*\nيفتح يوم الاثنين.",
-                                    parse_mode="Markdown")
-                            except Exception:
-                                pass
-                        continue
+                        continue  # السوق مغلق — صمت تام بدون رسائل
 
                     try:
                         async with aiohttp.ClientSession() as s:
@@ -1175,6 +1165,76 @@ async def notify_expiry(app: Application):
         await asyncio.sleep(EXPIRY_INTERVAL)
 
 
+# ─── Background: Market Open/Close Notifications ──────────────────────────────
+_CLOSE_MSG = """🔔 *إغلاق أسواق الفوركس والذهب*
+
+السلام عليكم ورحمة الله وبركاته 🤲
+
+أسواق الفوركس والمعادن والمؤشرات أغلقت الآن ليستريح المتداولون.
+
+نتمنى أن تكون أسبوعاً موفقاً للجميع 🌟
+*شكراً على ثقتكم — نراكم الأسبوع القادم إن شاء الله* 🙏
+
+_أسواق الكريبتو لا تزال مفتوحة 24/7_ ₿"""
+
+_OPEN_MSG = """🌅 *افتتاح أسواق الفوركس والذهب*
+
+بِسْمِ اللهِ الرَّحْمَنِ الرَّحِيمِ 🤲
+
+*اللهم بارك لنا في تجارتنا، وارزقنا من فضلك الواسع.*
+
+أسواق الفوركس والمعادن والمؤشرات فتحت أبوابها للأسبوع الجديد 📈
+
+_بالتوفيق للجميع — تداولوا بحكمة وانضباط_ 💪✨"""
+
+
+async def market_session_notifier(app: Application):
+    """يراقب افتتاح/إغلاق السوق الأسبوعي ويرسل رسائل مناسبة لجميع المشتركين"""
+    logger.info("🕐 بدء مراقبة جلسات السوق…")
+    await asyncio.sleep(30)
+
+    _last_state: bool | None = None  # None = غير معروف بعد
+
+    while True:
+        try:
+            # نستخدم EURUSD كمؤشر للسوق العام (ليس كريبتو)
+            current_open = is_market_open("EURUSD")
+
+            if _last_state is None:
+                # أول دورة — فقط نسجّل الحالة بدون إرسال
+                _last_state = current_open
+            elif current_open != _last_state:
+                # تغيّرت الحالة → أرسل الرسالة المناسبة
+                msg = _OPEN_MSG if current_open else _CLOSE_MSG
+                _last_state = current_open
+
+                # جلب كل المشتركين النشطين
+                subs_data = await _get("/api/v1/bot/active-subscribers")
+                subs = subs_data.get("subscribers", [])
+                sent = 0
+                for s in subs:
+                    tid = s.get("telegram_id")
+                    if not tid:
+                        continue
+                    try:
+                        await app.bot.send_message(
+                            chat_id=int(tid),
+                            text=msg,
+                            parse_mode="Markdown",
+                        )
+                        sent += 1
+                        await asyncio.sleep(0.05)
+                    except Exception:
+                        pass
+                label = "افتتاح" if current_open else "إغلاق"
+                logger.info(f"🕐 تنبيه {label} السوق → {sent} مشترك")
+
+        except Exception as e:
+            logger.error(f"market_session_notifier: {e}")
+
+        await asyncio.sleep(300)  # فحص كل 5 دقائق
+
+
 # ─── Main ─────────────────────────────────────────────────────────────────────
 def main():
     if not BOT_TOKEN:
@@ -1192,10 +1252,11 @@ def main():
         asyncio.create_task(broadcast_new_signals(application))
         asyncio.create_task(monitor_watchlists(application))
         asyncio.create_task(notify_expiry(application))
+        asyncio.create_task(market_session_notifier(application))
 
     app.post_init = post_init
 
-    logger.success("✅ البوت يعمل — 3 مهام خلفية نشطة")
+    logger.success("✅ البوت يعمل — 4 مهام خلفية نشطة")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 

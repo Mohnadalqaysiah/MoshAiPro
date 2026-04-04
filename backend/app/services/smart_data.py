@@ -574,9 +574,12 @@ class SmartDataProvider:
         - كريبتو: مفتوح 24/7
         - فوركس/ذهب/نفط/مؤشرات: مغلق السبت كاملاً + الأحد حتى 22:00 UTC + الجمعة بعد 22:00 UTC
         """
-        crypto = {"BTCUSD", "ETHUSD", "BNBUSD", "SOLUSD", "BNBUSD"}
-        if symbol.upper() in crypto:
-            return True
+        _CRYPTO = {
+            "BTCUSD","ETHUSD","BNBUSD","SOLUSD","XRPUSD","ADAUSD","DOTUSD",
+            "LTCUSD","LINKUSD","MATICUSD","AVAXUSD","ATOMUSD","UNIUSD","TRXUSD",
+        }
+        if symbol.upper() in _CRYPTO:
+            return True  # كريبتو 24/7 — كل الباقي يتبع جدول الفوركس
         from datetime import timezone as _tz
         now = datetime.now(_tz.utc)
         wd  = now.weekday()   # 0=Mon … 4=Fri 5=Sat 6=Sun
