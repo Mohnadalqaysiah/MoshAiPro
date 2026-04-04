@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import axios from 'axios'
-import { TrendingUp, TrendingDown, Activity, Zap, AlertCircle, RefreshCw, Send, ExternalLink, Copy, CheckCircle } from 'lucide-react'
+import { TrendingUp, TrendingDown, Activity, Zap, AlertCircle, RefreshCw, Send, ExternalLink, Copy, CheckCircle, X, ChevronDown } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import useMarkets from '../hooks/useMarkets'
 import { useLang } from '../contexts/LangContext'
@@ -53,6 +53,8 @@ export default function Dashboard() {
   const [tgLoading, setTgLoading]   = useState(false)
   const [relinking, setRelinking]   = useState(false)
   const [relinkDone, setRelinkDone] = useState(false)
+  const [quickResult, setQuickResult] = useState(null)   // modal result
+  const [historyLimit, setHistoryLimit] = useState(10)   // show more
 
   // جلب آخر الإشارات
   useEffect(() => { fetchSignals(); fetchSignalHistory() }, [])
@@ -84,7 +86,9 @@ export default function Dashboard() {
         `${API}/api/v1/signals/analyze?symbol=${symbol}&timeframe=1h&advanced_mode=true&force_refresh=${forceRefresh}`
       )
       const data = res.data.data
-      setSignals(prev => [{ ...data, market: symbol, id: Date.now() }, ...prev.slice(0, 9)])
+      const entry = { ...data, market: symbol, id: Date.now() }
+      setSignals(prev => [entry, ...prev.slice(0, 9)])
+      setQuickResult(entry)  // فتح الـ modal
     } catch (e) {
       if (e.response?.status === 403) {
         setLimitReached(true)
@@ -159,6 +163,96 @@ export default function Dashboard() {
   const showTgCard     = user && !user.telegram_linked && !relinkDone
   const showRelinkCard = user && user.telegram_linked && !relinkDone
 
+  // ── Quick Analysis Modal ──────────────────────────────────────────────────
+  const QuickModal = ({ result, onClose }) => {
+    if (!result) return null
+    const rec   = result.recommendation || result.signal_type || 'WATCH'
+    const conf  = result.ai_confidence_score || result.ai_confidence || 0
+    const lvl   = result.levels || {}
+    const entry = lvl.entry || result.entry_zones?.[0]
+    const sl    = lvl.stop_loss || result.stop_loss_zone
+    const tp1   = lvl.tp1 || result.take_profit_zones?.[0]
+    const tp2   = lvl.tp2 || result.take_profit_zones?.[1]
+    const rr    = result.risk_reward || lvl.risk_reward
+    const price = result.current_price
+    const fmt   = (v, d = 5) => v != null ? (typeof v === 'number' ? v.toFixed(d) : v) : '—'
+
+    const recColor = rec === 'BUY' ? 'text-green-400' : rec === 'SELL' ? 'text-red-400' : 'text-yellow-400'
+    const recBg    = rec === 'BUY' ? 'bg-green-500/10 border-green-600/40' : rec === 'SELL' ? 'bg-red-500/10 border-red-600/40' : 'bg-yellow-500/10 border-yellow-600/40'
+    const recLabel = rec === 'BUY' ? '🟢 شراء' : rec === 'SELL' ? '🔴 بيع' : '👁 مراقبة'
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
+        <div
+          className="relative bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-sm shadow-2xl animate-fade-in"
+          onClick={e => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className={`flex items-center justify-between px-5 py-4 border-b ${recBg} rounded-t-2xl border-b-gray-700/50`}>
+            <div className="flex items-center gap-3">
+              <span className="text-white font-bold text-lg">{result.market || result.symbol}</span>
+              <span className={`font-bold text-base ${recColor}`}>{recLabel}</span>
+            </div>
+            <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors">
+              <X size={18} />
+            </button>
+          </div>
+
+          {/* Body */}
+          <div className="px-5 py-4 space-y-4">
+            {/* Confidence */}
+            <div className="flex items-center justify-between">
+              <span className="text-gray-400 text-sm">نسبة الثقة</span>
+              <div className="flex items-center gap-2">
+                <div className="w-24 h-2 bg-gray-700 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${conf >= 75 ? 'bg-green-500' : conf >= 60 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                    style={{ width: `${conf}%` }}
+                  />
+                </div>
+                <span className="text-white font-bold text-sm">{Math.round(conf)}%</span>
+              </div>
+            </div>
+
+            {/* Levels grid */}
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { label: 'السعر الحالي', val: fmt(price, 4), color: 'text-blue-300' },
+                { label: 'سعر الدخول',  val: fmt(entry, 5), color: 'text-white' },
+                { label: 'وقف الخسارة', val: fmt(sl, 5),    color: 'text-red-400' },
+                { label: 'الهدف الأول', val: fmt(tp1, 5),   color: 'text-green-400' },
+                { label: 'الهدف الثاني',val: fmt(tp2, 5),   color: 'text-green-300' },
+                { label: 'R/R',          val: rr ? `1:${typeof rr === 'number' ? rr.toFixed(1) : rr}` : '—', color: 'text-yellow-400' },
+              ].map(({ label, val, color }) => (
+                <div key={label} className="bg-gray-800 rounded-xl px-3 py-2.5">
+                  <p className="text-xs text-gray-500 mb-0.5">{label}</p>
+                  <p className={`font-semibold text-sm font-mono ${color}`}>{val}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Summary */}
+            {result.summary && (
+              <div className="bg-gray-800 rounded-xl px-3 py-3 text-xs text-gray-400 leading-relaxed line-clamp-3">
+                {result.summary}
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="px-5 pb-4">
+            <button
+              onClick={onClose}
+              className="w-full py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-xl text-sm font-medium transition-colors"
+            >
+              إغلاق
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6" dir={isAr ? 'rtl' : 'ltr'}>
       {/* Header */}
@@ -175,6 +269,9 @@ export default function Dashboard() {
           {tx.refresh}
         </button>
       </div>
+
+      {/* Quick Analysis Modal */}
+      <QuickModal result={quickResult} onClose={() => setQuickResult(null)} />
 
       {error && (
         <div className="flex items-center justify-between gap-2 p-3 bg-red-900/30 border border-red-700 rounded-lg text-red-400 text-sm">
@@ -389,49 +486,65 @@ export default function Dashboard() {
         {signalHistory.length === 0 ? (
           <p className="text-gray-500 text-center py-6 text-sm">لا يوجد سجل بعد. قم بتحليل سوق للبدء.</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm" dir="rtl">
-              <thead>
-                <tr className="text-gray-400 border-b border-gray-700 text-xs">
-                  <th className="pb-2 text-right font-medium">السوق</th>
-                  <th className="pb-2 text-right font-medium">النوع</th>
-                  <th className="pb-2 text-right font-medium">الحالة</th>
-                  <th className="pb-2 text-right font-medium">الثقة</th>
-                  <th className="pb-2 text-right font-medium">الدخول</th>
-                  <th className="pb-2 text-right font-medium">التاريخ</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-700/50">
-                {signalHistory.map((s) => {
-                  const statusMap = {
-                    ACTIVE:  { label: 'نشطة 🟢',   cls: 'bg-green-900/40 text-green-300' },
-                    TP1_HIT: { label: 'TP1 ✅',     cls: 'bg-blue-900/40 text-blue-300' },
-                    TP2_HIT: { label: 'TP2 🎯',     cls: 'bg-purple-900/40 text-purple-300' },
-                    SL_HIT:  { label: 'SL ❌',      cls: 'bg-red-900/40 text-red-300' },
-                    EXPIRED: { label: 'منتهية ⏰',  cls: 'bg-gray-700/60 text-gray-400' },
-                  }
-                  const st = statusMap[s.status] || { label: s.status, cls: 'bg-gray-700 text-gray-400' }
-                  const typeColor = s.type === 'BUY' ? 'bg-green-900/40 text-green-300' : 'bg-red-900/40 text-red-300'
-                  const typeLabel = s.type === 'BUY' ? 'شراء' : 'بيع'
-                  const createdAt = s.created_at ? new Date(s.created_at).toLocaleDateString('ar-EG', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'
-                  return (
-                    <tr key={s.id} className="hover:bg-gray-700/30 transition-colors">
-                      <td className="py-2 pr-1 font-semibold text-white">{s.market}</td>
-                      <td className="py-2">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${typeColor}`}>{typeLabel}</span>
-                      </td>
-                      <td className="py-2">
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${st.cls}`}>{st.label}</span>
-                      </td>
-                      <td className="py-2 text-yellow-300 font-medium">{s.confidence ? `${Math.round(s.confidence)}%` : '-'}</td>
-                      <td className="py-2 text-gray-300">{s.entry ? (typeof s.entry === 'number' ? s.entry.toFixed(5) : s.entry) : '-'}</td>
-                      <td className="py-2 text-gray-500 text-xs">{createdAt}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm" dir="rtl">
+                <thead>
+                  <tr className="text-gray-400 border-b border-gray-700 text-xs">
+                    <th className="pb-2 text-right font-medium">السوق</th>
+                    <th className="pb-2 text-right font-medium">النوع</th>
+                    <th className="pb-2 text-right font-medium">الحالة</th>
+                    <th className="pb-2 text-right font-medium">الثقة</th>
+                    <th className="pb-2 text-right font-medium">الدخول</th>
+                    <th className="pb-2 text-right font-medium">التاريخ</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-700/50">
+                  {signalHistory.slice(0, historyLimit).map((s) => {
+                    const statusMap = {
+                      ACTIVE:  { label: 'نشطة 🟢',   cls: 'bg-green-900/40 text-green-300' },
+                      TP1_HIT: { label: 'TP1 ✅',     cls: 'bg-blue-900/40 text-blue-300' },
+                      TP2_HIT: { label: 'TP2 🎯',     cls: 'bg-purple-900/40 text-purple-300' },
+                      SL_HIT:  { label: 'SL ❌',      cls: 'bg-red-900/40 text-red-300' },
+                      EXPIRED: { label: 'منتهية ⏰',  cls: 'bg-gray-700/60 text-gray-400' },
+                    }
+                    const st = statusMap[s.status] || { label: s.status, cls: 'bg-gray-700 text-gray-400' }
+                    const typeColor = s.type === 'BUY' ? 'bg-green-900/40 text-green-300' : 'bg-red-900/40 text-red-300'
+                    const typeLabel = s.type === 'BUY' ? 'شراء' : 'بيع'
+                    const createdAt = s.created_at ? new Date(s.created_at).toLocaleDateString('ar-EG', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'
+                    return (
+                      <tr key={s.id} className="hover:bg-gray-700/30 transition-colors">
+                        <td className="py-2 pr-1 font-semibold text-white">{s.market}</td>
+                        <td className="py-2">
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${typeColor}`}>{typeLabel}</span>
+                        </td>
+                        <td className="py-2">
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${st.cls}`}>{st.label}</span>
+                        </td>
+                        <td className="py-2 text-yellow-300 font-medium">{s.confidence ? `${Math.round(s.confidence)}%` : '-'}</td>
+                        <td className="py-2 text-gray-300">{s.entry ? (typeof s.entry === 'number' ? s.entry.toFixed(5) : s.entry) : '-'}</td>
+                        <td className="py-2 text-gray-500 text-xs">{createdAt}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Show More */}
+            {signalHistory.length > historyLimit && (
+              <button
+                onClick={() => setHistoryLimit(l => l + 10)}
+                className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 text-sm text-gray-400 hover:text-white bg-gray-700/40 hover:bg-gray-700 rounded-xl transition-colors"
+              >
+                <ChevronDown size={16} />
+                عرض المزيد ({signalHistory.length - historyLimit} متبقية)
+              </button>
+            )}
+            {historyLimit > 10 && signalHistory.length <= historyLimit && (
+              <p className="mt-3 text-center text-xs text-gray-600">تم عرض جميع السجلات ({signalHistory.length})</p>
+            )}
+          </>
         )}
       </div>
     </div>
