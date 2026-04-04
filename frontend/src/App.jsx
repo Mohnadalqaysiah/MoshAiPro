@@ -1,4 +1,5 @@
-import { BrowserRouter as Router, Routes, Route, Navigate, Suspense, lazy } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate, Suspense } from 'react-router-dom'
+import { lazy } from 'react'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { LangProvider, useLang } from './contexts/LangContext'
 import './App.css'
