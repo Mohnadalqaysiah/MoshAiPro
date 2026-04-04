@@ -6,7 +6,8 @@ import {
   Users, CreditCard, BarChart2, CheckCircle, XCircle, Clock,
   Search, Plus, Trash2, ToggleLeft, ToggleRight, TrendingUp,
   DollarSign, Activity, RefreshCw, Calendar,
-  X, ExternalLink, Shield, AlertTriangle, Settings, Mail, Upload, Signal, Send
+  X, ExternalLink, Shield, AlertTriangle, Settings, Mail, Upload, Signal, Send,
+  FileText, TrendingUp as TrendUp
 } from 'lucide-react'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -201,6 +202,33 @@ export default function Admin() {
   const [messageSending, setMessageSending] = useState(false)
   const [messageMsg, setMessageMsg] = useState(null)
 
+  // Performance Report state
+  const [reportDays, setReportDays]       = useState(7)
+  const [reportData, setReportData]       = useState(null)
+  const [reportLoading, setReportLoading] = useState(false)
+  const [reportSending, setReportSending] = useState(false)
+  const [reportMsg, setReportMsg]         = useState(null)
+
+  const loadReport = async (days) => {
+    setReportLoading(true); setReportData(null); setReportMsg(null)
+    try {
+      const r = await axios.get(`${API}/api/v1/admin/performance-report`, { params: { days } })
+      setReportData(r.data)
+    } catch { setReportMsg({ type:'err', text:'فشل جلب التقرير' }) }
+    finally { setReportLoading(false) }
+  }
+
+  const sendReport = async (channel) => {
+    setReportSending(true); setReportMsg(null)
+    try {
+      const r = await axios.post(`${API}/api/v1/admin/performance-report/send`, {
+        days: reportDays, channel, include_expired: true
+      })
+      setReportMsg({ type:'ok', text: r.data.message })
+    } catch (err) { setReportMsg({ type:'err', text: err.response?.data?.detail || 'فشل الإرسال' }) }
+    finally { setReportSending(false) }
+  }
+
   // Logo upload state
   const [logoFile, setLogoFile] = useState(null)
   const [logoUploading, setLogoUploading] = useState(false)
@@ -361,7 +389,8 @@ export default function Admin() {
     { key:'payments',  icon:CreditCard, label:'المدفوعات' },
     { key:'markets',   icon:BarChart2,  label:'الأسواق' },
     { key:'signals',   icon:TrendingUp, label:'الإشارات' },
-    { key:'affiliate', icon:TrendingUp, label:'الأفلييت' },
+    { key:'reports',   icon:FileText,   label:'تقارير الأداء' },
+    { key:'affiliate', icon:TrendUp,    label:'الأفلييت' },
     { key:'messages',  icon:Send,       label:'رسائل تيليجرام' },
     { key:'email',     icon:Mail,       label:'البريد' },
     { key:'settings',  icon:Settings,   label:'الإعدادات' },
@@ -966,6 +995,137 @@ export default function Admin() {
                       })}
                     </tbody>
                   </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Performance Reports ── */}
+          {tab === 'reports' && (
+            <div className="max-w-4xl">
+              <h1 className="text-xl font-bold mb-6 flex items-center gap-2">
+                <FileText size={20} className="text-yellow-400"/> تقارير الأداء
+              </h1>
+
+              {reportMsg && (
+                <div className={`flex items-center gap-2 text-sm rounded-lg px-3 py-2 mb-4 ${reportMsg.type==='ok'?'bg-green-900/30 text-green-400':'bg-red-900/30 text-red-400'}`}>
+                  {reportMsg.type==='ok'?<CheckCircle size={14}/>:<AlertTriangle size={14}/>} {reportMsg.text}
+                </div>
+              )}
+
+              {/* فلتر الفترة */}
+              <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-5">
+                <h2 className="text-sm font-semibold text-gray-300 mb-3">اختر الفترة الزمنية</h2>
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {[
+                    { label:'اليوم',     days:1 },
+                    { label:'3 أيام',   days:3 },
+                    { label:'أسبوع',    days:7 },
+                    { label:'أسبوعان', days:14 },
+                    { label:'شهر',     days:30 },
+                  ].map(opt => (
+                    <button key={opt.days} onClick={() => setReportDays(opt.days)}
+                      className={`px-4 py-2 rounded-lg text-sm transition ${reportDays===opt.days?'bg-yellow-600 text-white':'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'}`}>
+                      {opt.label}
+                    </button>
+                  ))}
+                  <input type="number" min="1" max="90" value={reportDays}
+                    onChange={e => setReportDays(Number(e.target.value))}
+                    className="w-20 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white text-center"
+                    placeholder="أيام"
+                  />
+                </div>
+                <button onClick={() => loadReport(reportDays)} disabled={reportLoading}
+                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-5 py-2 rounded-lg text-sm transition">
+                  {reportLoading ? <RefreshCw size={14} className="animate-spin"/> : <FileText size={14}/>}
+                  {reportLoading ? 'جاري التحميل...' : 'معاينة التقرير'}
+                </button>
+              </div>
+
+              {/* معاينة التقرير */}
+              {reportData && (
+                <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-5">
+                  <h2 className="text-sm font-semibold text-gray-300 mb-4">
+                    📊 تقرير آخر {reportDays} يوم
+                  </h2>
+
+                  {/* الإحصائيات */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+                    {[
+                      { label:'إجمالي الصفقات', value: reportData.total,                      color:'text-white' },
+                      { label:'رابحة',           value: reportData.wins,                       color:'text-green-400' },
+                      { label:'خاسرة',           value: reportData.losses,                     color:'text-red-400' },
+                      { label:'نسبة الربح',      value: `${reportData.win_rate}%`,             color: reportData.win_rate>=50?'text-green-400':'text-red-400' },
+                    ].map(s => (
+                      <div key={s.label} className="bg-gray-800 rounded-lg p-3 text-center">
+                        <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
+                        <div className="text-xs text-gray-500 mt-1">{s.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="bg-gray-800 rounded-lg p-3 text-center mb-5">
+                    <span className="text-gray-400 text-sm">إجمالي النقاط: </span>
+                    <span className={`text-xl font-bold ${reportData.total_points>=0?'text-green-400':'text-red-400'}`}>
+                      {reportData.total_points>=0?'+':''}{reportData.total_points}
+                    </span>
+                  </div>
+
+                  {/* جدول الصفقات */}
+                  {reportData.signals.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-gray-500 border-b border-gray-800">
+                            <th className="pb-2 text-right">الزوج</th>
+                            <th className="pb-2 text-right">النوع</th>
+                            <th className="pb-2 text-right">النتيجة</th>
+                            <th className="pb-2 text-right">النقاط</th>
+                            <th className="pb-2 text-right">ثقة</th>
+                            <th className="pb-2 text-right">التاريخ</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {reportData.signals.map((s,i) => {
+                            const isWin = ['TP1_HIT','TP2_HIT'].includes(s.status)
+                            const statusLabel = {TP1_HIT:'هدف 1 ✅',TP2_HIT:'هدف 2 🏆',SL_HIT:'وقف ❌'}[s.status]||s.status
+                            return (
+                              <tr key={i} className="border-b border-gray-800/50 hover:bg-gray-800/30">
+                                <td className="py-2 font-medium">{s.market}</td>
+                                <td className="py-2"><span className={`text-xs px-2 py-0.5 rounded ${s.signal_type==='BUY'?'bg-green-900/50 text-green-300':'bg-red-900/50 text-red-300'}`}>{s.signal_type==='BUY'?'شراء':'بيع'}</span></td>
+                                <td className="py-2 text-sm">{statusLabel}</td>
+                                <td className={`py-2 font-bold ${isWin?'text-green-400':'text-red-400'}`}>{s.points>=0?'+':''}{s.points}</td>
+                                <td className="py-2 text-gray-400">{s.ai_confidence}%</td>
+                                <td className="py-2 text-gray-500 text-xs">{s.exit_date}</td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p className="text-gray-500 text-center py-4">لا توجد صفقات مغلقة في هذه الفترة</p>
+                  )}
+
+                  {/* أزرار الإرسال */}
+                  <div className="flex gap-3 mt-6 pt-4 border-t border-gray-800">
+                    <button onClick={() => sendReport('telegram')} disabled={reportSending}
+                      className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-5 py-2.5 rounded-lg text-sm transition font-medium">
+                      {reportSending ? <RefreshCw size={14} className="animate-spin"/> : <Send size={14}/>}
+                      إرسال عبر تيليجرام
+                    </button>
+                    <button onClick={() => sendReport('email')} disabled={reportSending}
+                      className="flex items-center gap-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white px-5 py-2.5 rounded-lg text-sm transition font-medium">
+                      {reportSending ? <RefreshCw size={14} className="animate-spin"/> : <Mail size={14}/>}
+                      إرسال عبر الإيميل
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {!reportData && !reportLoading && (
+                <div className="text-center py-12 text-gray-600">
+                  <FileText size={40} className="mx-auto mb-3 opacity-30"/>
+                  <p>اختر الفترة الزمنية ثم اضغط "معاينة التقرير"</p>
                 </div>
               )}
             </div>

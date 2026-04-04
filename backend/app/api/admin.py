@@ -954,6 +954,222 @@ def _signal_info(s: Signal) -> dict:
     }
 
 
+# ─── Performance Report ───────────────────────────────────────────────────────
+
+class ReportSendIn(BaseModel):
+    days: int = 7           # عدد الأيام للتقرير (7=أسبوع، 1=يوم، 30=شهر)
+    channel: str = "telegram"  # "telegram" أو "email"
+    include_expired: bool = True  # يشمل المستخدمين منتهي الاشتراك
+
+
+def _build_performance_report(signals: list, days: int) -> tuple[str, str]:
+    """
+    يبني تقرير الأداء — يُعيد (telegram_text, email_html)
+    """
+    closed   = [s for s in signals if s.status.value in ("TP1_HIT", "TP2_HIT", "SL_HIT")]
+    wins     = [s for s in closed if s.status.value in ("TP1_HIT", "TP2_HIT")]
+    losses   = [s for s in closed if s.status.value == "SL_HIT"]
+    total_pts= sum(s.points_earned or 0 for s in closed)
+    win_rate = round(len(wins) / len(closed) * 100) if closed else 0
+    period   = "اليوم" if days == 1 else f"آخر {days} يوم" if days < 30 else "الشهر"
+
+    # ── Telegram (HTML) ──────────────────────────────────────────────────────
+    pts_sign = "+" if total_pts >= 0 else ""
+    tg_lines = [
+        f"📊 <b>تقرير أداء Qaffel AI</b>",
+        f"🗓 الفترة: {period}",
+        "━━━━━━━━━━━━━━━━━━━━━━",
+        f"📈 إجمالي الصفقات: <b>{len(closed)}</b>",
+        f"✅ رابحة: <b>{len(wins)}</b>  │  ❌ خاسرة: <b>{len(losses)}</b>",
+        f"🏆 نسبة الربح: <b>{win_rate}%</b>",
+        f"⚡ إجمالي النقاط: <b>{pts_sign}{total_pts:.1f}</b>",
+        "━━━━━━━━━━━━━━━━━━━━━━",
+    ]
+
+    if closed:
+        tg_lines.append("📋 <b>الصفقات:</b>")
+        for s in closed[:10]:  # أقصى 10
+            st    = s.status.value
+            icon  = "✅" if st in ("TP1_HIT", "TP2_HIT") else "❌"
+            tp    = "TP2" if st == "TP2_HIT" else "TP1" if st == "TP1_HIT" else "SL"
+            pts   = s.points_earned or 0
+            sign  = "+" if pts >= 0 else ""
+            stype = "شراء" if (s.signal_type.value if hasattr(s.signal_type,"value") else s.signal_type) == "BUY" else "بيع"
+            tg_lines.append(
+                f"{icon} {s.market} {stype} — {tp}  <code>{sign}{pts:.1f} نقطة</code>"
+            )
+        if len(closed) > 10:
+            tg_lines.append(f"<i>... و {len(closed)-10} صفقة أخرى</i>")
+
+    tg_lines += [
+        "━━━━━━━━━━━━━━━━━━━━━━",
+        "🤖 <i>Qaffel AI — التداول الذكي</i>",
+    ]
+    tg_text = "\n".join(tg_lines)
+
+    # ── Email (HTML) ─────────────────────────────────────────────────────────
+    rows = ""
+    for s in closed:
+        st    = s.status.value
+        color = "#22c55e" if st in ("TP1_HIT","TP2_HIT") else "#ef4444"
+        tp    = "TP2" if st=="TP2_HIT" else "TP1" if st=="TP1_HIT" else "SL"
+        pts   = s.points_earned or 0
+        sign  = "+" if pts >= 0 else ""
+        stype = "شراء" if (s.signal_type.value if hasattr(s.signal_type,"value") else s.signal_type) == "BUY" else "بيع"
+        date  = s.exit_executed.strftime("%d/%m") if s.exit_executed else "—"
+        rows += f"""
+        <tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #1f2937">{s.market}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #1f2937">{stype}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #1f2937;color:{color};font-weight:bold">{tp}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #1f2937;color:{color};font-weight:bold">{sign}{pts:.1f}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #1f2937;color:#9ca3af">{date}</td>
+        </tr>"""
+
+    email_html = f"""
+    <div style="background:#111827;color:#f9fafb;font-family:Arial,sans-serif;max-width:600px;margin:auto;border-radius:12px;overflow:hidden">
+      <div style="background:#1e40af;padding:24px;text-align:center">
+        <h1 style="margin:0;font-size:22px">📊 تقرير أداء Qaffel AI</h1>
+        <p style="margin:6px 0 0;opacity:.8">الفترة: {period}</p>
+      </div>
+      <div style="padding:24px">
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px">
+          <div style="flex:1;background:#1f2937;border-radius:8px;padding:16px;text-align:center;min-width:100px">
+            <div style="font-size:28px;font-weight:bold">{len(closed)}</div>
+            <div style="color:#9ca3af;font-size:12px">إجمالي الصفقات</div>
+          </div>
+          <div style="flex:1;background:#1f2937;border-radius:8px;padding:16px;text-align:center;min-width:100px">
+            <div style="font-size:28px;font-weight:bold;color:#22c55e">{win_rate}%</div>
+            <div style="color:#9ca3af;font-size:12px">نسبة الربح</div>
+          </div>
+          <div style="flex:1;background:#1f2937;border-radius:8px;padding:16px;text-align:center;min-width:100px">
+            <div style="font-size:28px;font-weight:bold;color:{'#22c55e' if total_pts>=0 else '#ef4444'}">{pts_sign}{total_pts:.1f}</div>
+            <div style="color:#9ca3af;font-size:12px">إجمالي النقاط</div>
+          </div>
+        </div>
+        {"<table style='width:100%;border-collapse:collapse;direction:rtl'><thead><tr style='background:#1f2937'><th style='padding:10px 12px;text-align:right'>الزوج</th><th style='padding:10px 12px;text-align:right'>النوع</th><th style='padding:10px 12px;text-align:right'>النتيجة</th><th style='padding:10px 12px;text-align:right'>النقاط</th><th style='padding:10px 12px;text-align:right'>التاريخ</th></tr></thead><tbody>" + rows + "</tbody></table>" if rows else "<p style='color:#9ca3af;text-align:center'>لا توجد صفقات مغلقة في هذه الفترة</p>"}
+      </div>
+      <div style="background:#1f2937;padding:16px;text-align:center;color:#6b7280;font-size:12px">
+        Qaffel AI — التداول الذكي بالذكاء الاصطناعي
+      </div>
+    </div>"""
+
+    return tg_text, email_html
+
+
+@router.get("/performance-report")
+def get_performance_report(
+    days: int = Query(default=7, ge=1, le=90),
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """جلب بيانات تقرير الأداء للمعاينة قبل الإرسال"""
+    from datetime import date as dt_date, time as dt_time
+    now       = datetime.now(timezone.utc)
+    start_dt  = now - timedelta(days=days)
+    closed    = [SignalStatus.TP1_HIT, SignalStatus.TP2_HIT, SignalStatus.SL_HIT]
+
+    signals = (
+        db.query(Signal)
+        .filter(Signal.status.in_(closed), Signal.exit_executed >= start_dt)
+        .order_by(Signal.exit_executed.desc())
+        .all()
+    )
+
+    wins    = [s for s in signals if s.status.value in ("TP1_HIT","TP2_HIT")]
+    losses  = [s for s in signals if s.status.value == "SL_HIT"]
+    pts     = sum(s.points_earned or 0 for s in signals)
+
+    return {
+        "days":       days,
+        "total":      len(signals),
+        "wins":       len(wins),
+        "losses":     len(losses),
+        "win_rate":   round(len(wins)/len(signals)*100) if signals else 0,
+        "total_points": round(pts, 2),
+        "signals": [
+            {
+                "market":       s.market,
+                "signal_type":  s.signal_type.value if hasattr(s.signal_type,"value") else s.signal_type,
+                "status":       s.status.value if hasattr(s.status,"value") else s.status,
+                "points":       round(s.points_earned or 0, 2),
+                "entry_price":  s.entry_price,
+                "ai_confidence":s.ai_confidence,
+                "exit_date":    s.exit_executed.strftime("%d/%m %H:%M") if s.exit_executed else None,
+            }
+            for s in signals
+        ],
+    }
+
+
+@router.post("/performance-report/send")
+def send_performance_report(
+    data: ReportSendIn,
+    background: BackgroundTasks,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """إرسال تقرير الأداء لكل المستخدمين عبر تيليجرام أو إيميل"""
+    now      = datetime.now(timezone.utc)
+    start_dt = now - timedelta(days=data.days)
+    closed   = [SignalStatus.TP1_HIT, SignalStatus.TP2_HIT, SignalStatus.SL_HIT]
+
+    signals  = (
+        db.query(Signal)
+        .filter(Signal.status.in_(closed), Signal.exit_executed >= start_dt)
+        .order_by(Signal.exit_executed.desc())
+        .all()
+    )
+
+    tg_text, email_html = _build_performance_report(signals, data.days)
+    period = "اليوم" if data.days == 1 else f"آخر {data.days} يوم" if data.days < 30 else "الشهر"
+
+    # ── جمع المستلمين ────────────────────────────────────────────────────────
+    q = db.query(User).filter(User.is_active == True, User.plan != PlanType.BANNED)
+    users = q.all()
+
+    if data.channel == "telegram":
+        if not _settings.TELEGRAM_BOT_TOKEN:
+            raise HTTPException(400, "TELEGRAM_BOT_TOKEN غير مضبوط")
+        tg_users = [u for u in users if u.telegram_id]
+        if not tg_users:
+            return {"message": "لا يوجد مستخدمون لديهم تيليجرام", "sent": 0}
+
+        def _tg_broadcast():
+            import time as _t
+            sent = 0
+            for u in tg_users:
+                ok = _send_telegram_message(u.telegram_id, tg_text)
+                if ok:
+                    sent += 1
+                _t.sleep(0.05)
+            logger.info(f"📊 Performance report sent to {sent}/{len(tg_users)} Telegram users")
+
+        background.add_task(_tg_broadcast)
+        return {"message": f"⏳ جاري إرسال تقرير '{period}' لـ {len(tg_users)} مستخدم تيليجرام", "sent": len(tg_users)}
+
+    else:  # email
+        if not _settings.SMTP_PASSWORD:
+            raise HTTPException(400, "SMTP غير مضبوط")
+        email_users = [u for u in users if u.email]
+        subject     = f"📊 تقرير أداء Qaffel AI — {period}"
+
+        def _email_broadcast():
+            import time as _t
+            sent = 0
+            for u in email_users:
+                try:
+                    _send_email_svc(u.email, subject, email_html, _settings.SMTP_PASSWORD)
+                    sent += 1
+                    _t.sleep(0.1)
+                except Exception as _e:
+                    logger.warning(f"email report to {u.email}: {_e}")
+            logger.info(f"📊 Performance report emailed to {sent}/{len(email_users)} users")
+
+        background.add_task(_email_broadcast)
+        return {"message": f"⏳ جاري إرسال تقرير '{period}' لـ {len(email_users)} مستخدم بالإيميل", "sent": len(email_users)}
+
+
 # ─── Admin Affiliate ───────────────────────────────────────────────────────────
 
 class PayoutIn(BaseModel):
