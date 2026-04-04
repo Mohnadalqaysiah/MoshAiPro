@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
-import { TrendingUp, TrendingDown, Activity, BarChart2 } from 'lucide-react'
+import { TrendingUp, TrendingDown, Activity, BarChart2, ChevronDown } from 'lucide-react'
 import { useLang } from '../contexts/LangContext'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -51,9 +51,10 @@ export default function PerformanceSection() {
   const tx = T[lang] || T.ar
   const isAr = lang === 'ar'
 
-  const [data, setData]     = useState(null)
+  const [data, setData]       = useState(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError]   = useState(null)
+  const [error, setError]     = useState(null)
+  const [tradesLimit, setTradesLimit] = useState(10)
 
   useEffect(() => {
     const fetch = async () => {
@@ -106,9 +107,7 @@ export default function PerformanceSection() {
     : { label: tx.sell, cls: 'bg-red-900/50 text-red-300' }
 
   // Collect all closed trades from daily_stats for "recent trades"
-  const recentTrades = daily_stats
-    .flatMap(d => d.trades_detail)
-    .slice(0, 20)
+  const allRecentTrades = daily_stats.flatMap(d => d.trades_detail)
 
   return (
     <div className="space-y-4" dir={isAr ? 'rtl' : 'ltr'}>
@@ -219,30 +218,64 @@ export default function PerformanceSection() {
       </div>
 
       {/* Recent Closed Trades */}
-      {recentTrades.length > 0 && (
-        <div className="bg-gray-800 border border-gray-700 rounded-xl p-5">
-          <h3 className="text-white font-medium mb-3 flex items-center gap-2">
-            <TrendingDown size={16} className="text-yellow-400" />
-            {tx.recentTrades}
-          </h3>
-          <div className="space-y-2">
-            {recentTrades.map((t, i) => {
-              const st = statusLabel(t.status)
-              const ty = typeLabel(t.type)
+      {allRecentTrades.length > 0 && (
+        <div className="bg-gray-800/60 border border-gray-700/80 rounded-2xl overflow-hidden">
+          {/* Header */}
+          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-700/60">
+            <h3 className="text-white font-semibold flex items-center gap-2">
+              <TrendingDown size={15} className="text-yellow-400" />
+              {tx.recentTrades}
+              <span className="text-xs text-gray-500 font-normal">({allRecentTrades.length})</span>
+            </h3>
+          </div>
+
+          <div className="divide-y divide-gray-700/40">
+            {allRecentTrades.slice(0, tradesLimit).map((t, i) => {
+              const st  = statusLabel(t.status)
+              const ty  = typeLabel(t.type)
+              const isWin  = t.status === 'TP1_HIT' || t.status === 'TP2_HIT'
+              const isLoss = t.status === 'SL_HIT'
+              const accentBar = isWin ? 'bg-green-500' : isLoss ? 'bg-red-500' : 'bg-gray-600'
+              const ptsBadge  = isWin
+                ? 'bg-green-500/15 text-green-400 border border-green-500/30'
+                : isLoss
+                ? 'bg-red-500/15 text-red-400 border border-red-500/30'
+                : 'bg-gray-600/30 text-gray-400 border border-gray-600/30'
+
               return (
-                <div key={i} className="flex items-center justify-between bg-gray-700/30 rounded-lg px-3 py-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-white font-semibold text-xs">{t.market}</span>
-                    <span className={`text-xs px-1.5 py-0.5 rounded ${ty.cls}`}>{ty.label}</span>
-                    <span className={`text-xs px-1.5 py-0.5 rounded ${st.cls}`}>{st.label}</span>
+                <div key={i} className="flex items-center gap-0 hover:bg-gray-700/20 transition-colors">
+                  <div className={`w-1 self-stretch flex-shrink-0 ${accentBar} opacity-60`} />
+                  <div className="flex-1 flex items-center justify-between gap-3 px-4 py-2.5 flex-wrap">
+                    <div className="flex items-center gap-2">
+                      <span className="text-white font-bold text-sm">{t.market}</span>
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${ty.cls}`}>{ty.label}</span>
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${st.cls}`}>{st.label}</span>
+                    </div>
+                    <span className={`text-sm font-bold font-mono px-2.5 py-0.5 rounded-full ${ptsBadge}`}>
+                      {t.points > 0 ? '+' : ''}{t.points} {tx.points}
+                    </span>
                   </div>
-                  <span className={`text-sm font-bold font-mono ${ptColor(t.points)}`}>
-                    {t.points > 0 ? '+' : ''}{t.points} {tx.points}
-                  </span>
                 </div>
               )
             })}
           </div>
+
+          {allRecentTrades.length > tradesLimit && (
+            <button
+              onClick={() => setTradesLimit(l => l + 10)}
+              className="w-full py-3 text-sm text-gray-400 hover:text-white hover:bg-gray-700/30 transition-colors flex items-center justify-center gap-2 border-t border-gray-700/60"
+            >
+              <ChevronDown size={15} />
+              {isAr
+                ? `عرض المزيد (${allRecentTrades.length - tradesLimit} متبقية)`
+                : `Show more (${allRecentTrades.length - tradesLimit} remaining)`}
+            </button>
+          )}
+          {tradesLimit > 10 && allRecentTrades.length <= tradesLimit && (
+            <p className="py-3 text-center text-xs text-gray-600 border-t border-gray-700/40">
+              {isAr ? `تم عرض جميع الصفقات (${allRecentTrades.length})` : `All trades shown (${allRecentTrades.length})`}
+            </p>
+          )}
         </div>
       )}
     </div>

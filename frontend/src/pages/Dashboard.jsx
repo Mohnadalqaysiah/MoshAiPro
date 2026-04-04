@@ -349,31 +349,75 @@ export default function Dashboard() {
       )}
 
       {/* Quick Analyze */}
-      <div className="bg-gray-800 border border-gray-700 rounded-xl p-5">
-        <div className="flex items-center justify-between mb-4">
+      <div className="bg-gray-800/60 border border-gray-700/80 rounded-2xl overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-700/60">
           <h2 className="text-white font-semibold flex items-center gap-2">
-            <Zap size={18} className="text-blue-400" />
+            <Zap size={16} className="text-yellow-400" />
             تحليل سريع
           </h2>
-          <span className="text-xs text-gray-500">النتائج مُخزَّنة مؤقتاً · اضغط مطوّلاً للتحديث الإجباري</span>
+          <span className="text-xs text-gray-500 hidden sm:block">كليك يسار = كاش · كليك يمين = تحديث فوري</span>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
-          {markets.map(m => (
-            <button
-              key={m.symbol}
-              onClick={() => analyzeMarket(m.symbol, false)}
-              onContextMenu={(e) => { e.preventDefault(); analyzeMarket(m.symbol, true) }}
-              disabled={analyzing === m.symbol}
-              className="py-2.5 px-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:opacity-50 text-white rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1.5"
-            >
-              {analyzing === m.symbol ? (
-                <>
-                  <RefreshCw size={12} className="animate-spin" />
-                  {tx.analyzing}
-                </>
-              ) : m.symbol}
-            </button>
-          ))}
+
+        <div className="p-4">
+          {/* تجميع الأسواق حسب الفئة */}
+          {(() => {
+            const cats = {}
+            markets.forEach(m => {
+              const c = m.category || 'other'
+              if (!cats[c]) cats[c] = []
+              cats[c].push(m)
+            })
+            const catMeta = {
+              forex:   { label: 'فوركس',    color: 'from-blue-600/20 to-blue-700/10 border-blue-700/40 hover:border-blue-500/60 text-blue-300', ring: 'ring-blue-500/40' },
+              metals:  { label: 'معادن',    color: 'from-yellow-600/20 to-yellow-700/10 border-yellow-700/40 hover:border-yellow-500/60 text-yellow-300', ring: 'ring-yellow-500/40' },
+              crypto:  { label: 'كريبتو',   color: 'from-purple-600/20 to-purple-700/10 border-purple-700/40 hover:border-purple-500/60 text-purple-300', ring: 'ring-purple-500/40' },
+              indices: { label: 'مؤشرات',   color: 'from-green-600/20 to-green-700/10 border-green-700/40 hover:border-green-500/60 text-green-300', ring: 'ring-green-500/40' },
+              energy:  { label: 'طاقة',     color: 'from-orange-600/20 to-orange-700/10 border-orange-700/40 hover:border-orange-500/60 text-orange-300', ring: 'ring-orange-500/40' },
+              other:   { label: 'أخرى',     color: 'from-gray-600/20 to-gray-700/10 border-gray-700/40 hover:border-gray-500/60 text-gray-300', ring: 'ring-gray-500/40' },
+            }
+            return Object.entries(cats).map(([cat, items]) => {
+              const meta = catMeta[cat] || catMeta.other
+              return (
+                <div key={cat} className="mb-4 last:mb-0">
+                  <p className="text-xs text-gray-500 mb-2 font-medium uppercase tracking-wider">{meta.label}</p>
+                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 gap-2">
+                    {items.map(m => {
+                      const isAnalyzing = analyzing === m.symbol
+                      return (
+                        <button
+                          key={m.symbol}
+                          onClick={() => analyzeMarket(m.symbol, false)}
+                          onContextMenu={(e) => { e.preventDefault(); analyzeMarket(m.symbol, true) }}
+                          disabled={isAnalyzing}
+                          className={`relative py-2.5 px-2 bg-gradient-to-b border rounded-xl text-xs font-semibold transition-all duration-200 select-none
+                            ${meta.color}
+                            ${isAnalyzing
+                              ? 'opacity-60 cursor-not-allowed scale-95'
+                              : 'hover:scale-105 active:scale-95 cursor-pointer'
+                            }
+                            ${isAnalyzing ? `ring-2 ${meta.ring}` : ''}
+                          `}
+                        >
+                          {isAnalyzing ? (
+                            <span className="flex items-center justify-center gap-1">
+                              <RefreshCw size={11} className="animate-spin" />
+                              <span className="truncate">{m.symbol}</span>
+                            </span>
+                          ) : (
+                            <span className="truncate">{m.symbol}</span>
+                          )}
+                          {isAnalyzing && (
+                            <span className="absolute inset-0 rounded-xl animate-pulse bg-white/5" />
+                          )}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })
+          })()}
         </div>
       </div>
 
