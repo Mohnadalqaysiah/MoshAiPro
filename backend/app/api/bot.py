@@ -11,6 +11,7 @@ from loguru import logger
 from app.database import get_db
 from app.models.user import User, PlanType
 from app.models.signal import Signal, SignalStatus
+from app.models.site_settings import SiteSettings
 from app.services.ai_engine_v5 import mosh_ai_engine_v5
 from app.services.smart_data import smart_data as _smart_data
 from app.config import get_settings
@@ -363,12 +364,20 @@ def bot_renew_trials(
         User.is_active == True,
     ).all()
 
+    def _get_setting(key: str, default: int) -> int:
+        r = db.query(SiteSettings).filter(SiteSettings.key == key).first()
+        try: return int(r.value) if r and r.value else default
+        except: return default
+
+    analysis_limit = _get_setting("trial_analysis_limit", 10)
+    chat_limit     = _get_setting("trial_chat_limit", 20)
+
     renewed = []
     for u in candidates:
         last_renewal = u.trial_renewed_at or u.created_at
         if last_renewal and last_renewal < cutoff:
-            u.trial_analyses_left = 10
-            u.trial_chat_left     = 20
+            u.trial_analyses_left = analysis_limit
+            u.trial_chat_left     = chat_limit
             u.trial_ends_at       = now + timedelta(days=7)  # 7 أيام جديدة
             u.trial_renewed_at    = now
             renewed.append(u.id)

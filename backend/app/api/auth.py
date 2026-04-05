@@ -108,6 +108,12 @@ def register(
     new_code = generate_affiliate_code(db)
 
     now = datetime.now(timezone.utc)
+
+    def _get_setting(key: str, default: int) -> int:
+        r = db.query(SiteSettings).filter(SiteSettings.key == key).first()
+        try: return int(r.value) if r and r.value else default
+        except: return default
+
     user = User(
         email         = data.email.lower().strip(),
         password_hash = hash_password(data.password),
@@ -117,8 +123,8 @@ def register(
         is_active     = True,
         trial_started_at    = now,
         trial_ends_at       = now + timedelta(days=TRIAL_DAYS),
-        trial_analyses_left = 10,
-        trial_chat_left     = 20,
+        trial_analyses_left = _get_setting("trial_analysis_limit", 10),
+        trial_chat_left     = _get_setting("trial_chat_limit", 20),
         telegram_link_token = secrets.token_urlsafe(16),
         affiliate_code      = new_code,
         referred_by_code    = clean_ref if referrer else None,

@@ -239,6 +239,7 @@ export default function ChatBot() {
   const [sessionId, setSessionId] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [limitReached, setLimitReached] = useState(false)
   const bottomRef = useRef(null)
 
   const scrollToBottom = useCallback(() => {
@@ -251,6 +252,7 @@ export default function ChatBot() {
     if (!text.trim() || loading) return
     setInput('')
     setError('')
+    setLimitReached(false)
 
     const userMsg = { role: 'user', content: text }
     setMessages(prev => [...prev, userMsg])
@@ -278,12 +280,23 @@ export default function ChatBot() {
       setMessages(prev => [...prev, assistantMsg])
     } catch (e) {
       console.error(e)
-      setError('فشل الاتصال. تأكد أن الخادم يعمل.')
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: '⚠️ حدث خطأ. حاول مرة أخرى.',
-        action: 'error',
-      }])
+      if (e.response?.status === 403) {
+        const detail = e.response.data?.detail || 'استهلكت رسائل المحادثة التجريبية.'
+        setLimitReached(true)
+        setError(detail)
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: `🔒 ${detail}`,
+          action: 'error',
+        }])
+      } else {
+        setError('فشل الاتصال. تأكد أن الخادم يعمل.')
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: '⚠️ حدث خطأ. حاول مرة أخرى.',
+          action: 'error',
+        }])
+      }
     } finally {
       setLoading(false)
     }
@@ -410,8 +423,16 @@ export default function ChatBot() {
               )}
 
               {error && (
-                <div className="text-xs text-red-400 bg-red-900/20 border border-red-700/50 rounded-lg px-3 py-2">
-                  {error}
+                <div className="flex items-center justify-between gap-2 text-xs text-red-400 bg-red-900/20 border border-red-700/50 rounded-lg px-3 py-2">
+                  <span>{error}</span>
+                  {limitReached && (
+                    <a
+                      href="/pricing"
+                      className="flex-shrink-0 bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded-lg font-semibold whitespace-nowrap"
+                    >
+                      اشترك الآن
+                    </a>
+                  )}
                 </div>
               )}
 
@@ -431,12 +452,13 @@ export default function ChatBot() {
                       sendMessage(input)
                     }
                   }}
-                  placeholder="اكتب سؤالك... مثل: حلل الذهب ساعة"
-                  className="flex-1 resize-none bg-gray-800 text-gray-100 text-sm rounded-xl px-3 py-2 border border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-gray-500"
+                  disabled={limitReached}
+                  placeholder={limitReached ? 'اشترك للمتابعة...' : 'اكتب سؤالك... مثل: حلل الذهب ساعة'}
+                  className="flex-1 resize-none bg-gray-800 text-gray-100 text-sm rounded-xl px-3 py-2 border border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
                 <button
                   onClick={() => sendMessage(input)}
-                  disabled={loading || !input.trim()}
+                  disabled={loading || !input.trim() || limitReached}
                   className="h-9 w-9 flex items-center justify-center rounded-full bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white shadow-lg transition-colors"
                 >
                   {loading
