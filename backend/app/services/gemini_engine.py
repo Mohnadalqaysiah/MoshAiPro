@@ -573,10 +573,10 @@ class GeminiEngine:
         if not self.enabled:
             return {}
 
-        # آخر 20 شمعة LTF للـ Prompt
+        # آخر 10 شمعات LTF للـ Prompt (تقليل tokens)
         df_tail = []
         if df is not None and len(df) > 0:
-            tail = df.tail(20)[["open", "high", "low", "close"]].round(5)
+            tail = df.tail(10)[["open", "high", "low", "close"]].round(5)
             df_tail = tail.to_dict("records")
 
         prompt = _build_professional_prompt(
@@ -594,8 +594,8 @@ class GeminiEngine:
                 {"role": "user", "parts": [{"text": prompt}]}
             ],
             "generationConfig": {
-                "temperature": 0.10,       # أقل من v1 = أكثر دقة وثباتاً
-                "maxOutputTokens": 2000,
+                "temperature": 0.10,
+                "maxOutputTokens": 1200,   # تقليل من 2000 — الـ JSON لا يحتاج أكثر
                 "responseMimeType": "application/json",
             }
         }

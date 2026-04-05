@@ -623,7 +623,7 @@ class TradingChatAgent:
             return ""
 
         history = []
-        for msg in messages[-14:]:
+        for msg in messages[-8:]:   # تقليل من 14 → 8 لتوفير tokens المحادثة
             history.append({
                 "role": "user" if msg["role"] == "user" else "model",
                 "parts": [{"text": msg["content"]}]
@@ -638,7 +638,7 @@ class TradingChatAgent:
             "contents": history,
             "generationConfig": {
                 "temperature": 0.25,
-                "maxOutputTokens": 1800,
+                "maxOutputTokens": 1000,   # تقليل من 1800 — ردود الشات لا تحتاج أكثر
             }
         }
 
