@@ -29,6 +29,9 @@ AGENT_SYSTEM_PROMPT = """
 
 🌍 النطاق
 حلل أي أصل (Crypto / Forex / Gold / Indices / Stocks / Oil)
+- Crypto → 24/7
+- Forex/Metals/Indices/Oil → مغلق الجمعة-الأحد
+- Stocks أمريكية → 9:30-16:00 ET فقط
 - إذا السوق مغلق → تحليل فقط (بدون دخول)
 - إذا مفتوح → تحليل + توصية
 
@@ -58,6 +61,7 @@ Internal = تأكيد
 3) Liquidity
 BSL / SSL / Equal Highs/Lows
 ✔️ لازم Sweep قبل الدخول
+❗ لا تقل "لا يوجد سيولة" — دائماً يوجد
 
 4) Premium / Discount
 50% Range
