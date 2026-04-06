@@ -662,6 +662,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             _wl_symbols[uid].add(m)
             await q.answer(f"✅ أُضيف {MARKET_NAMES.get(m,m)}")
+        await _save_wl_to_db(uid, tgid)
         wl = _wl_symbols[uid]; tf = _wl_tf.get(uid,"1h"); conf = _wl_conf.get(uid,65); notif = _wl_notif.get(uid,True)
         await q.edit_message_text(
             f"👁 *قائمة المراقبة*\nالأزواج: *{len(wl)}*  │  الإطار: *{TF_LABELS.get(tf,tf)}*  │  الحد: *{conf}%*\n\nاضغط للإضافة/الإزالة:",
@@ -671,6 +672,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if d == "wl_all":
         _wl_symbols[uid] = set(m for cat in CATEGORIES.values() for m in cat["symbols"])
+        await _save_wl_to_db(uid, tgid)
         await q.answer("✅ تم تحديد الكل")
         await q.edit_message_text(
             f"👁 *قائمة المراقبة*\nالأزواج: *{len(_wl_symbols[uid])}* — جميعها محددة\n\nاضغط للإضافة/الإزالة:",
@@ -680,6 +682,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if d == "wl_none":
         _wl_symbols[uid] = set()
+        await _save_wl_to_db(uid, tgid)
         await q.answer("✖ تم إلغاء الكل")
         await q.edit_message_text(
             "👁 *قائمة المراقبة*\nلا توجد أزواج محددة.\n\nاضغط للإضافة/الإزالة:",
@@ -690,6 +693,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if d == "wl_notif":
         _wl_notif[uid] = not _wl_notif.get(uid, True)
         st = "مفعّل 🔔" if _wl_notif[uid] else "موقف 🔕"
+        await _save_wl_to_db(uid, tgid)
         await q.answer(f"الإشعارات: {st}")
         wl = _wl_symbols.get(uid, set()); tf = _wl_tf.get(uid,"1h"); conf = _wl_conf.get(uid,65)
         await q.edit_message_text(
@@ -706,6 +710,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if d.startswith("wltf_"):
         tf = d[5:]
         _wl_tf[uid] = tf
+        await _save_wl_to_db(uid, tgid)
         await q.answer(f"✅ الإطار: {TF_LABELS.get(tf,tf)}")
         wl = _wl_symbols.get(uid,set()); conf = _wl_conf.get(uid,65); notif = _wl_notif.get(uid,True)
         await q.edit_message_text(
@@ -724,6 +729,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if d.startswith("wlconf_"):
         conf = int(d[7:])
         _wl_conf[uid] = conf
+        await _save_wl_to_db(uid, tgid)
         await q.answer(f"✅ الحد: {conf}%")
         wl = _wl_symbols.get(uid,set()); tf = _wl_tf.get(uid,"1h"); notif = _wl_notif.get(uid,True)
         await q.edit_message_text(
