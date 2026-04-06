@@ -495,13 +495,31 @@ class TradingChatAgent:
         lines = [
             f"📊 **{symbol} | {timeframe}**",
             closed_note,
-            f"💰 السعر: **{price}**",
+            f"💰 السعر: **{float(price):.2f}**",
             f"{rec_emoji} **{rec_ar}** | الثقة: **{conf:.1f}%**",
             f"🏗️ {structure.get('trend','?')} ({structure.get('structure','?')})",
             f"📍 منطقة: {pd_z.get('zone','?')} ({pd_z.get('pct',0):.1f}%)",
             f"⏰ {kz.get('active_session','?')} {'🎯 Kill Zone مثالي' if kz.get('is_optimal_time') else ''}",
             "",
         ]
+
+        def _p(v, decimals=2):
+            """تنسيق سعر: رقم أو dict يحتوي low/high"""
+            if v is None:
+                return "?"
+            if isinstance(v, dict):
+                lo = v.get("low") or v.get("Low")
+                hi = v.get("high") or v.get("High")
+                if lo is not None and hi is not None:
+                    return f"{float(lo):.{decimals}f} – {float(hi):.{decimals}f}"
+                mid = v.get("mid") or v.get("price")
+                if mid is not None:
+                    return f"{float(mid):.{decimals}f}"
+                return "?"
+            try:
+                return f"{float(v):.{decimals}f}"
+            except Exception:
+                return str(v)
 
         # مستويات مهمة - دايماً تظهر
         important_levels = []
@@ -515,25 +533,31 @@ class TradingChatAgent:
         eq = pd_z.get("equilibrium")
 
         if bull_obs:
-            important_levels.append(f"🟢 OB دعم: **{bull_obs[0] if isinstance(bull_obs[0], (int, float)) else bull_obs[0]}**")
+            important_levels.append(f"🟢 OB دعم: **{_p(bull_obs[0])}**")
         if bear_obs:
-            important_levels.append(f"🔴 OB مقاومة: **{bear_obs[0] if isinstance(bear_obs[0], (int, float)) else bear_obs[0]}**")
+            important_levels.append(f"🔴 OB مقاومة: **{_p(bear_obs[0])}**")
         if bull_fvgs:
             fvg = bull_fvgs[0]
             if isinstance(fvg, dict):
-                important_levels.append(f"💠 FVG صاعد: **{fvg.get('low','?')} - {fvg.get('high','?')}**")
+                lo = fvg.get("low") or fvg.get("bottom")
+                hi = fvg.get("high") or fvg.get("top")
+                if lo and hi:
+                    important_levels.append(f"💠 FVG صاعد: **{float(lo):.2f} – {float(hi):.2f}**")
         if bear_fvgs:
             fvg = bear_fvgs[0]
             if isinstance(fvg, dict):
-                important_levels.append(f"💠 FVG هابط: **{fvg.get('low','?')} - {fvg.get('high','?')}**")
+                lo = fvg.get("low") or fvg.get("bottom")
+                hi = fvg.get("high") or fvg.get("top")
+                if lo and hi:
+                    important_levels.append(f"💠 FVG هابط: **{float(lo):.2f} – {float(hi):.2f}**")
         if ssl:
-            important_levels.append(f"🧲 سيولة تحت (SSL): **{ssl}**")
+            important_levels.append(f"🧲 سيولة تحت (SSL): **{_p(ssl)}**")
         if bsl:
-            important_levels.append(f"🧲 سيولة فوق (BSL): **{bsl}**")
+            important_levels.append(f"🧲 سيولة فوق (BSL): **{_p(bsl)}**")
         if ote:
-            important_levels.append(f"📐 OTE (61.8%): **{ote}**")
+            important_levels.append(f"📐 OTE (61.8%): **{_p(ote)}**")
         if eq:
-            important_levels.append(f"⚖️ Equilibrium: **{eq}**")
+            important_levels.append(f"⚖️ Equilibrium: **{_p(eq)}**")
 
         if important_levels:
             lines.append("**مستويات مهمة:**")
@@ -556,11 +580,11 @@ class TradingChatAgent:
             # للانتظار: أعطِ المنطقة اللي نتراقبها
             watch_zone = ""
             if bull_obs and structure.get("trend", "").upper() in ["BULLISH", "UP"]:
-                watch_zone = f"انتظر وصول السعر لمنطقة الـ OB عند **{bull_obs[0]}** قبل الدخول"
+                watch_zone = f"انتظر وصول السعر لمنطقة الـ OB عند **{_p(bull_obs[0])}** قبل الدخول"
             elif bear_obs and structure.get("trend", "").upper() in ["BEARISH", "DOWN"]:
-                watch_zone = f"انتظر وصول السعر لمنطقة الـ OB عند **{bear_obs[0]}** قبل البيع"
+                watch_zone = f"انتظر وصول السعر لمنطقة الـ OB عند **{_p(bear_obs[0])}** قبل البيع"
             elif eq:
-                watch_zone = f"انتظر وضوح الاتجاه من عند Equilibrium **{eq}**"
+                watch_zone = f"انتظر وضوح الاتجاه من عند Equilibrium **{_p(eq)}**"
 
             if watch_zone:
                 lines += [
