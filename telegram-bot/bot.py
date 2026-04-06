@@ -41,6 +41,9 @@ CRYPTO_MARKETS = {
     "LTCUSD","LINKUSD","MATICUSD","AVAXUSD","ATOMUSD","UNIUSD","TRXUSD",
 }
 
+# مجموعة الرموز المعتمدة حالياً — تُستخدم لتنقية قوائم المراقبة القديمة
+_VALID_SYMBOLS: set = {sym for cat in CATEGORIES.values() for sym in cat["symbols"]}
+
 TF_LABELS = {"15m":"15 دقيقة", "1h":"1 ساعة", "4h":"4 ساعات", "1day":"يومي"}
 TIMEFRAMES = ["15m", "1h", "4h", "1day"]
 
@@ -129,7 +132,9 @@ async def _load_wl_from_db(uid: int, telegram_id: str):
     """يحمّل إعدادات المراقبة من DB إلى الذاكرة"""
     d = await _get("/api/v1/bot/watchlist", {"telegram_id": telegram_id})
     if d.get("linked"):
-        _wl_symbols[uid] = set(d.get("watchlist", []))
+        # نفلتر فقط الرموز المعتمدة حالياً — نتجاهل أي رموز قديمة في DB
+        raw = set(s.upper() for s in d.get("watchlist", []))
+        _wl_symbols[uid] = raw & _VALID_SYMBOLS
         _wl_tf[uid]      = d.get("timeframe", "1h")
         _wl_conf[uid]    = d.get("min_confidence", 65)
         _wl_notif[uid]   = d.get("notifications_enabled", True)
