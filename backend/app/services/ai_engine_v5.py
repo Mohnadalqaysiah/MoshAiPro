@@ -331,11 +331,12 @@ class MoshAIEngineV5:
 
     def _fetch_spot_price(self, symbol: str) -> tuple[float, str]:
         """
-        يجلب سعر Spot الفوري للمعادن — 4 مصادر بالتسلسل:
+        يجلب سعر Spot الفوري للمعادن — 5 مصادر بالتسلسل:
           0. TradingView WebSocket  (OANDA Spot — أدق مصدر، لحظي)
-          1. yfinance GC=F theoretical carry basis (حساب رياضي دقيق)
-          2. @fawazahmed0/currency-api CDN  (مجاني، 24/7)
-          3. Finnhub quote (fallback أخير)
+          1. yfinance XAUUSD=X / XAGUSD=X (Spot مباشر — بدون حساب basis)
+          2. yfinance GC=F theoretical carry basis (احتياطي — أقل دقة)
+          3. @fawazahmed0/currency-api CDN  (مجاني، قد يتأخر 24h)
+          4. Finnhub quote (fallback أخير)
         يُعيد (0.0, "none") إذا فشل الكل (يُتجاوز التصحيح بأمان).
         """
         import requests as _req
@@ -353,13 +354,34 @@ class MoshAIEngineV5:
                 logger.info(f"   💰 TV spot [{sym_upper}]: {tv_price:.5f}")
                 return float(tv_price), "tv_spot"
             else:
-                logger.info(f"   📡 TV spot None for [{sym_upper}] (alive={tv_feed.is_alive()}) — falling to theoretical carry")
+                logger.info(f"   📡 TV spot None for [{sym_upper}] (alive={tv_feed.is_alive()}) — falling to yfinance spot")
         except Exception as _tv_e:
             logger.info(f"   TV spot unavailable [{sym_upper}]: {_tv_e}")
 
-        # ── 1. yfinance: Spot من Futures - theoretical carry basis (الأدق) ─
-        # المعادلة: spot ≈ futures - (futures × rate × days_to_expiry / 365)
-        # معدل الفائدة الأمريكي 2026: ~5.25% سنوياً
+        # ── 1. yfinance XAUUSD=X / XAGUSD=X — سعر Spot مباشر (بدون basis) ─
+        _YF_SPOT_SYM = {"XAUUSD": "XAUUSD=X", "XAGUSD": "XAGUSD=X"}
+        yf_spot_sym = _YF_SPOT_SYM.get(sym_upper)
+        if yf_spot_sym:
+            try:
+                import yfinance as _yf
+                ticker = _yf.Ticker(yf_spot_sym)
+                hist = ticker.history(period="1d", interval="1m")
+                if hist is not None and len(hist) > 0:
+                    price = float(hist["Close"].iloc[-1])
+                    if price > 0:
+                        logger.info(f"   💰 yfinance spot [{sym_upper}]: {price:.5f}")
+                        return round(price, 5), "yfinance_spot"
+                # fallback: .info
+                info = ticker.info
+                price = info.get("regularMarketPrice") or info.get("previousClose")
+                if price and float(price) > 0:
+                    logger.info(f"   💰 yfinance spot info [{sym_upper}]: {price:.5f}")
+                    return round(float(price), 5), "yfinance_spot"
+            except Exception as _ye:
+                logger.debug(f"   yfinance spot failed [{sym_upper}]: {_ye}")
+
+        # ── 2. yfinance: Spot من Futures - theoretical carry basis ──────────
+        # احتياطي فقط — قد يكون غير دقيق إذا تغيرت أسعار الفائدة
         futures_sym = _FUTURES_SYM.get(sym_upper)
         if futures_sym:
             try:
@@ -381,7 +403,7 @@ class MoshAIEngineV5:
             except Exception as _ye:
                 logger.debug(f"   theoretical basis failed [{sym_upper}]: {_ye}")
 
-        # ── 2. @fawazahmed0/currency-api CDN (backup — قد يكون متأخر 24h) ─
+        # ── 3. @fawazahmed0/currency-api CDN (backup — قد يكون متأخر 24h) ─
         currency_sym = _CURRENCY_API_SYM.get(sym_upper)
         if currency_sym:
             for url in [
@@ -398,7 +420,7 @@ class MoshAIEngineV5:
                 except Exception:
                     continue
 
-        # ── 3. Finnhub fallback ───────────────────────────────────────────
+        # ── 4. Finnhub fallback ───────────────────────────────────────────
         if smart_data._fh_key:
             try:
                 from app.services.smart_data import FINNHUB_MAP
