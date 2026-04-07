@@ -50,8 +50,9 @@ TV_SYMBOL_MAP: dict[str, str] = {
 _TV_REVERSE_MAP: dict[str, str] = {v: k for k, v in TV_SYMBOL_MAP.items()}
 
 _TV_URL = "wss://data.tradingview.com/socket.io/websocket"
-_PRICE_CACHE_TTL = 600.0  # ثانية — TV يرسل عند التغيير فقط، 10 دقائق كافية للذهب/فوركس
-_RECONNECT_DELAY = 5.0   # ثوانٍ انتظار قبل إعادة الاتصال
+_PRICE_CACHE_TTL  = 600.0  # ثانية — TV يرسل عند التغيير فقط، 10 دقائق كافية للذهب/فوركس
+_RECONNECT_DELAY  = 5.0    # ثوانٍ انتظار قبل إعادة الاتصال
+_REFRESH_INTERVAL = 240.0  # ثانية — إعادة اشتراك دورية لإجبار TV على إرسال أحدث سعر (4 دقائق)
 
 
 def _rand_session() -> str:
@@ -196,9 +197,21 @@ class TVPriceFeed:
 
             logger.info(f"📡 Subscribed to {len(TV_SYMBOL_MAP)} symbols")
 
-            # ── حلقة الاستقبال ────────────────────────────────────────────
+            # ── حلقة الاستقبال مع refresh دوري ───────────────────────────
+            last_refresh = asyncio.get_event_loop().time()
             async for raw_msg in ws:
                 self._handle_message(ws, raw_msg)
+                # كل 4 دقائق: إعادة اشتراك لإجبار TV على إرسال أحدث سعر
+                now = asyncio.get_event_loop().time()
+                if now - last_refresh >= _REFRESH_INTERVAL:
+                    last_refresh = now
+                    try:
+                        for tv_sym in TV_SYMBOL_MAP.values():
+                            await ws.send(_pack("quote_fast_symbols", [self._session, tv_sym]))
+                            await asyncio.sleep(0.01)
+                        logger.debug(f"📡 TV price refresh triggered for {len(TV_SYMBOL_MAP)} symbols")
+                    except Exception as _ref_e:
+                        logger.debug(f"📡 TV refresh error: {_ref_e}")
 
     def _handle_message(self, ws, raw: str):
         """معالجة رسالة واحدة من TradingView"""
