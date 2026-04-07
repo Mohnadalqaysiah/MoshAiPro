@@ -758,16 +758,23 @@ class SignalOutcomeIn(BaseModel):
 
 def _calc_points(market: str, price_diff: float) -> float:
     """
-    Unified pip points — 1 point = 1 pip per market standard
-    All metals use ×100  →  $0.01 move = 1 pt (XAUUSD $47 move = 4700 pts)
-    Crypto uses ×1       →  $1   move = 1 pt (BTC $500 move = 500 pts)
-    Forex/JPY uses ×10000/×100 → standard pips
+    Unified pip/points per market:
+    Metals  ×10   → $0.1 move = 1 pt  (XAUUSD $47 move = 470 pts)
+    Crypto  ×1    → $1   move = 1 pt  (BTC $500 move = 500 pts)
+    Indices ×1    → 1 index point = 1 pt (NAS100 +40 = 40 pts)
+    Oil/Gas ×10   → $0.1 move = 1 pt
+    JPY     ×100  → standard yen pips
+    Forex   ×10000→ standard pips (0.0001 = 1 pip)
     """
     symbol = (market or "").upper()
     if symbol in ("XAUUSD", "XAGUSD", "XPTUSD", "XPDUSD"):
-        return round(price_diff * 100, 2)    # metals: $0.01 per pip
-    elif symbol in ("BTCUSD", "ETHUSD", "BNBUSD"):
-        return round(price_diff * 1.0, 2)    # crypto: $1 per pip
+        return round(price_diff * 10, 2)     # metals: $0.1 per point
+    elif symbol in ("BTCUSD", "ETHUSD", "BNBUSD", "SOLUSD", "XRPUSD"):
+        return round(price_diff * 1.0, 2)    # crypto: $1 per point
+    elif symbol in ("NAS100", "US30", "SP500", "US100", "NASDAQ", "DOW"):
+        return round(price_diff * 1.0, 2)    # indices: 1 index point = 1 pt
+    elif symbol in ("USOIL", "OIL", "NATGAS", "BRENT"):
+        return round(price_diff * 10, 2)     # oil/gas: $0.1 per point
     elif symbol.endswith("JPY"):
         return round(price_diff * 100, 2)    # yen pairs
     else:

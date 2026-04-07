@@ -1037,14 +1037,17 @@ async def monitor_watchlists(app: Application):
             for u in db_users:
                 try:
                     tid = int(u["telegram_id"])
-                    wl  = set(s.upper() for s in u.get("watchlist", []))
+                    # فلترة إلى الرموز المعتمدة فقط — تتجاهل الرموز القديمة في DB
+                    wl  = set(s.upper() for s in u.get("watchlist", [])) & _VALID_SYMBOLS
                     if wl:
                         merged[tid] = (wl, u.get("timeframe","1h"), u.get("min_confidence",65))
                 except Exception:
                     pass
             for uid_, wl in list(_wl_symbols.items()):
                 if uid_ not in merged and wl:
-                    merged[uid_] = (set(s.upper() for s in wl), _wl_tf.get(uid_,"1h"), _wl_conf.get(uid_,65))
+                    filtered = set(s.upper() for s in wl) & _VALID_SYMBOLS
+                    if filtered:
+                        merged[uid_] = (filtered, _wl_tf.get(uid_,"1h"), _wl_conf.get(uid_,65))
 
             logger.info(f"🔍 دورة مراقبة — {len(merged)} مستخدم")
             now = datetime.now(timezone.utc)
