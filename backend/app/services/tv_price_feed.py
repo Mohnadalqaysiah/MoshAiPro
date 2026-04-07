@@ -86,7 +86,7 @@ class TVPriceFeed:
 
     async def get_price(self, symbol: str) -> Optional[float]:
         """
-        يُعيد سعر Spot الحالي (خلال 3 ثوانٍ) أو None إذا غير متاح.
+        يُعيد سعر Spot الحالي أو None إذا غير متاح.
         يبدأ الاتصال تلقائياً في أول استدعاء.
         """
         self._ensure_started()
@@ -108,7 +108,7 @@ class TVPriceFeed:
     def get_price_sync(self, symbol: str) -> Optional[float]:
         """
         نسخة متزامنة (Sync) — للاستخدام من كود غير async.
-        لا تبدأ الاتصال ولا تنتظر — فقط تُعيد ما هو مخزّن.
+        إذا الكاش فارغ أو منتهي → يحاول yfinance XAUUSD=X كـ fallback فوري.
         """
         sym = symbol.upper()
         entry = self._prices.get(sym)
@@ -116,6 +116,25 @@ class TVPriceFeed:
             price, ts = entry
             if time.monotonic() - ts <= _PRICE_CACHE_TTL:
                 return price
+
+        # Fallback: yfinance spot مباشر (XAUUSD=X / XAGUSD=X)
+        _YF_SPOT = {"XAUUSD": "XAUUSD=X", "XAGUSD": "XAGUSD=X"}
+        yf_sym = _YF_SPOT.get(sym)
+        if yf_sym:
+            try:
+                import yfinance as _yf
+                ticker = _yf.Ticker(yf_sym)
+                hist = ticker.history(period="1d", interval="1m")
+                if hist is not None and len(hist) > 0:
+                    price = float(hist["Close"].iloc[-1])
+                    if price > 0:
+                        # خزّن في الكاش حتى لا نستدعي yfinance في كل طلب
+                        self._prices[sym] = (price, time.monotonic())
+                        logger.info(f"📡 TV cache miss [{sym}] → yfinance fallback: {price:.2f}")
+                        return price
+            except Exception as _e:
+                logger.debug(f"📡 yfinance fallback failed [{sym}]: {_e}")
+
         return None
 
     def is_alive(self) -> bool:
@@ -201,15 +220,15 @@ class TVPriceFeed:
             last_refresh = asyncio.get_event_loop().time()
             async for raw_msg in ws:
                 self._handle_message(ws, raw_msg)
-                # كل 4 دقائق: إعادة اشتراك لإجبار TV على إرسال أحدث سعر
+                # كل 4 دقائق: إعادة اشتراك بـ quote_add_symbols لإجبار TV على إرسال snapshot
                 now = asyncio.get_event_loop().time()
                 if now - last_refresh >= _REFRESH_INTERVAL:
                     last_refresh = now
                     try:
                         for tv_sym in TV_SYMBOL_MAP.values():
-                            await ws.send(_pack("quote_fast_symbols", [self._session, tv_sym]))
-                            await asyncio.sleep(0.01)
-                        logger.debug(f"📡 TV price refresh triggered for {len(TV_SYMBOL_MAP)} symbols")
+                            await ws.send(_pack("quote_add_symbols", [self._session, tv_sym]))
+                            await asyncio.sleep(0.02)
+                        logger.debug(f"📡 TV price refresh (re-subscribe) for {len(TV_SYMBOL_MAP)} symbols")
                     except Exception as _ref_e:
                         logger.debug(f"📡 TV refresh error: {_ref_e}")
 
