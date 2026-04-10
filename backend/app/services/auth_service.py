@@ -115,7 +115,6 @@ def check_subscription(user: User, db: Session) -> dict:
                 "reason": "انتهت الفترة التجريبية. اشترك للمتابعة.",
                 "upgrade": True,
             }
-        # فحص الكريدت - يُحدد في كل endpoint بشكل منفصل
         return {
             "allowed": True,
             "plan": "trial",

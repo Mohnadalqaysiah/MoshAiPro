@@ -405,6 +405,7 @@ def bot_new_signals(
 
     # عمر الإشارة الأقصى قبل إلغاء البث (بالدقائق حسب الإطار)
     _MAX_SIGNAL_AGE = {"1m":5,"5m":10,"15m":20,"30m":30,"1h":60,"4h":180,"1d":720}
+    now = datetime.now(timezone.utc)
 
     result = []
     for s in signals:
