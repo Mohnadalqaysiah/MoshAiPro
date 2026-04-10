@@ -48,10 +48,11 @@ TF_LABELS = {"15m":"15 دقيقة", "1h":"1 ساعة", "4h":"4 ساعات", "1da
 TIMEFRAMES = ["15m", "1h", "4h", "1day"]
 
 # ─── Intervals ────────────────────────────────────────────────────────────────
-MONITOR_INTERVAL   = 900    # 15 min — watchlist monitoring
-BROADCAST_INTERVAL = 60     # 1 min  — new admin signals
-EXPIRY_INTERVAL    = 3600   # 1 hr   — subscription expiry
-ALERT_COOLDOWN     = 60     # min    — per-user per-symbol cooldown
+MONITOR_INTERVAL    = 900    # 15 min — watchlist monitoring
+BROADCAST_INTERVAL  = 60     # 1 min  — new admin signals
+EXPIRY_INTERVAL     = 3600   # 1 hr   — subscription expiry
+ALERT_COOLDOWN      = 60     # min    — per-user per-symbol same-direction cooldown
+DIRECTION_LOCK_MIN  = 240    # min    — قفل الاتجاه: بعد BUY لا يُرسل SELL لـ 4 ساعات
 
 # ─── In-memory state ──────────────────────────────────────────────────────────
 # uid → set of symbols
@@ -59,6 +60,7 @@ _wl_symbols:  dict[int, set]  = {}
 _wl_tf:       dict[int, str]  = {}
 _wl_conf:     dict[int, int]  = {}
 _wl_notif:    dict[int, bool] = {}
+# (uid, symbol) → {"time": datetime, "direction": "BUY"/"SELL"}
 last_alert:   dict            = {}
 notified_expiry: set          = set()
 
@@ -949,8 +951,26 @@ async def broadcast_new_signals(app: Application):
 
                 logger.info(f"📡 {len(sigs)} إشارة جديدة → {len(all_subs)} مشترك ({len(user_wl)} لديهم watchlist)")
 
+                now_bc = datetime.now(timezone.utc)
                 for sig in sigs:
-                    market = sig.get("market", "").upper()
+                    market   = sig.get("market", "").upper()
+                    sig_type = sig.get("signal_type", "BUY").upper()
+
+                    # قفل الاتجاه للإشارات المبثوثة — مفتاح مشترك بين كل المستخدمين
+                    bc_key  = ("broadcast", market)
+                    bc_last = last_alert.get(bc_key)
+                    if bc_last:
+                        elapsed_min = (now_bc - bc_last["time"]).total_seconds() / 60
+                        if bc_last["direction"] == sig_type and elapsed_min < ALERT_COOLDOWN:
+                            logger.debug(f"🔕 broadcast skip [{market}] same dir cooldown")
+                            await _post(f"/api/v1/bot/mark-broadcast/{sig['id']}")
+                            continue
+                        if bc_last["direction"] != sig_type and elapsed_min < DIRECTION_LOCK_MIN:
+                            logger.info(f"🔒 broadcast direction lock [{market}] {bc_last['direction']}→{sig_type} ({elapsed_min:.0f}m)")
+                            await _post(f"/api/v1/bot/mark-broadcast/{sig['id']}")
+                            continue
+                    last_alert[bc_key] = {"time": now_bc, "direction": sig_type}
+
                     msg = fmt_new_signal(sig)
                     kb  = InlineKeyboardMarkup([[
                         InlineKeyboardButton("📊 تحليل هذا الزوج", callback_data=f"sym_{sig['market']}"),
@@ -1078,10 +1098,18 @@ async def monitor_watchlists(app: Application):
 
                     key  = (uid_, symbol)
                     last = last_alert.get(key)
-                    if last and (now - last).total_seconds() < ALERT_COOLDOWN * 60:
-                        continue
+                    if last:
+                        elapsed_min = (now - last["time"]).total_seconds() / 60
+                        last_dir    = last["direction"]
+                        # نفس الاتجاه → كولداون عادي 60 دقيقة
+                        if last_dir == rec and elapsed_min < ALERT_COOLDOWN:
+                            continue
+                        # اتجاه معاكس → قفل 4 ساعات (منع التضارب)
+                        if last_dir != rec and elapsed_min < DIRECTION_LOCK_MIN:
+                            logger.debug(f"🔒 direction lock [{symbol}] {last_dir}→{rec} ({elapsed_min:.0f}m < {DIRECTION_LOCK_MIN}m)")
+                            continue
 
-                    last_alert[key] = now
+                    last_alert[key] = {"time": now, "direction": rec}
                     emoji  = "🟢" if rec == "BUY" else "🔴"
                     rec_ar = "شراء" if rec == "BUY" else "بيع"
                     alert  = (
