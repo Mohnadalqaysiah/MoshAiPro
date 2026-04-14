@@ -438,7 +438,23 @@ def bot_new_signals(
             "wyckoff_phase":  s.wyckoff_phase,
             "premium_discount": s.premium_discount,
         })
-    return {"signals": result, "count": len(result)}
+
+    # إزالة التكرار: إشارة واحدة فقط لكل (رمز + إطار + اتجاه)
+    seen: set = set()
+    deduped = []
+    for sig in result:
+        key = (sig["market"], sig["timeframe"], sig["signal_type"])
+        if key not in seen:
+            seen.add(key)
+            deduped.append(sig)
+        else:
+            # علّم المكرر كمُبثّ حتى لا يعود
+            dup = db.query(Signal).filter(Signal.id == sig["id"]).first()
+            if dup:
+                dup.broadcast_sent = True
+            db.commit()
+
+    return {"signals": deduped, "count": len(deduped)}
 
 
 @router.post("/mark-broadcast/{signal_id}")

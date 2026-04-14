@@ -144,7 +144,14 @@ async def analyze_market(
                 expires_at = datetime.now(timezone.utc) + timedelta(hours=expires_h)
                 sig_hash = hashlib.md5(f"{user.id}-{symbol}-{timeframe}-{rec}-{entry}".encode()).hexdigest()
                 existing = db.query(Signal).filter(Signal.signal_hash == sig_hash).first()
-                if not existing:
+                # منع إنشاء إشارة مكررة: إذا يوجد إشارة نشطة لنفس الرمز+الإطار+الاتجاه → تجاهل
+                active_dup = db.query(Signal).filter(
+                    Signal.market       == symbol,
+                    Signal.timeframe    == timeframe,
+                    Signal.signal_type  == sig_type,
+                    Signal.status       == SignalStatus.ACTIVE,
+                ).first()
+                if not existing and not active_dup:
                     sig = Signal(
                         user_id       = user.id,
                         market        = symbol,
