@@ -116,7 +116,7 @@ async def _get(path: str, params: dict = None, timeout: int = 15) -> dict:
     return {}
 
 
-async def _post(path: str, json: dict = None, params: dict = None, timeout: int = 15) -> dict:
+async def _post(path: str, json=None, params: dict = None, timeout: int = 15) -> dict:
     try:
         async with aiohttp.ClientSession() as s:
             async with s.post(
@@ -124,7 +124,11 @@ async def _post(path: str, json: dict = None, params: dict = None, timeout: int 
                 headers=BOT_HEADERS,
                 timeout=aiohttp.ClientTimeout(total=timeout),
             ) as r:
-                return await r.json() if r.status == 200 else {}
+                if r.status == 200:
+                    return await r.json()
+                body = await r.text()
+                logger.warning(f"POST {path} → {r.status}: {body[:200]}")
+                return {}
     except Exception as e:
         logger.error(f"POST {path}: {e}")
     return {}

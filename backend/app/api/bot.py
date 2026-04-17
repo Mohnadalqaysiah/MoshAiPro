@@ -3,7 +3,7 @@ Mosh AI Pro v5 - Bot API
 Endpoints خاصة بالبوت (تتحقق من BOT_SECRET بدلاً من JWT المستخدم)
 """
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, Header
+from fastapi import APIRouter, Depends, HTTPException, Header, Body
 from sqlalchemy.orm import Session
 from typing import Optional
 from loguru import logger
@@ -669,7 +669,7 @@ def bot_save_alert_signal(
 @router.post("/save-watchlist")
 def bot_save_watchlist(
     telegram_id: str,
-    watchlist: list,
+    watchlist: list = Body(...),
     timeframe: str = "1h",
     min_confidence: int = 65,
     notifications_enabled: bool = True,
