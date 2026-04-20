@@ -163,12 +163,17 @@ async def _save_wl_to_db(uid: int, telegram_id: str):
 # ─── Keyboards ────────────────────────────────────────────────────────────────
 def kb_main():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📊 تحليل فوري",  callback_data="m_analyze"),
-         InlineKeyboardButton("📡 الإشارات",    callback_data="m_signals")],
-        [InlineKeyboardButton("👁 المراقبة",     callback_data="m_watchlist"),
-         InlineKeyboardButton("📈 إحصائياتي",   callback_data="m_stats")],
-        [InlineKeyboardButton("🎁 الإحالة",      callback_data="m_referral"),
-         InlineKeyboardButton("⚙️ الإعدادات",    callback_data="m_settings")],
+        # ── تحليل وإشارات ──
+        [InlineKeyboardButton("⚡ تحليل فوري",   callback_data="m_analyze"),
+         InlineKeyboardButton("📡 آخر الإشارات", callback_data="m_signals")],
+        # ── مراقبة وإحصائيات ──
+        [InlineKeyboardButton("👁 المراقبة",      callback_data="m_watchlist"),
+         InlineKeyboardButton("📊 إحصائياتي",    callback_data="m_stats")],
+        # ── إحالة ومساعدة ──
+        [InlineKeyboardButton("🎁 نقاط الإحالة", callback_data="m_referral"),
+         InlineKeyboardButton("❓ المساعدة",      callback_data="m_help")],
+        # ── داشبورد ──
+        [InlineKeyboardButton("🌐 فتح الداشبورد", url=FRONTEND_URL)],
     ])
 
 
@@ -613,32 +618,65 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ─────────────────────── SIGNALS ──────────────────────────────────────────
     if d == "m_signals":
         await q.edit_message_text("⏳ جاري جلب الإشارات…")
-        res  = await _get("/api/v1/signals/latest", {"limit": 6})
+        res  = await _get("/api/v1/signals/latest", {"limit": 8})
         sigs = res.get("data", [])
+
+        STATUS_ICONS = {
+            "ACTIVE":  "🔵", "TP1_HIT": "✅", "TP2_HIT": "🏆",
+            "SL_HIT":  "❌", "PENDING": "⏳", "EXPIRED":  "⚫",
+        }
+        STATUS_AR = {
+            "ACTIVE":"نشطة", "TP1_HIT":"هدف 1 ✅", "TP2_HIT":"هدف 2 🏆",
+            "SL_HIT":"وقف ❌", "PENDING":"معلقة", "EXPIRED":"منتهية",
+        }
+
         if not sigs:
-            msg = "📡 لا توجد إشارات حتى الآن."
+            msg = (
+                "📡 *آخر الإشارات*\n"
+                "━━━━━━━━━━━━━━━━━━━━━━\n"
+                "_لا توجد إشارات حتى الآن._\n\n"
+                "حلّل سوقاً من قسم ⚡ تحليل فوري."
+            )
         else:
-            msg = "📡 *آخر الإشارات*\n━━━━━━━━━━━━━━━━━━━━━━\n"
-            STATUS_AR = {"ACTIVE":"نشطة","TP1_HIT":"هدف 1 ✅","TP2_HIT":"هدف 2 🏆","SL_HIT":"وقف خسارة ❌","PENDING":"معلقة","EXPIRED":"منتهية"}
+            active_count = sum(1 for s in sigs if s.get("status") == "ACTIVE")
+            msg = (
+                f"📡 *آخر الإشارات*\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"🔵 نشطة: *{active_count}*  │  إجمالي: *{len(sigs)}*\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            )
             for s in sigs:
-                e      = "🟢" if s.get("signal_type") == "BUY" else "🔴"
-                status = STATUS_AR.get(s.get("status",""), s.get("status",""))
-                conf   = s.get("ai_confidence", 0)
+                stype  = s.get("signal_type", "BUY")
+                status = s.get("status", "ACTIVE")
+                conf   = s.get("ai_confidence") or s.get("ai_confidence_score") or 0
                 mname  = MARKET_NAMES.get(s.get("market",""), s.get("market",""))
                 entry  = _fmt_price(s.get("entry_price"))
                 tp1    = _fmt_price(s.get("take_profit_1"))
-                sl     = _fmt_price(s.get("stop_loss"))
+                sl_p   = _fmt_price(s.get("stop_loss"))
+                rr     = s.get("risk_reward_ratio")
+
+                dir_emoji   = "▲" if stype == "BUY" else "▼"
+                dir_ar      = "شراء" if stype == "BUY" else "بيع"
+                status_icon = STATUS_ICONS.get(status, "○")
+                status_ar   = STATUS_AR.get(status, status)
+                conf_bar    = "█" * int(conf / 20) + "░" * (5 - int(conf / 20))
+
                 msg += (
-                    f"{e} *{mname}*  ·  `{s.get('timeframe','')}` · {conf:.0f}%\n"
-                    f"   دخول `{entry}` │ TP1 `{tp1}` │ SL `{sl}`\n"
-                    f"   الحالة: *{status}*\n"
-                    f"─────────────────────\n"
+                    f"{dir_emoji} *{mname}*  `{dir_ar}`  {status_icon} _{status_ar}_\n"
+                    f"  🎯 `{entry}`  🛑 `{sl_p}`  ✅ `{tp1}`"
                 )
+                if rr:
+                    msg += f"  ⚖️ `{float(rr):.1f}x`"
+                msg += f"\n  [{conf_bar}] `{conf:.0f}%`\n"
+                msg += "─────────────────────\n"
+
         await q.edit_message_text(
             msg, parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔄 تحديث",    callback_data="m_signals"),
-                 InlineKeyboardButton("🏠 الرئيسية", callback_data="m_back")],
+                [InlineKeyboardButton("🔄 تحديث",        callback_data="m_signals"),
+                 InlineKeyboardButton("⚡ تحليل فوري",   callback_data="m_analyze")],
+                [InlineKeyboardButton("🌐 الداشبورد",    url=FRONTEND_URL),
+                 InlineKeyboardButton("🔙 رجوع",         callback_data="m_back")],
             ]),
         )
         return
@@ -646,125 +684,82 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ─────────────────────── WATCHLIST ────────────────────────────────────────
     if d == "m_watchlist":
         await _load_wl_from_db(uid, tgid)
-        wl   = _wl_symbols.get(uid, set())
-        tf   = _wl_tf.get(uid, "1h")
-        conf = _wl_conf.get(uid, 65)
-        notif= _wl_notif.get(uid, True)
+        wl    = _wl_symbols.get(uid, set())
+        tf    = _wl_tf.get(uid, "1h")
+        conf  = _wl_conf.get(uid, 65)
+        notif = _wl_notif.get(uid, True)
         count = len(wl)
+        total = sum(len(v["symbols"]) for v in CATEGORIES.values())
+
+        # شريط بصري لعدد الأزواج المراقبة
+        filled = min(count, 10)
+        bar = "🟦" * filled + "⬜" * (10 - filled)
+
+        notif_line = "🔔 الإشعارات مفعّلة" if notif else "🔕 الإشعارات موقفة"
+
+        # قائمة الأزواج النشطة مختصرة
+        if wl:
+            wl_preview = "  ".join(f"`{s}`" for s in sorted(wl)[:8])
+            if count > 8:
+                wl_preview += f"  …+{count-8}"
+        else:
+            wl_preview = "_لم يتم اختيار أي زوج بعد_"
+
         await q.edit_message_text(
             f"👁 *قائمة المراقبة*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"الأزواج المراقبة: *{count}* من {sum(len(v['symbols']) for v in CATEGORIES.values())}\n"
-            f"الإطار: *{TF_LABELS.get(tf,tf)}*  │  الحد الأدنى للثقة: *{conf}%*\n"
-            f"الإشعارات: *{'مفعّل 🔔' if notif else 'موقف 🔕'}*\n\n"
-            f"اضغط على الزوج لإضافته أو إزالته:",
+            f"{bar}  *{count}/{total}* زوج\n\n"
+            f"⏱ الإطار: *{TF_LABELS.get(tf,tf)}*   🎯 الحد: *{conf}%*\n"
+            f"{notif_line}\n\n"
+            f"الأزواج المختارة:\n{wl_preview}\n\n"
+            f"💡 لإدارة الأزواج والإعدادات بشكل أفضل افتح الداشبورد:",
             parse_mode="Markdown",
-            reply_markup=kb_watchlist(uid),
-        )
-        return
-
-    if d.startswith("wl_t_"):
-        m = d[5:]
-        if uid not in _wl_symbols:
-            _wl_symbols[uid] = set()
-        if m in _wl_symbols[uid]:
-            _wl_symbols[uid].remove(m)
-            await q.answer(f"○ أُزيل {MARKET_NAMES.get(m,m)}")
-        else:
-            _wl_symbols[uid].add(m)
-            await q.answer(f"✅ أُضيف {MARKET_NAMES.get(m,m)}")
-        await _save_wl_to_db(uid, tgid)
-        wl = _wl_symbols[uid]; tf = _wl_tf.get(uid,"1h"); conf = _wl_conf.get(uid,65); notif = _wl_notif.get(uid,True)
-        await q.edit_message_text(
-            f"👁 *قائمة المراقبة*\nالأزواج: *{len(wl)}*  │  الإطار: *{TF_LABELS.get(tf,tf)}*  │  الحد: *{conf}%*\n\nاضغط للإضافة/الإزالة:",
-            parse_mode="Markdown", reply_markup=kb_watchlist(uid),
-        )
-        return
-
-    if d == "wl_all":
-        _wl_symbols[uid] = set(m for cat in CATEGORIES.values() for m in cat["symbols"])
-        await _save_wl_to_db(uid, tgid)
-        await q.answer("✅ تم تحديد الكل")
-        await q.edit_message_text(
-            f"👁 *قائمة المراقبة*\nالأزواج: *{len(_wl_symbols[uid])}* — جميعها محددة\n\nاضغط للإضافة/الإزالة:",
-            parse_mode="Markdown", reply_markup=kb_watchlist(uid),
-        )
-        return
-
-    if d == "wl_none":
-        _wl_symbols[uid] = set()
-        await _save_wl_to_db(uid, tgid)
-        await q.answer("✖ تم إلغاء الكل")
-        await q.edit_message_text(
-            "👁 *قائمة المراقبة*\nلا توجد أزواج محددة.\n\nاضغط للإضافة/الإزالة:",
-            parse_mode="Markdown", reply_markup=kb_watchlist(uid),
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🌐 إدارة المراقبة من الداشبورد", url=f"{FRONTEND_URL}/dashboard")],
+                [InlineKeyboardButton("🔔 تبديل الإشعارات", callback_data="wl_notif"),
+                 InlineKeyboardButton("🔙 رجوع",            callback_data="m_back")],
+            ]),
         )
         return
 
     if d == "wl_notif":
+        await _load_wl_from_db(uid, tgid)
         _wl_notif[uid] = not _wl_notif.get(uid, True)
+        await _save_wl_to_db(uid, tgid)
         st = "مفعّل 🔔" if _wl_notif[uid] else "موقف 🔕"
-        await _save_wl_to_db(uid, tgid)
         await q.answer(f"الإشعارات: {st}")
-        wl = _wl_symbols.get(uid, set()); tf = _wl_tf.get(uid,"1h"); conf = _wl_conf.get(uid,65)
+        # إعادة رسم شاشة المراقبة
+        wl    = _wl_symbols.get(uid, set())
+        tf    = _wl_tf.get(uid, "1h")
+        conf  = _wl_conf.get(uid, 65)
+        notif = _wl_notif[uid]
+        count = len(wl)
+        total = sum(len(v["symbols"]) for v in CATEGORIES.values())
+        filled = min(count, 10)
+        bar = "🟦" * filled + "⬜" * (10 - filled)
+        wl_preview = "  ".join(f"`{s}`" for s in sorted(wl)[:8]) if wl else "_لم يتم اختيار أي زوج_"
+        if count > 8: wl_preview += f"  …+{count-8}"
         await q.edit_message_text(
-            f"👁 *قائمة المراقبة*\nالأزواج: *{len(wl)}*  │  الإطار: *{TF_LABELS.get(tf,tf)}*  │  الحد: *{conf}%*\nالإشعارات: *{st}*\n\nاضغط للإضافة/الإزالة:",
-            parse_mode="Markdown", reply_markup=kb_watchlist(uid),
-        )
-        return
-
-    if d == "wl_tf":
-        await q.edit_message_text("⏱ *اختر الإطار الزمني للمراقبة:*",
-                                   parse_mode="Markdown", reply_markup=kb_tf_select())
-        return
-
-    if d.startswith("wltf_"):
-        tf = d[5:]
-        _wl_tf[uid] = tf
-        await _save_wl_to_db(uid, tgid)
-        await q.answer(f"✅ الإطار: {TF_LABELS.get(tf,tf)}")
-        wl = _wl_symbols.get(uid,set()); conf = _wl_conf.get(uid,65); notif = _wl_notif.get(uid,True)
-        await q.edit_message_text(
-            f"👁 *قائمة المراقبة*\nالأزواج: *{len(wl)}*  │  الإطار: *{TF_LABELS.get(tf,tf)}*  │  الحد: *{conf}%*\n\nاضغط للإضافة/الإزالة:",
-            parse_mode="Markdown", reply_markup=kb_watchlist(uid),
-        )
-        return
-
-    if d == "wl_conf":
-        await q.edit_message_text(
-            "🎯 *الحد الأدنى للثقة*\n\nنسبة أعلى = إشارات أقل لكن أقوى:",
-            parse_mode="Markdown", reply_markup=kb_conf_select(),
-        )
-        return
-
-    if d.startswith("wlconf_"):
-        conf = int(d[7:])
-        _wl_conf[uid] = conf
-        await _save_wl_to_db(uid, tgid)
-        await q.answer(f"✅ الحد: {conf}%")
-        wl = _wl_symbols.get(uid,set()); tf = _wl_tf.get(uid,"1h"); notif = _wl_notif.get(uid,True)
-        await q.edit_message_text(
-            f"👁 *قائمة المراقبة*\nالأزواج: *{len(wl)}*  │  الإطار: *{TF_LABELS.get(tf,tf)}*  │  الحد: *{conf}%*\n\nاضغط للإضافة/الإزالة:",
-            parse_mode="Markdown", reply_markup=kb_watchlist(uid),
-        )
-        return
-
-    if d == "wl_save":
-        await q.edit_message_text("⏳ جاري الحفظ…")
-        await _save_wl_to_db(uid, tgid)
-        wl = _wl_symbols.get(uid,set())
-        await q.edit_message_text(
-            f"✅ *تم الحفظ بنجاح!*\n\n"
-            f"الأزواج المراقبة: *{len(wl)}*\n"
-            f"الإطار: *{TF_LABELS.get(_wl_tf.get(uid,'1h'),'—')}*\n"
-            f"الحد الأدنى للثقة: *{_wl_conf.get(uid,65)}%*\n"
-            f"الإشعارات: *{'مفعّل 🔔' if _wl_notif.get(uid,True) else 'موقف 🔕'}*",
+            f"👁 *قائمة المراقبة*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"{bar}  *{count}/{total}* زوج\n\n"
+            f"⏱ الإطار: *{TF_LABELS.get(tf,tf)}*   🎯 الحد: *{conf}%*\n"
+            f"{'🔔 الإشعارات مفعّلة' if notif else '🔕 الإشعارات موقفة'}\n\n"
+            f"الأزواج المختارة:\n{wl_preview}\n\n"
+            f"💡 لإدارة الأزواج والإعدادات بشكل أفضل افتح الداشبورد:",
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("👁 تعديل",     callback_data="m_watchlist"),
-                 InlineKeyboardButton("🏠 الرئيسية", callback_data="m_back")],
+                [InlineKeyboardButton("🌐 إدارة المراقبة من الداشبورد", url=f"{FRONTEND_URL}/dashboard")],
+                [InlineKeyboardButton("🔔 تبديل الإشعارات", callback_data="wl_notif"),
+                 InlineKeyboardButton("🔙 رجوع",            callback_data="m_back")],
             ]),
         )
+        return
+
+    # handlers قديمة للـ watchlist — احتياطي للتوافق مع أي رسائل قديمة
+    if d.startswith("wl_t_") or d in ("wl_all","wl_none","wl_tf","wl_conf","wl_save") \
+            or d.startswith("wltf_") or d.startswith("wlconf_"):
+        await q.answer("⚙️ أدر المراقبة من الداشبورد")
         return
 
     # ─────────────────────── STATS ────────────────────────────────────────────
@@ -781,6 +776,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ]),
             )
             return
+
         total   = st.get("total_signals", 0)
         wins    = st.get("wins", 0)
         loss    = st.get("losses", 0)
@@ -790,46 +786,68 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         best    = st.get("best_trade", 0)
         worst   = st.get("worst_trade", 0)
         recent  = st.get("recent_trades", [])
-        plan    = st.get("plan_label","")
-        ends    = st.get("ends_at","")
-        name    = st.get("full_name","")
-        wr_bar  = "🟩" * int(wr/10) + "⬜" * (10 - int(wr/10))
+        plan    = st.get("plan_label", "")
+        ends    = st.get("ends_at", "")
+        name    = st.get("full_name", "") or "مستخدم"
+        ref_pts = st.get("referral_points", 0)
 
-        pts_sign = "+" if pts >= 0 else ""
+        # ── شريط Win Rate مرئي (10 خانات) ──
+        filled_wr  = round(wr / 10)
+        wr_bar     = "🟢" * filled_wr + "⚫" * (10 - filled_wr)
+
+        # ── شريط الأداء العام ──
+        pts_sign   = "+" if pts >= 0 else ""
+        pts_emoji  = "📈" if pts >= 0 else "📉"
+
+        # ── بطاقة الخطة ──
+        plan_icons = {"trial": "🔵", "weekly": "🟡", "monthly": "🟣"}
+        plan_icon  = plan_icons.get(st.get("plan",""), "⚪")
+        plan_line  = f"{plan_icon} *{plan}*"
+        if ends:
+            plan_line += f"  ·  ينتهي `{ends}`"
+
+        # ── آخر الصفقات بتنسيق أجمل ──
         recent_lines = ""
         if recent:
-            recent_lines = "\n*آخر الصفقات:*\n"
-            for t in recent:
-                pts_r = t.get("points", 0)
+            recent_lines = "\n📋 *آخر الصفقات:*\n"
+            for t in recent[:5]:
+                pts_r  = t.get("points", 0)
                 sign_r = "+" if pts_r >= 0 else ""
-                recent_lines += (
-                    f"{t['icon']} {t['market']} {t['type']}  "
-                    f"`{sign_r}{pts_r:.1f}` نقطة  {t['closed_at']}\n"
-                )
+                icon_r = t.get("icon", "○")
+                mkt    = t.get("market", "")
+                typ    = "▲" if t.get("type") == "BUY" else "▼"
+                date   = t.get("closed_at", "")
+                pts_fmt = f"`{sign_r}{pts_r:.1f}`"
+                recent_lines += f"  {icon_r} {typ} *{mkt}*  {pts_fmt} نق  _{date}_\n"
 
         text = (
-            f"📈 *إحصائياتك*\n"
+            f"📊 *لوحة إحصائياتك*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"👤 *{name}*\n"
-            f"💳 خطة: *{plan}*" + (f"  │  تنتهي: {ends}" if ends else "") + "\n"
+            f"{plan_line}\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"📊 مغلقة: *{total}*  │  ✅ رابحة: *{wins}*  │  ❌ خاسرة: *{loss}*\n"
-            f"⏳ نشطة حالياً: *{active}*\n"
-            f"🏆 نسبة الربح: *{wr:.1f}%*\n"
-            f"{wr_bar}\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"⚡ إجمالي النقاط: *{pts_sign}{pts:.2f}*\n"
-            + (f"🥇 أفضل صفقة:  `+{best:.2f}` نقطة\n" if best else "")
-            + (f"💔 أسوأ صفقة:  `{worst:.2f}` نقطة\n" if worst else "")
-            + recent_lines
-            + f"━━━━━━━━━━━━━━━━━━━━━━"
+            f"📦 *الصفقات المغلقة:* {total}\n"
+            f"  ✅ رابحة: *{wins}*   ❌ خاسرة: *{loss}*   ⏳ نشطة: *{active}*\n\n"
+            f"🏆 *نسبة الربح:* *{wr:.1f}%*\n"
+            f"  {wr_bar}\n\n"
+            f"{pts_emoji} *إجمالي النقاط:* `{pts_sign}{pts:.1f}`\n"
         )
+        if best:
+            text += f"  🥇 أفضل: `+{best:.1f}` نقطة\n"
+        if worst:
+            text += f"  💔 أسوأ:  `{worst:.1f}` نقطة\n"
+        if ref_pts:
+            text += f"  🎁 نقاط إحالة: `{ref_pts}`\n"
+        text += recent_lines
+        text += f"━━━━━━━━━━━━━━━━━━━━━━"
+
         await q.edit_message_text(
             text,
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🌐 فتح المنصة",  url=FRONTEND_URL),
-                 InlineKeyboardButton("🔙 رجوع",        callback_data="m_back")],
+                [InlineKeyboardButton("🔄 تحديث",        callback_data="m_stats"),
+                 InlineKeyboardButton("🌐 الداشبورد",    url=FRONTEND_URL)],
+                [InlineKeyboardButton("🔙 رجوع",         callback_data="m_back")],
             ]),
         )
         return
@@ -847,21 +865,57 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ]),
             )
             return
-        code  = st.get("affiliate_code","")
-        count = st.get("referral_count", 0)
-        link  = f"{FRONTEND_URL}/register?ref={code}" if code else f"{FRONTEND_URL}/register"
-        await q.edit_message_text(
-            f"🎁 *برنامج الإحالة*\n"
+
+        code     = st.get("affiliate_code", "")
+        count    = st.get("referral_count", 0)
+        ref_pts  = st.get("referral_points", 0)
+        link     = f"{FRONTEND_URL}/register?ref={code}" if code else f"{FRONTEND_URL}/register"
+
+        # حساب التحليلات المجانية المتاحة (20 نقطة = تحليل)
+        free_analyses = ref_pts // 20
+        pts_to_next   = 20 - (ref_pts % 20) if ref_pts % 20 != 0 else 0
+
+        # شريط نقاط الإحالة (كل 20 نقطة = مربع)
+        bar_filled = min(ref_pts % 20, 20)
+        pts_bar    = "🟣" * (bar_filled // 2) + "⬜" * (10 - bar_filled // 2)
+
+        # مستوى الإحالة
+        if count >= 25:
+            tier_line = "🥇 *مستوى ذهبي* — عمولة 15%"
+        elif count >= 10:
+            tier_line = "🥈 *مستوى فضي* — عمولة 5% → 15 إحالة للذهب"
+        else:
+            tier_line = "🥉 *مستوى برونزي* — عمولة 5%"
+
+        text = (
+            f"🎁 *نقاط الإحالة*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"رابطك الخاص:\n"
-            f"`{link}`\n\n"
-            f"👥 إجمالي إحالاتك: *{count}*\n\n"
-            f"كل مشترك تُحيله يمنحك عمولة شهرية مستمرة 💰\n"
-            f"5% برونزي → 15% ذهبي بعد 25 إحالة",
+            f"✨ *نقاطك:* `{ref_pts}`   👥 *مدعوّون:* `{count}`\n"
+            f"{pts_bar}\n"
+        )
+        if free_analyses > 0:
+            text += f"🎉 لديك *{free_analyses}* تحليل مجاني جاهز للاستبدال!\n"
+        else:
+            text += f"⚡ تحتاج *{pts_to_next}* نقطة للتحليل المجاني التالي\n"
+
+        text += (
+            f"\n{tier_line}\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"💡 *كيف تكسب النقاط؟*\n"
+            f"  • تسجيل صديق = *+10 نقطة*\n"
+            f"  • اشتراك صديق = *+50 نقطة*\n"
+            f"  • 20 نقطة = تحليل مجاني 🎯\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"🔗 *رابطك:*\n`{link}`"
+        )
+
+        await q.edit_message_text(
+            text,
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🌐 تفاصيل البرنامج", url=f"{FRONTEND_URL}/referral")],
-                [InlineKeyboardButton("🔙 رجوع",            callback_data="m_back")],
+                [InlineKeyboardButton("🌐 استبدل النقاط من الداشبورد", url=f"{FRONTEND_URL}/dashboard")],
+                [InlineKeyboardButton("📊 تفاصيل البرنامج", url=f"{FRONTEND_URL}/referral"),
+                 InlineKeyboardButton("🔙 رجوع",            callback_data="m_back")],
             ]),
         )
         return

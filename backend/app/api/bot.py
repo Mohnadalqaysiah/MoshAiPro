@@ -590,8 +590,9 @@ def bot_user_stats(
         "best_trade":     round(float(best), 2),
         "worst_trade":    round(float(worst), 2),
         "recent_trades":  recent,
-        "referral_count": aff_count,
-        "affiliate_code": user.affiliate_code,
+        "referral_count":    aff_count,
+        "affiliate_code":    user.affiliate_code,
+        "referral_points":   user.referral_points or 0,
         "trial_analyses_left": user.trial_analyses_left,
         "trial_chat_left":     user.trial_chat_left,
     }
