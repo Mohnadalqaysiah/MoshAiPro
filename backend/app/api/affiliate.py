@@ -146,3 +146,70 @@ def affiliate_link(
         "code": aff.code,
         "link": f"{frontend_url}/register?ref={aff.code}",
     }
+
+
+# ─── نقاط الإحالة ─────────────────────────────────────────────────────────────
+
+# إعدادات النقاط
+POINTS_PER_REGISTER  = 10   # نقاط عند تسجيل مدعو
+POINTS_PER_SUBSCRIBE = 50   # نقاط إضافية عند اشتراك المدعو
+POINTS_PER_ANALYSIS  = 20   # نقاط مطلوبة للحصول على تحليل مجاني
+
+
+@router.get("/points-summary")
+def points_summary(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    ملخص خفيف لـ widget لوحة التحكم:
+    - نقاط المستخدم الحالية
+    - رابط الإحالة
+    - عدد المدعوين
+    - التقدم نحو المكافأة التالية
+    """
+    aff = _get_or_create(user, db)
+    frontend_url = _settings.ALLOWED_ORIGINS.split(",")[0].strip().rstrip("/")
+    points = user.referral_points or 0
+    analyses_available = points // POINTS_PER_ANALYSIS
+    points_to_next     = POINTS_PER_ANALYSIS - (points % POINTS_PER_ANALYSIS) if points % POINTS_PER_ANALYSIS != 0 else 0
+    progress_pct       = ((points % POINTS_PER_ANALYSIS) / POINTS_PER_ANALYSIS * 100) if points < POINTS_PER_ANALYSIS else 100
+
+    return {
+        "points":              points,
+        "analyses_available":  analyses_available,
+        "points_to_next":      points_to_next if analyses_available == 0 else 0,
+        "progress_pct":        round(progress_pct, 1),
+        "total_referrals":     aff.total_referrals,
+        "referral_link":       f"{frontend_url}/register?ref={aff.code}",
+        "referral_code":       aff.code,
+        "points_per_register": POINTS_PER_REGISTER,
+        "points_per_subscribe":POINTS_PER_SUBSCRIBE,
+        "points_per_analysis": POINTS_PER_ANALYSIS,
+    }
+
+
+@router.post("/redeem-points")
+def redeem_points(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    استبدال 20 نقطة بتحليل مجاني واحد.
+    يُضاف إلى trial_analyses_left.
+    """
+    points = user.referral_points or 0
+    if points < POINTS_PER_ANALYSIS:
+        raise HTTPException(400, f"تحتاج {POINTS_PER_ANALYSIS} نقطة للاستبدال. لديك {points} نقطة فقط.")
+
+    user.referral_points     = points - POINTS_PER_ANALYSIS
+    user.trial_analyses_left = (user.trial_analyses_left or 0) + 1
+    db.commit()
+
+    logger.info(f"🔄 Redeemed {POINTS_PER_ANALYSIS} pts → +1 analysis | user={user.email} | remaining={user.referral_points}")
+    return {
+        "success":             True,
+        "points_remaining":    user.referral_points,
+        "analyses_left":       user.trial_analyses_left,
+        "message":             "تم استبدال 20 نقطة بتحليل مجاني ✅",
+    }

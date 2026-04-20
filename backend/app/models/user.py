@@ -74,6 +74,7 @@ class User(Base):
     # Affiliate
     affiliate_code    = Column(String(8), unique=True, nullable=True, index=True)
     referred_by_code  = Column(String(8), nullable=True, index=True)
+    referral_points   = Column(Integer, default=0, nullable=False)  # نقاط الإحالة القابلة للاستبدال
 
     # Timestamps
     created_at   = Column(DateTime(timezone=True), server_default=func.now())

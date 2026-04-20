@@ -318,9 +318,12 @@ def handle_payment(
                         ))
                         ref_aff.total_referrals     += 1
                         ref_aff.pending_balance_usd += commission
+                        # ── +50 نقطة إحالة للمُحيل عند اشتراك المدعو ──────
+                        if ref_user := db.query(User).filter(User.id == ref_aff.user_id).first():
+                            ref_user.referral_points = (ref_user.referral_points or 0) + 50
                         logger.info(
                             f"💰 Affiliate commission: referrer_id={ref_aff.user_id} "
-                            f"tier={tier} rate={rate*100:.0f}% earned={commission}$"
+                            f"tier={tier} rate={rate*100:.0f}% earned={commission}$ +50pts"
                         )
                         # إيميل إشعار عمولة للمُحيل
                         ref_user = db.query(User).filter(User.id == ref_aff.user_id).first()

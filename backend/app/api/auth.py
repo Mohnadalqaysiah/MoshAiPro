@@ -145,6 +145,12 @@ def register(
     db.add(aff)
     db.commit()
 
+    # ── منح نقاط الإحالة للمُحيل (10 نقاط عند التسجيل) ─────────────────
+    if referrer:
+        referrer.referral_points = (referrer.referral_points or 0) + 10
+        db.commit()
+        logger.info(f"🎁 +10 referral points → {referrer.email} (new user: {user.email})")
+
     token = create_token(user.id, user.role)
     logger.info(f"✅ New user registered: {user.email} (ref={user.referred_by_code or 'none'})")
 
@@ -469,6 +475,7 @@ def _user_info(user: User) -> dict:
         "notifications_enabled": bool(user.notifications_enabled),
         "affiliate_code":        user.affiliate_code or "",
         "referred_by_code":      user.referred_by_code or "",
+        "referral_points":       user.referral_points or 0,
     }
 
 

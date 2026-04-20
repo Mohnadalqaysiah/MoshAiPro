@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext'
 import useMarkets from '../hooks/useMarkets'
 import { useLang } from '../contexts/LangContext'
 import PerformanceSection from '../components/PerformanceSection'
+import ReferralWidget from '../components/ReferralWidget'
 
 const T = {
   ar: {
@@ -347,6 +348,9 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* Referral Widget */}
+      <ReferralWidget />
 
       {/* Quick Analyze */}
       <div className="bg-gray-800/60 border border-gray-700/80 rounded-2xl overflow-hidden">
