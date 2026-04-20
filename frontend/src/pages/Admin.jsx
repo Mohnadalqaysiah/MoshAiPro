@@ -812,6 +812,59 @@ export default function Admin() {
                 </div>
               )}
 
+              {/* ── قوالب جاهزة ── */}
+              {(() => {
+                const TEMPLATES = [
+                  {
+                    icon: '🔔', label: 'تحديث جديد',
+                    title: '🔔 تحديث جديد — Qaffel AI',
+                    message: `🔔 *تحديث جديد على المنصة!*\n\nالسلام عليكم 👋\n\nيسعدنا إطلاق تحديث جديد على منصة Qaffel AI يشمل:\n\n✅ \n✅ \n✅ \n\nجرّب الميزات الجديدة الآن 🚀`,
+                  },
+                  {
+                    icon: '🚀', label: 'إطلاق خدمة',
+                    title: '🚀 خدمة جديدة — Qaffel AI',
+                    message: `🚀 *إطلاق خدمة جديدة!*\n\nالسلام عليكم 👋\n\nيسعدنا الإعلان عن إطلاق *[اسم الخدمة]* الجديدة!\n\n📌 ما الجديد؟\n— \n\n🎯 كيف تستفيد؟\n— \n\nافتح المنصة الآن وجرّبها 👇`,
+                  },
+                  {
+                    icon: '⚠️', label: 'تنبيه مهم',
+                    title: '⚠️ تنبيه مهم',
+                    message: `⚠️ *تنبيه مهم من Qaffel AI*\n\nالسلام عليكم،\n\nنودّ إعلامكم بما يلي:\n\n📌 \n\nشكراً لتفهمكم 🙏`,
+                  },
+                  {
+                    icon: '🎁', label: 'عرض خاص',
+                    title: '🎁 عرض خاص محدود',
+                    message: `🎁 *عرض خاص لفترة محدودة!*\n\nالسلام عليكم 👋\n\nبمناسبة [المناسبة]، نقدّم لكم:\n\n💥 *[تفاصيل العرض]*\n⏰ صالح حتى: [التاريخ]\n\nاستفد الآن 👇`,
+                  },
+                  {
+                    icon: '📢', label: 'إعلان عام',
+                    title: '📢 إعلان من Qaffel AI',
+                    message: `📢 *إعلان مهم*\n\nالسلام عليكم ورحمة الله 🤲\n\n`,
+                  },
+                  {
+                    icon: '🛠', label: 'صيانة',
+                    title: '🛠 صيانة مجدولة',
+                    message: `🛠 *إشعار صيانة*\n\nالسلام عليكم،\n\nنودّ إعلامكم بأن المنصة ستكون في وضع الصيانة:\n\n🕐 الوقت: \n⏱ المدة المتوقعة: \n\nنعتذر عن أي إزعاج. نعمل لتحسين تجربتكم 💪`,
+                  },
+                ]
+                return (
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-300 mb-2">⚡ قوالب جاهزة</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {TEMPLATES.map(t => (
+                        <button key={t.label} type="button"
+                          onClick={() => setMessageForm(f => ({ ...f, title: t.title, message: t.message }))}
+                          className="flex flex-col items-center gap-1 px-2 py-2.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-green-600/50 rounded-xl text-xs text-gray-300 hover:text-white transition-all"
+                        >
+                          <span className="text-lg leading-none">{t.icon}</span>
+                          <span>{t.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-xs text-gray-600 mt-1.5">اضغط على القالب لتعبئة الحقول — يمكنك التعديل بعدها</p>
+                  </div>
+                )
+              })()}
+
               <form onSubmit={sendMessage} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">العنوان الرئيسي (اختياري)</label>
