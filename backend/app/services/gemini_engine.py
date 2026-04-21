@@ -645,8 +645,18 @@ class GeminiEngine:
 
     def merge_with_ict(self, ict_data: dict, gemini: dict) -> dict:
         """
-        دمج Gemini v2 مع ICT Analysis
-        Gemini v2 يأخذ 75% وزن (يرى HTF+LTF + Position Sizing)
+        دمج Gemini مع ICT — ICT يحكم الاتجاه، Gemini يُحسّن فقط
+
+        القواعد الجديدة:
+        ─────────────────────────────────────────────────────────────
+        1. ICT هو مصدر الحقيقة للاتجاه (direction authority)
+           - إذا Gemini عكس اتجاه ICT → نتجاهل توصية Gemini ونبقى مع ICT
+           - Gemini مسموح له فقط بـ: refine entry, position sizing, confirmation
+        2. Confidence: 60% ICT + 40% Gemini (بدل 75% Gemini قديماً)
+        3. مستويات Gemini (entry/sl/tp) تُقبل فقط إذا:
+           - تتوافق مع اتجاه ICT
+           - تحسّن R/R وليس تسوّئه
+        ─────────────────────────────────────────────────────────────
         """
         if not gemini:
             return ict_data
@@ -659,94 +669,133 @@ class GeminiEngine:
         analysis   = gemini.get("analysis", {})
         filters    = gemini.get("filters_passed", {})
 
+        ict_rec     = ict_data.get("recommendation", "WAIT")
+        gemini_rec  = sig.get("recommendation", "WAIT")
         gemini_conf = float(sig.get("confidence_score", 0))
         ict_conf    = float(ict_data.get("ai_confidence_score", 0))
-        final_conf  = round(gemini_conf * 0.75 + ict_conf * 0.25, 1)
 
         merged = {**ict_data}
+
+        # ── 1. ICT يحكم الاتجاه دائماً ───────────────────────────────────
+        # إذا Gemini عكس ICT → لا نقبل توصيته
+        direction_conflict = (
+            ict_rec in ("BUY", "SELL") and
+            gemini_rec in ("BUY", "SELL") and
+            ict_rec != gemini_rec
+        )
+        if direction_conflict:
+            logger.warning(
+                f"⚠️ Gemini direction conflict: ICT={ict_rec} vs Gemini={gemini_rec} "
+                f"→ keeping ICT direction, Gemini used for refinement only"
+            )
+            # ابقَ مع ICT، اخفض الثقة قليلاً لأن الخلاف موجود
+            final_conf = round(ict_conf * 0.85, 1)
+            merged["recommendation"] = ict_rec
+            merged["gemini_direction_conflict"] = True
+        else:
+            # اتفاق → confidence مرجح: 60% ICT + 40% Gemini
+            final_conf = round(ict_conf * 0.60 + gemini_conf * 0.40, 1)
+            # قبول توصية Gemini فقط إذا لم يكن WAIT من ICT
+            if ict_rec == "WAIT":
+                merged["recommendation"] = "WAIT"
+            elif gemini_conf >= 50:
+                merged["recommendation"] = gemini_rec or ict_rec
+            else:
+                merged["recommendation"] = ict_rec
+
         merged["ai_confidence_score"] = final_conf
 
-        # توصية Gemini: اقبلها إذا الثقة >= 40 حتى لو بعض الفلاتر فاشلة
-        # WAIT فقط إذا الثقة < 40 أو الفلاتر الحيوية فاشلة
-        critical_filters_ok = filters.get("htf_alignment", True) and filters.get("min_rr_met", True)
-        if gemini_conf >= 40 and critical_filters_ok:
-            merged["recommendation"] = sig.get("recommendation", ict_data.get("recommendation"))
-        elif gemini_conf < 40 or not critical_filters_ok:
-            merged["recommendation"] = "WAIT"
-
-        # مستويات الدخول والخروج من Gemini (أدق)
+        # ── 2. مستويات Gemini تُقبل فقط إذا تتوافق مع الاتجاه ───────────
+        final_rec = merged.get("recommendation", "WAIT")
         g_entry = trade_plan.get("entry_price")
         g_sl    = trade_plan.get("stop_loss")
         g_tp1   = targets.get("tp1", {}).get("price")
         g_tp2   = targets.get("tp2", {}).get("price")
         g_tp3   = targets.get("tp3", {}).get("price")
 
-        if g_entry:
-            merged["entry_zones"] = [g_entry]
-        if g_sl:
-            merged["stop_loss_zone"] = g_sl
+        if g_entry and g_sl and g_tp1 and final_rec in ("BUY", "SELL"):
+            g_e  = float(g_entry)
+            g_s  = float(g_sl)
+            g_t1 = float(g_tp1)
 
-        tps = [t for t in [g_tp1, g_tp2, g_tp3] if t]
-        if tps:
-            merged["take_profit_zones"] = tps
+            buy_valid  = final_rec == "BUY"  and g_s < g_e < g_t1
+            sell_valid = final_rec == "SELL" and g_t1 < g_e < g_s
 
-        # ── مزامنة levels dict (يُقرأ من البوت والمنصة) ─────────────────
-        if g_entry or g_sl or g_tp1:
-            rec     = merged.get("recommendation", "")
-            g_e     = g_entry or 0
-            g_s     = g_sl    or 0
-            g_t1    = g_tp1   or 0
-            # تحقق اتجاه صحيح قبل المزامنة
-            buy_ok  = rec == "BUY"  and g_s < g_e < g_t1
-            sell_ok = rec == "SELL" and g_t1 < g_e < g_s
-            if buy_ok or sell_ok:
-                merged_levels = dict(ict_data.get("levels", {}))
-                if g_entry: merged_levels["entry"] = g_entry
-                if g_sl:    merged_levels["stop_loss"] = g_sl
-                if g_tp1:   merged_levels["tp1"] = g_tp1
-                if g_tp2:   merged_levels["tp2"] = g_tp2
-                if g_tp3:   merged_levels["tp3"] = g_tp3
-                # أعِد حساب zone حول entry الجديد
-                atr_val = merged_levels.get("atr", 0)
-                if atr_val and g_entry:
-                    buf = atr_val * 0.25
-                    if rec == "BUY":
+            if buy_valid or sell_valid:
+                # تحقق: هل R/R من Gemini أفضل من ICT؟
+                ict_levels = ict_data.get("levels", {})
+                ict_entry  = float(ict_levels.get("entry") or 0)
+                ict_sl     = float(ict_levels.get("stop_loss") or 0)
+                ict_tp1    = float(ict_levels.get("tp1") or 0)
+
+                gemini_rr = abs(g_t1 - g_e) / abs(g_e - g_s) if abs(g_e - g_s) > 0 else 0
+                ict_rr    = abs(ict_tp1 - ict_entry) / abs(ict_entry - ict_sl) if (
+                    ict_entry and ict_sl and ict_tp1 and abs(ict_entry - ict_sl) > 0
+                ) else 0
+
+                if gemini_rr >= 1.2:
+                    merged["entry_zones"]     = [g_entry]
+                    merged["stop_loss_zone"]  = g_sl
+                    tps = [t for t in [g_tp1, g_tp2, g_tp3] if t]
+                    if tps:
+                        merged["take_profit_zones"] = tps
+
+                    merged_levels = dict(ict_data.get("levels", {}))
+                    merged_levels["entry"]     = g_entry
+                    merged_levels["stop_loss"] = g_sl
+                    merged_levels["tp1"]       = g_tp1
+                    if g_tp2: merged_levels["tp2"] = g_tp2
+                    if g_tp3: merged_levels["tp3"] = g_tp3
+
+                    atr_val = merged_levels.get("atr", 0)
+                    if atr_val:
+                        buf = atr_val * 0.25
                         merged_levels["entry_zone_min"] = round(g_entry - buf, 5)
                         merged_levels["entry_zone_max"] = round(g_entry + buf, 5)
-                    else:
-                        merged_levels["entry_zone_min"] = round(g_entry - buf, 5)
-                        merged_levels["entry_zone_max"] = round(g_entry + buf, 5)
-                merged["levels"] = merged_levels
 
+                    merged["levels"] = merged_levels
+                    logger.info(
+                        f"✅ Gemini levels accepted: rr={gemini_rr:.2f} "
+                        f"{'(better than ICT rr=' + str(round(ict_rr,2)) + ')' if gemini_rr > ict_rr else ''}"
+                    )
+                else:
+                    logger.info(
+                        f"⚠️ Gemini levels rejected (R/R={gemini_rr:.2f} < 1.2) "
+                        f"→ keeping ICT levels"
+                    )
+            else:
+                logger.warning(
+                    f"⚠️ Gemini levels direction mismatch [{final_rec}]: "
+                    f"entry={g_entry} sl={g_sl} tp1={g_tp1} → keeping ICT levels"
+                )
+
+        # ── 3. R/R من Gemini إذا موجود (للعرض فقط) ──────────────────────
         if trade_plan.get("risk_reward_avg"):
             merged["risk_reward_ratio"] = trade_plan["risk_reward_avg"]
 
-        # Position Sizing
+        # Position Sizing (Gemini يحسبه أفضل)
         merged["position_sizing"] = pos_size
 
-        # Scoring Breakdown
+        # Scoring
         merged["scoring_breakdown"] = {
             "total": scoring.get("total", 0),
             "total_max": 100,
-            "details": {
-                k: v for k, v in scoring.items()
-                if k not in ("total", "total_max")
-            }
+            "details": {k: v for k, v in scoring.items() if k not in ("total", "total_max")}
         }
 
-        # تحليل Gemini الكامل
         merged["gemini_analysis"] = {
-            "enabled": True,
-            "version": "2.0",
-            "confidence": gemini_conf,
-            "signal_grade": sig.get("signal_grade", "?"),
-            "ict_setup": sig.get("ict_setup", ""),
-            "arabic_summary": gemini.get("arabic_summary", ""),
-            "confirmations": gemini.get("confirmations", []),
-            "warnings": gemini.get("warnings", []),
-            "filters_passed": filters,
-            "detailed_analysis": analysis,
-            "trade_plan": trade_plan,
+            "enabled":          True,
+            "version":          "2.0",
+            "confidence":       gemini_conf,
+            "signal_grade":     sig.get("signal_grade", "?"),
+            "ict_setup":        sig.get("ict_setup", ""),
+            "arabic_summary":   gemini.get("arabic_summary", ""),
+            "confirmations":    gemini.get("confirmations", []),
+            "warnings":         gemini.get("warnings", []),
+            "filters_passed":   filters,
+            "detailed_analysis":analysis,
+            "trade_plan":       trade_plan,
+            "direction_used":   "ICT" if direction_conflict else "AGREED",
         }
 
         return merged

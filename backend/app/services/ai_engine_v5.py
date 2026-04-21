@@ -669,10 +669,27 @@ class MoshAIEngineV5:
             short  = "RANGE_TRAP"
             return self._block_signal(analysis, rec, reason, short)
 
-        # ── حالة 2: Sweep موجود ومؤكد → مسموح دائماً ─────────────────────
+        # ── حالة 2: Sweep موجود → يجب تأكيد BOS أو CHOCH أيضاً ──────────
         if has_confirmed_sweep:
             sweep_quality = sweep.get("sweep_quality", "MODERATE")
-            logger.debug(f"✅ Sweep Gate PASSED [{rec}]: quality={sweep_quality}")
+            # BOS/CHOCH confirmation required — sweep وحده لا يكفي
+            bos_data = analysis.get("market_structure", {})
+            has_bos   = bos_data.get("has_bos",   False)
+            has_choch = bos_data.get("has_choch", False)
+            structure_confirmed = has_bos or has_choch
+
+            if not structure_confirmed:
+                logger.warning(
+                    f"⚠️ Sweep Gate: sweep detected but no BOS/CHOCH confirmation [{rec}] → conf -10"
+                )
+                current_conf = float(analysis.get("ai_confidence_score") or 0)
+                analysis["ai_confidence_score"] = max(0, current_conf - 10)
+                analysis["sweep_no_structure"] = True
+
+            logger.debug(
+                f"✅ Sweep Gate PASSED [{rec}]: quality={sweep_quality} "
+                f"structure={'✅' if structure_confirmed else '⚠️ missing'}"
+            )
             return analysis
 
         # ── حالة 3: TREND Mode → Sweep اختياري ────────────────────────────
@@ -740,8 +757,16 @@ class MoshAIEngineV5:
 
     def _validate_trade_levels(self, analysis: dict) -> dict:
         """
-        تحقق إجباري: SL أسفل entry وTP فوق entry للشراء، والعكس للبيع.
-        إذا فشل → يُحوَّل لـ WAIT تلقائياً.
+        ─── Validation Layer الشامل ─────────────────────────────────────────
+        يُنفَّذ بعد كل توليد إشارة ويفحص:
+          1. TP ordering: BUY → TP1<TP2، SELL → TP1>TP2  (يصحّح تلقائياً)
+          2. Direction sanity: sl/entry/tp في الاتجاه الصحيح
+          3. R/R calculation صحيح + رفض إذا < 1.2
+          4. Distance sanity: SL/Entry/TP ليست متطابقة أو صفر
+          5. Zone alignment: SELL قرب resistance، BUY قرب support
+          6. OB conflict: support.max < resistance.min
+          7. Wyckoff / Premium-Discount consistency
+          8. Confidence cap: إذا R/R < 1.5 → max 75%
         """
         rec    = analysis.get("recommendation")
         levels = analysis.get("levels", {})
@@ -751,23 +776,141 @@ class MoshAIEngineV5:
         entry = float(levels.get("entry") or 0)
         sl    = float(levels.get("stop_loss") or 0)
         tp1   = float(levels.get("tp1") or 0)
+        tp2   = float(levels.get("tp2") or 0)
+
         if not entry or not sl or not tp1:
             return analysis
 
+        # ── 1. تصحيح ترتيب TP ────────────────────────────────────────────
         if rec == "BUY":
-            valid = sl < entry < tp1
-        else:
-            valid = tp1 < entry < sl
+            # BUY: يجب tp1 < tp2
+            if tp2 and tp1 > tp2:
+                logger.info(f"🔧 TP order fix [BUY]: swapping tp1={tp1} <> tp2={tp2}")
+                levels["tp1"], levels["tp2"] = tp2, tp1
+                tp1, tp2 = tp2, tp1
+        elif rec == "SELL":
+            # SELL: يجب tp1 > tp2
+            if tp2 and tp1 < tp2:
+                logger.info(f"🔧 TP order fix [SELL]: swapping tp1={tp1} <> tp2={tp2}")
+                levels["tp1"], levels["tp2"] = tp2, tp1
+                tp1, tp2 = tp2, tp1
 
-        if not valid:
-            logger.warning(
-                f"⛔ Trade Validation FAILED [{rec}]: "
-                f"entry={entry} sl={sl} tp1={tp1} → تحويل إلى WAIT"
-            )
-            analysis["recommendation"] = "WAIT"
-            analysis["ai_confidence_score"] = min(
-                float(analysis.get("ai_confidence_score") or 0), 55.0
-            )
+        # ── 2. Direction sanity ───────────────────────────────────────────
+        if rec == "BUY"  and not (sl < entry < tp1):
+            logger.warning(f"⛔ Levels INVALID [BUY]: sl={sl} entry={entry} tp1={tp1} → WAIT")
+            return self._reject_signal(analysis, "INVALID_LEVELS_BUY")
+        if rec == "SELL" and not (tp1 < entry < sl):
+            logger.warning(f"⛔ Levels INVALID [SELL]: tp1={tp1} entry={entry} sl={sl} → WAIT")
+            return self._reject_signal(analysis, "INVALID_LEVELS_SELL")
+
+        # ── 3. R/R حساب صحيح + رفض < 1.2 ────────────────────────────────
+        sl_dist  = abs(entry - sl)
+        tp1_dist = abs(tp1 - entry)
+        if sl_dist <= 0:
+            return self._reject_signal(analysis, "ZERO_SL_DISTANCE")
+
+        rr = round(tp1_dist / sl_dist, 2)
+        levels["risk_reward"] = rr
+        analysis["risk_reward_ratio"] = rr
+
+        if rr < 1.2:
+            logger.warning(f"⛔ R/R too low [{rec}]: rr={rr} < 1.2 → WAIT")
+            return self._reject_signal(analysis, f"LOW_RR_{rr}")
+
+        # ── 4. Confidence cap: R/R < 1.5 → max 75% ───────────────────────
+        if rr < 1.5:
+            current_conf = float(analysis.get("ai_confidence_score") or 0)
+            if current_conf > 75:
+                logger.info(f"📉 Conf capped 75% [R/R={rr}]: {current_conf}% → 75%")
+                analysis["ai_confidence_score"] = 75.0
+
+        # ── 5. Distance sanity: SL/TP لا يكونوا قريبين جداً (< 0.01%) ────
+        price_ref = entry
+        min_dist_pct = 0.0001  # 0.01%
+        if sl_dist / price_ref < min_dist_pct:
+            return self._reject_signal(analysis, "SL_TOO_CLOSE")
+
+        # ── 6. OB conflict: support.max < resistance.min ─────────────────
+        ob = analysis.get("order_blocks", {})
+        bull_obs = ob.get("bullish_obs", [])
+        bear_obs = ob.get("bearish_obs", [])
+        if bull_obs and bear_obs:
+            try:
+                support_max    = max(float(o.get("high", 0)) for o in bull_obs if isinstance(o, dict))
+                resistance_min = min(float(o.get("low",  0)) for o in bear_obs if isinstance(o, dict))
+                if support_max > 0 and resistance_min > 0 and support_max > resistance_min:
+                    logger.warning(
+                        f"⛔ OB Conflict [{rec}]: support.max={support_max} > resistance.min={resistance_min} → WAIT"
+                    )
+                    return self._reject_signal(analysis, "OB_OVERLAP_CONFLICT")
+            except Exception:
+                pass
+
+        # ── 7. Wyckoff consistency ────────────────────────────────────────
+        wyckoff_phase = (
+            analysis.get("wyckoff", {}).get("phase")
+            or analysis.get("wyckoff_phase", "")
+            or ""
+        ).upper()
+
+        if wyckoff_phase:
+            is_accumulation = any(w in wyckoff_phase for w in ("ACCUMULATION", "SPRING", "REACCUMULATION"))
+            is_distribution  = any(w in wyckoff_phase for w in ("DISTRIBUTION", "UPTHRUST", "REDISTRIBUTION"))
+
+            if is_distribution and rec == "BUY":
+                logger.warning(f"⛔ Wyckoff conflict: phase={wyckoff_phase} vs BUY → downgrade")
+                current_conf = float(analysis.get("ai_confidence_score") or 0)
+                analysis["ai_confidence_score"] = min(current_conf, 55.0)
+                if current_conf >= 65:
+                    return self._reject_signal(analysis, "WYCKOFF_DISTRIBUTION_VS_BUY")
+
+            if is_accumulation and rec == "SELL":
+                logger.warning(f"⛔ Wyckoff conflict: phase={wyckoff_phase} vs SELL → downgrade")
+                current_conf = float(analysis.get("ai_confidence_score") or 0)
+                analysis["ai_confidence_score"] = min(current_conf, 55.0)
+                if current_conf >= 65:
+                    return self._reject_signal(analysis, "WYCKOFF_ACCUMULATION_VS_SELL")
+
+        # ── 8. Premium/Discount zone consistency ─────────────────────────
+        pd_zone = (
+            analysis.get("premium_discount", {}).get("zone")
+            if isinstance(analysis.get("premium_discount"), dict)
+            else str(analysis.get("premium_discount", ""))
+        ).upper() if analysis.get("premium_discount") else ""
+
+        if pd_zone:
+            in_premium  = "PREMIUM"  in pd_zone
+            in_discount = "DISCOUNT" in pd_zone
+            if in_premium and rec == "BUY":
+                logger.warning(f"⛔ Zone conflict: PREMIUM zone + BUY → conf penalty")
+                current_conf = float(analysis.get("ai_confidence_score") or 0)
+                analysis["ai_confidence_score"] = min(current_conf, 60.0)
+            if in_discount and rec == "SELL":
+                logger.warning(f"⛔ Zone conflict: DISCOUNT zone + SELL → conf penalty")
+                current_conf = float(analysis.get("ai_confidence_score") or 0)
+                analysis["ai_confidence_score"] = min(current_conf, 60.0)
+
+        logger.info(
+            f"✅ Trade Validation PASSED [{rec}]: "
+            f"entry={entry} sl={sl} tp1={tp1} rr={rr}"
+        )
+        return analysis
+
+    def _reject_signal(self, analysis: dict, reason: str) -> dict:
+        """رفض الإشارة وتحويلها لـ WAIT مع تسجيل السبب"""
+        rec = analysis.get("recommendation", "?")
+        logger.warning(f"🚫 Signal REJECTED [{rec}] → WAIT | reason={reason}")
+        analysis["recommendation"]      = "WAIT"
+        analysis["signal_type"]         = "WAIT"
+        analysis["ai_confidence_score"] = min(
+            float(analysis.get("ai_confidence_score") or 0), 45.0
+        )
+        analysis["validation_rejected"] = True
+        analysis["rejection_reason"]    = reason
+        analysis["levels"]              = {}
+        analysis["entry_zones"]         = []
+        analysis["stop_loss_zone"]      = None
+        analysis["take_profit_zones"]   = []
         return analysis
 
     def _error_response(self, symbol: str, error: str) -> Dict:
