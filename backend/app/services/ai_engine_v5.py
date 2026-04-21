@@ -224,7 +224,9 @@ class MoshAIEngineV5:
             if "error" in ltf_analysis:
                 return self._error_response(symbol, ltf_analysis["error"])
 
-            # ── Step 3: Gemini v2 Enhancement ───────────────────────────────
+            # ── Step 3: Gemini — Arabic summary ONLY (NO direction, NO levels) ─
+            # ICT Engine is the SOLE source of direction and trade levels.
+            # Gemini is used only to enrich the text output for the user.
             if gemini_engine.enabled:
                 try:
                     gemini_result = await gemini_engine.analyze(
@@ -237,15 +239,19 @@ class MoshAIEngineV5:
                         max_risk_percent=max_risk_percent,
                     )
                     if gemini_result:
-                        ltf_analysis = gemini_engine.merge_with_ict(ltf_analysis, gemini_result)
-                        sig = gemini_result.get("signal", {})
-                        logger.success(
-                            f"   🤖 Gemini v2: {sig.get('recommendation')} | "
-                            f"Grade: {sig.get('signal_grade')} | "
-                            f"Score: {gemini_result.get('scoring_breakdown', {}).get('total', 0)}/100"
+                        # فقط النص والتأكيدات — لا نغير الاتجاه أو المستويات
+                        ltf_analysis["gemini_analysis"] = {
+                            "enabled":        True,
+                            "arabic_summary": gemini_result.get("arabic_summary", ""),
+                            "confirmations":  gemini_result.get("confirmations", []),
+                            "warnings":       gemini_result.get("warnings", []),
+                            "signal_grade":   gemini_result.get("signal", {}).get("signal_grade", ""),
+                        }
+                        logger.info(
+                            f"   AI summary: {gemini_result.get('arabic_summary', '')[:60]}"
                         )
                 except Exception as e:
-                    logger.warning(f"   ⚠️ Gemini v2 failed (using ICT only): {e}")
+                    logger.warning(f"   Gemini summary failed (ICT-only mode): {e}")
 
             # ── Step 4: Final formatting ─────────────────────────────────────
             ms = (datetime.now() - start).total_seconds() * 1000
@@ -277,11 +283,8 @@ class MoshAIEngineV5:
             if "momentum"       not in analysis: analysis["momentum"]       = ltf_analysis.get("momentum", {})
             if "range_conflict" not in analysis: analysis["range_conflict"] = ltf_analysis.get("range_conflict", {})
 
-            # ── بوابة السيولة الذكية (Smart Money Gate) ──────────────────────
-            analysis = self._validate_sweep_gate(analysis)
-
-            # ── التحقق الإجباري من صحة المستويات ────────────────────────────
-            analysis = self._validate_trade_levels(analysis)
+            # ── INSTITUTIONAL GATE — all 16 rules in one pass ────────────────
+            analysis = self._institutional_gate(analysis, symbol, timeframe, htf_analysis)
 
             rec  = analysis.get("recommendation", "WAIT")
             conf = analysis.get("ai_confidence_score", 0)
@@ -641,480 +644,266 @@ class MoshAIEngineV5:
 
         return analysis
 
-    def _validate_sweep_gate(self, analysis: dict) -> dict:
-        """
-        بوابة السيولة المحدّثة — تعتمد على Market Mode:
+    # ═══════════════════════════════════════════════════════════════════════
+    # INSTITUTIONAL GATE — Single authoritative validation (Rules 1-16)
+    # ═══════════════════════════════════════════════════════════════════════
 
-        RANGE Mode: Sweep إجباري (كما كان دائماً)
-        TREND Mode: Sweep اختياري إذا توفر Momentum + BOS
+    # Rule 5 — entry tolerance per timeframe
+    _ENTRY_TOLERANCE = {
+        "1m": 0.001, "5m": 0.001, "15m": 0.001,
+        "30m": 0.002, "1h": 0.002, "4h": 0.003, "1d": 0.003,
+    }
+
+    # Rule 11 — cooldown per timeframe (seconds)
+    _COOLDOWN_SEC = {
+        "1m": 300, "5m": 900, "15m": 2700,
+        "30m": 3600, "1h": 7200, "4h": 14400, "1d": 43200,
+    }
+
+    # Rule 9 — default spread per symbol
+    _DEFAULT_SPREAD = {
+        "XAUUSD": 0.30, "XAGUSD": 0.02, "BTCUSD": 8.0, "ETHUSD": 0.8,
+        "EURUSD": 0.0001, "GBPUSD": 0.0002, "USDJPY": 0.02, "USDCHF": 0.0002,
+        "NAS100": 1.0, "US30": 2.0, "USOIL": 0.04, "BRENT": 0.04,
+    }
+
+    def _institutional_gate(
+        self,
+        analysis: dict,
+        symbol: str,
+        timeframe: str,
+        htf_analysis: Optional[Dict] = None,
+    ) -> dict:
+        """
+        INSTITUTIONAL MODE Hard Rejection Gate (Rules 1-16).
+        ICT Engine is the SOLE source of direction and trade levels.
+        Any single check failure -> REJECT immediately, no exceptions.
         """
         rec = analysis.get("recommendation")
         if rec not in ("BUY", "SELL"):
             return analysis
 
-        # ── جلب بيانات السياق ─────────────────────────────────────────────
-        sweep = (
-            analysis.get("liquidity_sweep")
-            or analysis.get("liquidity", {}).get("sweep_analysis")
-            or {}
-        )
-        market_mode    = analysis.get("market_mode", {}).get("mode", "RANGE")
-        momentum_str   = analysis.get("momentum", {}).get("strength", "WEAK")
-        range_conflict = analysis.get("range_conflict", {}).get("avoid_entry", False)
+        levels  = analysis.get("levels", {})
+        entry   = float(levels.get("entry") or 0)
+        sl      = float(levels.get("stop_loss") or 0)
+        tp1_raw = float(levels.get("tp1") or 0)
+        tp2_raw = float(levels.get("tp2") or 0)
 
-        has_confirmed_sweep = (
+        if not entry or not sl or not tp1_raw:
+            return self._hard_reject(analysis, "MISSING_LEVELS")
+
+        # Rule 2: Direction must match ICT confluence
+        ict_dir = analysis.get("confluence", {}).get("direction", "WAIT")
+        if ict_dir != rec:
+            return self._hard_reject(analysis, "DIRECTION_MISMATCH_ICT")
+
+        # Rule 3: Structure validation — sweep + aligned BOS/CHOCH
+        struct   = analysis.get("market_structure", {})
+        sweep    = analysis.get("liquidity_sweep", {})
+        bos_list = struct.get("bos_events", [])
+
+        has_sweep = (
             sweep.get("has_bullish_sweep") if rec == "BUY"
             else sweep.get("has_bearish_sweep")
         )
-
-        # ── حالة 1: Range Trap — يُمنع دائماً بغض النظر عن أي شيء ─────────
-        if range_conflict:
-            reason = "تداخل OBs بدون BOS واضح — سوق Range متضارب"
-            short  = "RANGE_TRAP"
-            return self._block_signal(analysis, rec, reason, short)
-
-        # ── حالة 2: Sweep موجود → يجب تأكيد BOS أو CHOCH أيضاً ──────────
-        if has_confirmed_sweep:
-            sweep_quality = sweep.get("sweep_quality", "MODERATE")
-            # BOS/CHOCH confirmation required — sweep وحده لا يكفي
-            bos_data = analysis.get("market_structure", {})
-            has_bos   = bos_data.get("has_bos",   False)
-            has_choch = bos_data.get("has_choch", False)
-            structure_confirmed = has_bos or has_choch
-
-            if not structure_confirmed:
-                logger.warning(
-                    f"⚠️ Sweep Gate: sweep detected but no BOS/CHOCH confirmation [{rec}] → conf -10"
-                )
-                current_conf = float(analysis.get("ai_confidence_score") or 0)
-                analysis["ai_confidence_score"] = max(0, current_conf - 10)
-                analysis["sweep_no_structure"] = True
-
-            logger.debug(
-                f"✅ Sweep Gate PASSED [{rec}]: quality={sweep_quality} "
-                f"structure={'✅' if structure_confirmed else '⚠️ missing'}"
-            )
-            return analysis
-
-        # ── حالة 3: TREND Mode → Sweep اختياري ────────────────────────────
-        if market_mode == "TREND":
-            bos_present = analysis.get("market_mode", {}).get("has_bos", False)
-            if bos_present and momentum_str in ("STRONG", "MODERATE"):
-                # الدخول مسموح في Trend — لكن نخفّض الثقة
-                logger.info(
-                    f"✅ Sweep Gate BYPASSED [TREND mode] [{rec}]: "
-                    f"momentum={momentum_str} BOS=True"
-                )
-                current_conf = float(analysis.get("ai_confidence_score") or 0)
-                analysis["ai_confidence_score"] = max(0, current_conf - 15)
-                analysis["trend_entry_no_sweep"] = True
-                return analysis
-            elif bos_present and momentum_str == "WEAK":
-                reason = "Trend Mode لكن Momentum ضعيف — انتظر Pullback أو Retest"
-                short  = "TREND_WEAK_MOMENTUM"
-                return self._block_signal(analysis, rec, reason, short)
-            else:
-                reason = "Trend بدون BOS مؤكد — غير مؤهل للدخول"
-                short  = "TREND_NO_BOS"
-                return self._block_signal(analysis, rec, reason, short)
-
-        # ── حالة 4: RANGE Mode بدون Sweep ─────────────────────────────────
-        has_any_sweep = (
-            bool(sweep.get("ssl_sweep")) if rec == "BUY"
-            else bool(sweep.get("bsl_sweep"))
+        has_aligned_bos = (
+            any("BULLISH" in b.get("type", "") for b in bos_list) if rec == "BUY"
+            else any("BEARISH" in b.get("type", "") for b in bos_list)
         )
-        if has_any_sweep:
-            reason = "اكتساح سيولة بدون رفض مؤكد (Sweep ≠ Rejection)"
-            short  = "SWEEP_NO_REJECTION"
-        else:
-            reason = "Range Mode — لم يُكتشف اكتساح سيولة (شرط ICT الأساسي)"
-            short  = "NO_SWEEP"
+        has_choch = bool(struct.get("choch_events"))
 
-        return self._block_signal(analysis, rec, reason, short)
+        if not has_sweep:
+            return self._hard_reject(analysis, "NO_LIQUIDITY_SWEEP")
+        if not has_aligned_bos and not has_choch:
+            return self._hard_reject(analysis, "NO_BOS_NO_CHOCH")
 
-    def _block_signal(self, analysis: dict, rec: str, reason: str, short: str) -> dict:
-        """تحويل إشارة لـ WAIT مع مسح المستويات وتسجيل السبب"""
-        logger.warning(
-            f"🚫 Sweep Gate BLOCKED [{rec}] → WAIT | reason={short}"
-        )
-        analysis["recommendation"]      = "WAIT"
-        analysis["signal_type"]         = "WAIT"
-        analysis["ai_confidence_score"] = min(
-            float(analysis.get("ai_confidence_score") or 0), 39.0
-        )
-        analysis["sweep_gate_blocked"]  = True
-        analysis["sweep_gate_reason"]   = short
+        # Rule 4: Closest zone only, no overlap
+        ob           = analysis.get("order_blocks", {})
+        current_p    = float(analysis.get("current_price") or entry)
+        support_zone = self._closest_zone(current_p, ob.get("bullish_obs", []))
+        resist_zone  = self._closest_zone(current_p, ob.get("bearish_obs", []))
 
-        conf_data = analysis.get("confluence", {})
-        if isinstance(conf_data, dict):
-            factors = conf_data.get("factors", [])
-            if isinstance(factors, list):
-                factors.insert(0, f"🚫 Sweep Gate: {reason}")
+        if support_zone and resist_zone:
+            if float(support_zone["high"]) > float(resist_zone["low"]):
+                return self._hard_reject(analysis, "ZONE_OVERLAP")
 
-        # مسح المستويات — لا نعرض entry/SL/TP من إشارة محظورة
-        analysis["levels"]            = {}
-        analysis["entry_zones"]       = []
-        analysis["stop_loss_zone"]    = None
-        analysis["take_profit_zones"] = []
+        # Rule 5: Entry vs zone (dynamic tolerance)
+        tol = self._ENTRY_TOLERANCE.get(timeframe, 0.002)
+        if rec == "BUY" and support_zone:
+            z_lo, z_hi = float(support_zone["low"]), float(support_zone["high"])
+            if not (z_lo <= entry <= z_hi or abs(entry - z_hi) / entry <= tol):
+                return self._hard_reject(analysis, "BUY_ENTRY_NOT_NEAR_SUPPORT")
+        elif rec == "SELL" and resist_zone:
+            z_lo, z_hi = float(resist_zone["low"]), float(resist_zone["high"])
+            if not (z_lo <= entry <= z_hi or abs(entry - z_lo) / entry <= tol):
+                return self._hard_reject(analysis, "SELL_ENTRY_NOT_NEAR_RESISTANCE")
 
-        return analysis
-
-    def _validate_trade_levels(self, analysis: dict) -> dict:
-        """
-        ─── Validation Layer الشامل ─────────────────────────────────────────
-        يُنفَّذ بعد كل توليد إشارة ويفحص:
-          1. TP ordering: BUY → TP1<TP2، SELL → TP1>TP2  (يصحّح تلقائياً)
-          2. Direction sanity: sl/entry/tp في الاتجاه الصحيح
-          3. R/R calculation صحيح + رفض إذا < 1.2
-          4. Distance sanity: SL/Entry/TP ليست متطابقة أو صفر
-          5. Zone alignment: SELL قرب resistance، BUY قرب support
-          6. OB conflict: support.max < resistance.min
-          7. Wyckoff / Premium-Discount consistency
-          8. Confidence cap: إذا R/R < 1.5 → max 75%
-        """
-        rec    = analysis.get("recommendation")
-        levels = analysis.get("levels", {})
-        if rec not in ("BUY", "SELL") or not levels:
-            return analysis
-
-        entry = float(levels.get("entry") or 0)
-        sl    = float(levels.get("stop_loss") or 0)
-        tp1   = float(levels.get("tp1") or 0)
-        tp2   = float(levels.get("tp2") or 0)
-
-        if not entry or not sl or not tp1:
-            return analysis
-
-        # ── 1. تصحيح ترتيب TP ────────────────────────────────────────────
+        # Rule 6: TP/SL ordering + auto-fix swap
+        tp1, tp2 = tp1_raw, tp2_raw
         if rec == "BUY":
-            # BUY: يجب tp1 < tp2
+            if sl >= entry:
+                return self._hard_reject(analysis, "BUY_SL_ABOVE_ENTRY")
+            if tp1 <= entry:
+                return self._hard_reject(analysis, "BUY_TP1_BELOW_ENTRY")
             if tp2 and tp1 > tp2:
-                logger.info(f"🔧 TP order fix [BUY]: swapping tp1={tp1} <> tp2={tp2}")
                 levels["tp1"], levels["tp2"] = tp2, tp1
                 tp1, tp2 = tp2, tp1
-        elif rec == "SELL":
-            # SELL: يجب tp1 > tp2
+        else:
+            if sl <= entry:
+                return self._hard_reject(analysis, "SELL_SL_BELOW_ENTRY")
+            if tp1 >= entry:
+                return self._hard_reject(analysis, "SELL_TP1_ABOVE_ENTRY")
             if tp2 and tp1 < tp2:
-                logger.info(f"🔧 TP order fix [SELL]: swapping tp1={tp1} <> tp2={tp2}")
                 levels["tp1"], levels["tp2"] = tp2, tp1
                 tp1, tp2 = tp2, tp1
 
-        # ── 2. Direction sanity ───────────────────────────────────────────
-        if rec == "BUY"  and not (sl < entry < tp1):
-            logger.warning(f"⛔ Levels INVALID [BUY]: sl={sl} entry={entry} tp1={tp1} → WAIT")
-            return self._reject_signal(analysis, "INVALID_LEVELS_BUY")
-        if rec == "SELL" and not (tp1 < entry < sl):
-            logger.warning(f"⛔ Levels INVALID [SELL]: tp1={tp1} entry={entry} sl={sl} → WAIT")
-            return self._reject_signal(analysis, "INVALID_LEVELS_SELL")
-
-        # ── 3. R/R حساب صحيح + رفض < 1.2 ────────────────────────────────
-        sl_dist  = abs(entry - sl)
-        tp1_dist = abs(tp1 - entry)
+        # Rule 7: Dynamic RR threshold
+        sl_dist = abs(entry - sl)
+        tp_dist = abs(tp1 - entry)
         if sl_dist <= 0:
-            return self._reject_signal(analysis, "ZERO_SL_DISTANCE")
-
-        rr = round(tp1_dist / sl_dist, 2)
+            return self._hard_reject(analysis, "ZERO_SL_DISTANCE")
+        rr = round(tp_dist / sl_dist, 2)
         levels["risk_reward"] = rr
         analysis["risk_reward_ratio"] = rr
+        min_rr = self._get_min_rr()
+        if rr < min_rr:
+            return self._hard_reject(analysis, f"RR_{rr:.2f}_BELOW_MIN_{min_rr:.1f}")
 
-        if rr < 1.2:
-            logger.warning(f"⛔ R/R too low [{rec}]: rr={rr} < 1.2 → WAIT")
-            return self._reject_signal(analysis, f"LOW_RR_{rr}")
+        # Rule 8: Distance filter
+        if tp_dist / entry < 0.003:
+            return self._hard_reject(analysis, "TP_TOO_CLOSE")
+        if sl_dist / entry < 0.002:
+            return self._hard_reject(analysis, "SL_TOO_CLOSE")
 
-        # ── 4. Confidence cap: R/R < 1.5 → max 75% ───────────────────────
-        if rr < 1.5:
-            current_conf = float(analysis.get("ai_confidence_score") or 0)
-            if current_conf > 75:
-                logger.info(f"📉 Conf capped 75% [R/R={rr}]: {current_conf}% → 75%")
-                analysis["ai_confidence_score"] = 75.0
+        # Rule 9: Spread filter (ATR*0.05 or default)
+        atr    = float(levels.get("atr") or 0)
+        spread = atr * 0.05 if atr > 0 else self._DEFAULT_SPREAD.get(symbol.upper(), entry * 0.0002)
+        if spread / sl_dist > 0.30:
+            return self._hard_reject(analysis, "SPREAD_EATS_RISK")
 
-        # ── 5. Distance sanity: SL/TP لا يكونوا قريبين جداً (< 0.01%) ────
-        price_ref = entry
-        min_dist_pct = 0.0001  # 0.01%
-        if sl_dist / price_ref < min_dist_pct:
-            return self._reject_signal(analysis, "SL_TOO_CLOSE")
+        # Rule 10: Liquidity-based TP override
+        liquidity   = analysis.get("liquidity", {})
+        nearest_bsl = liquidity.get("nearest_bsl")
+        nearest_ssl = liquidity.get("nearest_ssl")
 
-        # ── 6. OB conflict: support.max < resistance.min ─────────────────
-        ob = analysis.get("order_blocks", {})
-        bull_obs = ob.get("bullish_obs", [])
-        bear_obs = ob.get("bearish_obs", [])
-        if bull_obs and bear_obs:
-            try:
-                support_max    = max(float(o.get("high", 0)) for o in bull_obs if isinstance(o, dict))
-                resistance_min = min(float(o.get("low",  0)) for o in bear_obs if isinstance(o, dict))
-                if support_max > 0 and resistance_min > 0 and support_max > resistance_min:
-                    logger.warning(
-                        f"⛔ OB Conflict [{rec}]: support.max={support_max} > resistance.min={resistance_min} → WAIT"
-                    )
-                    return self._reject_signal(analysis, "OB_OVERLAP_CONFLICT")
-            except Exception:
-                pass
+        if rec == "BUY" and nearest_bsl and float(nearest_bsl) > entry:
+            liq_tp1 = float(nearest_bsl)
+            liq_tp2 = round(liq_tp1 + (atr * 2 if atr else liq_tp1 * 0.005), 5)
+            if abs(liq_tp1 - entry) / entry > 0.003:
+                levels["tp1"] = round(liq_tp1, 5)
+                levels["tp2"] = liq_tp2
+                tp1 = liq_tp1
+        elif rec == "SELL" and nearest_ssl and float(nearest_ssl) < entry:
+            liq_tp1 = float(nearest_ssl)
+            liq_tp2 = round(liq_tp1 - (atr * 2 if atr else liq_tp1 * 0.005), 5)
+            if abs(entry - liq_tp1) / entry > 0.003:
+                levels["tp1"] = round(liq_tp1, 5)
+                levels["tp2"] = liq_tp2
+                tp1 = liq_tp1
 
-        # ── 7. Wyckoff consistency ────────────────────────────────────────
-        wyckoff_phase = (
-            analysis.get("wyckoff", {}).get("phase")
-            or analysis.get("wyckoff_phase", "")
-            or ""
-        ).upper()
+        # Rule 11: Cooldown
+        if not self.check_cooldown(symbol, timeframe):
+            return self._hard_reject(analysis, "COOLDOWN_ACTIVE")
 
-        if wyckoff_phase:
-            is_accumulation = any(w in wyckoff_phase for w in ("ACCUMULATION", "SPRING", "REACCUMULATION"))
-            is_distribution  = any(w in wyckoff_phase for w in ("DISTRIBUTION", "UPTHRUST", "REDISTRIBUTION"))
+        # Rule 14: Confidence system
+        conf = float(analysis.get("ai_confidence_score") or 0)
 
-            if is_distribution and rec == "BUY":
-                logger.warning(f"⛔ Wyckoff conflict: phase={wyckoff_phase} vs BUY → downgrade")
-                current_conf = float(analysis.get("ai_confidence_score") or 0)
-                analysis["ai_confidence_score"] = min(current_conf, 55.0)
-                if current_conf >= 65:
-                    return self._reject_signal(analysis, "WYCKOFF_DISTRIBUTION_VS_BUY")
+        # HTF alignment
+        if htf_analysis:
+            htf_trend = htf_analysis.get("market_structure", {}).get("trend", "RANGING")
+            if (rec == "BUY" and htf_trend == "BULLISH") or                (rec == "SELL" and htf_trend == "BEARISH"):
+                conf = min(conf + 8, 95)
+            elif (rec == "BUY" and htf_trend == "BEARISH") or                  (rec == "SELL" and htf_trend == "BULLISH"):
+                conf = max(conf - 15, 0)
+                if conf < 50:
+                    return self._hard_reject(analysis, "HTF_CONFLICT")
 
-            if is_accumulation and rec == "SELL":
-                logger.warning(f"⛔ Wyckoff conflict: phase={wyckoff_phase} vs SELL → downgrade")
-                current_conf = float(analysis.get("ai_confidence_score") or 0)
-                analysis["ai_confidence_score"] = min(current_conf, 55.0)
-                if current_conf >= 65:
-                    return self._reject_signal(analysis, "WYCKOFF_ACCUMULATION_VS_SELL")
+        # Confidence cap by R/R (Rule 14)
+        rr_final = round(abs(levels.get("tp1", tp1) - entry) / sl_dist, 2)
+        conf = min(conf, 75.0) if rr_final < 2.0 else min(conf, 90.0)
 
-        # ── 8. Premium/Discount zone consistency ─────────────────────────
-        pd_zone = (
-            analysis.get("premium_discount", {}).get("zone")
-            if isinstance(analysis.get("premium_discount"), dict)
-            else str(analysis.get("premium_discount", ""))
-        ).upper() if analysis.get("premium_discount") else ""
+        if conf < 55:
+            return self._hard_reject(analysis, f"CONF_TOO_LOW_{conf:.0f}")
 
-        if pd_zone:
-            in_premium  = "PREMIUM"  in pd_zone
-            in_discount = "DISCOUNT" in pd_zone
-            if in_premium and rec == "BUY":
-                logger.warning(f"⛔ Zone conflict: PREMIUM zone + BUY → conf penalty")
-                current_conf = float(analysis.get("ai_confidence_score") or 0)
-                analysis["ai_confidence_score"] = min(current_conf, 60.0)
-            if in_discount and rec == "SELL":
-                logger.warning(f"⛔ Zone conflict: DISCOUNT zone + SELL → conf penalty")
-                current_conf = float(analysis.get("ai_confidence_score") or 0)
-                analysis["ai_confidence_score"] = min(current_conf, 60.0)
-
-        # ── Phase 4: Final Validation Layer ──────────────────────────────────
-        passed, p4_reason = self._final_signal_validation(entry, sl, tp1, rr, rec, analysis)
-        if not passed:
-            return self._reject_signal(analysis, f"P4_{p4_reason}")
-
+        analysis["ai_confidence_score"]    = conf
+        analysis["institutional_gate_passed"] = True
+        analysis["gate_rr"]               = rr_final
         logger.info(
-            f"Trade Validation PASSED [{rec}]: "
-            f"entry={entry} sl={sl} tp1={tp1} rr={rr}"
+            f"GATE PASSED [{rec}] {symbol}/{timeframe}: "
+            f"entry={entry} rr={rr_final} conf={conf:.0f}%"
         )
         return analysis
-
-    def _reject_signal(self, analysis: dict, reason: str) -> dict:
-        """رفض الإشارة وتحويلها لـ WAIT مع تسجيل السبب"""
-        rec = analysis.get("recommendation", "?")
-        logger.warning(f"🚫 Signal REJECTED [{rec}] → WAIT | reason={reason}")
-        analysis["recommendation"]      = "WAIT"
-        analysis["signal_type"]         = "WAIT"
-        analysis["ai_confidence_score"] = min(
-            float(analysis.get("ai_confidence_score") or 0), 45.0
-        )
-        analysis["validation_rejected"] = True
-        analysis["rejection_reason"]    = reason
-        analysis["levels"]              = {}
-        analysis["entry_zones"]         = []
-        analysis["stop_loss_zone"]      = None
-        analysis["take_profit_zones"]   = []
-        return analysis
-
-    # ════════════════════════════════════════════════════════════════════════
-    # Phase 4 — Advanced Signal Quality Filters
-    # ════════════════════════════════════════════════════════════════════════
-
-    # ── Cooldown timing per timeframe ────────────────────────────────────────
-    _COOLDOWN_SEC = {
-        "1m": 300,    # 5 دقائق
-        "5m": 900,    # 15 دقيقة
-        "15m": 3600,  # ساعة
-        "30m": 5400,  # 90 دقيقة
-        "1h":  7200,  # ساعتان
-        "4h":  14400, # 4 ساعات
-        "1d":  43200, # 12 ساعة
-    }
-
-    def check_cooldown(self, symbol: str, timeframe: str) -> bool:
-        """
-        Task 5 — Cooldown: يمنع إشارات متكررة لنفس الرمز+الإطار خلال فترة معينة.
-        True = مسموح، False = في cooldown
-        """
-        key = f"{symbol.upper()}_{timeframe}"
-        now = time.time()
-        cooldown = self._COOLDOWN_SEC.get(timeframe, 3600)
-        last = self._last_signal_time.get(key, 0)
-        if now - last < cooldown:
-            remaining = int(cooldown - (now - last))
-            logger.info(f"Cooldown active [{symbol}/{timeframe}]: {remaining}s remaining")
-            return False
-        return True
-
-    def record_signal_sent(self, symbol: str, timeframe: str):
-        """يسجّل وقت آخر إشارة — يُستدعى بعد الحفظ في DB"""
-        key = f"{symbol.upper()}_{timeframe}"
-        self._last_signal_time[key] = time.time()
-
-    def update_performance(self, result: str):
-        """Task 6 — تحديث إحصاء الأداء (WIN/LOSS)"""
-        if result == "WIN":
-            self._perf["wins"]   += 1
-        elif result == "LOSS":
-            self._perf["losses"] += 1
-
-    def get_winrate(self) -> float:
-        """Task 6 — نسبة الفوز الحالية"""
-        total = self._perf["wins"] + self._perf["losses"]
-        return self._perf["wins"] / total if total > 0 else 1.0
 
     @staticmethod
-    def _get_relevant_zone(price: float, obs: list) -> Optional[dict]:
-        """
-        Task 4 — أقرب OB للسعر الحالي فقط (لا نستخدم OB عشوائي)
-        obs: list of {"low": float, "high": float, ...}
-        """
-        if not obs:
-            return None
+    def _closest_zone(price: float, obs: list) -> Optional[dict]:
         valid = [o for o in obs if isinstance(o, dict) and o.get("low") and o.get("high")]
         if not valid:
             return None
         return min(valid, key=lambda o: abs((float(o["low"]) + float(o["high"])) / 2 - price))
 
-    def _validate_entry_vs_zone(self, entry: float, rec: str, analysis: dict) -> bool:
-        """
-        Task 1 — Entry Validation vs Zone:
-        BUY:  entry يجب أن يكون داخل/قريب من أقرب bullish OB (support)
-        SELL: entry يجب أن يكون داخل/قريب من أقرب bearish OB (resistance)
-        tolerance: 0.3% من السعر
-        """
-        ob = analysis.get("order_blocks", {})
-        current_price = float(analysis.get("current_price") or entry)
-        tolerance = 0.003  # 0.3%
+    def _hard_reject(self, analysis: dict, reason: str) -> dict:
+        rec = analysis.get("recommendation", "?")
+        logger.warning(f"REJECTED [{rec}] {reason}")
+        analysis.update({
+            "recommendation":         "WAIT",
+            "signal_type":            "WAIT",
+            "ai_confidence_score":    min(float(analysis.get("ai_confidence_score") or 0), 45.0),
+            "institutional_rejected": True,
+            "rejection_reason":       reason,
+            "levels":                 {},
+            "entry_zones":            [],
+            "stop_loss_zone":         None,
+            "take_profit_zones":      [],
+        })
+        return analysis
 
-        if rec == "BUY":
-            bull_obs = ob.get("bullish_obs", [])
-            zone = self._get_relevant_zone(current_price, bull_obs)
-            if not zone:
-                # لا يوجد OB → تمرير (لا نرفض بسبب غياب البيانات)
-                return True
-            z_low  = float(zone["low"])
-            z_high = float(zone["high"])
-            in_zone  = z_low <= entry <= z_high
-            near_zone = abs(entry - z_high) / entry < tolerance
-            if not (in_zone or near_zone):
-                logger.warning(
-                    f"Entry zone mismatch [BUY]: entry={entry} not near support [{z_low}-{z_high}]"
-                )
-                return False
+    def _get_min_rr(self) -> float:
+        wr = self.get_winrate()
+        if wr > 0.60:  return 1.3
+        if wr >= 0.40: return 1.5
+        if wr >= 0.30: return 1.7
+        return 2.0
 
-        elif rec == "SELL":
-            bear_obs = ob.get("bearish_obs", [])
-            zone = self._get_relevant_zone(current_price, bear_obs)
-            if not zone:
-                return True
-            z_low  = float(zone["low"])
-            z_high = float(zone["high"])
-            in_zone   = z_low <= entry <= z_high
-            near_zone = abs(entry - z_low) / entry < tolerance
-            if not (in_zone or near_zone):
-                logger.warning(
-                    f"Entry zone mismatch [SELL]: entry={entry} not near resistance [{z_low}-{z_high}]"
-                )
-                return False
-
-        return True
-
-    def _validate_min_distance(self, entry: float, tp1: float, sl: float) -> bool:
-        """
-        Task 2 — Minimum Distance Filter:
-        TP >= 0.3% من entry
-        SL >= 0.2% من entry
-        يمنع الإشارات التافهة في أسواق عديمة الحركة
-        """
-        if entry <= 0:
-            return False
-        tp_dist_pct = abs(tp1 - entry) / entry
-        sl_dist_pct = abs(entry - sl) / entry
-
-        if tp_dist_pct < 0.003:
-            logger.warning(f"Min distance FAIL: TP dist={tp_dist_pct*100:.3f}% < 0.3%")
-            return False
-        if sl_dist_pct < 0.002:
-            logger.warning(f"Min distance FAIL: SL dist={sl_dist_pct*100:.3f}% < 0.2%")
+    def check_cooldown(self, symbol: str, timeframe: str) -> bool:
+        import time as _t
+        key = f"{symbol.upper()}_{timeframe}"
+        cooldown = self._COOLDOWN_SEC.get(timeframe, 3600)
+        last = self._last_signal_time.get(key, 0)
+        if _t.time() - last < cooldown:
+            remaining = int(cooldown - (_t.time() - last))
+            logger.info(f"Cooldown [{symbol}/{timeframe}]: {remaining}s left")
             return False
         return True
 
-    def _validate_spread(self, entry: float, sl: float, analysis: dict) -> bool:
-        """
-        Task 3 — Spread/Noise Protection:
-        يُقدّر spread من bid/ask أو من ATR إذا لم يتوفر
-        يرفض إذا spread > 30% من المخاطرة
-        """
-        risk = abs(entry - sl)
-        if risk <= 0:
-            return False
+    def record_signal_sent(self, symbol: str, timeframe: str):
+        import time as _t
+        self._last_signal_time[f"{symbol.upper()}_{timeframe}"] = _t.time()
 
-        # محاولة جلب spread من التحليل
-        spread = 0.0
+    def update_performance(self, result: str):
+        if result == "WIN":    self._perf["wins"]   += 1
+        elif result == "LOSS": self._perf["losses"] += 1
 
-        # من بيانات السوق إذا متاحة
-        levels = analysis.get("levels", {})
-        atr    = float(levels.get("atr") or 0)
+    def get_winrate(self) -> float:
+        total = self._perf["wins"] + self._perf["losses"]
+        return self._perf["wins"] / total if total > 0 else 0.55
 
-        if atr > 0:
-            # Spread يُقدَّر بـ 3% من ATR (تقريب معقول لأغلب الأسواق)
-            spread = atr * 0.03
-        else:
-            # fallback: نسبة ثابتة من الـ entry لكل رمز
-            symbol = analysis.get("symbol", "").upper()
-            spread_defaults = {
-                "XAUUSD": 0.30, "XAGUSD": 0.02, "BTCUSD": 5.0, "ETHUSD": 0.5,
-                "EURUSD": 0.0001, "GBPUSD": 0.0002, "USDJPY": 0.02,
-                "NAS100": 1.0, "US30": 2.0, "USOIL": 0.03,
-            }
-            spread = spread_defaults.get(symbol, entry * 0.0002)
-
-        ratio = spread / risk
-        if ratio > 0.30:
-            logger.warning(
-                f"Spread filter FAIL: spread={spread:.5f} risk={risk:.5f} ratio={ratio:.2f} > 0.30"
+    def load_performance_from_db(self, db_session) -> None:
+        try:
+            from app.models.signal import Signal, SignalStatus
+            wins   = db_session.query(Signal).filter(
+                Signal.status.in_([SignalStatus.TP1_HIT, SignalStatus.TP2_HIT])
+            ).count()
+            losses = db_session.query(Signal).filter(
+                Signal.status == SignalStatus.SL_HIT
+            ).count()
+            self._perf = {"wins": wins, "losses": losses}
+            logger.info(
+                f"Performance loaded: {wins}W/{losses}L "
+                f"winrate={self.get_winrate():.0%} "
+                f"min_rr={self._get_min_rr()}"
             )
-            return False
-        return True
-
-    def _dynamic_filter(self, rr: float) -> bool:
-        """
-        Task 7 — Dynamic Filter حسب الأداء الحالي:
-        إذا winrate < 40% → رفع حد R/R إلى 1.5
-        """
-        winrate = self.get_winrate()
-        if winrate < 0.40 and rr < 1.5:
-            logger.warning(
-                f"Dynamic filter: winrate={winrate:.0%} poor → requiring RR>=1.5 (got {rr:.2f})"
-            )
-            return False
-        return True
-
-    def _final_signal_validation(
-        self, entry: float, sl: float, tp1: float, rr: float,
-        rec: str, analysis: dict
-    ) -> tuple[bool, str]:
-        """
-        Task 8 — Final Validation Layer:
-        يجمع كل فلاتر Phase 4 ويُعيد (passed: bool, reason: str)
-        """
-        checks = [
-            (self._validate_entry_vs_zone(entry, rec, analysis),  "ENTRY_NOT_IN_ZONE"),
-            (self._validate_min_distance(entry, tp1, sl),         "MIN_DISTANCE_FAIL"),
-            (self._validate_spread(entry, sl, analysis),          "SPREAD_TOO_HIGH"),
-            (self._dynamic_filter(rr),                            "DYNAMIC_FILTER_STRICT"),
-        ]
-        for passed, reason in checks:
-            if not passed:
-                return False, reason
-        return True, "OK"
+        except Exception as e:
+            logger.warning(f"Could not load performance from DB: {e}")
 
     def _error_response(self, symbol: str, error: str) -> Dict:
         return {

@@ -129,6 +129,18 @@ async def lifespan(app: FastAPI):
     except Exception as _tv_err:
         logger.warning(f"⚠️ TradingView feed failed to start: {_tv_err} — will use fallback pricing")
 
+    # تحميل أداء الإشارات من DB لضبط Dynamic RR
+    try:
+        from app.services.ai_engine_v5 import mosh_ai_engine_v5
+        from app.database import SessionLocal
+        _db = SessionLocal()
+        try:
+            mosh_ai_engine_v5.load_performance_from_db(_db)
+        finally:
+            _db.close()
+    except Exception as _perf_err:
+        logger.warning(f"Could not load performance from DB: {_perf_err}")
+
     # بدء مهمة تنبيهات الأسعار
     alert_task = asyncio.create_task(_price_alert_checker())
     logger.success("✅ Price alert checker started")
