@@ -290,6 +290,9 @@ class MoshAIEngineV5:
             if analysis.get("recommendation") in ("BUY", "SELL"):
                 analysis = self._institutional_gate(analysis, symbol, timeframe, htf_analysis)
 
+            # ── EXPLAINABILITY LAYER — audit-grade trace (runs last, no changes)
+            analysis = self._explainability_layer(analysis, symbol, timeframe, htf_analysis)
+
             rec  = analysis.get("recommendation", "WAIT")
             conf = analysis.get("ai_confidence_score", 0)
             logger.success(f"✅ {symbol}/{timeframe}: {rec} | {conf}% | {int(ms)}ms")
@@ -646,6 +649,305 @@ class MoshAIEngineV5:
             analysis["current_price"] = live_price
             analysis["price_source"]  = live_source
 
+        return analysis
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # EXPLAINABILITY LAYER — Audit-grade trace for every decision
+    # "No trade is valid without a traceable reason"
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def _explainability_layer(
+        self,
+        analysis: dict,
+        symbol: str,
+        timeframe: str,
+        htf_analysis: Optional[Dict] = None,
+    ) -> dict:
+        """
+        Institutional Explainability Layer.
+        Runs AFTER _decision_finalizer + _institutional_gate.
+        Does NOT change any decision — only builds reason_trace.
+
+        Produces audit-grade output:
+          WHY this trade exists + WHY the other side was rejected.
+        """
+        decision = analysis.get("recommendation", "WAIT")
+        meta     = analysis.get("decision_meta", {})
+        struct   = analysis.get("market_structure", {})
+        sweep    = analysis.get("liquidity_sweep", {})
+        ob       = analysis.get("order_blocks", {})
+        pd_zone  = analysis.get("premium_discount", {})
+        levels   = analysis.get("levels", {})
+
+        # ── Score breakdown ──────────────────────────────────────────────
+        bull_score      = float(meta.get("bull_score") or analysis.get("confluence", {}).get("bull_score") or 0)
+        bear_score      = float(meta.get("bear_score") or analysis.get("confluence", {}).get("bear_score") or 0)
+        delta           = float(meta.get("score_delta") or (bull_score - bear_score))
+        threshold       = float(meta.get("threshold") or self._DECISION_THRESHOLD_TREND)
+        structure_bias  = meta.get("structure_bias")
+        htf_bias        = meta.get("htf_bias")
+        liq_bias        = meta.get("liq_bias")
+        zone_bias       = meta.get("zone_bias")
+        is_ranging      = bool(meta.get("is_ranging", False))
+
+        # ── 1. Market Structure trace ────────────────────────────────────
+        trend        = struct.get("trend", "UNKNOWN")
+        bos_events   = struct.get("bos_events", [])
+        choch_events = struct.get("choch_events", [])
+        bull_bos     = sum(1 for b in bos_events if "BULLISH" in b.get("type", ""))
+        bear_bos     = sum(1 for b in bos_events if "BEARISH" in b.get("type", ""))
+
+        ms_parts = [
+            f"Trend: {trend}",
+            f"BOS: {len(bos_events)} (Bullish×{bull_bos} Bearish×{bear_bos})",
+            f"CHoCH: {len(choch_events)} events",
+        ]
+        if choch_events:
+            last_c = choch_events[-1] if isinstance(choch_events[-1], dict) else {}
+            ms_parts.append(
+                f"Last CHoCH → {last_c.get('type','?')} @ {float(last_c.get('price', 0)):.5f}"
+            )
+        if bos_events:
+            last_b = bos_events[-1] if isinstance(bos_events[-1], dict) else {}
+            ms_parts.append(
+                f"Last BOS → {last_b.get('type','?')} @ {float(last_b.get('price', 0)):.5f}"
+            )
+        if structure_bias:
+            ms_parts.append(f"Structure Bias → {structure_bias}")
+        ms_trace = " | ".join(ms_parts)
+
+        # ── 2. Liquidity trace ───────────────────────────────────────────
+        has_bull_sweep = sweep.get("has_bullish_sweep", False)
+        has_bear_sweep = sweep.get("has_bearish_sweep", False)
+        sq             = sweep.get("sweep_quality", "NONE")
+        ssl_info       = sweep.get("ssl_sweep") or {}
+        bsl_info       = sweep.get("bsl_sweep") or {}
+        has_bos        = bool(bos_events)
+        has_choch      = bool(choch_events)
+
+        liq_parts = []
+        if has_bull_sweep:
+            liq_parts.append(
+                f"SSL Stop Hunt CONFIRMED (quality={sq}) "
+                f"{ssl_info.get('candles_since','?')}c ago "
+                f"wick={ssl_info.get('wick_atr_ratio','?')}×ATR → BULLISH footprint"
+            )
+        elif ssl_info:
+            liq_parts.append("SSL swept — rejection NOT confirmed (weak bullish)")
+        if has_bear_sweep:
+            liq_parts.append(
+                f"BSL Stop Hunt CONFIRMED (quality={sq}) "
+                f"{bsl_info.get('candles_since','?')}c ago "
+                f"wick={bsl_info.get('wick_atr_ratio','?')}×ATR → BEARISH footprint"
+            )
+        elif bsl_info:
+            liq_parts.append("BSL swept — rejection NOT confirmed (weak bearish)")
+        if not liq_parts:
+            liq_parts.append("No sweep detected — entry based on OB/zone only")
+        liq_trace = " | ".join(liq_parts)
+
+        # ── 3. Order Block trace ─────────────────────────────────────────
+        primary_bull  = analysis.get("primary_bull_ob")
+        primary_bear  = analysis.get("primary_bear_ob")
+        all_bull_obs  = ob.get("bullish_obs", [])
+        all_bear_obs  = ob.get("bearish_obs", [])
+
+        ob_parts = []
+        if primary_bull:
+            n_rejected = max(0, len(all_bull_obs) - 1)
+            ob_parts.append(
+                f"Primary Bullish OB: {float(primary_bull.get('low',0)):.5f}–"
+                f"{float(primary_bull.get('high',0)):.5f} "
+                f"(closest of {len(all_bull_obs)}"
+                + (f", {n_rejected} others discarded" if n_rejected else "") + ")"
+            )
+        else:
+            ob_parts.append("No bullish OB available")
+        if primary_bear:
+            n_rejected = max(0, len(all_bear_obs) - 1)
+            ob_parts.append(
+                f"Primary Bearish OB: {float(primary_bear.get('low',0)):.5f}–"
+                f"{float(primary_bear.get('high',0)):.5f} "
+                f"(closest of {len(all_bear_obs)}"
+                + (f", {n_rejected} others discarded" if n_rejected else "") + ")"
+            )
+        else:
+            ob_parts.append("No bearish OB available")
+        ob_trace = " | ".join(ob_parts)
+
+        # ── 4. Zone Logic trace ──────────────────────────────────────────
+        pd_name    = pd_zone.get("zone", "UNKNOWN")
+        pd_pct     = float(pd_zone.get("pct") or 0)
+        pd_raw     = pd_zone.get("bias", "NEUTRAL")
+        zone_parts = [f"Zone: {pd_name} ({pd_pct:.1f}% of range) | P/D Bias: {pd_raw}"]
+
+        if decision == "BUY":
+            if zone_bias == "BUY":
+                zone_parts.append("ALIGNED: BUY from discount/support zone")
+            elif zone_bias == "SELL":
+                zone_parts.append("CONFLICT: BUY in premium zone — allowed only by strong delta override")
+        elif decision == "SELL":
+            if zone_bias == "SELL":
+                zone_parts.append("ALIGNED: SELL from premium/resistance zone")
+            elif zone_bias == "BUY":
+                zone_parts.append("CONFLICT: SELL in discount zone — allowed only by strong delta override")
+        zone_trace = " | ".join(zone_parts)
+
+        # ── 5. Stop Hunt trace ───────────────────────────────────────────
+        if has_bull_sweep or has_bear_sweep:
+            sweep_type = "SSL" if has_bull_sweep else "BSL"
+            if has_bos or has_choch:
+                sh_trace = (
+                    f"{sweep_type} Stop Hunt CONFIRMED + structure shift present "
+                    f"(BOS={has_bos} CHoCH={has_choch}) — VALID trigger"
+                )
+            else:
+                sh_trace = (
+                    f"{sweep_type} sweep detected BUT no BOS/CHoCH — "
+                    "REJECTED as trigger (sweep without structure shift)"
+                )
+        else:
+            sh_trace = "No stop hunt — entry driven by OB/zone confluence"
+
+        # ── 6. Conflict detection ────────────────────────────────────────
+        conflicts = []
+        if structure_bias and htf_bias and structure_bias != htf_bias:
+            conflicts.append(
+                f"LTF Structure ({structure_bias}) ≠ HTF Trend ({htf_bias}) "
+                "→ resolved: Priority 1 (Structure)"
+            )
+        if structure_bias and zone_bias and structure_bias != zone_bias:
+            conflicts.append(
+                f"Structure ({structure_bias}) ≠ Zone ({zone_bias}) "
+                "→ resolved: Priority 1 (Structure over Zone)"
+            )
+        if liq_bias and structure_bias and liq_bias != structure_bias:
+            conflicts.append(
+                f"Liquidity ({liq_bias}) ≠ Structure ({structure_bias}) "
+                "→ resolved: Priority 1 (Structure)"
+            )
+        if decision == "BUY" and zone_bias == "SELL":
+            conflicts.append(
+                f"BUY in PREMIUM zone (zone_bias=SELL) "
+                f"→ allowed: score delta {delta:+.0f} ≥ {self._DECISION_THRESHOLD_STRONG}"
+            )
+        elif decision == "SELL" and zone_bias == "BUY":
+            conflicts.append(
+                f"SELL in DISCOUNT zone (zone_bias=BUY) "
+                f"→ allowed: score delta {delta:+.0f} ≥ {self._DECISION_THRESHOLD_STRONG}"
+            )
+
+        # ── 7. Priority chain used ───────────────────────────────────────
+        resolved = meta.get("resolved")
+        if structure_bias and resolved == structure_bias:
+            priority_used = "Priority 1 — Market Structure (BOS/CHoCH)"
+        elif htf_bias and resolved == htf_bias:
+            priority_used = "Priority 2 — HTF Trend Bias"
+        elif liq_bias and resolved == liq_bias:
+            priority_used = "Priority 3 — Liquidity Sweep"
+        elif zone_bias and resolved == zone_bias:
+            priority_used = "Priority 4 — P/D Zone"
+        else:
+            priority_used = "Priority 5 — Score Delta (pure confluence)"
+
+        # ── 8. Rejection reasons ─────────────────────────────────────────
+        rejection_reasons = []
+        gate_rej    = analysis.get("rejection_reason")
+        no_trade_r  = analysis.get("no_trade_reason")
+
+        if gate_rej:
+            rejection_reasons.append(f"GATE REJECTION: {gate_rej}")
+        if no_trade_r:
+            rejection_reasons.append(f"DECISION REJECTION: {no_trade_r}")
+
+        if decision == "WAIT":
+            if not has_bos and not has_choch:
+                rejection_reasons.append(
+                    "Missing: No BOS or CHoCH — structure shift required for valid entry"
+                )
+            if not has_bull_sweep and not has_bear_sweep:
+                rejection_reasons.append(
+                    "Missing: No liquidity sweep — no institutional order flow confirmation"
+                )
+            if abs(delta) < threshold:
+                rejection_reasons.append(
+                    f"Score too balanced: |delta|={abs(delta):.0f} < required {threshold:.0f} "
+                    f"(bull={bull_score:.0f} bear={bear_score:.0f})"
+                )
+            if is_ranging and not rejection_reasons:
+                rejection_reasons.append(
+                    f"Ranging market — threshold raised to {threshold:.0f}; "
+                    "swing setups not permitted without clear directional dominance"
+                )
+
+        # ── 9. Level trace ───────────────────────────────────────────────
+        level_trace = None
+        if decision in ("BUY", "SELL") and levels:
+            entry  = float(levels.get("entry") or 0)
+            sl     = float(levels.get("stop_loss") or 0)
+            tp1    = float(levels.get("tp1") or 0)
+            tp2    = float(levels.get("tp2") or 0)
+            rr     = float(analysis.get("gate_rr") or levels.get("risk_reward") or 0)
+            level_trace = (
+                f"Entry={entry:.5f} SL={sl:.5f} "
+                f"TP1={tp1:.5f} TP2={tp2:.5f} RR={rr:.2f}"
+            )
+
+        # ── 10. WHY THIS TRADE / WHY OTHER SIDE REJECTED ─────────────────
+        why_this = why_other = None
+        if decision in ("BUY", "SELL"):
+            other = "SELL" if decision == "BUY" else "BUY"
+            why_this = (
+                f"{decision} issued: {priority_used} confirms direction "
+                f"| score delta {delta:+.0f} ≥ threshold {threshold:.0f}"
+                + (f" | {level_trace}" if level_trace else "")
+            )
+            if structure_bias and structure_bias != other:
+                why_other = (
+                    f"{other} rejected: Structure bias is {structure_bias} "
+                    f"({bull_bos} bullish vs {bear_bos} bearish BOS"
+                    + (f", last CHoCH={choch_events[-1].get('type','?')}" if choch_events and isinstance(choch_events[-1], dict) else "")
+                    + ")"
+                )
+            else:
+                why_other = (
+                    f"{other} rejected: insufficient confluences "
+                    f"({'bull' if decision == 'SELL' else 'bear'} score "
+                    f"{bear_score if decision == 'BUY' else bull_score:.0f} < "
+                    f"{'bull' if decision == 'BUY' else 'bear'} score "
+                    f"{bull_score if decision == 'BUY' else bear_score:.0f})"
+                )
+
+        # ── Assemble reason_trace ────────────────────────────────────────
+        reason_trace = {
+            "decision":             decision,
+            "market_structure":     ms_trace,
+            "liquidity":            liq_trace,
+            "order_blocks":         ob_trace,
+            "zone_logic":           zone_trace,
+            "stop_hunt":            sh_trace,
+            "score_delta":          (
+                f"bull={bull_score:.0f} bear={bear_score:.0f} "
+                f"delta={delta:+.0f} required≥{threshold:.0f} "
+                f"[{'PASS' if abs(delta) >= threshold else 'FAIL'}]"
+            ),
+            "decision_priority_used": priority_used,
+            "conflicts_detected":   conflicts or ["NONE"],
+            "rejection_reasons":    rejection_reasons or ["N/A — all checks passed"],
+        }
+        if why_this:
+            reason_trace["why_this_trade"]        = why_this
+        if why_other:
+            reason_trace["why_other_side_rejected"] = why_other
+
+        analysis["reason_trace"] = reason_trace
+
+        logger.info(
+            f"TRACE [{decision}] {symbol}/{timeframe}: "
+            f"Δ={delta:+.0f}/{threshold:.0f} "
+            f"priority={priority_used.split('—')[0].strip()} "
+            f"conflicts={len(conflicts)}"
+        )
         return analysis
 
     # ═══════════════════════════════════════════════════════════════════════
