@@ -251,6 +251,14 @@ async def bot_check_outcomes(
                 sig.exit_executed           = datetime.now(timezone.utc)
                 db.commit()
 
+                # تحديث performance tracker في المحرك (Task 6)
+                perf_result = "WIN" if new_status in (SignalStatus.TP1_HIT, SignalStatus.TP2_HIT) else "LOSS"
+                mosh_ai_engine_v5.update_performance(perf_result)
+                logger.info(
+                    f"Performance updated: {perf_result} | "
+                    f"winrate={mosh_ai_engine_v5.get_winrate():.0%}"
+                )
+
                 payload = {
                     "signal_id":    sig.id,
                     "market":       sig.market,

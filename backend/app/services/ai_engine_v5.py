@@ -83,8 +83,12 @@ class MoshAIEngineV5:
         self.version = "5.2.0"
         # Signal cache: key → (analysis_dict, timestamp)
         self._signal_cache: Dict[str, tuple] = {}
-        logger.info(f"🚀 Mosh AI Engine v{self.version} initialized")
-        logger.info(f"   └─ Gemini v2: {'✅' if gemini_engine.enabled else '❌'}")
+        # Cooldown: key="{symbol}_{timeframe}" → last signal timestamp
+        self._last_signal_time: Dict[str, float] = {}
+        # Performance tracking (in-memory, resets on restart — DB is source of truth)
+        self._perf: Dict[str, int] = {"wins": 0, "losses": 0}
+        logger.info(f"Mosh AI Engine v{self.version} initialized")
+        logger.info(f"   Gemini v2: {'enabled' if gemini_engine.enabled else 'disabled'}")
 
     # ─── Cache ──────────────────────────────────────────────────────────────
 
@@ -890,8 +894,13 @@ class MoshAIEngineV5:
                 current_conf = float(analysis.get("ai_confidence_score") or 0)
                 analysis["ai_confidence_score"] = min(current_conf, 60.0)
 
+        # ── Phase 4: Final Validation Layer ──────────────────────────────────
+        passed, p4_reason = self._final_signal_validation(entry, sl, tp1, rr, rec, analysis)
+        if not passed:
+            return self._reject_signal(analysis, f"P4_{p4_reason}")
+
         logger.info(
-            f"✅ Trade Validation PASSED [{rec}]: "
+            f"Trade Validation PASSED [{rec}]: "
             f"entry={entry} sl={sl} tp1={tp1} rr={rr}"
         )
         return analysis
@@ -912,6 +921,200 @@ class MoshAIEngineV5:
         analysis["stop_loss_zone"]      = None
         analysis["take_profit_zones"]   = []
         return analysis
+
+    # ════════════════════════════════════════════════════════════════════════
+    # Phase 4 — Advanced Signal Quality Filters
+    # ════════════════════════════════════════════════════════════════════════
+
+    # ── Cooldown timing per timeframe ────────────────────────────────────────
+    _COOLDOWN_SEC = {
+        "1m": 300,    # 5 دقائق
+        "5m": 900,    # 15 دقيقة
+        "15m": 3600,  # ساعة
+        "30m": 5400,  # 90 دقيقة
+        "1h":  7200,  # ساعتان
+        "4h":  14400, # 4 ساعات
+        "1d":  43200, # 12 ساعة
+    }
+
+    def check_cooldown(self, symbol: str, timeframe: str) -> bool:
+        """
+        Task 5 — Cooldown: يمنع إشارات متكررة لنفس الرمز+الإطار خلال فترة معينة.
+        True = مسموح، False = في cooldown
+        """
+        key = f"{symbol.upper()}_{timeframe}"
+        now = time.time()
+        cooldown = self._COOLDOWN_SEC.get(timeframe, 3600)
+        last = self._last_signal_time.get(key, 0)
+        if now - last < cooldown:
+            remaining = int(cooldown - (now - last))
+            logger.info(f"Cooldown active [{symbol}/{timeframe}]: {remaining}s remaining")
+            return False
+        return True
+
+    def record_signal_sent(self, symbol: str, timeframe: str):
+        """يسجّل وقت آخر إشارة — يُستدعى بعد الحفظ في DB"""
+        key = f"{symbol.upper()}_{timeframe}"
+        self._last_signal_time[key] = time.time()
+
+    def update_performance(self, result: str):
+        """Task 6 — تحديث إحصاء الأداء (WIN/LOSS)"""
+        if result == "WIN":
+            self._perf["wins"]   += 1
+        elif result == "LOSS":
+            self._perf["losses"] += 1
+
+    def get_winrate(self) -> float:
+        """Task 6 — نسبة الفوز الحالية"""
+        total = self._perf["wins"] + self._perf["losses"]
+        return self._perf["wins"] / total if total > 0 else 1.0
+
+    @staticmethod
+    def _get_relevant_zone(price: float, obs: list) -> Optional[dict]:
+        """
+        Task 4 — أقرب OB للسعر الحالي فقط (لا نستخدم OB عشوائي)
+        obs: list of {"low": float, "high": float, ...}
+        """
+        if not obs:
+            return None
+        valid = [o for o in obs if isinstance(o, dict) and o.get("low") and o.get("high")]
+        if not valid:
+            return None
+        return min(valid, key=lambda o: abs((float(o["low"]) + float(o["high"])) / 2 - price))
+
+    def _validate_entry_vs_zone(self, entry: float, rec: str, analysis: dict) -> bool:
+        """
+        Task 1 — Entry Validation vs Zone:
+        BUY:  entry يجب أن يكون داخل/قريب من أقرب bullish OB (support)
+        SELL: entry يجب أن يكون داخل/قريب من أقرب bearish OB (resistance)
+        tolerance: 0.3% من السعر
+        """
+        ob = analysis.get("order_blocks", {})
+        current_price = float(analysis.get("current_price") or entry)
+        tolerance = 0.003  # 0.3%
+
+        if rec == "BUY":
+            bull_obs = ob.get("bullish_obs", [])
+            zone = self._get_relevant_zone(current_price, bull_obs)
+            if not zone:
+                # لا يوجد OB → تمرير (لا نرفض بسبب غياب البيانات)
+                return True
+            z_low  = float(zone["low"])
+            z_high = float(zone["high"])
+            in_zone  = z_low <= entry <= z_high
+            near_zone = abs(entry - z_high) / entry < tolerance
+            if not (in_zone or near_zone):
+                logger.warning(
+                    f"Entry zone mismatch [BUY]: entry={entry} not near support [{z_low}-{z_high}]"
+                )
+                return False
+
+        elif rec == "SELL":
+            bear_obs = ob.get("bearish_obs", [])
+            zone = self._get_relevant_zone(current_price, bear_obs)
+            if not zone:
+                return True
+            z_low  = float(zone["low"])
+            z_high = float(zone["high"])
+            in_zone   = z_low <= entry <= z_high
+            near_zone = abs(entry - z_low) / entry < tolerance
+            if not (in_zone or near_zone):
+                logger.warning(
+                    f"Entry zone mismatch [SELL]: entry={entry} not near resistance [{z_low}-{z_high}]"
+                )
+                return False
+
+        return True
+
+    def _validate_min_distance(self, entry: float, tp1: float, sl: float) -> bool:
+        """
+        Task 2 — Minimum Distance Filter:
+        TP >= 0.3% من entry
+        SL >= 0.2% من entry
+        يمنع الإشارات التافهة في أسواق عديمة الحركة
+        """
+        if entry <= 0:
+            return False
+        tp_dist_pct = abs(tp1 - entry) / entry
+        sl_dist_pct = abs(entry - sl) / entry
+
+        if tp_dist_pct < 0.003:
+            logger.warning(f"Min distance FAIL: TP dist={tp_dist_pct*100:.3f}% < 0.3%")
+            return False
+        if sl_dist_pct < 0.002:
+            logger.warning(f"Min distance FAIL: SL dist={sl_dist_pct*100:.3f}% < 0.2%")
+            return False
+        return True
+
+    def _validate_spread(self, entry: float, sl: float, analysis: dict) -> bool:
+        """
+        Task 3 — Spread/Noise Protection:
+        يُقدّر spread من bid/ask أو من ATR إذا لم يتوفر
+        يرفض إذا spread > 30% من المخاطرة
+        """
+        risk = abs(entry - sl)
+        if risk <= 0:
+            return False
+
+        # محاولة جلب spread من التحليل
+        spread = 0.0
+
+        # من بيانات السوق إذا متاحة
+        levels = analysis.get("levels", {})
+        atr    = float(levels.get("atr") or 0)
+
+        if atr > 0:
+            # Spread يُقدَّر بـ 3% من ATR (تقريب معقول لأغلب الأسواق)
+            spread = atr * 0.03
+        else:
+            # fallback: نسبة ثابتة من الـ entry لكل رمز
+            symbol = analysis.get("symbol", "").upper()
+            spread_defaults = {
+                "XAUUSD": 0.30, "XAGUSD": 0.02, "BTCUSD": 5.0, "ETHUSD": 0.5,
+                "EURUSD": 0.0001, "GBPUSD": 0.0002, "USDJPY": 0.02,
+                "NAS100": 1.0, "US30": 2.0, "USOIL": 0.03,
+            }
+            spread = spread_defaults.get(symbol, entry * 0.0002)
+
+        ratio = spread / risk
+        if ratio > 0.30:
+            logger.warning(
+                f"Spread filter FAIL: spread={spread:.5f} risk={risk:.5f} ratio={ratio:.2f} > 0.30"
+            )
+            return False
+        return True
+
+    def _dynamic_filter(self, rr: float) -> bool:
+        """
+        Task 7 — Dynamic Filter حسب الأداء الحالي:
+        إذا winrate < 40% → رفع حد R/R إلى 1.5
+        """
+        winrate = self.get_winrate()
+        if winrate < 0.40 and rr < 1.5:
+            logger.warning(
+                f"Dynamic filter: winrate={winrate:.0%} poor → requiring RR>=1.5 (got {rr:.2f})"
+            )
+            return False
+        return True
+
+    def _final_signal_validation(
+        self, entry: float, sl: float, tp1: float, rr: float,
+        rec: str, analysis: dict
+    ) -> tuple[bool, str]:
+        """
+        Task 8 — Final Validation Layer:
+        يجمع كل فلاتر Phase 4 ويُعيد (passed: bool, reason: str)
+        """
+        checks = [
+            (self._validate_entry_vs_zone(entry, rec, analysis),  "ENTRY_NOT_IN_ZONE"),
+            (self._validate_min_distance(entry, tp1, sl),         "MIN_DISTANCE_FAIL"),
+            (self._validate_spread(entry, sl, analysis),          "SPREAD_TOO_HIGH"),
+            (self._dynamic_filter(rr),                            "DYNAMIC_FILTER_STRICT"),
+        ]
+        for passed, reason in checks:
+            if not passed:
+                return False, reason
+        return True, "OK"
 
     def _error_response(self, symbol: str, error: str) -> Dict:
         return {

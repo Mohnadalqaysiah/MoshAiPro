@@ -133,49 +133,63 @@ async def analyze_market(
         except Exception as _le:
             logger.warning(f"AnalysisLog save error: {_le}")
 
-        # حفظ الإشارة — شروط صارمة: جودة أعلى + أقل تكراراً
+        # حفظ الإشارة — شروط صارمة + Cooldown
         from app.services.smart_data import smart_data as _sd
         try:
-            # ── فلترة مُشددة قبل الحفظ ─────────────────────────────────────
             _rr_ok  = rr and float(rr) >= 1.2
-            _rej    = analysis.get("validation_rejected") or analysis.get("sweep_gate_blocked") or \
-                      analysis.get("price_gap_rejected")
+            _rej    = (analysis.get("validation_rejected") or
+                       analysis.get("sweep_gate_blocked") or
+                       analysis.get("price_gap_rejected"))
+
+            # ── Cooldown check (Task 5) ────────────────────────────────────
+            _cooldown_ok = mosh_ai_engine_v5.check_cooldown(symbol, timeframe)
+
             if rec in ("BUY", "SELL") and entry and sl and tp1 \
-                    and conf >= 65 and _rr_ok and not _rej \
+                    and conf >= 65 and _rr_ok and not _rej and _cooldown_ok \
                     and analysis.get("market_open", True) and _sd.is_market_open(symbol):
-                sig_type = SignalType.BUY if rec == "BUY" else SignalType.SELL
-                tf_hours = {"1m":2,"5m":4,"15m":8,"30m":12,"1h":24,"4h":72,"1d":168,"1w":336}
+
+                sig_type  = SignalType.BUY if rec == "BUY" else SignalType.SELL
+                tf_hours  = {"1m":2,"5m":4,"15m":8,"30m":12,"1h":24,"4h":72,"1d":168,"1w":336}
                 expires_h = tf_hours.get(timeframe, 24)
                 expires_at = datetime.now(timezone.utc) + timedelta(hours=expires_h)
-                sig_hash = hashlib.md5(f"{user.id}-{symbol}-{timeframe}-{rec}-{entry}".encode()).hexdigest()
-                existing = db.query(Signal).filter(Signal.signal_hash == sig_hash).first()
-                # منع إنشاء إشارة مكررة: إذا يوجد إشارة نشطة لنفس الرمز+الإطار+الاتجاه → تجاهل
+                # hash لا يشمل user_id — إشارة واحدة لكل (رمز+إطار+اتجاه+entry) في الكل
+                sig_hash = hashlib.md5(
+                    f"{symbol}-{timeframe}-{rec}-{round(float(entry), 4)}".encode()
+                ).hexdigest()
+                existing   = db.query(Signal).filter(Signal.signal_hash == sig_hash).first()
                 active_dup = db.query(Signal).filter(
-                    Signal.market       == symbol,
-                    Signal.timeframe    == timeframe,
-                    Signal.signal_type  == sig_type,
-                    Signal.status       == SignalStatus.ACTIVE,
+                    Signal.market      == symbol,
+                    Signal.timeframe   == timeframe,
+                    Signal.signal_type == sig_type,
+                    Signal.status      == SignalStatus.ACTIVE,
                 ).first()
+
                 if not existing and not active_dup:
-                    sig = Signal(
-                        user_id       = user.id,
-                        market        = symbol,
-                        timeframe     = timeframe,
-                        signal_type   = sig_type,
-                        signal_quality= SignalQuality.PREMIUM if conf >= 80 else SignalQuality.STANDARD,
-                        status        = SignalStatus.ACTIVE,
-                        entry_price   = float(entry),
-                        stop_loss     = float(sl),
-                        take_profit_1 = float(tp1),
-                        take_profit_2 = float(tp2 or tp1),
-                        current_price = analysis.get("current_price"),
-                        ai_confidence = conf,
+                    new_sig = Signal(
+                        user_id           = user.id,
+                        market            = symbol,
+                        timeframe         = timeframe,
+                        signal_type       = sig_type,
+                        signal_quality    = SignalQuality.PREMIUM if conf >= 80 else SignalQuality.STANDARD,
+                        status            = SignalStatus.ACTIVE,
+                        entry_price       = float(entry),
+                        stop_loss         = float(sl),
+                        take_profit_1     = float(tp1),
+                        take_profit_2     = float(tp2 or tp1),
+                        current_price     = analysis.get("current_price"),
+                        ai_confidence     = conf,
                         risk_reward_ratio = rr,
-                        signal_hash   = sig_hash,
-                        expires_at    = expires_at,
+                        signal_hash       = sig_hash,
+                        expires_at        = expires_at,
                     )
-                    db.add(sig)
+                    db.add(new_sig)
                     db.commit()
+                    # سجّل الـ cooldown بعد الحفظ
+                    mosh_ai_engine_v5.record_signal_sent(symbol, timeframe)
+                    logger.info(
+                        f"Signal saved: {symbol}/{timeframe} {rec} "
+                        f"entry={entry} rr={rr} conf={conf}%"
+                    )
         except Exception as _se:
             logger.warning(f"Signal save error: {_se}")
 
