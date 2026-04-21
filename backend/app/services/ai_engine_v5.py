@@ -283,8 +283,12 @@ class MoshAIEngineV5:
             if "momentum"       not in analysis: analysis["momentum"]       = ltf_analysis.get("momentum", {})
             if "range_conflict" not in analysis: analysis["range_conflict"] = ltf_analysis.get("range_conflict", {})
 
-            # ── INSTITUTIONAL GATE — all 16 rules in one pass ────────────────
-            analysis = self._institutional_gate(analysis, symbol, timeframe, htf_analysis)
+            # ── DECISION FINALIZER — resolves conflicts → BUY/SELL/NO TRADE ──
+            analysis = self._decision_finalizer(analysis, symbol, timeframe, htf_analysis)
+
+            # ── INSTITUTIONAL GATE — validates levels if decision was made ────
+            if analysis.get("recommendation") in ("BUY", "SELL"):
+                analysis = self._institutional_gate(analysis, symbol, timeframe, htf_analysis)
 
             rec  = analysis.get("recommendation", "WAIT")
             conf = analysis.get("ai_confidence_score", 0)
@@ -642,6 +646,189 @@ class MoshAIEngineV5:
             analysis["current_price"] = live_price
             analysis["price_source"]  = live_source
 
+        return analysis
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # DECISION FINALIZER — Converts analysis to single clean decision
+    # "If it is not clear, it is not a trade"
+    # ═══════════════════════════════════════════════════════════════════════
+
+    # Min score delta to issue a trade (trending vs ranging markets)
+    _DECISION_THRESHOLD_TREND  = 20   # need 20-pt lead in trending market
+    _DECISION_THRESHOLD_RANGE  = 35   # stricter in ranging/sideways market
+    _DECISION_THRESHOLD_STRONG = 40   # override HTF/zone conflicts if lead ≥40
+
+    def _decision_finalizer(
+        self,
+        analysis: dict,
+        symbol: str,
+        timeframe: str,
+        htf_analysis: Optional[Dict] = None,
+    ) -> dict:
+        """
+        Decision-Grade Trading Engine.
+        Converts multi-signal ICT analysis → single BUY / SELL / NO TRADE.
+        Must run BEFORE _institutional_gate.
+
+        Priority chain (conflict resolution):
+          1. Market Structure (BOS / CHoCH)
+          2. HTF bias
+          3. Liquidity (sweep direction)
+          4. P/D Zone bias
+        """
+        confluence  = analysis.get("confluence", {})
+        struct      = analysis.get("market_structure", {})
+        sweep       = analysis.get("liquidity_sweep", {})
+        ob          = analysis.get("order_blocks", {})
+        pd_zone     = analysis.get("premium_discount", {})
+        market_mode = analysis.get("market_mode", {})
+        rng_conflict= analysis.get("range_conflict", {})
+
+        bull_score  = float(confluence.get("bull_score", 0))
+        bear_score  = float(confluence.get("bear_score", 0))
+        score_delta = bull_score - bear_score   # >0 = bullish lean, <0 = bearish lean
+
+        # ── 1. Range Trap → immediate NO TRADE ──────────────────────────────
+        if rng_conflict.get("in_range_trap") or rng_conflict.get("avoid_entry"):
+            return self._hard_reject(analysis, "RANGE_TRAP_OB_OVERLAP_NO_BOS")
+
+        # ── 2. Market Regime detection ───────────────────────────────────────
+        mode  = (market_mode.get("mode") or "TREND").upper()
+        trend = (struct.get("trend") or "RANGING").upper()
+        is_ranging = mode == "RANGE" or trend == "RANGING"
+
+        threshold = (
+            self._DECISION_THRESHOLD_RANGE  if is_ranging
+            else self._DECISION_THRESHOLD_TREND
+        )
+
+        # ── 3. Stop Hunt validation — sweep MUST have structure shift ────────
+        has_bullish_sweep = sweep.get("has_bullish_sweep", False)
+        has_bearish_sweep = sweep.get("has_bearish_sweep", False)
+        has_bos   = bool(struct.get("bos_events"))
+        has_choch = bool(struct.get("choch_events"))
+        any_sweep = has_bullish_sweep or has_bearish_sweep
+
+        if any_sweep and not has_bos and not has_choch:
+            return self._hard_reject(analysis, "SWEEP_WITHOUT_STRUCTURE_SHIFT")
+
+        # ── 4. Score delta check ─────────────────────────────────────────────
+        if abs(score_delta) < threshold:
+            return self._hard_reject(
+                analysis,
+                f"SCORE_DELTA_{abs(score_delta):.0f}_BELOW_{threshold}"
+            )
+
+        # ── 5. Conflict Resolver (priority 1→4) ──────────────────────────────
+        #  Priority 1: Market Structure dominance (BOS / CHoCH count)
+        bos_list    = struct.get("bos_events", [])
+        choch_list  = struct.get("choch_events", [])
+        bull_bos    = sum(1 for b in bos_list if "BULLISH" in b.get("type", ""))
+        bear_bos    = sum(1 for b in bos_list if "BEARISH" in b.get("type", ""))
+
+        # Last CHoCH is most meaningful (recent structure reversal)
+        last_choch_dir = None
+        if choch_list:
+            last_c = choch_list[-1] if isinstance(choch_list, list) else None
+            if isinstance(last_c, dict):
+                last_choch_dir = "BUY" if "BULLISH" in last_c.get("type", "") else "SELL"
+
+        structure_bias: Optional[str] = None
+        if last_choch_dir:
+            structure_bias = last_choch_dir          # CHoCH beats BOS count
+        elif bull_bos > bear_bos:
+            structure_bias = "BUY"
+        elif bear_bos > bull_bos:
+            structure_bias = "SELL"
+
+        #  Priority 2: HTF bias
+        htf_bias: Optional[str] = None
+        if htf_analysis:
+            htf_trend = (htf_analysis.get("market_structure", {}).get("trend") or "RANGING").upper()
+            if htf_trend == "BULLISH":
+                htf_bias = "BUY"
+            elif htf_trend == "BEARISH":
+                htf_bias = "SELL"
+
+        #  Priority 3: Liquidity sweep direction
+        liq_bias: Optional[str] = None
+        if has_bullish_sweep and not has_bearish_sweep:
+            liq_bias = "BUY"
+        elif has_bearish_sweep and not has_bullish_sweep:
+            liq_bias = "SELL"
+
+        #  Priority 4: Premium / Discount zone
+        pd_raw  = (pd_zone.get("bias") or "NEUTRAL").upper()
+        zone_bias: Optional[str] = "BUY" if pd_raw == "BUY" else ("SELL" if pd_raw == "SELL" else None)
+
+        # ── Score direction (raw ICT answer) ────────────────────────────────
+        score_dir = "BUY" if score_delta > 0 else "SELL"
+
+        # ── Apply priority chain to resolve direction ────────────────────────
+        if structure_bias:
+            resolved = structure_bias
+            # If score strongly disagrees with structure → NO TRADE
+            if score_dir != structure_bias and abs(score_delta) < self._DECISION_THRESHOLD_STRONG:
+                return self._hard_reject(analysis, "SCORE_CONFLICTS_STRUCTURE")
+        elif htf_bias:
+            resolved = htf_bias
+            if score_dir != htf_bias and abs(score_delta) < self._DECISION_THRESHOLD_STRONG:
+                return self._hard_reject(analysis, "SCORE_CONFLICTS_HTF")
+        elif liq_bias:
+            resolved = liq_bias
+        else:
+            resolved = score_dir   # fallback: pure score
+
+        # ── 6. HTF conflict penalty ──────────────────────────────────────────
+        if htf_bias and htf_bias != resolved and abs(score_delta) < self._DECISION_THRESHOLD_STRONG:
+            return self._hard_reject(analysis, "HTF_DIRECTION_CONFLICT")
+
+        # ── 7. Execution zone validation ──────────────────────────────────────
+        #  BUY must enter from discount/support, SELL from premium/resistance
+        if resolved == "BUY" and zone_bias == "SELL":
+            if abs(score_delta) < self._DECISION_THRESHOLD_STRONG:
+                return self._hard_reject(analysis, "BUY_IN_PREMIUM_ZONE")
+        elif resolved == "SELL" and zone_bias == "BUY":
+            if abs(score_delta) < self._DECISION_THRESHOLD_STRONG:
+                return self._hard_reject(analysis, "SELL_IN_DISCOUNT_ZONE")
+
+        # ── 8. Primary OB selection (single zone, no overlap) ────────────────
+        current_p     = float(analysis.get("current_price") or 0) or float(confluence.get("entry", 0) or 0)
+        primary_bull_ob = self._closest_zone(current_p, ob.get("bullish_obs", []))
+        primary_bear_ob = self._closest_zone(current_p, ob.get("bearish_obs", []))
+
+        # Reject if the two primary zones overlap each other
+        if primary_bull_ob and primary_bear_ob:
+            if float(primary_bull_ob.get("high", 0)) > float(primary_bear_ob.get("low", 0)):
+                return self._hard_reject(analysis, "PRIMARY_OB_ZONES_OVERLAP")
+
+        # Store primary zones for gate to use
+        analysis["primary_bull_ob"] = primary_bull_ob
+        analysis["primary_bear_ob"] = primary_bear_ob
+
+        # ── 9. Commit decision ───────────────────────────────────────────────
+        analysis["recommendation"]  = resolved
+        analysis["signal_type"]     = resolved
+        analysis["confluence"]["direction"] = resolved
+
+        # Decision metadata (useful for debugging / frontend display)
+        analysis["decision_meta"] = {
+            "bull_score":      bull_score,
+            "bear_score":      bear_score,
+            "score_delta":     round(score_delta, 1),
+            "threshold":       threshold,
+            "structure_bias":  structure_bias,
+            "htf_bias":        htf_bias,
+            "liq_bias":        liq_bias,
+            "zone_bias":       zone_bias,
+            "resolved":        resolved,
+            "is_ranging":      is_ranging,
+        }
+        logger.info(
+            f"DECISION [{resolved}] {symbol}/{timeframe}: "
+            f"bull={bull_score:.0f} bear={bear_score:.0f} Δ={score_delta:+.0f} "
+            f"struct={structure_bias} htf={htf_bias} liq={liq_bias}"
+        )
         return analysis
 
     # ═══════════════════════════════════════════════════════════════════════
