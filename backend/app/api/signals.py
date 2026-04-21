@@ -492,3 +492,60 @@ async def get_signal_details(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
+
+
+@router.get("/scorecard")
+def signals_scorecard(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
+    """لوحة أداء الإشارات — نسبة الفوز لكل رمز"""
+    closed_statuses = [SignalStatus.TP1_HIT, SignalStatus.TP2_HIT, SignalStatus.SL_HIT]
+
+    all_signals = db.query(Signal).filter(
+        Signal.status.in_(closed_statuses + [SignalStatus.ACTIVE, SignalStatus.EXPIRED])
+    ).all()
+
+    stats: dict = {}
+    for sig in all_signals:
+        m = sig.market
+        if m not in stats:
+            stats[m] = {"wins": 0, "losses": 0, "active": 0, "expired": 0}
+        if sig.status in (SignalStatus.TP1_HIT, SignalStatus.TP2_HIT):
+            stats[m]["wins"] += 1
+        elif sig.status == SignalStatus.SL_HIT:
+            stats[m]["losses"] += 1
+        elif sig.status == SignalStatus.ACTIVE:
+            stats[m]["active"] += 1
+        else:
+            stats[m]["expired"] += 1
+
+    result = []
+    total_wins = total_losses = 0
+    for market, d in sorted(stats.items()):
+        resolved = d["wins"] + d["losses"]
+        win_rate = round(d["wins"] / resolved * 100) if resolved > 0 else None
+        total_wins   += d["wins"]
+        total_losses += d["losses"]
+        result.append({
+            "market":   market,
+            "wins":     d["wins"],
+            "losses":   d["losses"],
+            "active":   d["active"],
+            "total":    resolved + d["active"] + d["expired"],
+            "win_rate": win_rate,
+        })
+
+    total_resolved = total_wins + total_losses
+    overall_win_rate = round(total_wins / total_resolved * 100) if total_resolved > 0 else None
+
+    return {
+        "scorecard": result,
+        "overall": {
+            "wins":     total_wins,
+            "losses":   total_losses,
+            "win_rate": overall_win_rate,
+            "total":    len(all_signals),
+        }
+    }

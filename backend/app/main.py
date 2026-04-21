@@ -15,7 +15,7 @@ import shutil
 
 from app.config import get_settings
 from app.database import init_db, get_db
-from app.api import signals, markets, analytics, chat, auth, subscription, admin, bot, public_chat, analyses, affiliate
+from app.api import signals, markets, analytics, chat, auth, subscription, admin, bot, public_chat, analyses, affiliate, alerts
 from app.services.gemini_engine import gemini_engine
 from app.services.rate_limiter import twelvedata_client
 from app.models.site_settings import SiteSettings
@@ -23,6 +23,84 @@ from sqlalchemy.orm import Session
 from fastapi import Depends
 
 settings = get_settings()
+
+
+# ── Price Alert Background Checker ────────────────────────────────────────────
+async def _price_alert_checker():
+    """يفحص تنبيهات الأسعار كل 30 ثانية ويرسل إشعار تلغرام عند التفعيل"""
+    import aiohttp
+    from datetime import datetime, timezone
+    from app.database import SessionLocal
+    from app.models.price_alert import PriceAlert, AlertDirection
+    from app.services.tv_price_feed import tv_feed
+
+    SYMBOL_NAMES = {
+        "XAUUSD": "🥇 الذهب", "XAGUSD": "🥈 الفضة",
+        "BTCUSD": "₿ بيتكوين", "ETHUSD": "Ξ إيثريوم",
+        "EURUSD": "EUR/USD", "GBPUSD": "GBP/USD",
+        "USDJPY": "USD/JPY", "USDCHF": "USD/CHF",
+        "NAS100": "📈 ناسداك", "US30": "📈 داو جونز",
+        "SP500": "📈 S&P 500", "USOIL": "🛢 النفط",
+    }
+
+    while True:
+        try:
+            await asyncio.sleep(30)
+            db = SessionLocal()
+            try:
+                pending = db.query(PriceAlert).filter(PriceAlert.triggered == False).all()
+                if not pending:
+                    continue
+
+                for alert in pending:
+                    price = tv_feed.get_price_sync(alert.symbol)
+                    if not price:
+                        continue
+
+                    hit = (
+                        (alert.direction == AlertDirection.ABOVE and price >= alert.target_price) or
+                        (alert.direction == AlertDirection.BELOW and price <= alert.target_price)
+                    )
+                    if not hit:
+                        continue
+
+                    # تعليم التنبيه كمُفعَّل
+                    alert.triggered    = True
+                    alert.triggered_at = datetime.now(timezone.utc)
+                    db.commit()
+
+                    if not alert.telegram_id:
+                        continue
+
+                    # إرسال رسالة تلغرام
+                    name  = SYMBOL_NAMES.get(alert.symbol, alert.symbol)
+                    arrow = "📈" if alert.direction == AlertDirection.ABOVE else "📉"
+                    note  = f"\n📝 {alert.note}" if alert.note else ""
+                    msg   = (
+                        f"🔔 *تنبيه السعر تم تفعيله!*\n\n"
+                        f"{arrow} *{name}*\n"
+                        f"السعر الحالي: `{price:,.2f}`\n"
+                        f"السعر المستهدف: `{alert.target_price:,.2f}`{note}\n\n"
+                        f"_تنبيه من Qaffel AI_"
+                    )
+                    token = settings.TELEGRAM_BOT_TOKEN
+                    url   = f"https://api.telegram.org/bot{token}/sendMessage"
+                    async with aiohttp.ClientSession() as sess:
+                        await sess.post(url, json={
+                            "chat_id":    alert.telegram_id,
+                            "text":       msg,
+                            "parse_mode": "Markdown",
+                        }, timeout=aiohttp.ClientTimeout(total=10))
+                    logger.info(f"🔔 Alert triggered: {alert.symbol} @ {price} (user {alert.user_id})")
+
+            finally:
+                db.close()
+
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error(f"Price alert checker error: {e}")
+
 
 # Configure logging
 logger.remove()
@@ -51,7 +129,13 @@ async def lifespan(app: FastAPI):
     except Exception as _tv_err:
         logger.warning(f"⚠️ TradingView feed failed to start: {_tv_err} — will use fallback pricing")
 
+    # بدء مهمة تنبيهات الأسعار
+    alert_task = asyncio.create_task(_price_alert_checker())
+    logger.success("✅ Price alert checker started")
+
     yield
+
+    alert_task.cancel()
 
     # Shutdown
     logger.info("👋 Shutting down Mosh AI Pro v5...")
@@ -199,6 +283,7 @@ app.include_router(chat.router,         prefix="/api/v1/chat",          tags=["C
 app.include_router(public_chat.router,  prefix="/api/v1/public",         tags=["Public"])
 app.include_router(analyses.router,     prefix="/api/v1/analyses",        tags=["Analyses"])
 app.include_router(affiliate.router,    prefix="/api/v1/affiliate",       tags=["Affiliate"])
+app.include_router(alerts.router,       prefix="/api/v1/alerts",           tags=["Alerts"])
 
 
 # WebSocket endpoint for real-time updates

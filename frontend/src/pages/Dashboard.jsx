@@ -7,6 +7,8 @@ import useMarkets from '../hooks/useMarkets'
 import { useLang } from '../contexts/LangContext'
 import PerformanceSection from '../components/PerformanceSection'
 import ReferralWidget from '../components/ReferralWidget'
+import PriceAlertWidget from '../components/PriceAlertWidget'
+import SignalScorecard from '../components/SignalScorecard'
 
 const T = {
   ar: {
@@ -351,6 +353,12 @@ export default function Dashboard() {
 
       {/* Referral Widget */}
       <ReferralWidget />
+
+      {/* Signal Scorecard */}
+      <SignalScorecard />
+
+      {/* Price Alerts */}
+      <PriceAlertWidget />
 
       {/* Quick Analyze */}
       <div className="bg-gray-800/60 border border-gray-700/80 rounded-2xl overflow-hidden">

@@ -11,6 +11,7 @@ from app.models.analysis import Analysis
 from app.models.analysis_log import AnalysisLog
 from app.models.site_settings import SiteSettings
 from app.models.affiliate import Affiliate, AffiliateReferral
+from app.models.price_alert import PriceAlert, AlertDirection
 
 __all__ = [
     "User", "UserRole", "PlanType",
@@ -21,4 +22,5 @@ __all__ = [
     "AnalysisLog",
     "SiteSettings",
     "Affiliate", "AffiliateReferral",
+    "PriceAlert", "AlertDirection",
 ]
