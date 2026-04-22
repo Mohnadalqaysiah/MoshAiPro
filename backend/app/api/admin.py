@@ -1405,3 +1405,138 @@ def admin_affiliate_payout(
         "pending_balance_usd": aff.pending_balance_usd,
         "paid_out_usd":        aff.paid_out_usd,
     }
+
+
+# ─── Re-engagement Campaign ───────────────────────────────────────────────────
+
+class ReEngageCampaignIn(BaseModel):
+    message:           str                   # نص الرسالة (يدعم {name})
+    interval_days:     int   = 3             # كم يوم بين كل إرسال
+    max_sends:         int   = 3             # الحد الأقصى للإرسال لكل مستخدم
+    expired_since_days: int  = 0             # المنتهيون منذ X يوم فقط (0=الكل)
+    include_trial:     bool  = False         # هل يشمل التجريبيين المنتهيين
+    dry_run:           bool  = False         # معاينة فقط بدون إرسال
+
+
+class ReEngageCampaignScheduleIn(BaseModel):
+    message:           str
+    interval_days:     int  = 3
+    max_sends:         int  = 3
+    include_trial:     bool = False
+
+
+@router.get("/reengagement/preview")
+def reengagement_preview(
+    expired_since_days: int = 0,
+    include_trial: bool = False,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """معاينة قائمة المستخدمين المنتهيين الذين لديهم Telegram"""
+    now = datetime.now(timezone.utc)
+
+    q = db.query(User).filter(
+        User.telegram_id != None,  # noqa
+        User.telegram_id != "",
+    )
+
+    if include_trial:
+        q = q.filter(User.plan.in_([PlanType.WEEKLY, PlanType.MONTHLY, PlanType.TRIAL]))
+    else:
+        q = q.filter(User.plan.in_([PlanType.WEEKLY, PlanType.MONTHLY]))
+
+    # منتهيو الاشتراك
+    q = q.filter(
+        (User.subscription_ends_at < now) | (User.subscription_ends_at == None)  # noqa
+    )
+
+    if expired_since_days > 0:
+        cutoff = now - timedelta(days=expired_since_days)
+        q = q.filter(User.subscription_ends_at >= cutoff)
+
+    users = q.all()
+    return {
+        "count": len(users),
+        "users": [
+            {
+                "id":          u.id,
+                "name":        u.full_name or u.email.split("@")[0],
+                "email":       u.email,
+                "plan":        u.plan.value,
+                "telegram_id": u.telegram_id,
+                "expired_at":  u.subscription_ends_at.isoformat() if u.subscription_ends_at else None,
+            }
+            for u in users[:50]   # أول 50 للمعاينة
+        ],
+    }
+
+
+@router.post("/reengagement/send")
+def reengagement_send(
+    data: ReEngageCampaignIn,
+    background: BackgroundTasks,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """
+    إرسال رسالة دعائية للمستخدمين المنتهيين عبر تيليجرام.
+    يدعم {name} في نص الرسالة.
+    interval_days / max_sends: للتتبع في SiteSettings (re_engage_log).
+    """
+    now = datetime.now(timezone.utc)
+
+    q = db.query(User).filter(
+        User.telegram_id != None,  # noqa
+        User.telegram_id != "",
+        (User.subscription_ends_at < now) | (User.subscription_ends_at == None),  # noqa
+    )
+    if not data.include_trial:
+        q = q.filter(User.plan.in_([PlanType.WEEKLY, PlanType.MONTHLY]))
+    else:
+        q = q.filter(User.plan.in_([PlanType.WEEKLY, PlanType.MONTHLY, PlanType.TRIAL]))
+
+    if data.expired_since_days > 0:
+        cutoff = now - timedelta(days=data.expired_since_days)
+        q = q.filter(User.subscription_ends_at >= cutoff)
+
+    users = q.all()
+
+    if not users:
+        return {"success": True, "sent": 0, "message": "لا يوجد مستخدمون مؤهلون"}
+
+    if data.dry_run:
+        return {
+            "success": True,
+            "dry_run": True,
+            "would_send": len(users),
+            "sample": [u.email for u in users[:5]],
+        }
+
+    # بناء قائمة (chat_id, text) مخصصة
+    import json as _json
+    tasks: list[tuple[str, str]] = []
+    for u in users:
+        name = u.full_name or u.email.split("@")[0]
+        text = data.message.replace("{name}", name)
+        tasks.append((u.telegram_id, text))
+
+    def _campaign_task(tasks_list):
+        import time as _t
+        sent = 0
+        for cid, txt in tasks_list:
+            if _send_telegram_message(cid, txt):
+                sent += 1
+            _t.sleep(0.05)
+        logger.info(f"📣 Re-engagement campaign: sent={sent}/{len(tasks_list)}")
+
+    background.add_task(_campaign_task, tasks)
+
+    logger.info(
+        f"📣 Re-engagement campaign queued: users={len(users)} "
+        f"interval={data.interval_days}d max={data.max_sends}"
+    )
+    return {
+        "success":   True,
+        "queued":    len(users),
+        "message":   f"جاري إرسال {len(users)} رسالة في الخلفية",
+    }

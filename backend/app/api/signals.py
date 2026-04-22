@@ -463,55 +463,6 @@ def get_public_results(db: Session = Depends(get_db)):
     }
 
 
-@router.get("/{signal_id}")
-async def get_signal_details(
-    signal_id: int,
-    db: Session = Depends(get_db)
-):
-    """
-    Get detailed signal information
-    """
-    try:
-        signal = db.query(Signal).filter(Signal.id == signal_id).first()
-        
-        if not signal:
-            raise HTTPException(status_code=404, detail="Signal not found")
-        
-        return {
-            "success": True,
-            "data": {
-                "id": signal.id,
-                "market": signal.market,
-                "timeframe": signal.timeframe,
-                "signal_type": signal.signal_type.value,
-                "signal_quality": signal.signal_quality.value,
-                "status": signal.status.value,
-                "entry_price": signal.entry_price,
-                "stop_loss": signal.stop_loss,
-                "take_profit_1": signal.take_profit_1,
-                "take_profit_2": signal.take_profit_2,
-                "current_price": signal.current_price,
-                "ai_confidence": signal.ai_confidence,
-                "ai_reasoning": signal.ai_reasoning,
-                "wyckoff_phase": signal.wyckoff_phase,
-                "premium_discount": signal.premium_discount,
-                "killzone": signal.killzone,
-                "risk_reward_ratio": signal.risk_reward_ratio,
-                "profit_loss": signal.profit_loss,
-                "profit_loss_percentage": signal.profit_loss_percentage,
-                "created_at": signal.created_at.isoformat(),
-                "expires_at": signal.expires_at.isoformat() if signal.expires_at else None
-            }
-        }
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"❌ Error fetching signal details: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-
 
 
 @router.get("/scorecard")
@@ -671,3 +622,47 @@ def signals_backtest(
         "by_symbol":    symbol_rows,
         "by_timeframe": tf_rows,
     }
+
+
+# ── Must be LAST — catches /{signal_id} after all static routes ──────────────
+@router.get("/{signal_id}")
+async def get_signal_details(
+    signal_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get detailed signal information"""
+    try:
+        signal = db.query(Signal).filter(Signal.id == signal_id).first()
+        if not signal:
+            raise HTTPException(status_code=404, detail="Signal not found")
+        return {
+            "success": True,
+            "data": {
+                "id": signal.id,
+                "market": signal.market,
+                "timeframe": signal.timeframe,
+                "signal_type": signal.signal_type.value,
+                "signal_quality": signal.signal_quality.value,
+                "status": signal.status.value,
+                "entry_price": signal.entry_price,
+                "stop_loss": signal.stop_loss,
+                "take_profit_1": signal.take_profit_1,
+                "take_profit_2": signal.take_profit_2,
+                "current_price": signal.current_price,
+                "ai_confidence": signal.ai_confidence,
+                "ai_reasoning": signal.ai_reasoning,
+                "wyckoff_phase": signal.wyckoff_phase,
+                "premium_discount": signal.premium_discount,
+                "killzone": signal.killzone,
+                "risk_reward_ratio": signal.risk_reward_ratio,
+                "profit_loss": signal.profit_loss,
+                "profit_loss_percentage": signal.profit_loss_percentage,
+                "created_at": signal.created_at.isoformat(),
+                "expires_at": signal.expires_at.isoformat() if signal.expires_at else None,
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error fetching signal details: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

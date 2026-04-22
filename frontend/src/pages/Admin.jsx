@@ -992,6 +992,9 @@ export default function Admin() {
                 <p>🚀 الإرسال يتم في الخلفية للمستخدمين الذين لديهم telegram_id</p>
                 <p>💬 يدعم HTML formatting في الرسائل</p>
               </div>
+
+              {/* ── Re-engagement Campaign ── */}
+              <ReEngagementCampaign />
             </div>
           )}
 
@@ -1805,6 +1808,155 @@ function RedemptionTiersAdmin({ saveSetting, siteSettings, settingEdits, setSett
         <button disabled={settingSaving===key} onClick={() => saveSetting(key)}
           className="flex items-center gap-1 bg-yellow-700 hover:bg-yellow-600 disabled:opacity-50 text-white text-xs px-4 py-1.5 rounded-lg transition">
           {settingSaving===key ? <RefreshCw size={11} className="animate-spin"/> : <CheckCircle size={11}/>} حفظ المستويات
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── Re-engagement Campaign Component ──────────────────────────────────────────
+const DEFAULT_REENG_MSGS = [
+  {
+    label: 'عرض تجديد',
+    text: `🎯 مرحباً {name}!\n\nنفتقدك في Qaffel AI 💙\n\nاشتراكك انتهى — لكن لديك فرصة للعودة بـ <b>عرض خاص</b>!\n\n✅ إشارات ذهب يومية\n✅ تحليل ICT + Smart Money\n✅ تنبيهات فورية\n\nجدّد الآن وعُد للتداول الاحترافي 🚀`,
+  },
+  {
+    label: 'تذكير بالنتائج',
+    text: `📊 {name}، هل رأيت نتائجنا الأخيرة؟\n\nالأسبوع الماضي على Qaffel AI:\n🥇 XAUUSD: +$420\n🥇 BTCUSD: +2.3%\n\nاشتراكك منتهي — جدّده الآن ولا تفوّت الإشارات القادمة 🎯`,
+  },
+  {
+    label: 'رسالة بسيطة',
+    text: `👋 {name}\n\nاشتراكك في Qaffel AI انتهى.\n\nنحن هنا إذا قررت العودة — المنصة تنتظرك 💪`,
+  },
+]
+
+function ReEngagementCampaign() {
+  const [msg, setMsg]             = useState(DEFAULT_REENG_MSGS[0].text)
+  const [intervalDays, setInterval] = useState(3)
+  const [maxSends, setMaxSends]   = useState(3)
+  const [expiredSince, setExpiredSince] = useState(0)
+  const [includeTrial, setIncludeTrial] = useState(false)
+  const [preview, setPreview]     = useState(null)
+  const [result, setResult]       = useState(null)
+  const [loading, setLoading]     = useState('')
+
+  const doPreview = async () => {
+    setLoading('preview'); setResult(null)
+    try {
+      const r = await axios.get(`${API}/api/v1/admin/reengagement/preview`, {
+        params: { expired_since_days: expiredSince, include_trial: includeTrial }
+      })
+      setPreview(r.data)
+    } catch (e) {
+      setResult({ type:'err', text: e.response?.data?.detail || 'خطأ' })
+    } finally { setLoading('') }
+  }
+
+  const doSend = async (dryRun = false) => {
+    if (!dryRun && !confirm(`إرسال الرسالة لـ ${preview?.count ?? '?'} مستخدم؟`)) return
+    setLoading('send'); setResult(null)
+    try {
+      const r = await axios.post(`${API}/api/v1/admin/reengagement/send`, {
+        message: msg, interval_days: intervalDays, max_sends: maxSends,
+        expired_since_days: expiredSince, include_trial: includeTrial, dry_run: dryRun,
+      })
+      setResult({ type:'ok', text: r.data.dry_run
+        ? `معاينة: سيُرسل لـ ${r.data.would_send} مستخدم`
+        : r.data.message
+      })
+    } catch (e) {
+      setResult({ type:'err', text: e.response?.data?.detail || 'خطأ' })
+    } finally { setLoading('') }
+  }
+
+  return (
+    <div className="mt-8 bg-gray-900 border border-orange-800/30 rounded-2xl p-5">
+      <h2 className="text-base font-bold text-orange-400 mb-1 flex items-center gap-2">
+        <Send size={16}/> حملة إعادة الاستهداف — المنتهيين
+      </h2>
+      <p className="text-xs text-gray-500 mb-4">إرسال رسالة تيليجرام لجميع المستخدمين المنتهيين الذين لديهم حساب تيليجرام</p>
+
+      {/* Quick templates */}
+      <div className="flex gap-2 flex-wrap mb-3">
+        {DEFAULT_REENG_MSGS.map(t => (
+          <button key={t.label} onClick={() => setMsg(t.text)}
+            className="text-xs px-3 py-1 rounded-lg border border-gray-700 text-gray-400 hover:border-orange-600 hover:text-orange-400 transition">
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Message editor */}
+      <div className="mb-3">
+        <label className="block text-xs text-gray-400 mb-1">نص الرسالة <span className="text-orange-400">(يدعم {'{name}'} و HTML)</span></label>
+        <textarea rows={6} value={msg} onChange={e => setMsg(e.target.value)}
+          className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white font-mono resize-y focus:outline-none focus:ring-1 focus:ring-orange-500"
+          dir="rtl"/>
+      </div>
+
+      {/* Settings row */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        <div>
+          <label className="block text-xs text-gray-400 mb-1">تكرار كل (يوم)</label>
+          <input type="number" min="1" max="30" value={intervalDays}
+            onChange={e => setInterval(Number(e.target.value))}
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white text-center" dir="ltr"/>
+        </div>
+        <div>
+          <label className="block text-xs text-gray-400 mb-1">حد الإرسال</label>
+          <input type="number" min="1" max="10" value={maxSends}
+            onChange={e => setMaxSends(Number(e.target.value))}
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white text-center" dir="ltr"/>
+        </div>
+        <div>
+          <label className="block text-xs text-gray-400 mb-1">منتهيون منذ (يوم، 0=الكل)</label>
+          <input type="number" min="0" max="365" value={expiredSince}
+            onChange={e => setExpiredSince(Number(e.target.value))}
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white text-center" dir="ltr"/>
+        </div>
+        <div className="flex items-end pb-1.5">
+          <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
+            <input type="checkbox" checked={includeTrial} onChange={e => setIncludeTrial(e.target.checked)}
+              className="accent-orange-500"/>
+            شمل التجريبيين
+          </label>
+        </div>
+      </div>
+
+      {/* Feedback */}
+      {result && (
+        <div className={`flex items-center gap-2 text-xs rounded-lg px-3 py-2 mb-3 ${result.type==='ok'?'bg-green-900/30 text-green-400':'bg-red-900/30 text-red-400'}`}>
+          {result.type==='ok'?<CheckCircle size={12}/>:<AlertTriangle size={12}/>} {result.text}
+        </div>
+      )}
+
+      {/* Preview result */}
+      {preview && (
+        <div className="bg-gray-800 rounded-xl p-3 mb-3 text-xs text-gray-300">
+          <p className="font-semibold text-white mb-1">معاينة: <span className="text-orange-400">{preview.count} مستخدم</span> مؤهل للإرسال</p>
+          <div className="flex flex-wrap gap-1">
+            {preview.users.slice(0,10).map(u => (
+              <span key={u.id} className="bg-gray-700 rounded px-2 py-0.5">{u.name}</span>
+            ))}
+            {preview.count > 10 && <span className="text-gray-500">+{preview.count - 10} أخرين</span>}
+          </div>
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="flex gap-2 flex-wrap">
+        <button disabled={loading==='preview'} onClick={doPreview}
+          className="flex items-center gap-1 text-xs border border-gray-600 text-gray-300 hover:border-gray-400 px-4 py-2 rounded-xl transition">
+          {loading==='preview'?<RefreshCw size={11} className="animate-spin"/>:<Activity size={11}/>} معاينة القائمة
+        </button>
+        <button disabled={loading==='send'} onClick={() => doSend(true)}
+          className="flex items-center gap-1 text-xs border border-orange-700/50 text-orange-400 hover:bg-orange-900/20 px-4 py-2 rounded-xl transition">
+          اختبار (بدون إرسال)
+        </button>
+        <button disabled={loading==='send' || !msg.trim()} onClick={() => doSend(false)}
+          className="flex items-center gap-1 text-xs bg-orange-700 hover:bg-orange-600 disabled:opacity-50 text-white px-5 py-2 rounded-xl transition font-semibold">
+          {loading==='send'?<RefreshCw size={11} className="animate-spin"/>:<Send size={11}/>}
+          إرسال الحملة
         </button>
       </div>
     </div>
