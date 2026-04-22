@@ -241,3 +241,67 @@ html {
   contain: strict;
   will-change: transform;
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   LIGHT THEME — applied when <html class="theme-light">
+   ══════════════════════════════════════════════════════════════════════ */
+:root.theme-light {
+  color-scheme: light;
+}
+
+/* ── Main backgrounds ── */
+.theme-light .min-h-screen { background-color: #f1f5f9 !important; }
+.theme-light .bg-gray-900  { background-color: #f1f5f9 !important; }
+.theme-light .bg-gray-950  { background-color: #e8eef5 !important; }
+.theme-light .bg-gray-800  { background-color: #ffffff !important; }
+.theme-light .bg-gray-800\/60 { background-color: rgba(255,255,255,0.95) !important; }
+.theme-light .bg-gray-700  { background-color: #e2e8f0 !important; }
+.theme-light .bg-gray-700\/50 { background-color: rgba(226,232,240,0.7) !important; }
+.theme-light .bg-gray-700\/80 { background-color: rgba(226,232,240,0.85) !important; }
+.theme-light .bg-gray-800\/30 { background-color: rgba(255,255,255,0.6) !important; }
+
+/* ── Navbar ── */
+.theme-light nav.bg-gray-800 {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+/* ── Text colors ── */
+.theme-light .text-white    { color: #0f172a !important; }
+.theme-light .text-gray-100 { color: #1e293b !important; }
+.theme-light .text-gray-200 { color: #334155 !important; }
+.theme-light .text-gray-300 { color: #475569 !important; }
+.theme-light .text-gray-400 { color: #64748b !important; }
+.theme-light .text-gray-500 { color: #94a3b8 !important; }
+
+/* ── Borders ── */
+.theme-light .border-gray-700     { border-color: #e2e8f0 !important; }
+.theme-light .border-gray-700\/50 { border-color: rgba(226,232,240,0.6) !important; }
+.theme-light .border-gray-700\/60 { border-color: rgba(226,232,240,0.7) !important; }
+.theme-light .border-gray-700\/80 { border-color: rgba(226,232,240,0.9) !important; }
+.theme-light .border-gray-600     { border-color: #cbd5e1 !important; }
+
+/* ── Hover states ── */
+.theme-light .hover\:bg-gray-700:hover { background-color: #e2e8f0 !important; }
+.theme-light .hover\:bg-gray-600:hover { background-color: #cbd5e1 !important; }
+.theme-light .hover\:text-white:hover  { color: #0f172a !important; }
+
+/* ── Scrollbar ── */
+.theme-light ::-webkit-scrollbar-track { background: #f1f5f9; }
+.theme-light ::-webkit-scrollbar-thumb { background: #cbd5e1; }
+.theme-light ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* ── BestOpportunityWidget — dark defaults ── */
+.best-opp-widget     { background-color: rgba(31,41,55,0.6); border-color: rgba(55,65,81,0.8); color: #f9fafb; }
+.best-opp-header     { background-color: rgba(17,24,39,0.4); border-color: rgba(55,65,81,0.6); }
+.best-opp-track      { background-color: rgba(55,65,81,0.6); }
+.best-opp-level-card { background-color: rgba(17,24,39,0.4); }
+.best-opp-sub        { color: #9ca3af; }
+
+/* ── BestOpportunityWidget — light overrides ── */
+.theme-light .best-opp-widget     { background-color: #ffffff; border-color: #e2e8f0; color: #0f172a; }
+.theme-light .best-opp-header     { background-color: #f8fafc; border-color: #e2e8f0; }
+.theme-light .best-opp-track      { background-color: #e2e8f0; }
+.theme-light .best-opp-level-card { background-color: #f1f5f9; }
+.theme-light .best-opp-sub        { color: #64748b; }

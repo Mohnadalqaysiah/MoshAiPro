@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { TrendingUp, BarChart2, Activity, Zap, LogOut, Shield, User, Menu, X, Settings, History, Globe } from 'lucide-react'
+import { TrendingUp, BarChart2, Activity, Zap, LogOut, Shield, User, Menu, X, Settings, History, Globe, Sun, Moon } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
+import { useTheme } from '../contexts/ThemeContext'
 import useSiteSettings from '../hooks/useSiteSettings'
 
 export default function Navbar() {
@@ -10,6 +11,7 @@ export default function Navbar() {
   const navigate  = useNavigate()
   const { user, logout } = useAuth()
   const { lang, toggle: toggleLang } = useLang()
+  const { isDark, toggle: toggleTheme } = useTheme()
   const siteSettings = useSiteSettings()
   const [open, setOpen] = useState(false)
 
@@ -89,6 +91,13 @@ export default function Navbar() {
             </Link>
           )}
           <button
+            onClick={toggleTheme}
+            title={isDark ? (isAr ? 'الوضع النهاري' : 'Light mode') : (isAr ? 'الوضع الليلي' : 'Dark mode')}
+            className="flex items-center gap-1 text-xs text-gray-400 hover:text-yellow-400 px-2 py-1.5 rounded-lg hover:bg-gray-700"
+          >
+            {isDark ? <Sun size={14} /> : <Moon size={14} />}
+          </button>
+          <button
             onClick={toggleLang}
             title={isAr ? 'Switch to English' : 'التبديل للعربية'}
             className="flex items-center gap-1 text-xs text-gray-400 hover:text-blue-400 px-2 py-1.5 rounded-lg hover:bg-gray-700"
@@ -151,6 +160,13 @@ export default function Navbar() {
               <span className="truncate">حسابي — {user.full_name || user.email}</span>
             </Link>
           )}
+          <button
+            onClick={toggleTheme}
+            className="flex items-center gap-2 w-full px-4 py-2.5 rounded-lg text-sm text-gray-400 hover:bg-gray-700"
+          >
+            {isDark ? <Sun size={16} className="text-yellow-400" /> : <Moon size={16} className="text-blue-400" />}
+            {isDark ? (isAr ? 'الوضع النهاري' : 'Light Mode') : (isAr ? 'الوضع الليلي' : 'Dark Mode')}
+          </button>
           <button onClick={handleLogout} className="flex items-center gap-2 w-full px-4 py-2.5 rounded-lg text-sm text-red-400 hover:bg-gray-700">
             <LogOut size={16} /> تسجيل الخروج
           </button>

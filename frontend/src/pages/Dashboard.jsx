@@ -10,6 +10,7 @@ import ReferralWidget from '../components/ReferralWidget'
 import PriceAlertWidget from '../components/PriceAlertWidget'
 import SignalScorecard from '../components/SignalScorecard'
 import RedemptionWidget from '../components/RedemptionWidget'
+import BestOpportunityWidget from '../components/BestOpportunityWidget'
 
 const T = {
   ar: {
@@ -277,6 +278,9 @@ export default function Dashboard() {
 
       {/* Quick Analysis Modal */}
       <QuickModal result={quickResult} onClose={() => setQuickResult(null)} />
+
+      {/* Best Opportunity Widget */}
+      <BestOpportunityWidget />
 
       {error && (
         <div className="flex items-center justify-between gap-2 p-3 bg-red-900/30 border border-red-700 rounded-lg text-red-400 text-sm">

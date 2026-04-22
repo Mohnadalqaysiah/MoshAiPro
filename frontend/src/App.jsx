@@ -2,6 +2,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { lazy, Suspense } from 'react'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { LangProvider, useLang } from './contexts/LangContext'
+import { ThemeProvider } from './contexts/ThemeContext'
+import OnboardingTour from './components/OnboardingTour'
 import './App.css'
 
 // Eagerly load only the most critical shared components
@@ -85,6 +87,7 @@ function AppRoutes() {
               <Navbar />
               <TrialBanner />
               <TelegramLinkBanner />
+              <OnboardingTour />
               <main className="container mx-auto px-3 sm:px-4 py-5 sm:py-6 max-w-7xl">
                 <Routes>
                   <Route path="/dashboard" element={<Dashboard />} />
@@ -109,12 +112,14 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <LangProvider>
-      <AuthProvider>
-        <Router>
-          <AppRoutes />
-        </Router>
-      </AuthProvider>
-    </LangProvider>
+    <ThemeProvider>
+      <LangProvider>
+        <AuthProvider>
+          <Router>
+            <AppRoutes />
+          </Router>
+        </AuthProvider>
+      </LangProvider>
+    </ThemeProvider>
   )
 }
