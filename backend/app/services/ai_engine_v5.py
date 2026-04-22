@@ -293,6 +293,9 @@ class MoshAIEngineV5:
             # ── EXPLAINABILITY LAYER — audit-grade trace (runs last, no changes)
             analysis = self._explainability_layer(analysis, symbol, timeframe, htf_analysis)
 
+            # ── NORMALIZE OUTPUT LAYER — unified schema for API/Bot/Dashboard
+            analysis = self._normalize_output_layer(analysis, symbol, timeframe)
+
             rec  = analysis.get("recommendation", "WAIT")
             conf = analysis.get("ai_confidence_score", 0)
             logger.success(f"✅ {symbol}/{timeframe}: {rec} | {conf}% | {int(ms)}ms")
@@ -947,6 +950,260 @@ class MoshAIEngineV5:
             f"Δ={delta:+.0f}/{threshold:.0f} "
             f"priority={priority_used.split('—')[0].strip()} "
             f"conflicts={len(conflicts)}"
+        )
+        return analysis
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # NORMALIZE OUTPUT LAYER — Unified schema for API / Bot / Dashboard
+    # Runs LAST — read-only normalization, never changes decisions
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def _normalize_output_layer(
+        self,
+        analysis: dict,
+        symbol: str,
+        timeframe: str,
+    ) -> dict:
+        """
+        Unified Output Schema.
+        Reads all existing analysis fields and builds analysis["output"]
+        with a stable, typed schema consumed by API / Bot / Dashboard.
+        Does NOT change any decision — pure normalization only.
+        """
+        decision  = analysis.get("recommendation", "WAIT")
+        meta      = analysis.get("decision_meta", {})
+        struct    = analysis.get("market_structure", {})
+        sweep     = analysis.get("liquidity_sweep", {})
+        ob        = analysis.get("order_blocks", {})
+        pd_zone   = analysis.get("premium_discount", {})
+        levels    = analysis.get("levels", {})
+        conf      = float(analysis.get("ai_confidence_score") or 0)
+        trace     = analysis.get("reason_trace", {})
+
+        # ── decision ─────────────────────────────────────────────────────
+        action = "NO TRADE" if decision in ("WAIT", "NO TRADE") else decision
+        decision_reason = (
+            trace.get("why_this_trade")
+            or analysis.get("rejection_reason")
+            or analysis.get("no_trade_reason")
+            or "N/A"
+        )
+        out_decision = {
+            "action":     action,
+            "confidence": round(conf, 1),
+            "reason":     str(decision_reason),
+        }
+
+        # ── score ─────────────────────────────────────────────────────────
+        bull_score = float(meta.get("bull_score") or analysis.get("confluence", {}).get("bull_score") or 0)
+        bear_score = float(meta.get("bear_score") or analysis.get("confluence", {}).get("bear_score") or 0)
+        delta      = float(meta.get("score_delta") or (bull_score - bear_score))
+        threshold  = float(meta.get("threshold") or self._DECISION_THRESHOLD_TREND)
+        out_score  = {
+            "bull":     round(bull_score, 1),
+            "bear":     round(bear_score, 1),
+            "delta":    round(delta, 1),
+            "required": round(threshold, 1),
+            "status":   "PASS" if abs(delta) >= threshold else "FAIL",
+        }
+
+        # ── market_structure ──────────────────────────────────────────────
+        raw_trend    = struct.get("trend", "RANGING")
+        bos_events   = struct.get("bos_events", [])
+        choch_events = struct.get("choch_events", [])
+        bull_bos     = sum(1 for b in bos_events if "BULLISH" in b.get("type", ""))
+        bear_bos     = sum(1 for b in bos_events if "BEARISH" in b.get("type", ""))
+        # normalise trend string
+        if raw_trend in ("BULLISH", "BEARISH", "RANGING"):
+            norm_trend = raw_trend
+        elif "BULL" in str(raw_trend).upper():
+            norm_trend = "BULLISH"
+        elif "BEAR" in str(raw_trend).upper():
+            norm_trend = "BEARISH"
+        else:
+            norm_trend = "RANGING"
+
+        last_choch = "NONE"
+        if choch_events:
+            lc = choch_events[-1] if isinstance(choch_events[-1], dict) else {}
+            raw_lc = lc.get("type", "")
+            if "BULL" in str(raw_lc).upper():
+                last_choch = "BULLISH"
+            elif "BEAR" in str(raw_lc).upper():
+                last_choch = "BEARISH"
+
+        out_structure = {
+            "trend":      norm_trend,
+            "bos_bull":   bull_bos,
+            "bos_bear":   bear_bos,
+            "last_choch": last_choch,
+        }
+
+        # ── liquidity ─────────────────────────────────────────────────────
+        has_bull_sweep = sweep.get("has_bullish_sweep", False)
+        has_bear_sweep = sweep.get("has_bearish_sweep", False)
+        sweep_detected = has_bull_sweep or has_bear_sweep
+
+        if has_bull_sweep:
+            sweep_type_out = "SSL"
+            sweep_info     = sweep.get("ssl_sweep") or {}
+        elif has_bear_sweep:
+            sweep_type_out = "BSL"
+            sweep_info     = sweep.get("bsl_sweep") or {}
+        else:
+            sweep_type_out = "NONE"
+            sweep_info     = {}
+
+        sq_raw = str(sweep.get("sweep_quality", "NONE")).upper()
+        if sq_raw in ("STRONG", "HIGH"):
+            strength = "STRONG"
+        elif sq_raw in ("MODERATE", "MEDIUM", "CONFIRMED"):
+            strength = "MODERATE"
+        elif sweep_detected:
+            strength = "WEAK"
+        else:
+            strength = "NONE"
+
+        sweep_confirmed = has_bull_sweep or has_bear_sweep  # quality-confirmed sweep
+        candles_since   = int(sweep_info.get("candles_since") or 0)
+
+        out_liquidity = {
+            "sweep_detected": sweep_detected,
+            "sweep_type":     sweep_type_out,
+            "sweep_confirmed": sweep_confirmed,
+            "strength":       strength,
+            "candles_since":  candles_since,
+        }
+
+        # ── order_blocks ──────────────────────────────────────────────────
+        current_price = float(analysis.get("current_price") or 0)
+        primary_bull_ob = analysis.get("primary_bull_ob")
+        primary_bear_ob = analysis.get("primary_bear_ob")
+        all_bull_obs    = ob.get("bullish_obs", [])
+        all_bear_obs    = ob.get("bearish_obs", [])
+
+        primary_ob   = primary_bull_ob if action == "BUY" else (primary_bear_ob if action == "SELL" else (primary_bull_ob or primary_bear_ob))
+        ob_type      = "BULLISH" if primary_ob is primary_bull_ob else ("BEARISH" if primary_ob is primary_bear_ob else "NONE")
+        total_obs    = (len(all_bull_obs) if action in ("BUY", "NO TRADE") else len(all_bear_obs)) or len(all_bull_obs) + len(all_bear_obs)
+        rejected_cnt = max(0, total_obs - 1) if primary_ob else 0
+
+        rej_reason = "NONE"
+        gate_rej = analysis.get("rejection_reason", "")
+        if "DISTANCE" in str(gate_rej):
+            rej_reason = "DISTANCE"
+        elif "OVERLAP" in str(gate_rej) or "CONFLICT" in str(gate_rej):
+            rej_reason = "CONFLICT"
+        elif "WEAK" in str(gate_rej):
+            rej_reason = "WEAK"
+
+        if primary_ob and isinstance(primary_ob, dict):
+            ob_low  = float(primary_ob.get("low", 0))
+            ob_high = float(primary_ob.get("high", 0))
+            mid     = (ob_low + ob_high) / 2
+            dist_pct = round(abs(current_price - mid) / mid * 100, 3) if mid else 0
+            out_ob = {
+                "primary": {
+                    "type":         ob_type,
+                    "range":        [round(ob_low, 5), round(ob_high, 5)],
+                    "distance_pct": dist_pct,
+                },
+                "rejected_count":   rejected_cnt,
+                "rejection_reason": rej_reason,
+            }
+        else:
+            out_ob = {
+                "primary":          None,
+                "rejected_count":   rejected_cnt,
+                "rejection_reason": rej_reason,
+            }
+
+        # ── zone ──────────────────────────────────────────────────────────
+        pd_name = str(pd_zone.get("zone", "EQUILIBRIUM")).upper()
+        if "DISCOUNT" in pd_name:
+            zone_type = "DISCOUNT"
+        elif "PREMIUM" in pd_name:
+            zone_type = "PREMIUM"
+        else:
+            zone_type = "EQUILIBRIUM"
+
+        zone_pct = round(float(pd_zone.get("pct") or 0), 2)
+
+        if action == "BUY":
+            aligned = zone_type == "DISCOUNT"
+        elif action == "SELL":
+            aligned = zone_type == "PREMIUM"
+        else:
+            aligned = False
+
+        out_zone = {
+            "type":              zone_type,
+            "value_pct":         zone_pct,
+            "aligned_with_trade": aligned,
+        }
+
+        # ── conflicts ─────────────────────────────────────────────────────
+        raw_conflicts = trace.get("conflicts_detected", [])
+        out_conflicts = []
+        for c in raw_conflicts:
+            if c == "NONE":
+                continue
+            # parse "A ≠ B → resolved: X" format from explainability layer
+            parts = str(c).split("→")
+            details  = parts[0].strip()
+            resolved = parts[1].replace("resolved:", "").strip() if len(parts) > 1 else "unknown"
+            # infer conflict type
+            if "HTF" in details:
+                c_type = "HTF_CONFLICT"
+            elif "Zone" in details:
+                c_type = "ZONE_CONFLICT"
+            elif "Liquidity" in details:
+                c_type = "LIQUIDITY_CONFLICT"
+            else:
+                c_type = "STRUCTURE_CONFLICT"
+            out_conflicts.append({
+                "type":        c_type,
+                "details":     details,
+                "resolved_by": resolved,
+            })
+
+        # ── no_trade_reason ───────────────────────────────────────────────
+        no_trade_reasons = []
+        if action == "NO TRADE":
+            gate_rej_str = analysis.get("rejection_reason")
+            dec_rej_str  = analysis.get("no_trade_reason")
+            if gate_rej_str:
+                no_trade_reasons.append(str(gate_rej_str))
+            elif dec_rej_str:
+                no_trade_reasons.append(str(dec_rej_str))
+            else:
+                # build from trace
+                for r in trace.get("rejection_reasons", []):
+                    if r and r != "N/A — all checks passed":
+                        no_trade_reasons.append(r)
+            if not no_trade_reasons:
+                if out_score["status"] == "FAIL":
+                    no_trade_reasons.append("SCORE_DELTA_INSUFFICIENT")
+                if not sweep_detected:
+                    no_trade_reasons.append("NO_LIQUIDITY_SWEEP")
+                if bull_bos == 0 and bear_bos == 0 and last_choch == "NONE":
+                    no_trade_reasons.append("NO_BOS_NO_CHOCH")
+
+        # ── assemble final output ─────────────────────────────────────────
+        analysis["output"] = {
+            "decision":        out_decision,
+            "score":           out_score,
+            "market_structure": out_structure,
+            "liquidity":       out_liquidity,
+            "order_blocks":    out_ob,
+            "zone":            out_zone,
+            "conflicts":       out_conflicts,
+            "no_trade_reason": no_trade_reasons,
+        }
+
+        logger.debug(
+            f"OUTPUT NORMALIZED [{action}] {symbol}/{timeframe}: "
+            f"score={out_score['status']} sweep={sweep_type_out} "
+            f"zone={zone_type} conflicts={len(out_conflicts)}"
         )
         return analysis
 
