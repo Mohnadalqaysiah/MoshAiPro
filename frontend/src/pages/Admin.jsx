@@ -29,6 +29,11 @@ function UserModal({ user: u, onClose, onUpdate }) {
   const [extraDays, setExtraDays] = useState(7)
   const [loading, setLoading] = useState('')
   const [msg, setMsg] = useState(null)
+  // Renewal state
+  const [renewDays, setRenewDays]       = useState(30)
+  const [renewPlan, setRenewPlan]       = useState('monthly')
+  const [renewReason, setRenewReason]   = useState('')
+  const [renewNotify, setRenewNotify]   = useState(true)
 
   const doAction = async (action, payload = {}) => {
     setLoading(action); setMsg(null)
@@ -36,6 +41,11 @@ function UserModal({ user: u, onClose, onUpdate }) {
       if (action === 'reset_trial') {
         await axios.post(`${API}/api/v1/admin/users/${u.id}/reset-trial`)
         setMsg({ type:'ok', text:'تم إعادة تعيين التجربة' })
+      } else if (action === 'renew') {
+        const res = await axios.post(`${API}/api/v1/admin/users/${u.id}/renew`, {
+          days: renewDays, plan: renewPlan, reason: renewReason, notify_telegram: renewNotify,
+        })
+        setMsg({ type:'ok', text:`✅ تم التجديد حتى ${res.data.new_end?.slice(0,10)} | إشعار: ${res.data.notified?'أُرسل':'لا Telegram'}` })
       } else if (action === 'extend') {
         await axios.put(`${API}/api/v1/admin/users/${u.id}`, { extra_days: extraDays })
         setMsg({ type:'ok', text:`تم تمديد الاشتراك ${extraDays} يوم` })
@@ -117,9 +127,50 @@ function UserModal({ user: u, onClose, onUpdate }) {
               </div>
             </div>
 
+            {/* Renewal */}
+            <div className="bg-gray-800/50 rounded-xl p-3 border border-green-700/30">
+              <p className="text-xs text-green-400 font-semibold mb-3 flex items-center gap-1">
+                <RefreshCw size={12}/> إعادة تنشيط / تجديد الاشتراك
+              </p>
+              <div className="grid grid-cols-2 gap-2 mb-2">
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">المدة (يوم)</label>
+                  <input type="number" min="1" max="365" value={renewDays}
+                    onChange={e => setRenewDays(Number(e.target.value))}
+                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-green-500 text-center" dir="ltr"/>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">الباقة</label>
+                  <select value={renewPlan} onChange={e => setRenewPlan(e.target.value)}
+                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-green-500">
+                    <option value="monthly">شهري</option>
+                    <option value="weekly">أسبوعي</option>
+                  </select>
+                </div>
+              </div>
+              <div className="mb-2">
+                <label className="text-xs text-gray-400 block mb-1">السبب (اختياري)</label>
+                <input type="text" value={renewReason} placeholder="مكافأة / استثناء / خطأ دفع..."
+                  onChange={e => setRenewReason(e.target.value)}
+                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-green-500"/>
+              </div>
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
+                  <input type="checkbox" checked={renewNotify} onChange={e => setRenewNotify(e.target.checked)}
+                    className="accent-green-500"/>
+                  إشعار تلغرام للمستخدم
+                </label>
+                <button disabled={loading==='renew'}
+                  onClick={() => doAction('renew')}
+                  className="flex items-center gap-1 text-xs bg-green-700 hover:bg-green-600 text-white px-4 py-1.5 rounded-lg transition font-semibold">
+                  {loading==='renew' ? '...' : <><RefreshCw size={11}/> تجديد</>}
+                </button>
+              </div>
+            </div>
+
             {/* Extend */}
             <div>
-              <p className="text-xs text-gray-400 mb-2">تمديد الاشتراك</p>
+              <p className="text-xs text-gray-400 mb-2">تمديد بسيط</p>
               <div className="flex gap-2">
                 <input type="number" min="1" max="365" value={extraDays}
                   onChange={e => setExtraDays(Number(e.target.value))}
@@ -510,6 +561,23 @@ export default function Admin() {
                       placeholder="بحث..." className="bg-gray-800 border border-gray-700 rounded-lg pr-8 pl-3 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500 w-40" dir="ltr"/>
                   </div>
                   <button onClick={() => { setUsersLimit(10); loadUsers() }} className="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded-lg">بحث</button>
+                  {/* Bulk Renewal */}
+                  <button
+                    onClick={async () => {
+                      if (!confirm('تجديد جميع المستخدمين المنتهيين (30 يوم / شهري) مع إشعار تلغرام؟')) return
+                      try {
+                        const r = await axios.post(`${API}/api/v1/admin/users/bulk-renew`, {
+                          days: 30, plan: 'monthly', reason: 'تجديد جماعي من الأدمن', notify_telegram: true,
+                        })
+                        alert(`✅ تم تجديد ${r.data.renewed} مستخدم | إشعارات: ${r.data.notified}`)
+                        loadUsers()
+                      } catch (e) {
+                        alert('خطأ: ' + (e.response?.data?.detail || e.message))
+                      }
+                    }}
+                    className="flex items-center gap-1 text-xs bg-green-800/60 hover:bg-green-700/60 text-green-300 border border-green-700/40 px-3 py-1.5 rounded-lg transition">
+                    <RefreshCw size={12}/> تجديد المنتهيين
+                  </button>
                 </div>
               </div>
 
@@ -1589,6 +1657,12 @@ export default function Admin() {
                   </div>
 
                   <p className="text-xs text-gray-600">* تأخذ التغييرات مفعولها على الاشتراكات الجديدة فقط</p>
+
+                  {/* ── Redemption Tiers ── */}
+                  <div className="mt-6">
+                    <h2 className="text-sm font-semibold text-yellow-400 uppercase tracking-wider mb-3">🏆 مستويات استبدال النقاط</h2>
+                    <RedemptionTiersAdmin saveSetting={saveSetting} siteSettings={siteSettings} settingEdits={settingEdits} setSettingEdits={setSettingEdits} settingSaving={settingSaving} />
+                  </div>
                 </div>
               )}
 
@@ -1668,6 +1742,70 @@ export default function Admin() {
           )}
 
         </main>
+      </div>
+    </div>
+  )
+}
+
+// ── Redemption Tiers Admin Component ──────────────────────────────────────────
+function RedemptionTiersAdmin({ saveSetting, siteSettings, settingEdits, setSettingEdits, settingSaving }) {
+  const DEFAULT = [
+    { id:1, label:'تحليل مجاني',  points:20,   reward_type:'analysis', reward_value:1,  description:'تحليل واحد' },
+    { id:2, label:'3 تحليلات',    points:50,   reward_type:'analysis', reward_value:3,  description:'3 تحليلات' },
+    { id:3, label:'يوم اشتراك',   points:100,  reward_type:'days',     reward_value:1,  description:'يوم مجاني' },
+    { id:4, label:'أسبوع اشتراك', points:500,  reward_type:'days',     reward_value:7,  description:'أسبوع مجاني' },
+    { id:5, label:'شهر اشتراك',   points:2000, reward_type:'days',     reward_value:30, description:'شهر مجاني' },
+  ]
+  const key = 'redemption_tiers'
+  const raw = settingEdits[key] ?? siteSettings[key]?.value ?? ''
+  let tiers = DEFAULT
+  try { if (raw) tiers = JSON.parse(raw) } catch {}
+
+  const [localTiers, setLocalTiers] = useState(tiers)
+  const updateTier = (idx, field, val) => {
+    const t = localTiers.map((t, i) => i === idx ? { ...t, [field]: field==='points'||field==='reward_value' ? Number(val) : val } : t)
+    setLocalTiers(t)
+    setSettingEdits(s => ({ ...s, [key]: JSON.stringify(t) }))
+  }
+  const addTier = () => {
+    const t = [...localTiers, { id: Date.now(), label:'جديد', points:100, reward_type:'analysis', reward_value:1, description:'' }]
+    setLocalTiers(t); setSettingEdits(s => ({ ...s, [key]: JSON.stringify(t) }))
+  }
+  const removeTier = (idx) => {
+    const t = localTiers.filter((_,i) => i !== idx)
+    setLocalTiers(t); setSettingEdits(s => ({ ...s, [key]: JSON.stringify(t) }))
+  }
+
+  return (
+    <div className="space-y-3">
+      {localTiers.map((t, idx) => (
+        <div key={t.id} className="bg-gray-900 border border-gray-800 rounded-xl p-3 grid grid-cols-5 gap-2 items-center text-xs">
+          <input value={t.label} onChange={e => updateTier(idx,'label',e.target.value)}
+            className="col-span-1 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white" placeholder="الاسم"/>
+          <div className="flex items-center gap-1">
+            <input type="number" value={t.points} onChange={e => updateTier(idx,'points',e.target.value)}
+              className="w-16 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-center" dir="ltr"/>
+            <span className="text-gray-500">نقطة</span>
+          </div>
+          <select value={t.reward_type} onChange={e => updateTier(idx,'reward_type',e.target.value)}
+            className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white">
+            <option value="analysis">تحليل</option>
+            <option value="days">أيام</option>
+          </select>
+          <div className="flex items-center gap-1">
+            <input type="number" value={t.reward_value} onChange={e => updateTier(idx,'reward_value',e.target.value)}
+              className="w-14 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-center" dir="ltr"/>
+            <span className="text-gray-500">{t.reward_type==='days'?'يوم':'×'}</span>
+          </div>
+          <button onClick={() => removeTier(idx)} className="text-red-500 hover:text-red-400 justify-self-end">✕</button>
+        </div>
+      ))}
+      <div className="flex gap-2">
+        <button onClick={addTier} className="text-xs text-blue-400 hover:text-blue-300 px-3 py-1.5 border border-blue-700/40 rounded-lg">+ إضافة مستوى</button>
+        <button disabled={settingSaving===key} onClick={() => saveSetting(key)}
+          className="flex items-center gap-1 bg-yellow-700 hover:bg-yellow-600 disabled:opacity-50 text-white text-xs px-4 py-1.5 rounded-lg transition">
+          {settingSaving===key ? <RefreshCw size={11} className="animate-spin"/> : <CheckCircle size={11}/>} حفظ المستويات
+        </button>
       </div>
     </div>
   )

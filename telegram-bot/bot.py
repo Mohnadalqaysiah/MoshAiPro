@@ -1361,4 +1361,16 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # إذا حدث Conflict error — احذر من نسخة قديمة من البوت
+    # حاول مرة أخرى بعد انتظار
+    while True:
+        try:
+            main()
+        except Exception as e:
+            if "Conflict" in str(e):
+                logger.error(f"❌ Conflict error: {e}")
+                logger.info("⏳ انتظار 30 ثانية قبل المحاولة مرة أخرى...")
+                import time
+                time.sleep(30)
+            else:
+                raise

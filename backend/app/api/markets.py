@@ -9,6 +9,8 @@ from loguru import logger
 from app.config import get_settings, MARKET_CONFIG
 from app.database import get_db
 from app.models.market_config import MarketConfig
+from app.models.signal import Signal, SignalStatus
+from app.services.auth_service import get_current_user
 
 settings = get_settings()
 router = APIRouter()
@@ -86,6 +88,103 @@ def get_supported_markets(db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"❌ Error fetching markets: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/overview")
+def market_overview(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """
+    Market Overview — خريطة حرارية لجميع الأسواق.
+    يُرجع آخر إشارة لكل رمز (الاتجاه + الثقة) + إحصائيات الأداء.
+    """
+    from datetime import datetime, timezone, timedelta
+    from sqlalchemy import func
+
+    closed = [SignalStatus.TP1_HIT, SignalStatus.TP2_HIT, SignalStatus.SL_HIT]
+    since_30d = datetime.now(timezone.utc) - timedelta(days=30)
+
+    # آخر إشارة لكل رمز (subquery: max id per market)
+    sub = (
+        db.query(Signal.market, func.max(Signal.id).label("max_id"))
+        .group_by(Signal.market)
+        .subquery()
+    )
+    latest_sigs = (
+        db.query(Signal)
+        .join(sub, Signal.id == sub.c.max_id)
+        .all()
+    )
+
+    # Win-rate آخر 30 يوم لكل رمز
+    perf_sigs = db.query(Signal).filter(
+        Signal.status.in_(closed),
+        Signal.created_at >= since_30d,
+    ).all()
+
+    perf: dict = {}
+    for s in perf_sigs:
+        m = s.market or "?"
+        if m not in perf:
+            perf[m] = {"wins": 0, "losses": 0}
+        if s.status in (SignalStatus.TP1_HIT, SignalStatus.TP2_HIT):
+            perf[m]["wins"] += 1
+        else:
+            perf[m]["losses"] += 1
+
+    # Live prices
+    try:
+        from app.services.smart_data import smart_data
+        def _price(sym):
+            meta = smart_data.get_realtime_price_with_meta(sym)
+            return round(meta["price"], 5) if meta else None
+    except Exception:
+        def _price(_): return None
+
+    markets_map = {}
+    for sig in latest_sigs:
+        m  = sig.market or "?"
+        p  = perf.get(m, {})
+        res = p.get("wins", 0) + p.get("losses", 0)
+        wr  = round(p["wins"] / res * 100) if res > 0 else None
+        markets_map[m] = {
+            "symbol":         m,
+            "direction":      sig.signal_type or "WAIT",
+            "confidence":     float(sig.ai_confidence or 0),
+            "win_rate_30d":   wr,
+            "wins_30d":       p.get("wins", 0),
+            "losses_30d":     p.get("losses", 0),
+            "last_signal_at": sig.created_at.isoformat() if sig.created_at else None,
+            "live_price":     _price(m),
+        }
+
+    # أضف الأسواق التي لا توجد لها إشارات بعد
+    try:
+        for m in db.query(MarketConfig).filter(MarketConfig.is_active == True).all():
+            if m.symbol not in markets_map:
+                markets_map[m.symbol] = {
+                    "symbol": m.symbol, "direction": "WAIT", "confidence": 0,
+                    "win_rate_30d": None, "wins_30d": 0, "losses_30d": 0,
+                    "last_signal_at": None, "live_price": _price(m.symbol),
+                }
+    except Exception:
+        pass
+
+    items = sorted(markets_map.values(), key=lambda x: (
+        0 if x["direction"] in ("BUY", "SELL") else 1,
+        -(x["confidence"] or 0),
+    ))
+
+    return {
+        "markets": items,
+        "summary": {
+            "buy":  sum(1 for x in items if x["direction"] == "BUY"),
+            "sell": sum(1 for x in items if x["direction"] == "SELL"),
+            "wait": sum(1 for x in items if x["direction"] not in ("BUY","SELL")),
+        },
+        "total": len(items),
+    }
 
 
 @router.get("/{symbol}/price")

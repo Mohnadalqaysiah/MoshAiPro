@@ -155,6 +155,30 @@ POINTS_PER_REGISTER  = 10   # نقاط عند تسجيل مدعو
 POINTS_PER_SUBSCRIBE = 50   # نقاط إضافية عند اشتراك المدعو
 POINTS_PER_ANALYSIS  = 20   # نقاط مطلوبة للحصول على تحليل مجاني
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Default redemption tiers (can be overridden from SiteSettings key
+# "redemption_tiers" as JSON array)
+# ─────────────────────────────────────────────────────────────────────────────
+DEFAULT_REDEMPTION_TIERS = [
+    {"id": 1, "label": "تحليل مجاني",  "points": 20,   "reward_type": "analysis", "reward_value": 1,  "description": "تحليل واحد إضافي"},
+    {"id": 2, "label": "3 تحليلات",    "points": 50,   "reward_type": "analysis", "reward_value": 3,  "description": "3 تحليلات مجانية"},
+    {"id": 3, "label": "يوم اشتراك",   "points": 100,  "reward_type": "days",     "reward_value": 1,  "description": "يوم اشتراك مجاني"},
+    {"id": 4, "label": "أسبوع اشتراك", "points": 500,  "reward_type": "days",     "reward_value": 7,  "description": "أسبوع اشتراك مجاني"},
+    {"id": 5, "label": "شهر اشتراك",   "points": 2000, "reward_type": "days",     "reward_value": 30, "description": "شهر اشتراك مجاني"},
+]
+
+
+def _get_tiers(db: Session) -> list:
+    """Return tiers from SiteSettings or defaults."""
+    import json
+    row = db.query(SiteSettings).filter(SiteSettings.key == "redemption_tiers").first()
+    if row and row.value:
+        try:
+            return json.loads(row.value)
+        except Exception:
+            pass
+    return DEFAULT_REDEMPTION_TIERS
+
 
 @router.get("/points-summary")
 def points_summary(
@@ -212,4 +236,83 @@ def redeem_points(
         "points_remaining":    user.referral_points,
         "analyses_left":       user.trial_analyses_left,
         "message":             "تم استبدال 20 نقطة بتحليل مجاني ✅",
+    }
+
+
+# ─── Redemption Tiers ─────────────────────────────────────────────────────────
+
+@router.get("/redemption-tiers")
+def get_redemption_tiers(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """قائمة مستويات الاستبدال المتاحة مع حالة المستخدم"""
+    tiers  = _get_tiers(db)
+    points = user.referral_points or 0
+    result = []
+    for t in tiers:
+        result.append({
+            **t,
+            "can_redeem":    points >= t["points"],
+            "points_needed": max(0, t["points"] - points),
+        })
+    return {"points": points, "tiers": result}
+
+
+class RedeemTierIn(BaseModel):
+    tier_id: int
+
+
+@router.post("/redeem-tier")
+def redeem_tier(
+    data: RedeemTierIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """استبدال نقاط بمكافأة من أحد المستويات"""
+    from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+    tiers  = _get_tiers(db)
+    tier   = next((t for t in tiers if t["id"] == data.tier_id), None)
+    if not tier:
+        raise HTTPException(404, "المستوى غير موجود")
+
+    points = user.referral_points or 0
+    cost   = tier["points"]
+    if points < cost:
+        raise HTTPException(400, f"تحتاج {cost} نقطة. لديك {points} فقط.")
+
+    user.referral_points = points - cost
+    reward_type  = tier["reward_type"]
+    reward_value = int(tier["reward_value"])
+    msg_ar = ""
+
+    if reward_type == "analysis":
+        user.trial_analyses_left = (user.trial_analyses_left or 0) + reward_value
+        msg_ar = f"تم إضافة {reward_value} تحليل مجاني ✅"
+
+    elif reward_type == "days":
+        now  = _dt.now(_tz.utc)
+        base = max(user.subscription_ends_at or now, now)
+        user.subscription_ends_at = base + _td(days=reward_value)
+        if user.plan not in (PlanType.WEEKLY, PlanType.MONTHLY):
+            user.plan = PlanType.MONTHLY
+        user.is_active = True
+        msg_ar = f"تم إضافة {reward_value} يوم اشتراك ✅"
+
+    else:
+        raise HTTPException(400, "نوع مكافأة غير مدعوم")
+
+    db.commit()
+    logger.info(
+        f"🎁 Tier redeem: user={user.email} tier_id={data.tier_id} "
+        f"cost={cost} reward={reward_type}×{reward_value} remaining={user.referral_points}"
+    )
+    return {
+        "success":          True,
+        "tier_label":       tier["label"],
+        "points_spent":     cost,
+        "points_remaining": user.referral_points,
+        "reward_type":      reward_type,
+        "reward_value":     reward_value,
+        "message":          msg_ar,
     }

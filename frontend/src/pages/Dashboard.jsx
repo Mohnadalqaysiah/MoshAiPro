@@ -9,6 +9,7 @@ import PerformanceSection from '../components/PerformanceSection'
 import ReferralWidget from '../components/ReferralWidget'
 import PriceAlertWidget from '../components/PriceAlertWidget'
 import SignalScorecard from '../components/SignalScorecard'
+import RedemptionWidget from '../components/RedemptionWidget'
 
 const T = {
   ar: {
@@ -353,6 +354,9 @@ export default function Dashboard() {
 
       {/* Referral Widget */}
       <ReferralWidget />
+
+      {/* Redemption Widget */}
+      <RedemptionWidget />
 
       {/* Signal Scorecard */}
       <SignalScorecard />

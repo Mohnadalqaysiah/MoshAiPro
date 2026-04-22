@@ -568,3 +568,106 @@ def signals_scorecard(
             "total":    len(all_signals),
         }
     }
+
+
+@router.get("/backtest")
+def signals_backtest(
+    symbol:    str = "",
+    timeframe: str = "",
+    days:      int = 90,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
+    """
+    Backtesting Lite — أداء الإشارات التاريخية.
+    يمكن الفلترة بـ symbol و timeframe والمدة الزمنية (days).
+    """
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    closed = [SignalStatus.TP1_HIT, SignalStatus.TP2_HIT, SignalStatus.SL_HIT]
+
+    q = db.query(Signal).filter(
+        Signal.status.in_(closed),
+        Signal.created_at >= since,
+    )
+    if symbol:
+        q = q.filter(Signal.market == symbol.upper())
+    if timeframe:
+        q = q.filter(Signal.timeframe == timeframe)
+
+    sigs = q.order_by(Signal.created_at.desc()).all()
+
+    # ── Aggregate by symbol ──────────────────────────────────────────────────
+    by_symbol: dict = {}
+    by_tf: dict = {}
+    rr_values = []
+
+    for s in sigs:
+        m  = s.market or "?"
+        tf = s.timeframe or "?"
+        win = s.status in (SignalStatus.TP1_HIT, SignalStatus.TP2_HIT)
+
+        # by symbol
+        if m not in by_symbol:
+            by_symbol[m] = {"wins": 0, "losses": 0, "rr_sum": 0.0, "signals": []}
+        by_symbol[m]["wins" if win else "losses"] += 1
+        rr = float(s.risk_reward_ratio or 0)
+        by_symbol[m]["rr_sum"] += rr if win else 0
+
+        # by timeframe
+        if tf not in by_tf:
+            by_tf[tf] = {"wins": 0, "losses": 0}
+        by_tf[tf]["wins" if win else "losses"] += 1
+
+        if rr > 0:
+            rr_values.append(rr if win else -rr)
+
+        # last 5 signals preview
+        if len(by_symbol[m]["signals"]) < 5:
+            by_symbol[m]["signals"].append({
+                "id":         s.id,
+                "direction":  s.signal_type,
+                "status":     s.status.value if s.status else "",
+                "entry":      s.entry_price,
+                "rr":         rr,
+                "created_at": s.created_at.isoformat() if s.created_at else None,
+            })
+
+    # ── Build result ──────────────────────────────────────────────────────────
+    symbol_rows = []
+    for m, d in sorted(by_symbol.items()):
+        resolved = d["wins"] + d["losses"]
+        wr = round(d["wins"] / resolved * 100, 1) if resolved > 0 else None
+        avg_rr = round(d["rr_sum"] / d["wins"], 2) if d["wins"] > 0 else None
+        symbol_rows.append({
+            "symbol":        m,
+            "wins":          d["wins"],
+            "losses":        d["losses"],
+            "total":         resolved,
+            "win_rate":      wr,
+            "avg_winning_rr": avg_rr,
+            "recent":        d["signals"],
+        })
+
+    tf_rows = []
+    for tf, d in sorted(by_tf.items()):
+        resolved = d["wins"] + d["losses"]
+        wr = round(d["wins"] / resolved * 100, 1) if resolved > 0 else None
+        tf_rows.append({"timeframe": tf, "wins": d["wins"], "losses": d["losses"], "win_rate": wr})
+
+    total_wins   = sum(d["wins"]   for d in by_symbol.values())
+    total_losses = sum(d["losses"] for d in by_symbol.values())
+    total_res    = total_wins + total_losses
+    avg_rr_all   = round(sum(rr_values) / len(rr_values), 2) if rr_values else None
+
+    return {
+        "filter": {"symbol": symbol or "ALL", "timeframe": timeframe or "ALL", "days": days},
+        "overall": {
+            "total":    total_res,
+            "wins":     total_wins,
+            "losses":   total_losses,
+            "win_rate": round(total_wins / total_res * 100, 1) if total_res > 0 else None,
+            "avg_rr":   avg_rr_all,
+        },
+        "by_symbol":    symbol_rows,
+        "by_timeframe": tf_rows,
+    }

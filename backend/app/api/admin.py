@@ -206,6 +206,140 @@ def reset_trial(
     return {"success": True, "message": "تم إعادة تعيين التجربة"}
 
 
+class RenewUserIn(BaseModel):
+    days:             int    = 30
+    plan:             str    = "monthly"   # monthly | weekly
+    reason:           str    = ""
+    notify_telegram:  bool   = True
+
+
+class BulkRenewIn(BaseModel):
+    user_ids:        Optional[List[int]] = None   # None = all expired
+    days:            int  = 30
+    plan:            str  = "monthly"
+    reason:          str  = ""
+    notify_telegram: bool = True
+
+
+@router.post("/users/{user_id}/renew")
+def renew_user(
+    user_id: int,
+    data: RenewUserIn,
+    background: BackgroundTasks,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """تجديد اشتراك مستخدم واحد مع إشعار تلغرام اختياري"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(404, "المستخدم غير موجود")
+
+    now   = datetime.now(timezone.utc)
+    base  = max(user.subscription_ends_at or now, now)
+    new_end = base + timedelta(days=data.days)
+
+    try:
+        plan_enum = PlanType(data.plan)
+    except ValueError:
+        plan_enum = PlanType.MONTHLY
+
+    user.plan                = plan_enum
+    user.is_active           = True
+    user.subscription_ends_at = new_end
+    db.commit()
+
+    logger.info(
+        f"🔄 Renewal: user={user.email} days={data.days} "
+        f"plan={data.plan} reason={data.reason!r} new_end={new_end.date()}"
+    )
+
+    if data.notify_telegram and user.telegram_id:
+        plan_label = {"monthly": "شهري", "weekly": "أسبوعي"}.get(data.plan, data.plan)
+        msg = (
+            f"✅ <b>تم تجديد اشتراكك</b>\n\n"
+            f"الباقة: <b>{plan_label}</b>\n"
+            f"المدة المضافة: <b>{data.days} يوم</b>\n"
+            f"ينتهي في: <b>{new_end.strftime('%Y-%m-%d')}</b>"
+        )
+        if data.reason:
+            msg += f"\nالسبب: {data.reason}"
+        background.add_task(_send_telegram_message, user.telegram_id, msg)
+
+    return {
+        "success":       True,
+        "user_id":       user.id,
+        "email":         user.email,
+        "plan":          user.plan.value,
+        "new_end":       new_end.isoformat(),
+        "days_added":    data.days,
+        "notified":      bool(data.notify_telegram and user.telegram_id),
+    }
+
+
+@router.post("/users/bulk-renew")
+def bulk_renew(
+    data: BulkRenewIn,
+    background: BackgroundTasks,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """تجديد جماعي — إما قائمة محددة أو جميع المنتهيين"""
+    now = datetime.now(timezone.utc)
+
+    if data.user_ids:
+        users = db.query(User).filter(User.id.in_(data.user_ids)).all()
+    else:
+        # جميع المنتهيين (subscription_ends_at < now أو فارغة + plan ليس trial/banned)
+        users = db.query(User).filter(
+            User.plan.in_([PlanType.WEEKLY, PlanType.MONTHLY]),
+            (User.subscription_ends_at < now) | (User.subscription_ends_at == None),  # noqa
+        ).all()
+
+    if not users:
+        return {"success": True, "renewed": 0, "message": "لا يوجد مستخدمون منتهون"}
+
+    try:
+        plan_enum = PlanType(data.plan)
+    except ValueError:
+        plan_enum = PlanType.MONTHLY
+
+    plan_label = {"monthly": "شهري", "weekly": "أسبوعي"}.get(data.plan, data.plan)
+    renewed, notified = 0, 0
+
+    for user in users:
+        base    = max(user.subscription_ends_at or now, now)
+        new_end = base + timedelta(days=data.days)
+        user.plan                = plan_enum
+        user.is_active           = True
+        user.subscription_ends_at = new_end
+        renewed += 1
+
+        if data.notify_telegram and user.telegram_id:
+            msg = (
+                f"✅ <b>تم تجديد اشتراكك</b>\n\n"
+                f"الباقة: <b>{plan_label}</b>\n"
+                f"المدة المضافة: <b>{data.days} يوم</b>\n"
+                f"ينتهي في: <b>{new_end.strftime('%Y-%m-%d')}</b>"
+            )
+            if data.reason:
+                msg += f"\nالسبب: {data.reason}"
+            background.add_task(_send_telegram_message, user.telegram_id, msg)
+            notified += 1
+
+    db.commit()
+    logger.info(
+        f"🔄 Bulk renewal: renewed={renewed} notified={notified} "
+        f"days={data.days} plan={data.plan} reason={data.reason!r}"
+    )
+    return {
+        "success":  True,
+        "renewed":  renewed,
+        "notified": notified,
+        "days_added": data.days,
+        "plan":     data.plan,
+    }
+
+
 @router.delete("/users/{user_id}/ban")
 def ban_user(
     user_id: int,

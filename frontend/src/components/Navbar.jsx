@@ -16,11 +16,12 @@ export default function Navbar() {
   const isAr = lang === 'ar'
 
   const links = [
-    { path: '/dashboard', label: isAr ? 'لوحة التحكم' : 'Dashboard',  icon: <Activity size={16} /> },
-    { path: '/signals',   label: isAr ? 'الإشارات'    : 'Signals',    icon: <Zap size={16} /> },
-    { path: '/analyses',  label: isAr ? 'سجل التحليل' : 'Analyses',   icon: <History size={16} /> },
-    { path: '/markets',   label: isAr ? 'الأسواق'     : 'Markets',    icon: <TrendingUp size={16} /> },
-    { path: '/analytics', label: isAr ? 'التحليلات'   : 'Analytics',  icon: <BarChart2 size={16} /> },
+    { path: '/dashboard',      label: isAr ? 'لوحة التحكم'   : 'Dashboard',      icon: <Activity size={16} /> },
+    { path: '/signals',        label: isAr ? 'الإشارات'       : 'Signals',        icon: <Zap size={16} /> },
+    { path: '/analyses',       label: isAr ? 'سجل التحليل'   : 'Analyses',       icon: <History size={16} /> },
+    { path: '/market-overview',label: isAr ? 'نظرة الأسواق'  : 'Overview',       icon: <Globe size={16} /> },
+    { path: '/backtesting',    label: isAr ? 'الأداء التاريخي': 'Backtesting',    icon: <BarChart2 size={16} /> },
+    { path: '/analytics',      label: isAr ? 'التحليلات'      : 'Analytics',      icon: <TrendingUp size={16} /> },
   ]
 
   const handleLogout = () => { logout(); navigate('/login') }

@@ -29,6 +29,8 @@ const Analytics      = lazy(() => import('./pages/Analytics'))
 const Analyses       = lazy(() => import('./pages/Analyses'))
 const Profile        = lazy(() => import('./pages/Profile'))
 const AffiliatePage  = lazy(() => import('./pages/AffiliatePage'))
+const MarketOverview = lazy(() => import('./pages/MarketOverview'))
+const Backtesting    = lazy(() => import('./pages/Backtesting'))
 const ChatBot        = lazy(() => import('./components/ChatBot'))
 
 const PageLoader = () => (
@@ -91,7 +93,9 @@ function AppRoutes() {
                   <Route path="/analytics" element={<Analytics />} />
                   <Route path="/analyses"  element={<Analyses />} />
                   <Route path="/profile"   element={<Profile />} />
-                  <Route path="/affiliate" element={<AffiliatePage />} />
+                  <Route path="/affiliate"       element={<AffiliatePage />} />
+                  <Route path="/market-overview" element={<MarketOverview />} />
+                  <Route path="/backtesting"     element={<Backtesting />} />
                 </Routes>
               </main>
               <ChatBot />
