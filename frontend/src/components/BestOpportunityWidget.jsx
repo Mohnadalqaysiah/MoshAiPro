@@ -63,13 +63,22 @@ export default function BestOpportunityWidget() {
   const rec   = best?.recommendation || best?.signal_type || ''
   const conf  = best?.ai_confidence_score || best?.ai_confidence || 0
   const lvl   = best?.levels || {}
-  const entry = lvl.entry || best?.entry_zones?.[0]
-  const sl    = lvl.stop_loss || best?.stop_loss_zone
-  const tp1   = lvl.tp1 || best?.take_profit_zones?.[0]
+  const entry = lvl.entry   || best?.entry_price   || best?.entry_zones?.[0]
+  const sl    = lvl.stop_loss || best?.stop_loss   || best?.stop_loss_zone
+  const tp1   = lvl.tp1    || best?.take_profit_1 || best?.take_profit_zones?.[0]
   const rr    = best?.risk_reward_ratio || lvl.risk_reward
   const sym   = best?.symbol || best?.market || ''
   const tf    = best?.timeframe || '1h'
-  const fmt   = (v, d = 5) => v != null ? Number(v).toFixed(d) : '—'
+
+  // حدد عدد الخانات العشرية بناءً على حجم السعر
+  const decimals = (v) => {
+    if (!v) return 5
+    const n = Number(v)
+    if (n >= 100) return 2
+    if (n >= 10)  return 3
+    return 5
+  }
+  const fmt = (v) => v != null && v !== 0 ? Number(v).toFixed(decimals(v)) : '—'
 
   const isBuy  = rec === 'BUY'
   const isSell = rec === 'SELL'
@@ -146,9 +155,9 @@ export default function BestOpportunityWidget() {
             <div className="grid grid-cols-4 gap-2 pt-1">
               {[
                 { label: tx.entry, val: fmt(entry) },
-                { label: tx.sl,    val: fmt(sl) },
-                { label: tx.tp,    val: fmt(tp1) },
-                { label: tx.rr,    val: rr ? `${Number(rr).toFixed(1)}×` : '—' },
+                { label: tx.sl,    val: fmt(sl)    },
+                { label: tx.tp,    val: fmt(tp1)   },
+                { label: tx.rr,    val: rr ? `${Number(rr).toFixed(2)}×` : '—' },
               ].map(({ label, val }) => (
                 <div key={label} className="text-center best-opp-level-card rounded-lg py-2 px-1">
                   <p className="text-xs opacity-50 mb-0.5">{label}</p>

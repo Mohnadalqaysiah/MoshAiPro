@@ -220,13 +220,21 @@ async def get_latest_signals(
             "count": len(signals),
             "data": [
                 {
-                    "id": s.id,
-                    "market": s.market,
-                    "signal_type": s.signal_type.value if hasattr(s.signal_type, 'value') else s.signal_type,
-                    "entry_price": s.entry_price,
-                    "status": s.status.value if hasattr(s.status, 'value') else s.status,
-                    "ai_confidence": s.ai_confidence,
-                    "created_at": s.created_at.isoformat()
+                    "id":               s.id,
+                    "symbol":           s.market,
+                    "market":           s.market,
+                    "timeframe":        s.timeframe,
+                    "recommendation":   s.signal_type.value if hasattr(s.signal_type, 'value') else s.signal_type,
+                    "signal_type":      s.signal_type.value if hasattr(s.signal_type, 'value') else s.signal_type,
+                    "entry_price":      s.entry_price,
+                    "stop_loss":        s.stop_loss,
+                    "take_profit_1":    s.take_profit_1,
+                    "take_profit_2":    s.take_profit_2,
+                    "risk_reward_ratio": s.risk_reward_ratio,
+                    "status":           s.status.value if hasattr(s.status, 'value') else s.status,
+                    "ai_confidence":    s.ai_confidence,
+                    "ai_confidence_score": s.ai_confidence,
+                    "created_at":       s.created_at.isoformat()
                 }
                 for s in signals
             ]
