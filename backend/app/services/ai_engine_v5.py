@@ -760,14 +760,15 @@ class MoshAIEngineV5:
         else:  # VOLATILE
             required_delta = 25
 
-        # ── 3. Dynamic min RR (based on winrate) ──────────────────────────────
+        # ── 3. Dynamic min RR (market_state-aware + winrate) ──────────────────
         wr = self.get_winrate()
+        # RANGING markets: lower RR bar (1.0) — smaller moves, tighter ranges
+        # TRENDING/VOLATILE: standard 1.1
+        base_rr = 1.0 if market_state == "RANGING" else 1.1
         if wr < 0.40:
-            min_rr = 1.3
-        elif wr < 0.55:
-            min_rr = 1.1
+            min_rr = max(base_rr + 0.2, 1.3)   # winrate penalty on top of base
         else:
-            min_rr = 1.1   # floor is 1.1
+            min_rr = base_rr
 
         # ── 4. Sweep confirmation requirement ────────────────────────────────
         require_sweep_confirmation = (market_state == "TRENDING")
@@ -838,7 +839,10 @@ class MoshAIEngineV5:
             )
 
         # ── 9. Apply hard limits (clamp) ──────────────────────────────────────
-        delta_min = 18 if emergency_active else self._CALIB_DELTA_MIN
+        # Dynamic delta floor: max(16, avg_delta × 0.85) instead of fixed 20
+        # Emergency mode already set required_delta above — clamp only, don't re-override
+        avg_delta_floor = self._get_avg_delta(symbol, timeframe)
+        delta_min = max(16.0, avg_delta_floor * 0.85)
         required_delta  = max(delta_min,               min(self._CALIB_DELTA_MAX,    required_delta))
         min_rr          = max(self._CALIB_RR_MIN,      min(self._CALIB_RR_MAX,       min_rr))
         entry_tolerance = max(self._CALIB_TOL_MIN,     min(self._CALIB_TOL_MAX,      entry_tolerance))
@@ -1641,15 +1645,17 @@ class MoshAIEngineV5:
         sweep_quality_raw = str(sweep.get("sweep_quality", "NONE")).upper()
 
         # Score delta bonus/penalty from sweep quality
+        # Sweep quality → effective_delta adjustment (weights reduced 30–40% to
+        # avoid over-filtering from sweep absence / weakness)
         sweep_delta_adj = 0.0
         if sweep_quality_raw in ("STRONG", "HIGH"):
-            sweep_delta_adj = +5.0    # strong sweep adds to effective delta
+            sweep_delta_adj = +3.5    # was +5.0  (×0.70)
         elif sweep_quality_raw in ("MODERATE", "MEDIUM", "CONFIRMED"):
-            sweep_delta_adj = +2.0
+            sweep_delta_adj = +1.5    # was +2.0  (×0.75)
         elif sweep_quality_raw == "WEAK":
-            sweep_delta_adj = -2.0    # weak sweep is a mild penalty, NOT rejection
+            sweep_delta_adj = -1.2    # was -2.0  (×0.60 — less penalty)
         elif not any_sweep:
-            sweep_delta_adj = -5.0    # no sweep at all — penalty only
+            sweep_delta_adj = -3.0    # was -5.0  (×0.60 — less penalty)
 
         # ── SCORING LAYER: effective_delta ────────────────────────────────────
         # All quality signals feed into one number. No rejections here.
