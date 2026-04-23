@@ -294,8 +294,11 @@ class MoshAIEngineV5:
             # ── INSTITUTIONAL GATE — validates levels if decision was made ────
             if analysis.get("recommendation") in ("BUY", "SELL"):
                 analysis = self._institutional_gate(analysis, symbol, timeframe, htf_analysis)
-                # Record this signal for silence tracker
                 if analysis.get("institutional_gate_passed"):
+                    # ── CONFIDENCE CALIBRATION — replaces raw AI score ────────
+                    analysis = self._confidence_calibration_layer(
+                        analysis, symbol, timeframe, htf_analysis
+                    )
                     self._record_signal_issued(symbol, timeframe)
 
             # ── BORDERLINE RESCUE — soft-rejected signals get re-examined ────
@@ -679,7 +682,7 @@ class MoshAIEngineV5:
     # Hard limits — never exceeded regardless of market conditions
     _CALIB_DELTA_MIN      = 20
     _CALIB_DELTA_MAX      = 35
-    _CALIB_RR_MIN         = 1.2
+    _CALIB_RR_MIN         = 1.3
     _CALIB_RR_MAX         = 2.0
     _CALIB_TOL_MIN        = 0.0025   # 0.25%
     _CALIB_TOL_MAX        = 0.0060   # 0.60%
@@ -739,12 +742,12 @@ class MoshAIEngineV5:
 
         # ── 3. Dynamic min RR (based on winrate) ──────────────────────────────
         wr = self.get_winrate()
-        if wr < 0.40:
-            min_rr = 1.6
-        elif wr < 0.55:
-            min_rr = 1.4
+        if wr < 0.50:
+            min_rr = 1.5   # winrate below 50% → stricter
+        elif wr < 0.60:
+            min_rr = 1.3   # normal
         else:
-            min_rr = 1.2
+            min_rr = 1.3   # floor is always 1.3
 
         # ── 4. Sweep confirmation requirement ────────────────────────────────
         require_sweep_confirmation = (market_state == "TRENDING")
@@ -1426,6 +1429,20 @@ class MoshAIEngineV5:
         bear_score  = float(confluence.get("bear_score", 0))
         score_delta = bull_score - bear_score   # >0 = bullish lean, <0 = bearish lean
 
+        # ── 0. Anti-Noise Filter (low timeframe control) ─────────────────────
+        # On ≤15m: require sweep + micro structure (BOS or CHoCH) OR strong delta
+        if timeframe in ("1m", "5m", "15m"):
+            has_any_sweep_early = (
+                sweep.get("has_bullish_sweep", False) or sweep.get("has_bearish_sweep", False)
+            )
+            has_micro_struct = bool(struct.get("bos_events")) or bool(struct.get("choch_events"))
+            raw_delta_early  = abs(bull_score - bear_score)
+            # Use calibrated threshold if available
+            early_thresh = float(analysis.get("_calib_delta") or self._DECISION_THRESHOLD_TREND)
+            strong_delta = raw_delta_early >= early_thresh + 10
+            if not ((has_any_sweep_early and has_micro_struct) or strong_delta):
+                return self._hard_reject(analysis, "LOW_TF_NOISE_FILTER")
+
         # ── 1. Range Trap → immediate NO TRADE ──────────────────────────────
         if rng_conflict.get("in_range_trap") or rng_conflict.get("avoid_entry"):
             return self._hard_reject(analysis, "RANGE_TRAP_OB_OVERLAP_NO_BOS")
@@ -1752,6 +1769,34 @@ class MoshAIEngineV5:
             if not (z_lo <= entry <= z_hi or abs(entry - z_lo) / entry <= tol):
                 return self._hard_reject(analysis, "SELL_ENTRY_NOT_NEAR_RESISTANCE")
 
+        # Rule 5b: Entry Quality Filter — OB depth + FVG/imbalance requirement
+        # Reject if entry is too deep inside OB (> 70% — stale zone, no reaction)
+        active_ob = support_zone if rec == "BUY" else resist_zone
+        if active_ob:
+            ob_lo  = float(active_ob.get("low",  0))
+            ob_hi  = float(active_ob.get("high", 0))
+            ob_rng = ob_hi - ob_lo
+            if ob_rng > 0 and entry > 0:
+                if rec == "BUY":
+                    depth_pct = (entry - ob_lo) / ob_rng
+                else:
+                    depth_pct = (ob_hi - entry) / ob_rng
+                if depth_pct > 0.70:
+                    return self._hard_reject(analysis, f"ENTRY_TOO_DEEP_IN_OB_{depth_pct*100:.0f}PCT")
+
+        # FVG / price imbalance check — require at least one imbalance near entry
+        # Only enforce if FVG data is present (skip if ICT engine didn't produce it)
+        fvg_data = analysis.get("fvg") or analysis.get("fair_value_gaps") or []
+        if fvg_data and isinstance(fvg_data, list) and entry > 0:
+            tol_fvg = tol * 3  # 3× entry tolerance
+            fvg_near = any(
+                abs(((float(f.get("low", 0)) + float(f.get("high", 0))) / 2) - entry) / entry <= tol_fvg
+                for f in fvg_data
+                if isinstance(f, dict) and f.get("low") and f.get("high")
+            )
+            if not fvg_near:
+                return self._hard_reject(analysis, "NO_FVG_NEAR_ENTRY")
+
         # Rule 6: TP/SL ordering + auto-fix swap
         tp1, tp2 = tp1_raw, tp2_raw
         if rec == "BUY":
@@ -1797,24 +1842,34 @@ class MoshAIEngineV5:
         if spread / sl_dist > 0.30:
             return self._hard_reject(analysis, "SPREAD_EATS_RISK")
 
-        # Rule 10: Liquidity-based TP override
+        # Rule 10: Liquidity-based TP placement
+        # TP1 = slightly BEFORE liquidity (avoid running into it)
+        # TP2 = AT liquidity level
+        # TP3 = BEYOND liquidity (runner)
         liquidity   = analysis.get("liquidity", {})
         nearest_bsl = liquidity.get("nearest_bsl")
         nearest_ssl = liquidity.get("nearest_ssl")
+        atr_offset  = atr * 0.3 if atr else 0  # hold-back before liquidity
 
         if rec == "BUY" and nearest_bsl and float(nearest_bsl) > entry:
-            liq_tp1 = float(nearest_bsl)
-            liq_tp2 = round(liq_tp1 + (atr * 2 if atr else liq_tp1 * 0.005), 5)
-            if abs(liq_tp1 - entry) / entry > 0.003:
-                levels["tp1"] = round(liq_tp1, 5)
+            liq_level = float(nearest_bsl)
+            if abs(liq_level - entry) / entry > 0.003:
+                liq_tp1 = round(liq_level - atr_offset, 5)   # before liquidity
+                liq_tp2 = round(liq_level, 5)                 # at liquidity
+                liq_tp3 = round(liq_level + (atr * 1.5 if atr else liq_level * 0.005), 5)
+                levels["tp1"] = liq_tp1
                 levels["tp2"] = liq_tp2
+                levels["tp3"] = liq_tp3
                 tp1 = liq_tp1
         elif rec == "SELL" and nearest_ssl and float(nearest_ssl) < entry:
-            liq_tp1 = float(nearest_ssl)
-            liq_tp2 = round(liq_tp1 - (atr * 2 if atr else liq_tp1 * 0.005), 5)
-            if abs(entry - liq_tp1) / entry > 0.003:
-                levels["tp1"] = round(liq_tp1, 5)
+            liq_level = float(nearest_ssl)
+            if abs(entry - liq_level) / entry > 0.003:
+                liq_tp1 = round(liq_level + atr_offset, 5)   # before liquidity
+                liq_tp2 = round(liq_level, 5)                 # at liquidity
+                liq_tp3 = round(liq_level - (atr * 1.5 if atr else liq_level * 0.005), 5)
+                levels["tp1"] = liq_tp1
                 levels["tp2"] = liq_tp2
+                levels["tp3"] = liq_tp3
                 tp1 = liq_tp1
 
         # Rule 11: Cooldown (use calibrated cooldown if available)
@@ -1822,32 +1877,193 @@ class MoshAIEngineV5:
         if not self.check_cooldown(symbol, timeframe, override_sec=calib_cooldown):
             return self._hard_reject(analysis, "COOLDOWN_ACTIVE")
 
-        # Rule 14: Confidence system
-        conf = float(analysis.get("ai_confidence_score") or 0)
-
-        # HTF alignment
+        # Rule 14: HTF conflict — hard reject only (confidence is handled by calibration layer)
         if htf_analysis:
             htf_trend = htf_analysis.get("market_structure", {}).get("trend", "RANGING")
-            if (rec == "BUY" and htf_trend == "BULLISH") or                (rec == "SELL" and htf_trend == "BEARISH"):
-                conf = min(conf + 8, 95)
-            elif (rec == "BUY" and htf_trend == "BEARISH") or                  (rec == "SELL" and htf_trend == "BULLISH"):
-                conf = max(conf - 15, 0)
-                if conf < 50:
-                    return self._hard_reject(analysis, "HTF_CONFLICT")
+            if (rec == "BUY" and htf_trend == "BEARISH") or \
+               (rec == "SELL" and htf_trend == "BULLISH"):
+                return self._hard_reject(analysis, "HTF_CONFLICT")
 
-        # Confidence cap by R/R (Rule 14)
         rr_final = round(abs(levels.get("tp1", tp1) - entry) / sl_dist, 2)
-        conf = min(conf, 75.0) if rr_final < 2.0 else min(conf, 90.0)
-
-        if conf < 55:
-            return self._hard_reject(analysis, f"CONF_TOO_LOW_{conf:.0f}")
-
-        analysis["ai_confidence_score"]    = conf
         analysis["institutional_gate_passed"] = True
         analysis["gate_rr"]               = rr_final
+        analysis["gate_htf_aligned"]      = False
+        if htf_analysis:
+            htf_trend = htf_analysis.get("market_structure", {}).get("trend", "RANGING")
+            analysis["gate_htf_aligned"] = (
+                (rec == "BUY"  and htf_trend == "BULLISH") or
+                (rec == "SELL" and htf_trend == "BEARISH")
+            )
         logger.info(
             f"GATE PASSED [{rec}] {symbol}/{timeframe}: "
-            f"entry={entry} rr={rr_final} conf={conf:.0f}%"
+            f"entry={entry} rr={rr_final}"
+        )
+        return analysis
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # CONFIDENCE CALIBRATION LAYER — Institutional-grade score formula
+    # Replaces raw AI confidence with structured component weighting.
+    # Runs AFTER institutional_gate (only on passed signals).
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def _confidence_calibration_layer(
+        self,
+        analysis: dict,
+        symbol: str,
+        timeframe: str,
+        htf_analysis: Optional[Dict] = None,
+    ) -> dict:
+        """
+        Confidence formula:
+          score = (ict_score × 0.40)
+                + (liquidity_quality × 0.25)
+                + (structure_strength × 0.20)
+                + (rr_score × 0.15)
+
+        Penalties:
+          RR < 1.5         → -10
+          timeframe ≤ 15m  → -10
+          STRUCTURE_PENDING → -15
+          RANGING market   → -5
+
+        Caps:
+          always  ≤ 90
+          RR < 2  ≤ 75
+          ≤ 15m   ≤ 65
+
+        Signal tiers (logged, not enforced — gate already enforces RR):
+          TIER_A: RR ≥ 2 + strong structure + HTF aligned
+          TIER_B: RR ≥ 1.5
+        """
+        rec    = analysis.get("recommendation", "WAIT")
+        levels = analysis.get("levels", {})
+        entry  = float(levels.get("entry") or 0)
+        sl     = float(levels.get("stop_loss") or 0)
+        tp1    = float(levels.get("tp1") or 0)
+        rr     = float(analysis.get("gate_rr") or analysis.get("risk_reward_ratio") or 0)
+
+        struct    = analysis.get("market_structure", {})
+        sweep     = analysis.get("liquidity_sweep", {})
+        confluence= analysis.get("confluence", {})
+        calib     = analysis.get("calibration_params", {})
+
+        # ── Component 1: ICT Score (0–100) ───────────────────────────────────
+        if rec == "BUY":
+            raw_ict = float(confluence.get("bull_score") or 0)
+        else:
+            raw_ict = float(confluence.get("bear_score") or 0)
+        ict_score = min(raw_ict, 100.0)
+
+        # ── Component 2: Liquidity Quality (0–100) ───────────────────────────
+        sq = str(sweep.get("sweep_quality", "NONE")).upper()
+        if sq in ("STRONG", "HIGH"):
+            liquidity_quality = 90.0
+        elif sq in ("MODERATE", "MEDIUM", "CONFIRMED"):
+            liquidity_quality = 65.0
+        elif sq == "WEAK":
+            liquidity_quality = 30.0
+        else:
+            liquidity_quality = 0.0
+
+        # ── Component 3: Structure Strength (0–100) ──────────────────────────
+        has_bos   = bool(struct.get("bos_events"))
+        has_choch = bool(struct.get("choch_events"))
+        grace     = analysis.get("structure_grace", False)
+
+        if has_choch and has_bos:
+            structure_strength = 90.0
+        elif has_choch:
+            structure_strength = 75.0
+        elif has_bos:
+            structure_strength = 60.0
+        elif grace:
+            structure_strength = 35.0  # pending
+        else:
+            structure_strength = 0.0
+
+        # ── Component 4: RR Score (0–100) ────────────────────────────────────
+        if rr >= 2.5:
+            rr_score = 100.0
+        elif rr >= 2.0:
+            rr_score = 85.0
+        elif rr >= 1.5:
+            rr_score = 65.0
+        elif rr >= 1.3:
+            rr_score = 45.0
+        else:
+            rr_score = 0.0
+
+        # ── Raw formula ───────────────────────────────────────────────────────
+        raw_conf = (
+            ict_score        * 0.40
+            + liquidity_quality * 0.25
+            + structure_strength * 0.20
+            + rr_score          * 0.15
+        )
+
+        # ── Penalties ─────────────────────────────────────────────────────────
+        penalty = 0.0
+        penalty_log = []
+
+        if rr < 1.5:
+            penalty += 10.0
+            penalty_log.append(f"RR<1.5(-10)")
+        if timeframe in ("1m", "5m", "15m"):
+            penalty += 10.0
+            penalty_log.append(f"LowTF(-10)")
+        if grace:
+            penalty += 15.0
+            penalty_log.append(f"StructPending(-15)")
+        market_state = calib.get("market_state", "")
+        if market_state == "RANGING":
+            penalty += 5.0
+            penalty_log.append(f"Ranging(-5)")
+
+        calibrated_conf = max(0.0, raw_conf - penalty)
+
+        # ── HTF alignment bonus ───────────────────────────────────────────────
+        htf_aligned = analysis.get("gate_htf_aligned", False)
+        if htf_aligned:
+            calibrated_conf = min(calibrated_conf + 5.0, 90.0)
+
+        # ── Caps ──────────────────────────────────────────────────────────────
+        cap = 90.0
+        if timeframe in ("1m", "5m", "15m"):
+            cap = min(cap, 65.0)
+        if rr < 2.0:
+            cap = min(cap, 75.0)
+
+        final_conf = round(min(calibrated_conf, cap), 1)
+
+        # ── Signal quality tier ───────────────────────────────────────────────
+        if rr >= 2.0 and structure_strength >= 60.0 and htf_aligned:
+            tier = "TIER_A"
+        elif rr >= 1.5:
+            tier = "TIER_B"
+        else:
+            tier = "TIER_B"   # gate ensures min 1.3, tiers are informational
+
+        analysis["ai_confidence_score"] = final_conf
+        analysis["signal_tier"]         = tier
+        analysis["confidence_components"] = {
+            "ict_score":          round(ict_score, 1),
+            "liquidity_quality":  round(liquidity_quality, 1),
+            "structure_strength": round(structure_strength, 1),
+            "rr_score":           round(rr_score, 1),
+            "raw":                round(raw_conf, 1),
+            "penalties":          penalty_log,
+            "penalty_total":      round(penalty, 1),
+            "cap":                cap,
+            "tier":               tier,
+        }
+
+        logger.info(
+            f"CONFIDENCE [{rec}] {symbol}/{timeframe}: "
+            f"ict={ict_score:.0f} liq={liquidity_quality:.0f} "
+            f"struct={structure_strength:.0f} rr={rr_score:.0f} "
+            f"→ raw={raw_conf:.1f} penalties={penalty:.0f} "
+            f"final={final_conf:.1f}% | {tier}"
+            + (f" [penalties: {', '.join(penalty_log)}]" if penalty_log else "")
         )
         return analysis
 
@@ -2165,10 +2381,9 @@ class MoshAIEngineV5:
 
     def _get_min_rr(self) -> float:
         wr = self.get_winrate()
-        if wr > 0.60:  return 1.3
-        if wr >= 0.40: return 1.5
-        if wr >= 0.30: return 1.7
-        return 2.0
+        if wr >= 0.60: return 1.3
+        if wr >= 0.50: return 1.3
+        return 1.5   # winrate < 50%
 
     def check_cooldown(self, symbol: str, timeframe: str, override_sec: float = None) -> bool:
         import time as _t

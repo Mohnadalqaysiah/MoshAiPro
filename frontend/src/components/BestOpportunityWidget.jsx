@@ -34,17 +34,32 @@ export default function BestOpportunityWidget() {
   const fetch = async () => {
     setLoading(true)
     try {
-      const res = await axios.get(`${API}/api/v1/signals/latest?limit=30`)
+      const res = await axios.get(`${API}/api/v1/signals/latest?limit=50`)
       const signals = res.data.data || []
-      // find highest-confidence BUY or SELL
-      const active = signals.filter(s =>
-        ['BUY', 'SELL'].includes(s.recommendation || s.signal_type) &&
-        (s.ai_confidence_score || s.ai_confidence || 0) >= 55
-      )
+
+      const active = signals.filter(s => {
+        const rec  = s.recommendation || s.signal_type || ''
+        const conf = s.ai_confidence_score || s.ai_confidence || 0
+        const rr   = s.risk_reward_ratio || s.levels?.risk_reward || 0
+        // Only valid directional signals with realistic quality
+        return (
+          ['BUY', 'SELL'].includes(rec) &&
+          conf >= 55 && conf <= 95 &&   // cap 95 blocks inflated AI scores
+          rr >= 1.3                      // minimum viable RR
+        )
+      })
+
       if (active.length === 0) { setBest(null); return }
-      const top = active.reduce((a, b) =>
-        (b.ai_confidence_score || b.ai_confidence || 0) > (a.ai_confidence_score || a.ai_confidence || 0) ? b : a
-      )
+
+      // Sort by combined score: 60% confidence + 40% RR normalised to 0–1 (max RR 4)
+      const scored = active.map(s => ({
+        ...s,
+        _score: (
+          (s.ai_confidence_score || s.ai_confidence || 0) * 0.6 +
+          Math.min((s.risk_reward_ratio || 0) / 4, 1) * 100 * 0.4
+        ),
+      }))
+      const top = scored.reduce((a, b) => b._score > a._score ? b : a)
       setBest(top)
       setLastUpdated(new Date())
     } catch {
@@ -63,12 +78,13 @@ export default function BestOpportunityWidget() {
   const rec   = best?.recommendation || best?.signal_type || ''
   const conf  = best?.ai_confidence_score || best?.ai_confidence || 0
   const lvl   = best?.levels || {}
-  const entry = lvl.entry   || best?.entry_price   || best?.entry_zones?.[0]
-  const sl    = lvl.stop_loss || best?.stop_loss   || best?.stop_loss_zone
-  const tp1   = lvl.tp1    || best?.take_profit_1 || best?.take_profit_zones?.[0]
+  const entry = lvl.entry      || best?.entry_price
+  const sl    = lvl.stop_loss  || best?.stop_loss
+  const tp1   = lvl.tp1        || best?.take_profit_1
   const rr    = best?.risk_reward_ratio || lvl.risk_reward
   const sym   = best?.symbol || best?.market || ''
   const tf    = best?.timeframe || '1h'
+  const tier  = best?.signal_tier || ''
 
   // حدد عدد الخانات العشرية بناءً على حجم السعر
   const decimals = (v) => {
@@ -125,13 +141,21 @@ export default function BestOpportunityWidget() {
                 <span className="text-xl font-bold tracking-wide">{sym}</span>
                 <span className="text-xs opacity-50 best-opp-sub">{tx.tf}: {tf}</span>
               </div>
-              <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full font-bold text-sm ${
-                isBuy
-                  ? 'bg-green-500/15 text-green-400 border border-green-500/30'
-                  : 'bg-red-500/15 text-red-400 border border-red-500/30'
-              }`}>
-                {isBuy ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-                {isBuy ? tx.buy : tx.sell}
+              <div className="flex items-center gap-2">
+                {tier === 'TIER_A' && (
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-500/15 text-yellow-400 border border-yellow-500/30 font-semibold">A</span>
+                )}
+                {tier === 'TIER_B' && (
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/30 font-semibold">B</span>
+                )}
+                <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full font-bold text-sm ${
+                  isBuy
+                    ? 'bg-green-500/15 text-green-400 border border-green-500/30'
+                    : 'bg-red-500/15 text-red-400 border border-red-500/30'
+                }`}>
+                  {isBuy ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                  {isBuy ? tx.buy : tx.sell}
+                </div>
               </div>
             </div>
 
