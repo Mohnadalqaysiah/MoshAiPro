@@ -1464,11 +1464,28 @@ class MoshAIEngineV5:
                 body_ratio = float(sw_info.get("body_atr_ratio") or 0)
                 strong_momentum = (body_ratio >= 0.5 and wick_atr >= 2.0)
                 if not strong_momentum:
-                    return self._hard_reject(analysis, "SWEEP_WITHOUT_STRUCTURE_SHIFT")
-                analysis["trending_momentum_override"] = True
-                logger.info(
-                    f"TRENDING momentum override: body={body_ratio:.2f} wick={wick_atr:.2f} — structure waived"
-                )
+                    # ── STRUCTURE GRACE LAYER ─────────────────────────────────
+                    # Structure often lags price in fast markets (XAU, BTC, NAS).
+                    # If sweep quality is STRONG or MODERATE: downgrade rejection
+                    # to WARNING and allow the signal to reach institutional_gate.
+                    # WEAK / NONE quality → still hard reject.
+                    grace_quality = str(sweep.get("sweep_quality", "NONE")).upper()
+                    if grace_quality in ("STRONG", "MODERATE"):
+                        analysis["structure_grace"]   = True
+                        analysis["structure_warning"] = "SWEEP_WITHOUT_STRUCTURE_SHIFT"
+                        logger.info(
+                            f"STRUCTURE GRACE [{symbol}/{timeframe}]: "
+                            f"no BOS/CHoCH, sweep_quality={grace_quality} — "
+                            f"downgrading to WARNING, continuing to delta check"
+                        )
+                        # Continue — do NOT reject
+                    else:
+                        return self._hard_reject(analysis, "SWEEP_WITHOUT_STRUCTURE_SHIFT")
+                else:
+                    analysis["trending_momentum_override"] = True
+                    logger.info(
+                        f"TRENDING momentum override: body={body_ratio:.2f} wick={wick_atr:.2f} — structure waived"
+                    )
             else:
                 # RANGING/VOLATILE: check at least one quality confirmation
                 # determine likely direction from sweep type
@@ -1578,6 +1595,14 @@ class MoshAIEngineV5:
         analysis["signal_type"]     = resolved
         analysis["confluence"]["direction"] = resolved
 
+        # Structure Grace: mark as STRUCTURE_PENDING_ENTRY (not yet confirmed)
+        if analysis.get("structure_grace"):
+            analysis["structure_status"] = "STRUCTURE_PENDING_ENTRY"
+            logger.info(
+                f"STRUCTURE_PENDING_ENTRY [{resolved}] {symbol}/{timeframe}: "
+                f"sweep confirmed, momentum confirmed, BOS/CHoCH awaited next candle"
+            )
+
         # Decision metadata (useful for debugging / frontend display)
         analysis["decision_meta"] = {
             "bull_score":      bull_score,
@@ -1590,6 +1615,7 @@ class MoshAIEngineV5:
             "zone_bias":       zone_bias,
             "resolved":        resolved,
             "is_ranging":      is_ranging,
+            "structure_grace": analysis.get("structure_grace", False),
         }
         logger.info(
             f"DECISION [{resolved}] {symbol}/{timeframe}: "
@@ -1674,7 +1700,15 @@ class MoshAIEngineV5:
         req_sweep_conf = analysis.get("_calib_req_sweep", True)
         if not has_aligned_bos and not has_choch:
             if req_sweep_conf:
-                return self._hard_reject(analysis, "NO_BOS_NO_CHOCH")
+                # Structure Grace bypass: signal was approved with structure_warning,
+                # BOS/CHoCH confirmation is delayed but NOT absent — don't re-reject.
+                if analysis.get("structure_grace"):
+                    logger.info(
+                        f"GATE: structure_grace active [{rec}] {symbol}/{timeframe} — "
+                        f"NO_BOS_NO_CHOCH waived (STRUCTURE_PENDING_ENTRY)"
+                    )
+                else:
+                    return self._hard_reject(analysis, "NO_BOS_NO_CHOCH")
             else:
                 # Only re-run if decision_finalizer didn't already check
                 if not analysis.get("anti_fake_sweep_pass") and analysis.get("anti_fake_sweep_conf") is None:
