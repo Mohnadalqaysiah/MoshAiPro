@@ -1429,11 +1429,29 @@ class MoshAIEngineV5:
             f"reason={primary_reason}"
         )
 
+        # ── htf_status ────────────────────────────────────────────────────
+        htf_status = analysis.get("htf_status") or (
+            "aligned"     if analysis.get("gate_htf_aligned") else
+            "conflicting" if analysis.get("htf_conflict_flag") else
+            "neutral"
+        )
+
+        # ── risk_status (RR + SL only) ────────────────────────────────────
+        rej = analysis.get("rejection_reason", "")
+        if any(rej.startswith(t) for t in ("RR_", "ZERO_SL", "BUY_SL_ABOVE", "SELL_SL_BELOW")):
+            risk_status = "VIOLATED"
+        elif signal_status == "PASS":
+            risk_status = "OK"
+        else:
+            risk_status = "PENDING"
+
         # ── assemble final output ─────────────────────────────────────────
         analysis["output"] = {
             "decision":         out_decision,
             "signal_status":    signal_status,
-            "primary_reason":   primary_reason,
+            "primary_reason":   primary_reason if signal_status == "REJECT" else None,
+            "htf_status":       htf_status,
+            "risk_status":      risk_status,
             "stability_score":  stability_score,
             "score":            out_score,
             "market_structure": out_structure,
@@ -1445,6 +1463,9 @@ class MoshAIEngineV5:
             "auto_calibration": analysis.get("calibration_params"),
             "debug_summary":    debug_summary,
         }
+
+        # Expose top-level
+        analysis["htf_status"] = htf_status
 
         # Also expose top-level for quick access by API/Bot
         analysis["signal_status"]   = signal_status
@@ -1659,12 +1680,24 @@ class MoshAIEngineV5:
                 # TRENDING: use structure as tiebreaker only if delta is borderline
                 resolved = structure_bias
 
-        # ── 6. HTF conflict — hard reject only in TRENDING + strong opposition ──
+        # ── 6. HTF assessment — context flag + scoring penalty, NEVER rejection ──
+        # HTF conflict is a multiplier only. RR/SL are the only hard gates.
         if htf_bias and htf_bias != resolved:
-            if not is_ranging and abs(score_delta) < self._DECISION_THRESHOLD_STRONG:
-                return self._hard_reject(analysis, "HTF_DIRECTION_CONFLICT")
-            else:
-                analysis["htf_conflict_warning"] = f"HTF={htf_bias} vs resolved={resolved}"
+            analysis["htf_conflict_warning"] = f"HTF={htf_bias} vs resolved={resolved}"
+            analysis["htf_status"]           = "conflicting"
+            # Penalty applied in confidence calibration layer
+            analysis["_htf_conflict_penalty"] = (
+                20.0 if (not is_ranging and abs(score_delta) < self._DECISION_THRESHOLD_STRONG)
+                else 10.0
+            )
+            logger.info(
+                f"HTF_DIRECTION_CONFLICT → scoring penalty "
+                f"{analysis['_htf_conflict_penalty']:.0f} [{symbol}/{timeframe}]"
+            )
+        elif htf_bias and htf_bias == resolved:
+            analysis["htf_status"] = "aligned"
+        else:
+            analysis["htf_status"] = "neutral"
 
         # ── 7. Zone assessment — scoring penalty only, never rejection ──────────
         if resolved == "BUY" and zone_bias == "SELL":
@@ -1982,12 +2015,21 @@ class MoshAIEngineV5:
             analysis["cooldown_active_warning"] = True
             logger.info(f"GATE: COOLDOWN_ACTIVE [{symbol}/{timeframe}] — warning only, signal proceeds")
 
-        # Rule 14: HTF conflict — hard reject only (confidence is handled by calibration layer)
+        # Rule 14: HTF conflict — context flag + confidence penalty, NEVER rejection
+        # HTF is a multiplier, not a gate. Only RR/SL are hard gates.
         if htf_analysis:
             htf_trend = htf_analysis.get("market_structure", {}).get("trend", "RANGING")
             if (rec == "BUY" and htf_trend == "BEARISH") or \
                (rec == "SELL" and htf_trend == "BULLISH"):
-                return self._hard_reject(analysis, "HTF_CONFLICT")
+                analysis["htf_conflict_flag"]  = True
+                analysis["htf_status"]         = "conflicting"
+                # Merge with any existing penalty from _decision_finalizer
+                existing = float(analysis.get("_htf_conflict_penalty") or 0)
+                analysis["_htf_conflict_penalty"] = max(existing, 20.0)
+                logger.info(
+                    f"HTF_CONFLICT → scoring penalty "
+                    f"{analysis['_htf_conflict_penalty']:.0f} [{symbol}/{timeframe}]"
+                )
 
         rr_final = round(abs(levels.get("tp1", tp1) - entry) / sl_dist, 2)
         analysis["institutional_gate_passed"] = True
@@ -2130,15 +2172,19 @@ class MoshAIEngineV5:
             sweep_pen = abs(sw_adj) * 2   # −2 adj → −4 conf, −5 adj → −10 conf
             penalty += sweep_pen
             penalty_log.append(f"WeakSweep(-{sweep_pen:.0f})")
-        # Zone conflict penalty — replaces old hard reject for zone misalignment
+        # Zone conflict penalty
         zone_pen = float(analysis.get("_zone_confidence_penalty") or 0)
         if zone_pen > 0:
             penalty += zone_pen
             penalty_log.append(f"ZoneConflict(-{zone_pen:.0f})")
         elif analysis.get("zone_conflict_warning"):
-            # legacy path — kept for backwards compat
             penalty += 8.0
             penalty_log.append(f"CounterZone(-8)")
+        # HTF conflict penalty — replaces hard rejection (context multiplier)
+        htf_pen = float(analysis.get("_htf_conflict_penalty") or 0)
+        if htf_pen > 0:
+            penalty += htf_pen
+            penalty_log.append(f"HTFConflict(-{htf_pen:.0f})")
         # TP too close warning
         if analysis.get("tp_too_close_warning"):
             penalty += 8.0
@@ -2400,10 +2446,12 @@ class MoshAIEngineV5:
         if not candidates:
             return "N/A"
 
+        # Tier 1: Risk integrity (only valid hard rejects now)
         TIER1 = ("RR_", "ZERO_SL", "BUY_SL_ABOVE", "SELL_SL_BELOW",
                  "MISSING_ENTRY", "BUY_TP1_BELOW", "SELL_TP1_ABOVE")
-        TIER2 = ("HTF_CONFLICT", "HTF_DIRECTION")
-        TIER3 = ("SCORE_DELTA", "DELTA_")
+        # Tier 2: Score delta (HTF is no longer a rejection cause)
+        TIER2 = ("SCORE_DELTA", "DELTA_")
+        TIER3 = ("RANGE_TRAP", "LOW_TF")
 
         for tier in (TIER1, TIER2, TIER3):
             for c in candidates:
@@ -2485,7 +2533,7 @@ class MoshAIEngineV5:
             logger.debug(f"SMART_RESCUE SKIP [{symbol}/{timeframe}]: RR={rr:.2f} < 1.0")
             return analysis
 
-        # HTF strong conflict hard block
+        # HTF conflict is no longer a hard block — it reduces rescue confidence instead
         if htf_analysis:
             pre_rec   = analysis.get("_pre_reject_rec") or analysis.get("recommendation", "")
             htf_trend = (
@@ -2493,16 +2541,16 @@ class MoshAIEngineV5:
                 .get("trend", "RANGING")
                 .upper()
             )
-            strong_htf_conflict = (
-                (pre_rec == "BUY"  and htf_trend == "BEARISH") or
-                (pre_rec == "SELL" and htf_trend == "BULLISH")
-            )
-            if strong_htf_conflict:
-                logger.debug(
-                    f"SMART_RESCUE SKIP [{symbol}/{timeframe}]: "
-                    f"STRONG_HTF_CONFLICT ({htf_trend} vs {pre_rec})"
+            if (pre_rec == "BUY" and htf_trend == "BEARISH") or \
+               (pre_rec == "SELL" and htf_trend == "BULLISH"):
+                analysis["htf_conflict_flag"]     = True
+                analysis["htf_status"]            = "conflicting"
+                existing = float(analysis.get("_htf_conflict_penalty") or 0)
+                analysis["_htf_conflict_penalty"] = max(existing, 20.0)
+                logger.info(
+                    f"SMART_RESCUE: HTF conflict → penalty only, rescue continues "
+                    f"[{symbol}/{timeframe}]"
                 )
-                return analysis
 
         # ── Condition 1: delta >= threshold - 3 ──────────────────────────────
         decision_meta = analysis.get("decision_meta", {})
@@ -2607,10 +2655,9 @@ class MoshAIEngineV5:
         HARD_REJECT_PREFIXES = (
             "NO_LIQUIDITY_SWEEP",
             "RR_",                       # RR_0.80_BELOW_MIN_1.5 etc.
-            "HTF_CONFLICT",
-            "HTF_DIRECTION_CONFLICT",
             "INVALID_STRUCTURE",
             "FAKE_SWEEP_NO_CONFIRMATION", # confirmed fake — no rescue
+            # HTF_CONFLICT / HTF_DIRECTION_CONFLICT removed — now scoring penalties only
         )
         for prefix in HARD_REJECT_PREFIXES:
             if reason.startswith(prefix):
