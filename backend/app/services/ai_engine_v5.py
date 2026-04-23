@@ -690,7 +690,7 @@ class MoshAIEngineV5:
     # Hard limits — never exceeded regardless of market conditions
     _CALIB_DELTA_MIN      = 20
     _CALIB_DELTA_MAX      = 35
-    _CALIB_RR_MIN         = 1.3
+    _CALIB_RR_MIN         = 1.1
     _CALIB_RR_MAX         = 2.0
     _CALIB_TOL_MIN        = 0.0025   # 0.25%
     _CALIB_TOL_MAX        = 0.0060   # 0.60%
@@ -750,12 +750,12 @@ class MoshAIEngineV5:
 
         # ── 3. Dynamic min RR (based on winrate) ──────────────────────────────
         wr = self.get_winrate()
-        if wr < 0.50:
-            min_rr = 1.5   # winrate below 50% → stricter
-        elif wr < 0.60:
-            min_rr = 1.3   # normal
+        if wr < 0.40:
+            min_rr = 1.3
+        elif wr < 0.55:
+            min_rr = 1.1
         else:
-            min_rr = 1.3   # floor is always 1.3
+            min_rr = 1.1   # floor is 1.1
 
         # ── 4. Sweep confirmation requirement ────────────────────────────────
         require_sweep_confirmation = (market_state == "TRENDING")
@@ -1696,7 +1696,16 @@ class MoshAIEngineV5:
         tp2_raw = float(levels.get("tp2") or 0)
 
         if not entry or not sl or not tp1_raw:
-            return self._hard_reject(analysis, "MISSING_LEVELS")
+            # Try to recover entry from current_price
+            if not entry and analysis.get("current_price"):
+                entry = float(analysis["current_price"])
+                levels["entry"] = entry
+                logger.info(f"GATE: missing entry recovered from current_price={entry} [{symbol}]")
+            # If still missing → WARNING not hard reject (smart_rescue may recover)
+            if not entry or not sl or not tp1_raw:
+                analysis["missing_levels_warning"] = True
+                logger.warning(f"GATE: MISSING_LEVELS [{symbol}/{timeframe}] — tagged as warning")
+                return self._hard_reject(analysis, "MISSING_LEVELS")
 
         # Rule 2: Direction must match ICT confluence
         ict_dir = analysis.get("confluence", {}).get("direction", "WAIT")
@@ -1827,8 +1836,10 @@ class MoshAIEngineV5:
             return self._hard_reject(analysis, f"RR_{rr:.2f}_BELOW_MIN_{min_rr:.1f}")
 
         # Rule 8: Distance filter
+        # TP_TOO_CLOSE → warning only (confidence penalty applied in calibration layer)
         if tp_dist / entry < 0.003:
-            return self._hard_reject(analysis, "TP_TOO_CLOSE")
+            analysis["tp_too_close_warning"] = True
+            logger.info(f"GATE: TP_TOO_CLOSE tagged as warning [{symbol}/{timeframe}] tp_dist={tp_dist:.5f}")
         if sl_dist / entry < 0.002:
             return self._hard_reject(analysis, "SL_TOO_CLOSE")
 
@@ -2024,6 +2035,10 @@ class MoshAIEngineV5:
         if analysis.get("zone_conflict_warning"):
             penalty += 8.0
             penalty_log.append(f"CounterZone(-8)")
+        # TP too close warning
+        if analysis.get("tp_too_close_warning"):
+            penalty += 8.0
+            penalty_log.append(f"TPClose(-8)")
 
         calibrated_conf = max(0.0, raw_conf - penalty)
 
@@ -2539,9 +2554,9 @@ class MoshAIEngineV5:
 
     def _get_min_rr(self) -> float:
         wr = self.get_winrate()
-        if wr >= 0.60: return 1.3
-        if wr >= 0.50: return 1.3
-        return 1.5   # winrate < 50%
+        if wr >= 0.55: return 1.1
+        if wr >= 0.40: return 1.1
+        return 1.3   # winrate < 40%
 
     def check_cooldown(self, symbol: str, timeframe: str, override_sec: float = None) -> bool:
         import time as _t
