@@ -87,6 +87,8 @@ class MoshAIEngineV5:
         self._last_signal_time: Dict[str, float] = {}
         # Performance tracking (in-memory, resets on restart — DB is source of truth)
         self._perf: Dict[str, int] = {"wins": 0, "losses": 0}
+        # Auto-calibration state: last signal timestamp per symbol (for silence detection)
+        self._last_signal_issued: Dict[str, float] = {}
         logger.info(f"Mosh AI Engine v{self.version} initialized")
         logger.info(f"   Gemini v2: {'enabled' if gemini_engine.enabled else 'disabled'}")
 
@@ -283,12 +285,18 @@ class MoshAIEngineV5:
             if "momentum"       not in analysis: analysis["momentum"]       = ltf_analysis.get("momentum", {})
             if "range_conflict" not in analysis: analysis["range_conflict"] = ltf_analysis.get("range_conflict", {})
 
+            # ── AUTO CALIBRATION — adapts thresholds to market + performance ──
+            analysis = self._auto_calibrate_thresholds(analysis, symbol, timeframe)
+
             # ── DECISION FINALIZER — resolves conflicts → BUY/SELL/NO TRADE ──
             analysis = self._decision_finalizer(analysis, symbol, timeframe, htf_analysis)
 
             # ── INSTITUTIONAL GATE — validates levels if decision was made ────
             if analysis.get("recommendation") in ("BUY", "SELL"):
                 analysis = self._institutional_gate(analysis, symbol, timeframe, htf_analysis)
+                # Record this signal for silence tracker
+                if analysis.get("institutional_gate_passed"):
+                    self._record_signal_issued(symbol, timeframe)
 
             # ── EXPLAINABILITY LAYER — audit-grade trace (runs last, no changes)
             analysis = self._explainability_layer(analysis, symbol, timeframe, htf_analysis)
@@ -653,6 +661,160 @@ class MoshAIEngineV5:
             analysis["price_source"]  = live_source
 
         return analysis
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # AUTO CALIBRATION ENGINE — Adapts thresholds to market + performance
+    # "Adapt thresholds — not logic"
+    # ═══════════════════════════════════════════════════════════════════════
+
+    # Hard limits — never exceeded regardless of market conditions
+    _CALIB_DELTA_MIN      = 20
+    _CALIB_DELTA_MAX      = 35
+    _CALIB_RR_MIN         = 1.2
+    _CALIB_RR_MAX         = 2.0
+    _CALIB_TOL_MIN        = 0.0025   # 0.25%
+    _CALIB_TOL_MAX        = 0.0060   # 0.60%
+    _CALIB_COOLDOWN_MIN   = 3600     # 1 hour
+    _CALIB_COOLDOWN_MAX   = 14400    # 4 hours
+    _CALIB_SILENCE_HOURS  = 6        # silence window that triggers relaxed delta
+
+    def _auto_calibrate_thresholds(
+        self,
+        analysis: dict,
+        symbol: str,
+        timeframe: str,
+    ) -> dict:
+        """
+        Auto Calibration Engine.
+        Runs BEFORE _decision_finalizer — adjusts thresholds only.
+        NEVER changes: entry/SL/TP values, trade direction logic,
+        or institutional gate hard rules.
+        """
+        import time as _t
+
+        # ── 1. Read market state from ICT output ─────────────────────────────
+        market_mode    = analysis.get("market_mode", {})
+        struct         = analysis.get("market_structure", {})
+        raw_trend      = str(struct.get("trend", "RANGING")).upper()
+        raw_mode       = str(market_mode.get("mode", "")).upper()
+        atr            = float((analysis.get("levels") or {}).get("atr") or 0)
+        current_price  = float(analysis.get("current_price") or 1)
+
+        # ── Determine market_state ────────────────────────────────────────────
+        if raw_mode in ("VOLATILE", "BREAKOUT"):
+            market_state = "VOLATILE"
+        elif raw_trend in ("BULLISH", "BEARISH") or raw_mode in ("TRENDING", "TREND"):
+            market_state = "TRENDING"
+        else:
+            market_state = "RANGING"
+
+        # ── Determine volatility from ATR ─────────────────────────────────────
+        # ATR as % of price
+        atr_pct = (atr / current_price) if current_price > 0 else 0
+        if atr_pct == 0:
+            volatility = "NORMAL"
+        elif atr_pct < 0.003:
+            volatility = "LOW"
+        elif atr_pct > 0.010:
+            volatility = "HIGH"
+        else:
+            volatility = "NORMAL"
+
+        # ── 2. Dynamic score delta ────────────────────────────────────────────
+        if market_state == "TRENDING":
+            required_delta = 20
+        elif market_state == "RANGING":
+            required_delta = 25
+        else:  # VOLATILE
+            required_delta = 30
+
+        # ── 3. Dynamic min RR (based on winrate) ──────────────────────────────
+        wr = self.get_winrate()
+        if wr < 0.40:
+            min_rr = 1.6
+        elif wr < 0.55:
+            min_rr = 1.4
+        else:
+            min_rr = 1.2
+
+        # ── 4. Sweep confirmation requirement ────────────────────────────────
+        require_sweep_confirmation = (market_state == "TRENDING")
+
+        # ── 5. Entry tolerance ────────────────────────────────────────────────
+        if volatility == "LOW":
+            entry_tolerance = 0.0050   # 0.50% — wider in calm market
+        elif volatility == "HIGH":
+            entry_tolerance = 0.0025   # 0.25% — tighter in chaotic market
+        else:
+            entry_tolerance = 0.0030   # 0.30% normal
+
+        # ── 6. Cooldown adjustment ────────────────────────────────────────────
+        if market_state == "RANGING":
+            cooldown_hours = 1
+        elif market_state == "TRENDING":
+            cooldown_hours = 2
+        else:  # VOLATILE
+            cooldown_hours = 2
+        cooldown_sec = cooldown_hours * 3600
+
+        # ── 7. Fallback: silence > 6h → relax delta once ─────────────────────
+        silence_key   = f"{symbol.upper()}_{timeframe}"
+        last_issued   = self._last_signal_issued.get(silence_key, 0)
+        silence_hours = (_t.time() - last_issued) / 3600 if last_issued > 0 else 0
+        silence_relaxed = False
+        if silence_hours >= self._CALIB_SILENCE_HOURS:
+            required_delta = max(required_delta - 5, self._CALIB_DELTA_MIN)
+            silence_relaxed = True
+
+        # ── 8. Apply hard limits (clamp) ──────────────────────────────────────
+        required_delta  = max(self._CALIB_DELTA_MIN,    min(self._CALIB_DELTA_MAX,    required_delta))
+        min_rr          = max(self._CALIB_RR_MIN,       min(self._CALIB_RR_MAX,       min_rr))
+        entry_tolerance = max(self._CALIB_TOL_MIN,      min(self._CALIB_TOL_MAX,      entry_tolerance))
+        cooldown_sec    = max(self._CALIB_COOLDOWN_MIN, min(self._CALIB_COOLDOWN_MAX, cooldown_sec))
+
+        # ── 9. Apply calibrated values ────────────────────────────────────────
+        # Score delta → read by _decision_finalizer via calibration_params
+        # Min RR / tolerance → read by _institutional_gate via same dict
+        calibration = {
+            "market_state":               market_state,
+            "volatility":                 volatility,
+            "winrate":                    round(wr, 3),
+            "delta":                      required_delta,
+            "min_rr":                     round(min_rr, 2),
+            "entry_tolerance":            round(entry_tolerance * 100, 3),  # store as %
+            "entry_tolerance_raw":        entry_tolerance,
+            "cooldown_sec":               cooldown_sec,
+            "require_sweep_confirmation": require_sweep_confirmation,
+            "silence_hours":              round(silence_hours, 1),
+            "silence_relaxed":            silence_relaxed,
+            "reason": (
+                f"{market_state} + {volatility} volatility"
+                + (" | silence relaxed" if silence_relaxed else "")
+                + f" | winrate={wr:.0%}"
+            ),
+        }
+        analysis["calibration_params"] = calibration
+
+        # Also inject directly into _ENTRY_TOLERANCE for this call
+        # (per-symbol/timeframe override — does NOT mutate class-level dict permanently)
+        analysis["_calib_entry_tol"]   = entry_tolerance
+        analysis["_calib_min_rr"]      = min_rr
+        analysis["_calib_delta"]       = required_delta
+        analysis["_calib_cooldown"]    = cooldown_sec
+        analysis["_calib_req_sweep"]   = require_sweep_confirmation
+
+        logger.info(
+            f"CALIBRATE [{symbol}/{timeframe}] "
+            f"state={market_state} vol={volatility} "
+            f"Δ={required_delta} RR≥{min_rr} tol={entry_tolerance*100:.2f}% "
+            f"cooldown={cooldown_hours}h"
+            + (f" [SILENCE {silence_hours:.1f}h → delta relaxed]" if silence_relaxed else "")
+        )
+        return analysis
+
+    def _record_signal_issued(self, symbol: str, timeframe: str):
+        """Called when a BUY/SELL passes all gates — updates silence tracker."""
+        self._last_signal_issued[f"{symbol.upper()}_{timeframe}"] = time.time()
 
     # ═══════════════════════════════════════════════════════════════════════
     # EXPLAINABILITY LAYER — Audit-grade trace for every decision
@@ -1198,6 +1360,7 @@ class MoshAIEngineV5:
             "zone":            out_zone,
             "conflicts":       out_conflicts,
             "no_trade_reason": no_trade_reasons,
+            "auto_calibration": analysis.get("calibration_params"),
         }
 
         logger.debug(
@@ -1256,10 +1419,15 @@ class MoshAIEngineV5:
         trend = (struct.get("trend") or "RANGING").upper()
         is_ranging = mode == "RANGE" or trend == "RANGING"
 
-        threshold = (
-            self._DECISION_THRESHOLD_RANGE  if is_ranging
-            else self._DECISION_THRESHOLD_TREND
-        )
+        # Use calibrated threshold if available (from _auto_calibrate_thresholds)
+        calib_delta = analysis.get("_calib_delta")
+        if calib_delta is not None:
+            threshold = float(calib_delta)
+        else:
+            threshold = (
+                self._DECISION_THRESHOLD_RANGE  if is_ranging
+                else self._DECISION_THRESHOLD_TREND
+            )
 
         # ── 3. Stop Hunt validation — sweep MUST have structure shift ────────
         has_bullish_sweep = sweep.get("has_bullish_sweep", False)
@@ -1474,7 +1642,8 @@ class MoshAIEngineV5:
                 return self._hard_reject(analysis, "ZONE_OVERLAP")
 
         # Rule 5: Entry vs zone (dynamic tolerance)
-        tol = self._ENTRY_TOLERANCE.get(timeframe, 0.002)
+        # Use calibrated tolerance if available, else fall back to per-timeframe default
+        tol = analysis.get("_calib_entry_tol") or self._ENTRY_TOLERANCE.get(timeframe, 0.002)
         if rec == "BUY" and support_zone:
             z_lo, z_hi = float(support_zone["low"]), float(support_zone["high"])
             if not (z_lo <= entry <= z_hi or abs(entry - z_hi) / entry <= tol):
@@ -1511,7 +1680,9 @@ class MoshAIEngineV5:
         rr = round(tp_dist / sl_dist, 2)
         levels["risk_reward"] = rr
         analysis["risk_reward_ratio"] = rr
-        min_rr = self._get_min_rr()
+        # Use calibrated min_rr if available, else use performance-based dynamic RR
+        calib_rr = analysis.get("_calib_min_rr")
+        min_rr = calib_rr if calib_rr is not None else self._get_min_rr()
         if rr < min_rr:
             return self._hard_reject(analysis, f"RR_{rr:.2f}_BELOW_MIN_{min_rr:.1f}")
 
@@ -1547,8 +1718,9 @@ class MoshAIEngineV5:
                 levels["tp2"] = liq_tp2
                 tp1 = liq_tp1
 
-        # Rule 11: Cooldown
-        if not self.check_cooldown(symbol, timeframe):
+        # Rule 11: Cooldown (use calibrated cooldown if available)
+        calib_cooldown = analysis.get("_calib_cooldown")
+        if not self.check_cooldown(symbol, timeframe, override_sec=calib_cooldown):
             return self._hard_reject(analysis, "COOLDOWN_ACTIVE")
 
         # Rule 14: Confidence system
@@ -1610,14 +1782,14 @@ class MoshAIEngineV5:
         if wr >= 0.30: return 1.7
         return 2.0
 
-    def check_cooldown(self, symbol: str, timeframe: str) -> bool:
+    def check_cooldown(self, symbol: str, timeframe: str, override_sec: float = None) -> bool:
         import time as _t
         key = f"{symbol.upper()}_{timeframe}"
-        cooldown = self._COOLDOWN_SEC.get(timeframe, 3600)
+        cooldown = override_sec if override_sec is not None else self._COOLDOWN_SEC.get(timeframe, 3600)
         last = self._last_signal_time.get(key, 0)
         if _t.time() - last < cooldown:
             remaining = int(cooldown - (_t.time() - last))
-            logger.info(f"Cooldown [{symbol}/{timeframe}]: {remaining}s left")
+            logger.info(f"Cooldown [{symbol}/{timeframe}]: {remaining}s left (cooldown={cooldown}s)")
             return False
         return True
 
