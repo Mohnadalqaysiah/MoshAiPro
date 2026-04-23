@@ -301,11 +301,19 @@ class MoshAIEngineV5:
                     )
                     self._record_signal_issued(symbol, timeframe)
 
-            # ── BORDERLINE RESCUE — soft-rejected signals get re-examined ────
-            # Runs after both _decision_finalizer and _institutional_gate.
-            # Converts REJECT → WAIT(rescued_candidate) if borderline conditions
-            # are met. Hard rejects (NO_LIQUIDITY_SWEEP, RR, HTF) are untouched.
-            if analysis.get("institutional_rejected"):
+            # ── SMART RESCUE LAYER — near-threshold signals recovered as BUY/SELL ─
+            # Runs after decision_finalizer + institutional_gate.
+            # If delta is close to threshold + real sweep + no strong HTF conflict
+            # + viable RR → passes signal as RESCUED_SIGNAL (not just WAIT).
+            if analysis.get("institutional_rejected") or \
+               analysis.get("recommendation") == "WAIT":
+                analysis = self._smart_rescue_layer(
+                    analysis, symbol, timeframe, htf_analysis
+                )
+
+            # ── BORDERLINE RESCUE — older soft-rescue (WAIT only, not BUY/SELL) ─
+            if analysis.get("institutional_rejected") and \
+               not analysis.get("smart_rescued"):
                 analysis = self._borderline_rescue_layer(
                     analysis, symbol, timeframe, htf_analysis
                 )
@@ -2255,6 +2263,150 @@ class MoshAIEngineV5:
             "stop_loss_zone":         None,
             "take_profit_zones":      [],
         })
+        return analysis
+
+    def _smart_rescue_layer(
+        self,
+        analysis: dict,
+        symbol: str,
+        timeframe: str,
+        htf_analysis: Optional[Dict] = None,
+    ) -> dict:
+        """
+        SMART RESCUE LAYER — recovers near-threshold signals as full BUY/SELL.
+
+        Runs after decision_finalizer + institutional_gate.
+        Unlike borderline_rescue_layer (which returns WAIT), this layer can
+        promote a rejected signal to BUY or SELL tagged as RESCUED_SIGNAL.
+
+        ALL conditions must pass:
+          1. delta >= threshold - 3  (near-miss, not a weak signal)
+          2. has_liquidity_sweep == True  (real sweep exists)
+          3. HTF conflict is not STRONG  (neutral or aligned OK)
+          4. RR >= 1.1  (viable trade, checked from pre-reject levels)
+          5. Not a confirmed fake sweep
+
+        HARD BLOCK (never rescued):
+          - NO_LIQUIDITY_SWEEP
+          - RR < 1.0
+          - STRONG_HTF_CONFLICT
+        """
+        reason = analysis.get("rejection_reason", "")
+
+        # ── Hard blocks ───────────────────────────────────────────────────────
+        HARD_BLOCK = (
+            "NO_LIQUIDITY_SWEEP",
+            "NO_SWEEP_NO_STRUCTURE",
+            "FAKE_SWEEP_NO_CONFIRMATION",
+        )
+        for b in HARD_BLOCK:
+            if reason.startswith(b):
+                logger.debug(f"SMART_RESCUE SKIP [{symbol}/{timeframe}]: hard block — {reason}")
+                return analysis
+
+        # RR hard block — check from pre-reject levels OR current levels
+        pre_levels = analysis.get("_pre_reject_levels") or analysis.get("levels") or {}
+        entry  = float(pre_levels.get("entry") or 0)
+        sl     = float(pre_levels.get("stop_loss") or pre_levels.get("sl") or 0)
+        tp1    = float(pre_levels.get("tp1") or 0)
+        rr = 0.0
+        if entry > 0 and sl > 0 and tp1 > 0:
+            sl_dist = abs(entry - sl)
+            tp_dist = abs(tp1 - entry)
+            rr = round(tp_dist / sl_dist, 2) if sl_dist > 0 else 0.0
+
+        if rr < 1.0:
+            logger.debug(f"SMART_RESCUE SKIP [{symbol}/{timeframe}]: RR={rr:.2f} < 1.0")
+            return analysis
+
+        # HTF strong conflict hard block
+        if htf_analysis:
+            pre_rec   = analysis.get("_pre_reject_rec") or analysis.get("recommendation", "")
+            htf_trend = (
+                htf_analysis.get("market_structure", {})
+                .get("trend", "RANGING")
+                .upper()
+            )
+            strong_htf_conflict = (
+                (pre_rec == "BUY"  and htf_trend == "BEARISH") or
+                (pre_rec == "SELL" and htf_trend == "BULLISH")
+            )
+            if strong_htf_conflict:
+                logger.debug(
+                    f"SMART_RESCUE SKIP [{symbol}/{timeframe}]: "
+                    f"STRONG_HTF_CONFLICT ({htf_trend} vs {pre_rec})"
+                )
+                return analysis
+
+        # ── Condition 1: delta >= threshold - 3 ──────────────────────────────
+        decision_meta = analysis.get("decision_meta", {})
+        raw_delta     = abs(float(decision_meta.get("score_delta", 0)))
+        eff_delta     = float(analysis.get("effective_delta", raw_delta))
+        threshold     = float(
+            decision_meta.get("threshold")
+            or analysis.get("_calib_delta")
+            or 17
+        )
+        if eff_delta < threshold - 3:
+            logger.debug(
+                f"SMART_RESCUE SKIP [{symbol}/{timeframe}]: "
+                f"eff_delta={eff_delta:.1f} < threshold-3={threshold-3:.1f}"
+            )
+            return analysis
+
+        # ── Condition 2: real sweep exists ────────────────────────────────────
+        sweep = analysis.get("liquidity_sweep", {})
+        has_any_sweep = (
+            sweep.get("has_bullish_sweep", False) or
+            sweep.get("has_bearish_sweep", False)
+        )
+        if not has_any_sweep:
+            logger.debug(f"SMART_RESCUE SKIP [{symbol}/{timeframe}]: no sweep")
+            return analysis
+
+        # ── Condition 3: not a confirmed fake sweep ───────────────────────────
+        if "FAKE_SWEEP_NO_CONFIRMATION" in reason:
+            logger.debug(f"SMART_RESCUE SKIP [{symbol}/{timeframe}]: confirmed fake sweep")
+            return analysis
+
+        # ── Condition 4: RR >= 1.1 (already checked >= 1.0 above) ────────────
+        if rr < 1.1:
+            logger.debug(f"SMART_RESCUE SKIP [{symbol}/{timeframe}]: RR={rr:.2f} < 1.1")
+            return analysis
+
+        # ── All conditions met → rescue as full BUY/SELL ─────────────────────
+        direction = (
+            analysis.get("_pre_reject_rec")
+            or ("BUY" if analysis.get("decision_meta", {}).get("score_delta", 0) > 0 else "SELL")
+        )
+
+        logger.info(
+            f"SMART_RESCUE [{symbol}/{timeframe}]: "
+            f"reason={reason} eff_delta={eff_delta:.1f}/thr={threshold:.1f} "
+            f"rr={rr:.2f} sweep=True → RESCUED_SIGNAL [{direction}]"
+        )
+
+        # Restore pre-reject levels
+        if pre_levels:
+            analysis["levels"] = dict(pre_levels)
+
+        analysis["recommendation"]        = direction
+        analysis["signal_type"]           = direction
+        analysis["smart_rescued"]         = True
+        analysis["signal_quality"]        = "BORDERLINE"
+        analysis["rescue_reason"]         = "rescued_near_threshold"
+        analysis["rescue_original_reject"] = reason
+        analysis["rescue_rr"]             = rr
+        analysis["rescue_eff_delta"]      = round(eff_delta, 1)
+        analysis["institutional_rejected"] = False
+        # Run confidence calibration for the rescued signal
+        analysis = self._confidence_calibration_layer(
+            analysis, symbol, timeframe, htf_analysis
+        )
+        # Apply an extra penalty for being rescued
+        cur_conf = float(analysis.get("ai_confidence_score", 0))
+        analysis["ai_confidence_score"] = max(round(cur_conf - 10.0, 1), 40.0)
+        self._record_signal_issued(symbol, timeframe)
         return analysis
 
     def _borderline_rescue_layer(
