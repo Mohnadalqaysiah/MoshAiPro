@@ -1701,16 +1701,16 @@ class MoshAIEngineV5:
                 entry = float(analysis["current_price"])
                 levels["entry"] = entry
                 logger.info(f"GATE: missing entry recovered from current_price={entry} [{symbol}]")
-            # If still missing → WARNING not hard reject (smart_rescue may recover)
+            # Still missing after recovery → soft warning only, continue with partial levels
             if not entry or not sl or not tp1_raw:
                 analysis["missing_levels_warning"] = True
-                logger.warning(f"GATE: MISSING_LEVELS [{symbol}/{timeframe}] — tagged as warning")
-                return self._hard_reject(analysis, "MISSING_LEVELS")
+                logger.warning(f"GATE: MISSING_LEVELS [{symbol}/{timeframe}] — soft warning, continuing")
 
-        # Rule 2: Direction must match ICT confluence
+        # Rule 2: Direction must match ICT confluence — soft warning only
         ict_dir = analysis.get("confluence", {}).get("direction", "WAIT")
         if ict_dir != rec:
-            return self._hard_reject(analysis, "DIRECTION_MISMATCH_ICT")
+            analysis["direction_mismatch_warning"] = True
+            logger.info(f"GATE: DIRECTION_MISMATCH_ICT [{symbol}/{timeframe}] — warning only")
 
         # Rule 3: Structure validation — sweep + aligned BOS/CHOCH
         struct   = analysis.get("market_structure", {})
@@ -1727,18 +1727,15 @@ class MoshAIEngineV5:
         )
         has_choch = bool(struct.get("choch_events"))
 
-        # Sweep is now a scoring factor — absence penalises confidence (handled
-        # in calibration layer) but does NOT reject by itself.
-        # Only a truly confirmed fake sweep (opposite candle reaction) rejects here.
+        # Sweep is a scoring factor — absence penalises confidence only, never rejects.
         if not has_sweep:
-            # No sweep at all: tag for calibration penalty, do NOT reject
             analysis["no_sweep_penalty"] = True
             logger.info(f"GATE: no sweep [{rec}] {symbol}/{timeframe} — penalty applied, not rejected")
-        # Structure grace: BOS/CHoCH absence already handled in decision_finalizer — skip re-check
+        # Structure absence → soft warning only (no hard reject)
         if not has_aligned_bos and not has_choch and not analysis.get("structure_grace"):
-            # Only hard reject if there's truly no structure AND no sweep at all
             if not has_sweep:
-                return self._hard_reject(analysis, "NO_SWEEP_NO_STRUCTURE")
+                analysis["no_sweep_no_structure_warning"] = True
+                logger.info(f"GATE: NO_SWEEP_NO_STRUCTURE [{symbol}/{timeframe}] — warning only")
 
         # Rule 4: Single resolved OB per side — overlap resolved via priority, never rejected
         ob        = analysis.get("order_blocks", {})
@@ -1758,20 +1755,20 @@ class MoshAIEngineV5:
                 analysis.get("liquidity", {}),
             )
 
-        # Rule 5: Entry vs zone (dynamic tolerance)
-        # Use calibrated tolerance if available, else fall back to per-timeframe default
+        # Rule 5: Entry vs zone (dynamic tolerance) — soft warning only
         tol = analysis.get("_calib_entry_tol") or self._ENTRY_TOLERANCE.get(timeframe, 0.002)
         if rec == "BUY" and support_zone:
             z_lo, z_hi = float(support_zone["low"]), float(support_zone["high"])
             if not (z_lo <= entry <= z_hi or abs(entry - z_hi) / entry <= tol):
-                return self._hard_reject(analysis, "BUY_ENTRY_NOT_NEAR_SUPPORT")
+                analysis["entry_not_near_zone_warning"] = True
+                logger.info(f"GATE: BUY_ENTRY_NOT_NEAR_SUPPORT [{symbol}/{timeframe}] — warning only")
         elif rec == "SELL" and resist_zone:
             z_lo, z_hi = float(resist_zone["low"]), float(resist_zone["high"])
             if not (z_lo <= entry <= z_hi or abs(entry - z_lo) / entry <= tol):
-                return self._hard_reject(analysis, "SELL_ENTRY_NOT_NEAR_RESISTANCE")
+                analysis["entry_not_near_zone_warning"] = True
+                logger.info(f"GATE: SELL_ENTRY_NOT_NEAR_RESISTANCE [{symbol}/{timeframe}] — warning only")
 
-        # Rule 5b: Entry Quality Filter — OB depth + FVG/imbalance requirement
-        # Reject if entry is too deep inside OB (> 70% — stale zone, no reaction)
+        # Rule 5b: OB depth — soft warning only
         active_ob = support_zone if rec == "BUY" else resist_zone
         if active_ob:
             ob_lo  = float(active_ob.get("low",  0))
@@ -1783,20 +1780,21 @@ class MoshAIEngineV5:
                 else:
                     depth_pct = (ob_hi - entry) / ob_rng
                 if depth_pct > 0.70:
-                    return self._hard_reject(analysis, f"ENTRY_TOO_DEEP_IN_OB_{depth_pct*100:.0f}PCT")
+                    analysis["entry_deep_in_ob_warning"] = True
+                    logger.info(f"GATE: ENTRY_TOO_DEEP_IN_OB {depth_pct*100:.0f}% [{symbol}/{timeframe}] — warning only")
 
-        # FVG / price imbalance check — require at least one imbalance near entry
-        # Only enforce if FVG data is present (skip if ICT engine didn't produce it)
+        # FVG proximity — soft warning only (no rejection)
         fvg_data = analysis.get("fvg") or analysis.get("fair_value_gaps") or []
         if fvg_data and isinstance(fvg_data, list) and entry > 0:
-            tol_fvg = tol * 3  # 3× entry tolerance
+            tol_fvg = tol * 3
             fvg_near = any(
                 abs(((float(f.get("low", 0)) + float(f.get("high", 0))) / 2) - entry) / entry <= tol_fvg
                 for f in fvg_data
                 if isinstance(f, dict) and f.get("low") and f.get("high")
             )
             if not fvg_near:
-                return self._hard_reject(analysis, "NO_FVG_NEAR_ENTRY")
+                analysis["no_fvg_near_entry_warning"] = True
+                logger.info(f"GATE: NO_FVG_NEAR_ENTRY [{symbol}/{timeframe}] — warning only")
 
         # Rule 6: TP/SL ordering + auto-fix swap
         # Guard: if entry is zero levels are corrupt — reject cleanly
@@ -1835,19 +1833,20 @@ class MoshAIEngineV5:
         if rr < min_rr:
             return self._hard_reject(analysis, f"RR_{rr:.2f}_BELOW_MIN_{min_rr:.1f}")
 
-        # Rule 8: Distance filter
-        # TP_TOO_CLOSE → warning only (confidence penalty applied in calibration layer)
+        # Rule 8: Distance filter — both are soft warnings only
         if tp_dist / entry < 0.003:
             analysis["tp_too_close_warning"] = True
-            logger.info(f"GATE: TP_TOO_CLOSE tagged as warning [{symbol}/{timeframe}] tp_dist={tp_dist:.5f}")
+            logger.info(f"GATE: TP_TOO_CLOSE warning [{symbol}/{timeframe}] tp_dist={tp_dist:.5f}")
         if sl_dist / entry < 0.002:
-            return self._hard_reject(analysis, "SL_TOO_CLOSE")
+            analysis["sl_too_close_warning"] = True
+            logger.info(f"GATE: SL_TOO_CLOSE warning [{symbol}/{timeframe}] sl_dist={sl_dist:.5f}")
 
-        # Rule 9: Spread filter (ATR*0.05 or default)
+        # Rule 9: Spread filter — soft warning only
         atr    = float(levels.get("atr") or 0)
         spread = atr * 0.05 if atr > 0 else self._DEFAULT_SPREAD.get(symbol.upper(), entry * 0.0002)
         if spread / sl_dist > 0.30:
-            return self._hard_reject(analysis, "SPREAD_EATS_RISK")
+            analysis["spread_eats_risk_warning"] = True
+            logger.info(f"GATE: SPREAD_EATS_RISK warning [{symbol}/{timeframe}]")
 
         # Rule 10: Liquidity-based TP placement
         # TP1 = slightly BEFORE liquidity (avoid running into it)
@@ -1879,10 +1878,11 @@ class MoshAIEngineV5:
                 levels["tp3"] = liq_tp3
                 tp1 = liq_tp1
 
-        # Rule 11: Cooldown (use calibrated cooldown if available)
+        # Rule 11: Cooldown — soft warning only, log but do not block
         calib_cooldown = analysis.get("_calib_cooldown")
         if not self.check_cooldown(symbol, timeframe, override_sec=calib_cooldown):
-            return self._hard_reject(analysis, "COOLDOWN_ACTIVE")
+            analysis["cooldown_active_warning"] = True
+            logger.info(f"GATE: COOLDOWN_ACTIVE [{symbol}/{timeframe}] — warning only, signal proceeds")
 
         # Rule 14: HTF conflict — hard reject only (confidence is handled by calibration layer)
         if htf_analysis:
@@ -2039,6 +2039,22 @@ class MoshAIEngineV5:
         if analysis.get("tp_too_close_warning"):
             penalty += 8.0
             penalty_log.append(f"TPClose(-8)")
+        # SL too close warning
+        if analysis.get("sl_too_close_warning"):
+            penalty += 8.0
+            penalty_log.append(f"SLClose(-8)")
+        # Entry not near zone warning
+        if analysis.get("entry_not_near_zone_warning"):
+            penalty += 6.0
+            penalty_log.append(f"EntryFarZone(-6)")
+        # Entry too deep in OB
+        if analysis.get("entry_deep_in_ob_warning"):
+            penalty += 5.0
+            penalty_log.append(f"DeepOB(-5)")
+        # No sweep + no structure (worst case)
+        if analysis.get("no_sweep_no_structure_warning"):
+            penalty += 15.0
+            penalty_log.append(f"NoSweepNoStruct(-15)")
 
         calibrated_conf = max(0.0, raw_conf - penalty)
 
