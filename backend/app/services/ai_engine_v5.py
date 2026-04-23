@@ -1576,15 +1576,18 @@ class MoshAIEngineV5:
             if abs(score_delta) < self._DECISION_THRESHOLD_STRONG:
                 return self._hard_reject(analysis, "SELL_IN_DISCOUNT_ZONE")
 
-        # ── 8. Primary OB selection (single zone, no overlap) ────────────────
-        current_p     = float(analysis.get("current_price") or 0) or float(confluence.get("entry", 0) or 0)
-        primary_bull_ob = self._closest_zone(current_p, ob.get("bullish_obs", []))
-        primary_bear_ob = self._closest_zone(current_p, ob.get("bearish_obs", []))
-
-        # Reject if the two primary zones overlap each other
-        if primary_bull_ob and primary_bear_ob:
-            if float(primary_bull_ob.get("high", 0)) > float(primary_bear_ob.get("low", 0)):
-                return self._hard_reject(analysis, "PRIMARY_OB_ZONES_OVERLAP")
+        # ── 8. Primary OB selection — overlap resolved, never rejected ──────────
+        current_p = float(analysis.get("current_price") or 0) or float(confluence.get("entry", 0) or 0)
+        primary_bull_ob, primary_bear_ob, ob_overlap = self._resolve_ob_zones(
+            current_p,
+            ob.get("bullish_obs", []),
+            ob.get("bearish_obs", []),
+            resolved,           # direction is already decided at step 5
+            htf_analysis,
+            analysis.get("liquidity", {}),
+        )
+        if ob_overlap:
+            analysis["ob_overlap_warning"] = True   # WARNING only — not a rejection
 
         # Store primary zones for gate to use
         analysis["primary_bull_ob"] = primary_bull_ob
@@ -1719,15 +1722,23 @@ class MoshAIEngineV5:
                     afs_conf = analysis.get("anti_fake_sweep_conf", "NO_CONFIRMATION")
                     return self._hard_reject(analysis, f"FAKE_SWEEP_{afs_conf}")
 
-        # Rule 4: Closest zone only, no overlap
-        ob           = analysis.get("order_blocks", {})
-        current_p    = float(analysis.get("current_price") or entry)
-        support_zone = self._closest_zone(current_p, ob.get("bullish_obs", []))
-        resist_zone  = self._closest_zone(current_p, ob.get("bearish_obs", []))
-
-        if support_zone and resist_zone:
-            if float(support_zone["high"]) > float(resist_zone["low"]):
-                return self._hard_reject(analysis, "ZONE_OVERLAP")
+        # Rule 4: Single resolved OB per side — overlap resolved via priority, never rejected
+        ob        = analysis.get("order_blocks", {})
+        current_p = float(analysis.get("current_price") or entry)
+        # Re-use pre-resolved zones from _decision_finalizer if available,
+        # otherwise resolve now (covers cases where gate is called standalone)
+        if "primary_bull_ob" in analysis or "primary_bear_ob" in analysis:
+            support_zone = analysis.get("primary_bull_ob")
+            resist_zone  = analysis.get("primary_bear_ob")
+        else:
+            support_zone, resist_zone, _ov = self._resolve_ob_zones(
+                current_p,
+                ob.get("bullish_obs", []),
+                ob.get("bearish_obs", []),
+                rec,
+                htf_analysis,
+                analysis.get("liquidity", {}),
+            )
 
         # Rule 5: Entry vs zone (dynamic tolerance)
         # Use calibrated tolerance if available, else fall back to per-timeframe default
@@ -1846,6 +1857,79 @@ class MoshAIEngineV5:
         if not valid:
             return None
         return min(valid, key=lambda o: abs((float(o["low"]) + float(o["high"])) / 2 - price))
+
+    def _resolve_ob_zones(
+        self,
+        current_p: float,
+        bull_obs: list,
+        bear_obs: list,
+        direction: str,
+        htf_analysis: Optional[Dict] = None,
+        liquidity: Optional[dict] = None,
+    ) -> tuple[Optional[dict], Optional[dict], bool]:
+        """
+        OB_RESOLUTION_PRIORITY — selects a single best OB per side.
+        When the two primary zones overlap, resolves by:
+          1. Trade direction alignment (primary)
+          2. HTF trend alignment (tiebreaker)
+          3. Liquidity proximity (final tiebreaker)
+
+        Never rejects. Returns (support_zone, resist_zone, overlap_warning).
+        """
+        support_zone = self._closest_zone(current_p, bull_obs)
+        resist_zone  = self._closest_zone(current_p, bear_obs)
+
+        # No overlap — nothing to resolve
+        if not (support_zone and resist_zone):
+            return support_zone, resist_zone, False
+
+        bull_hi = float(support_zone.get("high", 0))
+        bear_lo = float(resist_zone.get("low", 0))
+        if bull_hi <= bear_lo:
+            return support_zone, resist_zone, False
+
+        # ── Overlap detected — resolution priority ────────────────────────────
+        # Priority 1: direction alignment — keep the OB matching trade direction,
+        # drop the opposing one so no ambiguity reaches downstream.
+        if direction == "BUY":
+            resolved_support = support_zone
+            resolved_resist  = None
+        elif direction == "SELL":
+            resolved_support = None
+            resolved_resist  = resist_zone
+        else:
+            # Priority 2: HTF alignment tiebreaker
+            htf_trend = ""
+            if htf_analysis:
+                htf_trend = (
+                    htf_analysis.get("market_structure", {})
+                    .get("trend", "")
+                    .upper()
+                )
+            if htf_trend == "BULLISH":
+                resolved_support, resolved_resist = support_zone, None
+            elif htf_trend == "BEARISH":
+                resolved_support, resolved_resist = None, resist_zone
+            else:
+                # Priority 3: liquidity proximity tiebreaker
+                liq = liquidity or {}
+                bsl = float(liq.get("nearest_bsl") or 0)
+                ssl = float(liq.get("nearest_ssl") or 0)
+                bull_mid = (float(support_zone["low"]) + bull_hi) / 2
+                bear_mid = (bear_lo + float(resist_zone["high"])) / 2
+                bull_liq_dist = abs(bull_mid - bsl) if bsl else float("inf")
+                bear_liq_dist = abs(bear_mid - ssl) if ssl else float("inf")
+                if bull_liq_dist <= bear_liq_dist:
+                    resolved_support, resolved_resist = support_zone, None
+                else:
+                    resolved_support, resolved_resist = None, resist_zone
+
+        logger.info(
+            f"OB_RESOLUTION: overlap detected (bull_hi={bull_hi} > bear_lo={bear_lo}) "
+            f"dir={direction} → kept support={resolved_support is not None} "
+            f"resist={resolved_resist is not None}"
+        )
+        return resolved_support, resolved_resist, True
 
     def _anti_fake_sweep_check(
         self,
