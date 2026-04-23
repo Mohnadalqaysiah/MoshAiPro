@@ -736,7 +736,7 @@ class MoshAIEngineV5:
         if market_state == "TRENDING":
             required_delta = 18
         elif market_state == "RANGING":
-            required_delta = 18   # lowered: ranging markets already filtered by anti-fake sweep
+            required_delta = 17   # sweep scoring factor replaces strict delta filter
         else:  # VOLATILE
             required_delta = 25
 
@@ -1462,83 +1462,58 @@ class MoshAIEngineV5:
                 else self._DECISION_THRESHOLD_TREND
             )
 
-        # ── 3. Stop Hunt validation — sweep MUST have structure shift ────────
+        # ── 3. Sweep assessment — scoring factor, not hard gate ──────────────
+        # Sweep presence/quality ADJUSTS score_delta, it does NOT reject alone.
+        # Only a confirmed fake (sweep + opposite reaction) remains a hard reject.
         has_bullish_sweep = sweep.get("has_bullish_sweep", False)
         has_bearish_sweep = sweep.get("has_bearish_sweep", False)
         has_bos   = bool(struct.get("bos_events"))
         has_choch = bool(struct.get("choch_events"))
         any_sweep = has_bullish_sweep or has_bearish_sweep
+        sweep_quality_raw = str(sweep.get("sweep_quality", "NONE")).upper()
 
-        # In TRENDING market → sweep + (BOS OR CHoCH OR strong momentum candle)
-        # In RANGING/VOLATILE → run Anti-Fake Sweep filter instead
-        req_sweep_conf = analysis.get("_calib_req_sweep", True)
+        # Score delta bonus/penalty from sweep quality
+        sweep_delta_adj = 0.0
+        if sweep_quality_raw in ("STRONG", "HIGH"):
+            sweep_delta_adj = +5.0    # strong sweep adds to effective delta
+        elif sweep_quality_raw in ("MODERATE", "MEDIUM", "CONFIRMED"):
+            sweep_delta_adj = +2.0
+        elif sweep_quality_raw == "WEAK":
+            sweep_delta_adj = -2.0    # weak sweep is a mild penalty, NOT rejection
+        elif not any_sweep:
+            sweep_delta_adj = -5.0    # no sweep at all — penalty only
+
+        effective_delta = abs(score_delta) + sweep_delta_adj
+        analysis["sweep_delta_adj"] = sweep_delta_adj
+        analysis["effective_delta"] = round(effective_delta, 1)
+
+        # Structure grace: if no BOS/CHoCH but sweep exists, tag pending — no reject
         if any_sweep and not has_bos and not has_choch:
-            if req_sweep_conf:
-                # TRENDING: check strong momentum candle as fallback
-                sweep_raw  = analysis.get("liquidity_sweep", {})
-                sw_info    = (sweep_raw.get("ssl_sweep") or sweep_raw.get("bsl_sweep")) or {}
-                wick_atr   = float(sw_info.get("wick_atr_ratio") or 0)
-                body_ratio = float(sw_info.get("body_atr_ratio") or 0)
-                strong_momentum = (body_ratio >= 0.5 and wick_atr >= 2.0)
-                if not strong_momentum:
-                    # ── STRUCTURE GRACE LAYER ─────────────────────────────────
-                    # Structure often lags price in fast markets (XAU, BTC, NAS).
-                    # If sweep quality is STRONG or MODERATE: downgrade rejection
-                    # to WARNING and allow the signal to reach institutional_gate.
-                    # WEAK / NONE quality → still hard reject.
-                    grace_quality = str(sweep.get("sweep_quality", "NONE")).upper()
-                    if grace_quality in ("STRONG", "MODERATE"):
-                        analysis["structure_grace"]   = True
-                        analysis["structure_warning"] = "SWEEP_WITHOUT_STRUCTURE_SHIFT"
-                        logger.info(
-                            f"STRUCTURE GRACE [{symbol}/{timeframe}]: "
-                            f"no BOS/CHoCH, sweep_quality={grace_quality} — "
-                            f"downgrading to WARNING, continuing to delta check"
-                        )
-                        # Continue — do NOT reject
-                    else:
-                        return self._hard_reject(analysis, "SWEEP_WITHOUT_STRUCTURE_SHIFT")
-                else:
-                    analysis["trending_momentum_override"] = True
-                    logger.info(
-                        f"TRENDING momentum override: body={body_ratio:.2f} wick={wick_atr:.2f} — structure waived"
-                    )
-            else:
-                # RANGING/VOLATILE: check at least one quality confirmation
-                sweep_dir = "BUY" if has_bullish_sweep else "SELL"
-                afs_pass, afs_conf = self._anti_fake_sweep_check(analysis, sweep_dir)
-                analysis["anti_fake_sweep_pass"]  = afs_pass
-                analysis["anti_fake_sweep_conf"]  = afs_conf
-                if not afs_pass:
-                    # STALE_SWEEP in RANGING: borderline rescue can catch this later
-                    # WEAK_SWEEP_QUALITY: also allow rescue — not a confirmed fake
-                    # Only NO_CONFIRMATION is a definitive fake → hard reject
-                    if afs_conf == "NO_CONFIRMATION":
-                        return self._hard_reject(analysis, f"FAKE_SWEEP_{afs_conf}")
-                    else:
-                        # Soft-reject: tagged for borderline rescue evaluation
-                        analysis["fake_sweep_warning"] = afs_conf
-                        logger.info(
-                            f"FAKE_SWEEP soft-reject [{symbol}/{timeframe}]: "
-                            f"{afs_conf} — eligible for borderline rescue"
-                        )
-                        return self._hard_reject(analysis, f"FAKE_SWEEP_{afs_conf}")
-
-        # ── 4. Score delta check ─────────────────────────────────────────────
-        if abs(score_delta) < threshold:
-            return self._hard_reject(
-                analysis,
-                f"SCORE_DELTA_{abs(score_delta):.0f}_BELOW_{threshold}"
+            analysis["structure_grace"]   = True
+            analysis["structure_status"]  = "STRUCTURE_PENDING_ENTRY"
+            analysis["structure_warning"] = "SWEEP_WITHOUT_STRUCTURE_SHIFT"
+            logger.info(
+                f"STRUCTURE PENDING [{symbol}/{timeframe}]: "
+                f"sweep_quality={sweep_quality_raw} — tagged, no rejection"
             )
 
-        # ── 5. Conflict Resolver (priority 1→4) ──────────────────────────────
-        #  Priority 1: Market Structure dominance (BOS / CHoCH count)
+        # ── 4. Score delta check (delta is PRIMARY, sweep is scoring factor) ──
+        if effective_delta < threshold:
+            return self._hard_reject(
+                analysis,
+                f"SCORE_DELTA_{abs(score_delta):.0f}_ADJ_{effective_delta:.0f}_BELOW_{threshold}"
+            )
+
+        # ── 5. Conflict Resolver — rebalanced: delta leads, sweep/struct follow ──
+        #  Priority 1: Score delta direction (strongest signal in this rebalance)
+        score_dir = "BUY" if score_delta > 0 else "SELL"
+
+        #  Priority 2: Market Structure (BOS / CHoCH)
         bos_list    = struct.get("bos_events", [])
         choch_list  = struct.get("choch_events", [])
         bull_bos    = sum(1 for b in bos_list if "BULLISH" in b.get("type", ""))
         bear_bos    = sum(1 for b in bos_list if "BEARISH" in b.get("type", ""))
 
-        # Last CHoCH is most meaningful (recent structure reversal)
         last_choch_dir = None
         if choch_list:
             last_c = choch_list[-1] if isinstance(choch_list, list) else None
@@ -1547,13 +1522,13 @@ class MoshAIEngineV5:
 
         structure_bias: Optional[str] = None
         if last_choch_dir:
-            structure_bias = last_choch_dir          # CHoCH beats BOS count
+            structure_bias = last_choch_dir
         elif bull_bos > bear_bos:
             structure_bias = "BUY"
         elif bear_bos > bull_bos:
             structure_bias = "SELL"
 
-        #  Priority 2: HTF bias
+        #  Priority 3: HTF bias
         htf_bias: Optional[str] = None
         if htf_analysis:
             htf_trend = (htf_analysis.get("market_structure", {}).get("trend") or "RANGING").upper()
@@ -1562,60 +1537,59 @@ class MoshAIEngineV5:
             elif htf_trend == "BEARISH":
                 htf_bias = "SELL"
 
-        #  Priority 3: Liquidity sweep direction
+        #  Priority 4: Liquidity sweep direction
         liq_bias: Optional[str] = None
         if has_bullish_sweep and not has_bearish_sweep:
             liq_bias = "BUY"
         elif has_bearish_sweep and not has_bullish_sweep:
             liq_bias = "SELL"
 
-        #  Priority 4: Premium / Discount zone
+        #  Priority 5: Premium / Discount zone
         pd_raw  = (pd_zone.get("bias") or "NEUTRAL").upper()
         zone_bias: Optional[str] = "BUY" if pd_raw == "BUY" else ("SELL" if pd_raw == "SELL" else None)
 
-        # ── Score direction (raw ICT answer) ────────────────────────────────
-        score_dir = "BUY" if score_delta > 0 else "SELL"
+        # ── Direction resolution: delta first, structure confirms/warns ──────
+        # Delta is already validated — use it as the primary direction anchor.
+        resolved = score_dir
 
-        # ── Apply priority chain to resolve direction ────────────────────────
-        if structure_bias:
-            resolved = structure_bias
-            # In RANGING markets structure is noisy — downgrade conflict to warning
-            if score_dir != structure_bias and abs(score_delta) < self._DECISION_THRESHOLD_STRONG:
-                if is_ranging:
-                    analysis["structure_conflict_warning"] = "SCORE_CONFLICTS_STRUCTURE"
-                    logger.info(
-                        f"RANGING structure conflict downgraded to warning [{symbol}/{timeframe}]: "
-                        f"score_dir={score_dir} structure={structure_bias}"
-                    )
-                else:
-                    return self._hard_reject(analysis, "SCORE_CONFLICTS_STRUCTURE")
-        elif htf_bias:
-            resolved = htf_bias
-            if score_dir != htf_bias and abs(score_delta) < self._DECISION_THRESHOLD_STRONG:
-                if is_ranging:
-                    analysis["htf_conflict_warning"] = "SCORE_CONFLICTS_HTF"
-                    logger.info(f"RANGING HTF conflict downgraded to warning [{symbol}/{timeframe}]")
-                else:
-                    return self._hard_reject(analysis, "SCORE_CONFLICTS_HTF")
-        elif liq_bias:
-            resolved = liq_bias
-        else:
-            resolved = score_dir   # fallback: pure score
+        # Structure agreement: if structure contradicts delta, warn (not reject) in ranging
+        if structure_bias and structure_bias != score_dir:
+            if abs(score_delta) >= self._DECISION_THRESHOLD_STRONG:
+                pass   # strong delta overrides structure disagreement
+            elif is_ranging:
+                analysis["structure_conflict_warning"] = "SCORE_CONFLICTS_STRUCTURE"
+                logger.info(
+                    f"RANGING structure conflict → warning only [{symbol}/{timeframe}]: "
+                    f"delta={score_dir} struct={structure_bias}"
+                )
+            else:
+                # TRENDING: use structure as tiebreaker only if delta is borderline
+                resolved = structure_bias
 
-        # ── 6. HTF conflict penalty ──────────────────────────────────────────
-        # In RANGING markets HTF bias is often absent/neutral — only hard reject in TRENDING
-        if htf_bias and htf_bias != resolved and abs(score_delta) < self._DECISION_THRESHOLD_STRONG:
-            if not is_ranging:
+        # ── 6. HTF conflict — hard reject only in TRENDING + strong opposition ──
+        if htf_bias and htf_bias != resolved:
+            if not is_ranging and abs(score_delta) < self._DECISION_THRESHOLD_STRONG:
                 return self._hard_reject(analysis, "HTF_DIRECTION_CONFLICT")
+            else:
+                analysis["htf_conflict_warning"] = f"HTF={htf_bias} vs resolved={resolved}"
 
-        # ── 7. Execution zone validation ──────────────────────────────────────
-        #  BUY must enter from discount/support, SELL from premium/resistance
+        # ── 7. Execution zone validation — SELL in discount allowed in TRENDING ──
         if resolved == "BUY" and zone_bias == "SELL":
             if abs(score_delta) < self._DECISION_THRESHOLD_STRONG:
                 return self._hard_reject(analysis, "BUY_IN_PREMIUM_ZONE")
         elif resolved == "SELL" and zone_bias == "BUY":
+            # SELL in discount: in TRENDING markets this is valid (continuation)
+            # apply confidence penalty in calibration layer instead of rejecting
             if abs(score_delta) < self._DECISION_THRESHOLD_STRONG:
-                return self._hard_reject(analysis, "SELL_IN_DISCOUNT_ZONE")
+                if is_ranging:
+                    return self._hard_reject(analysis, "SELL_IN_DISCOUNT_ZONE")
+                else:
+                    # TRENDING: tag as counter-zone, penalised later in confidence
+                    analysis["zone_conflict_warning"] = "SELL_IN_DISCOUNT_TRENDING"
+                    logger.info(
+                        f"SELL in discount zone [{symbol}/{timeframe}]: "
+                        f"TRENDING market — applying confidence penalty, not rejecting"
+                    )
 
         # ── 8. Primary OB selection — overlap resolved, never rejected ──────────
         current_p = float(analysis.get("current_price") or 0) or float(confluence.get("entry", 0) or 0)
@@ -1736,32 +1710,18 @@ class MoshAIEngineV5:
         )
         has_choch = bool(struct.get("choch_events"))
 
+        # Sweep is now a scoring factor — absence penalises confidence (handled
+        # in calibration layer) but does NOT reject by itself.
+        # Only a truly confirmed fake sweep (opposite candle reaction) rejects here.
         if not has_sweep:
-            return self._hard_reject(analysis, "NO_LIQUIDITY_SWEEP")
-        # BOS/CHoCH required only when calibration demands it (TRENDING market)
-        # In RANGING/VOLATILE: anti-fake sweep filter was already run in
-        # _decision_finalizer — here we only re-check if it wasn't run yet
-        req_sweep_conf = analysis.get("_calib_req_sweep", True)
-        if not has_aligned_bos and not has_choch:
-            if req_sweep_conf:
-                # Structure Grace bypass: signal was approved with structure_warning,
-                # BOS/CHoCH confirmation is delayed but NOT absent — don't re-reject.
-                if analysis.get("structure_grace"):
-                    logger.info(
-                        f"GATE: structure_grace active [{rec}] {symbol}/{timeframe} — "
-                        f"NO_BOS_NO_CHOCH waived (STRUCTURE_PENDING_ENTRY)"
-                    )
-                else:
-                    return self._hard_reject(analysis, "NO_BOS_NO_CHOCH")
-            else:
-                # Only re-run if decision_finalizer didn't already check
-                if not analysis.get("anti_fake_sweep_pass") and analysis.get("anti_fake_sweep_conf") is None:
-                    afs_pass, afs_conf = self._anti_fake_sweep_check(analysis, rec)
-                    analysis["anti_fake_sweep_pass"] = afs_pass
-                    analysis["anti_fake_sweep_conf"] = afs_conf
-                if not analysis.get("anti_fake_sweep_pass", False):
-                    afs_conf = analysis.get("anti_fake_sweep_conf", "NO_CONFIRMATION")
-                    return self._hard_reject(analysis, f"FAKE_SWEEP_{afs_conf}")
+            # No sweep at all: tag for calibration penalty, do NOT reject
+            analysis["no_sweep_penalty"] = True
+            logger.info(f"GATE: no sweep [{rec}] {symbol}/{timeframe} — penalty applied, not rejected")
+        # Structure grace: BOS/CHoCH absence already handled in decision_finalizer — skip re-check
+        if not has_aligned_bos and not has_choch and not analysis.get("structure_grace"):
+            # Only hard reject if there's truly no structure AND no sweep at all
+            if not has_sweep:
+                return self._hard_reject(analysis, "NO_SWEEP_NO_STRUCTURE")
 
         # Rule 4: Single resolved OB per side — overlap resolved via priority, never rejected
         ob        = analysis.get("order_blocks", {})
@@ -2046,6 +2006,16 @@ class MoshAIEngineV5:
         if market_state == "RANGING":
             penalty += 5.0
             penalty_log.append(f"Ranging(-5)")
+        # Sweep scoring factor: weak or absent sweep penalises confidence
+        sw_adj = float(analysis.get("sweep_delta_adj", 0))
+        if sw_adj < 0:
+            sweep_pen = abs(sw_adj) * 2   # −2 adj → −4 conf, −5 adj → −10 conf
+            penalty += sweep_pen
+            penalty_log.append(f"WeakSweep(-{sweep_pen:.0f})")
+        # Counter-zone SELL in discount (TRENDING only — was not rejected)
+        if analysis.get("zone_conflict_warning"):
+            penalty += 8.0
+            penalty_log.append(f"CounterZone(-8)")
 
         calibrated_conf = max(0.0, raw_conf - penalty)
 
