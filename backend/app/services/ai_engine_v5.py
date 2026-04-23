@@ -298,6 +298,15 @@ class MoshAIEngineV5:
                 if analysis.get("institutional_gate_passed"):
                     self._record_signal_issued(symbol, timeframe)
 
+            # ── BORDERLINE RESCUE — soft-rejected signals get re-examined ────
+            # Runs after both _decision_finalizer and _institutional_gate.
+            # Converts REJECT → WAIT(rescued_candidate) if borderline conditions
+            # are met. Hard rejects (NO_LIQUIDITY_SWEEP, RR, HTF) are untouched.
+            if analysis.get("institutional_rejected"):
+                analysis = self._borderline_rescue_layer(
+                    analysis, symbol, timeframe, htf_analysis
+                )
+
             # ── EXPLAINABILITY LAYER — audit-grade trace (runs last, no changes)
             analysis = self._explainability_layer(analysis, symbol, timeframe, htf_analysis)
 
@@ -1900,6 +1909,9 @@ class MoshAIEngineV5:
     def _hard_reject(self, analysis: dict, reason: str) -> dict:
         rec = analysis.get("recommendation", "?")
         logger.warning(f"REJECTED [{rec}] {reason}")
+        # Save snapshot before clearing (used by borderline_rescue_layer)
+        analysis["_pre_reject_levels"] = dict(analysis.get("levels", {}))
+        analysis["_pre_reject_rec"]    = rec
         analysis.update({
             "recommendation":         "WAIT",
             "signal_type":            "WAIT",
@@ -1911,6 +1923,126 @@ class MoshAIEngineV5:
             "stop_loss_zone":         None,
             "take_profit_zones":      [],
         })
+        return analysis
+
+    def _borderline_rescue_layer(
+        self,
+        analysis: dict,
+        symbol: str,
+        timeframe: str,
+        htf_analysis: Optional[Dict] = None,
+    ) -> dict:
+        """
+        Borderline Rescue Layer — runs AFTER soft rejection only.
+
+        Converts REJECT → WAIT (rescued_candidate) if ALL conditions met:
+          1) Sweep exists (any quality except NONE)
+          2) Score delta within ±3 of calibrated threshold
+          3) No HTF conflict
+          4) RR >= 1.0 (viability — not the strict minimum)
+
+        HARD REJECTS that cannot be rescued (no exceptions):
+          NO_LIQUIDITY_SWEEP, RR_*, HTF_CONFLICT, HTF_DIRECTION_CONFLICT,
+          INVALID_STRUCTURE
+
+        Rescued signal:
+          - recommendation stays WAIT (never upgraded to BUY/SELL)
+          - rescued_candidate = True → logged, tracked for re-evaluation
+          - institutional_rejected cleared (not a hard failure)
+        """
+        reason = analysis.get("rejection_reason", "")
+
+        # ── Hard rejects — cannot be rescued ─────────────────────────────────
+        HARD_REJECT_PREFIXES = (
+            "NO_LIQUIDITY_SWEEP",
+            "RR_",                    # RR_0.80_BELOW_MIN_1.5 etc.
+            "HTF_CONFLICT",
+            "HTF_DIRECTION_CONFLICT",
+            "INVALID_STRUCTURE",
+        )
+        for prefix in HARD_REJECT_PREFIXES:
+            if reason.startswith(prefix):
+                logger.debug(f"RESCUE SKIP [{symbol}/{timeframe}]: hard reject — {reason}")
+                return analysis
+
+        # ── Condition 1: Sweep exists (quality != NONE) ───────────────────────
+        sweep = analysis.get("liquidity_sweep", {})
+        sweep_quality = str(sweep.get("sweep_quality", "NONE")).upper()
+        has_any_sweep = (
+            sweep.get("has_bullish_sweep", False)
+            or sweep.get("has_bearish_sweep", False)
+        )
+        if not has_any_sweep or sweep_quality == "NONE":
+            logger.debug(f"RESCUE SKIP [{symbol}/{timeframe}]: sweep absent or quality=NONE")
+            return analysis
+
+        # ── Condition 2: Delta within ±3 of calibrated threshold ─────────────
+        decision_meta = analysis.get("decision_meta", {})
+        score_delta   = abs(float(decision_meta.get("score_delta", 0)))
+        threshold     = float(
+            decision_meta.get("threshold")
+            or analysis.get("_calib_delta")
+            or 22
+        )
+        delta_gap = abs(score_delta - threshold)
+        if delta_gap > 3:
+            logger.debug(
+                f"RESCUE SKIP [{symbol}/{timeframe}]: "
+                f"delta={score_delta:.1f} threshold={threshold:.1f} gap={delta_gap:.1f} > 3"
+            )
+            return analysis
+
+        # ── Condition 3: No HTF conflict ──────────────────────────────────────
+        if htf_analysis:
+            pre_rec  = analysis.get("_pre_reject_rec", "BUY")
+            htf_trend = (
+                htf_analysis.get("market_structure", {})
+                .get("trend", "RANGING")
+                .upper()
+            )
+            htf_conflict = (
+                (pre_rec == "BUY"  and htf_trend == "BEARISH")
+                or (pre_rec == "SELL" and htf_trend == "BULLISH")
+            )
+            if htf_conflict:
+                logger.debug(
+                    f"RESCUE SKIP [{symbol}/{timeframe}]: "
+                    f"HTF conflict ({htf_trend} vs {pre_rec})"
+                )
+                return analysis
+
+        # ── Condition 4: RR >= 1.0 (viability) ───────────────────────────────
+        pre_levels = analysis.get("_pre_reject_levels", {})
+        entry = float(pre_levels.get("entry") or 0)
+        sl    = float(pre_levels.get("stop_loss") or pre_levels.get("sl") or 0)
+        tp1   = float(pre_levels.get("tp1") or 0)
+
+        rr = 0.0
+        if entry > 0 and sl > 0 and tp1 > 0:
+            sl_dist = abs(entry - sl)
+            tp_dist = abs(tp1 - entry)
+            rr = round(tp_dist / sl_dist, 2) if sl_dist > 0 else 0.0
+
+        if rr < 1.0:
+            logger.debug(
+                f"RESCUE SKIP [{symbol}/{timeframe}]: RR={rr:.2f} < 1.0"
+            )
+            return analysis
+
+        # ── All conditions met → rescue ───────────────────────────────────────
+        logger.info(
+            f"🔶 BORDERLINE RESCUE [{symbol}/{timeframe}]: "
+            f"reason={reason} Δ={score_delta:.1f}/thr={threshold:.1f} "
+            f"rr={rr:.2f} sweep={sweep_quality} → rescued_candidate"
+        )
+        analysis["rescued_candidate"]   = True
+        analysis["rescue_reason"]       = reason
+        analysis["rescue_rr"]           = rr
+        analysis["rescue_delta_gap"]    = round(delta_gap, 1)
+        analysis["rescue_sweep_quality"] = sweep_quality
+        # Keep recommendation as WAIT — never upgrade to BUY/SELL
+        # Clear institutional_rejected so downstream layers don't treat it as hard fail
+        analysis["institutional_rejected"] = False
         return analysis
 
     def _get_min_rr(self) -> float:
