@@ -1377,24 +1377,81 @@ class MoshAIEngineV5:
                 if bull_bos == 0 and bear_bos == 0 and last_choch == "NONE":
                     no_trade_reasons.append("NO_BOS_NO_CHOCH")
 
+        # ── signal_status — deterministic: PASS / REJECT / WATCHLIST ────────
+        signal_status = analysis.get("signal_status") or (
+            "PASS"      if action in ("BUY", "SELL") else
+            "WATCHLIST" if analysis.get("watchlist_reason") else
+            "REJECT"    if analysis.get("institutional_rejected") else
+            "WATCHLIST"   # WAIT without a hard reject = watchlist candidate
+        )
+
+        # ── primary rejection reason (single, severity-ordered) ───────────
+        primary_reason = self._select_primary_rejection_reason(analysis)
+
+        # ── stability score (0–100) — measures distance from rejection boundary ──
+        meta_d     = analysis.get("decision_meta", {})
+        eff_d      = float(meta_d.get("effective_delta") or analysis.get("effective_delta") or 0)
+        thr_d      = float(meta_d.get("threshold") or 20)
+        delta_margin = max(0.0, eff_d - thr_d)
+        delta_max    = max(thr_d * 0.8, 1.0)   # full score at 80% margin above threshold
+
+        sq_s = str(sweep.get("sweep_quality", "NONE")).upper()
+        sweep_s = (1.0 if sq_s in ("STRONG","HIGH") else
+                   0.65 if sq_s in ("MODERATE","MEDIUM","CONFIRMED") else
+                   0.30 if sq_s == "WEAK" else 0.0)
+
+        bos_s   = bool(struct.get("bos_events"))
+        choch_s = bool(struct.get("choch_events"))
+        struct_s = (1.0 if bos_s and choch_s else
+                    0.7 if choch_s else
+                    0.5 if bos_s else 0.0)
+
+        htf_s  = 1.0 if analysis.get("gate_htf_aligned") else 0.4
+        rr_s   = float(analysis.get("risk_reward_ratio") or 0)
+        rr_val = min(rr_s / 2.5, 1.0) if rr_s > 0 else 0.0
+
+        stability_score = round(min(100.0, max(0.0,
+            min(delta_margin / delta_max, 1.0) * 35 +
+            sweep_s   * 25 +
+            struct_s  * 20 +
+            htf_s     * 10 +
+            rr_val    * 10
+        )), 1)
+
+        # ── debug summary (single line for logs / frontend dev) ───────────
+        debug_summary = (
+            f"[{symbol}/{timeframe} {signal_status}] "
+            f"delta={eff_d:.1f}/{thr_d:.1f} | "
+            f"sweep={sq_s} | "
+            f"struct={'CHoCH+BOS' if bos_s and choch_s else 'CHoCH' if choch_s else 'BOS' if bos_s else 'NONE'} | "
+            f"htf={'aligned' if analysis.get('gate_htf_aligned') else 'neutral'} | "
+            f"stability={stability_score} | "
+            f"reason={primary_reason}"
+        )
+
         # ── assemble final output ─────────────────────────────────────────
         analysis["output"] = {
-            "decision":        out_decision,
-            "score":           out_score,
+            "decision":         out_decision,
+            "signal_status":    signal_status,
+            "primary_reason":   primary_reason,
+            "stability_score":  stability_score,
+            "score":            out_score,
             "market_structure": out_structure,
-            "liquidity":       out_liquidity,
-            "order_blocks":    out_ob,
-            "zone":            out_zone,
-            "conflicts":       out_conflicts,
-            "no_trade_reason": no_trade_reasons,
+            "liquidity":        out_liquidity,
+            "order_blocks":     out_ob,
+            "zone":             out_zone,
+            "conflicts":        out_conflicts,
+            "no_trade_reason":  no_trade_reasons,
             "auto_calibration": analysis.get("calibration_params"),
+            "debug_summary":    debug_summary,
         }
 
-        logger.debug(
-            f"OUTPUT NORMALIZED [{action}] {symbol}/{timeframe}: "
-            f"score={out_score['status']} sweep={sweep_type_out} "
-            f"zone={zone_type} conflicts={len(out_conflicts)}"
-        )
+        # Also expose top-level for quick access by API/Bot
+        analysis["signal_status"]   = signal_status
+        analysis["primary_reason"]  = primary_reason
+        analysis["stability_score"] = stability_score
+
+        logger.info(debug_summary)
         return analysis
 
     # ═══════════════════════════════════════════════════════════════════════
@@ -1437,23 +1494,30 @@ class MoshAIEngineV5:
         bear_score  = float(confluence.get("bear_score", 0))
         score_delta = bull_score - bear_score   # >0 = bullish lean, <0 = bearish lean
 
-        # ── 0. Anti-Noise Filter (low timeframe control) ─────────────────────
-        # On ≤15m: require sweep + micro structure (BOS or CHoCH) OR strong delta
+        # ── DETECTION LAYER (no rejections) ──────────────────────────────────
+        # All conditions detected here contribute to scoring only.
+
+        # 0. Low-TF noise detection → scoring penalty only
+        _low_tf_noise_penalty = 0.0
         if timeframe in ("1m", "5m", "15m"):
             has_any_sweep_early = (
                 sweep.get("has_bullish_sweep", False) or sweep.get("has_bearish_sweep", False)
             )
             has_micro_struct = bool(struct.get("bos_events")) or bool(struct.get("choch_events"))
             raw_delta_early  = abs(bull_score - bear_score)
-            # Use calibrated threshold if available
             early_thresh = float(analysis.get("_calib_delta") or self._DECISION_THRESHOLD_TREND)
             strong_delta = raw_delta_early >= early_thresh + 10
             if not ((has_any_sweep_early and has_micro_struct) or strong_delta):
-                return self._hard_reject(analysis, "LOW_TF_NOISE_FILTER")
+                _low_tf_noise_penalty = 15.0
+                analysis["low_tf_noise_flag"] = True
+                logger.info(f"SCORING: low_tf_noise_penalty=15 [{symbol}/{timeframe}]")
 
-        # ── 1. Range Trap → immediate NO TRADE ──────────────────────────────
+        # 1. Range trap detection → scoring penalty only
+        _range_trap_penalty = 0.0
         if rng_conflict.get("in_range_trap") or rng_conflict.get("avoid_entry"):
-            return self._hard_reject(analysis, "RANGE_TRAP_OB_OVERLAP_NO_BOS")
+            _range_trap_penalty = 20.0
+            analysis["range_trap_flag"] = True
+            logger.info(f"SCORING: range_trap_penalty=20 [{symbol}/{timeframe}]")
 
         # ── 2. Market Regime detection ───────────────────────────────────────
         mode  = (market_mode.get("mode") or "TREND").upper()
@@ -1491,14 +1555,22 @@ class MoshAIEngineV5:
         elif not any_sweep:
             sweep_delta_adj = -5.0    # no sweep at all — penalty only
 
-        # Dynamic delta buffer: small boost applied before threshold comparison
-        # RANGING = +2.0 (harder to get signal, more help needed)
-        # TRENDING/VOLATILE = +1.5
+        # ── SCORING LAYER: effective_delta ────────────────────────────────────
+        # All quality signals feed into one number. No rejections here.
+        # RANGING = +2.0 buffer (harder market), TRENDING/VOLATILE = +1.5
         delta_buffer = 2.0 if is_ranging else 1.5
-        effective_delta = abs(score_delta) + sweep_delta_adj + delta_buffer
-        analysis["sweep_delta_adj"] = sweep_delta_adj
-        analysis["delta_buffer"]    = delta_buffer
-        analysis["effective_delta"] = round(effective_delta, 1)
+        effective_delta = (
+            abs(score_delta)
+            + sweep_delta_adj
+            + delta_buffer
+            - _low_tf_noise_penalty
+            - _range_trap_penalty
+        )
+        analysis["sweep_delta_adj"]      = sweep_delta_adj
+        analysis["delta_buffer"]         = delta_buffer
+        analysis["low_tf_noise_penalty"] = _low_tf_noise_penalty
+        analysis["range_trap_penalty"]   = _range_trap_penalty
+        analysis["effective_delta"]      = round(effective_delta, 1)
 
         # Structure grace: if no BOS/CHoCH but sweep exists, tag pending — no reject
         if any_sweep and not has_bos and not has_choch:
@@ -1510,11 +1582,19 @@ class MoshAIEngineV5:
                 f"sweep_quality={sweep_quality_raw} — tagged, no rejection"
             )
 
-        # ── 4. Score delta check (delta is PRIMARY, sweep is scoring factor) ──
+        # ── DECISION LAYER: delta below threshold → WATCHLIST, never REJECT ────
+        # Score delta failure is a quality issue, not a risk violation.
+        # Only RR/HTF/SL can hard-reject. Everything else becomes WATCHLIST.
+        _is_watchlist = False
         if effective_delta < threshold:
-            return self._hard_reject(
-                analysis,
-                f"SCORE_DELTA_{abs(score_delta):.0f}_ADJ_{effective_delta:.0f}_BELOW_{threshold}"
+            _is_watchlist = True
+            analysis["watchlist_reason"] = (
+                f"DELTA_{abs(score_delta):.0f}_ADJ_{effective_delta:.0f}_BELOW_{threshold:.0f}"
+            )
+            logger.info(
+                f"WATCHLIST [{symbol}/{timeframe}]: "
+                f"eff_delta={effective_delta:.1f} < threshold={threshold:.1f} "
+                f"(noise={_low_tf_noise_penalty} trap={_range_trap_penalty})"
             )
 
         # ── 5. Conflict Resolver — rebalanced: delta leads, sweep/struct follow ──
@@ -1586,23 +1666,22 @@ class MoshAIEngineV5:
             else:
                 analysis["htf_conflict_warning"] = f"HTF={htf_bias} vs resolved={resolved}"
 
-        # ── 7. Execution zone validation — SELL in discount allowed in TRENDING ──
+        # ── 7. Zone assessment — scoring penalty only, never rejection ──────────
         if resolved == "BUY" and zone_bias == "SELL":
             if abs(score_delta) < self._DECISION_THRESHOLD_STRONG:
-                return self._hard_reject(analysis, "BUY_IN_PREMIUM_ZONE")
+                analysis["zone_conflict_warning"]      = "BUY_IN_PREMIUM_ZONE"
+                analysis["_zone_confidence_penalty"]   = 12.0
+                logger.info(f"SCORING: BUY_IN_PREMIUM_ZONE penalty=12 [{symbol}/{timeframe}]")
         elif resolved == "SELL" and zone_bias == "BUY":
-            # SELL in discount: in TRENDING markets this is valid (continuation)
-            # apply confidence penalty in calibration layer instead of rejecting
             if abs(score_delta) < self._DECISION_THRESHOLD_STRONG:
-                if is_ranging:
-                    return self._hard_reject(analysis, "SELL_IN_DISCOUNT_ZONE")
-                else:
-                    # TRENDING: tag as counter-zone, penalised later in confidence
-                    analysis["zone_conflict_warning"] = "SELL_IN_DISCOUNT_TRENDING"
-                    logger.info(
-                        f"SELL in discount zone [{symbol}/{timeframe}]: "
-                        f"TRENDING market — applying confidence penalty, not rejecting"
-                    )
+                analysis["zone_conflict_warning"] = (
+                    "SELL_IN_DISCOUNT_ZONE" if is_ranging else "SELL_IN_DISCOUNT_TRENDING"
+                )
+                analysis["_zone_confidence_penalty"] = 12.0
+                logger.info(
+                    f"SCORING: SELL_IN_DISCOUNT penalty=12 [{symbol}/{timeframe}] "
+                    f"(ranging={is_ranging})"
+                )
 
         # ── 8. Primary OB selection — overlap resolved, never rejected ──────────
         current_p = float(analysis.get("current_price") or 0) or float(confluence.get("entry", 0) or 0)
@@ -1622,36 +1701,50 @@ class MoshAIEngineV5:
         analysis["primary_bear_ob"] = primary_bear_ob
 
         # ── 9. Commit decision ───────────────────────────────────────────────
-        analysis["recommendation"]  = resolved
-        analysis["signal_type"]     = resolved
+        # WATCHLIST: direction resolved for diagnostics, recommendation = WAIT
         analysis["confluence"]["direction"] = resolved
+        if _is_watchlist:
+            analysis["recommendation"] = "WAIT"
+            analysis["signal_type"]    = "WAIT"
+            analysis["signal_status"]  = "WATCHLIST"
+            analysis["no_trade_reason"] = analysis.get(
+                "watchlist_reason", "DELTA_BELOW_THRESHOLD"
+            )
+        else:
+            analysis["recommendation"] = resolved
+            analysis["signal_type"]    = resolved
+            analysis["signal_status"]  = "PASS"   # tentative — gate may change to REJECT
 
         # Structure Grace: mark as STRUCTURE_PENDING_ENTRY (not yet confirmed)
-        if analysis.get("structure_grace"):
+        if analysis.get("structure_grace") and not _is_watchlist:
             analysis["structure_status"] = "STRUCTURE_PENDING_ENTRY"
             logger.info(
                 f"STRUCTURE_PENDING_ENTRY [{resolved}] {symbol}/{timeframe}: "
-                f"sweep confirmed, momentum confirmed, BOS/CHoCH awaited next candle"
+                f"sweep confirmed, BOS/CHoCH awaited next candle"
             )
 
-        # Decision metadata (useful for debugging / frontend display)
+        # Decision metadata
         analysis["decision_meta"] = {
-            "bull_score":      bull_score,
-            "bear_score":      bear_score,
-            "score_delta":     round(score_delta, 1),
-            "threshold":       threshold,
-            "structure_bias":  structure_bias,
-            "htf_bias":        htf_bias,
-            "liq_bias":        liq_bias,
-            "zone_bias":       zone_bias,
-            "resolved":        resolved,
-            "is_ranging":      is_ranging,
-            "structure_grace": analysis.get("structure_grace", False),
+            "bull_score":        bull_score,
+            "bear_score":        bear_score,
+            "score_delta":       round(score_delta, 1),
+            "effective_delta":   round(effective_delta, 1),
+            "threshold":         threshold,
+            "is_watchlist":      _is_watchlist,
+            "structure_bias":    structure_bias,
+            "htf_bias":          htf_bias,
+            "liq_bias":          liq_bias,
+            "zone_bias":         zone_bias,
+            "resolved":          resolved,
+            "is_ranging":        is_ranging,
+            "structure_grace":   analysis.get("structure_grace", False),
         }
+        status_tag = "WATCHLIST" if _is_watchlist else resolved
         logger.info(
-            f"DECISION [{resolved}] {symbol}/{timeframe}: "
-            f"bull={bull_score:.0f} bear={bear_score:.0f} Δ={score_delta:+.0f} "
-            f"struct={structure_bias} htf={htf_bias} liq={liq_bias}"
+            f"DECISION [{status_tag}] {symbol}/{timeframe}: "
+            f"bull={bull_score:.0f} bear={bear_score:.0f} "
+            f"Δ={score_delta:+.0f} eff={effective_delta:.1f}/thr={threshold:.1f} "
+            f"struct={structure_bias} htf={htf_bias}"
         )
         return analysis
 
@@ -1898,6 +1991,7 @@ class MoshAIEngineV5:
 
         rr_final = round(abs(levels.get("tp1", tp1) - entry) / sl_dist, 2)
         analysis["institutional_gate_passed"] = True
+        analysis["signal_status"]         = "PASS"
         analysis["gate_rr"]               = rr_final
         analysis["gate_htf_aligned"]      = False
         if htf_analysis:
@@ -2036,8 +2130,13 @@ class MoshAIEngineV5:
             sweep_pen = abs(sw_adj) * 2   # −2 adj → −4 conf, −5 adj → −10 conf
             penalty += sweep_pen
             penalty_log.append(f"WeakSweep(-{sweep_pen:.0f})")
-        # Counter-zone SELL in discount (TRENDING only — was not rejected)
-        if analysis.get("zone_conflict_warning"):
+        # Zone conflict penalty — replaces old hard reject for zone misalignment
+        zone_pen = float(analysis.get("_zone_confidence_penalty") or 0)
+        if zone_pen > 0:
+            penalty += zone_pen
+            penalty_log.append(f"ZoneConflict(-{zone_pen:.0f})")
+        elif analysis.get("zone_conflict_warning"):
+            # legacy path — kept for backwards compat
             penalty += 8.0
             penalty_log.append(f"CounterZone(-8)")
         # TP too close warning
@@ -2282,6 +2381,36 @@ class MoshAIEngineV5:
         )
         return False, "NO_CONFIRMATION"
 
+    def _select_primary_rejection_reason(self, analysis: dict) -> str:
+        """
+        Single primary rejection reason using severity hierarchy:
+          Tier 1 — Risk integrity: RR / SL violations
+          Tier 2 — Directional risk: HTF conflict
+          Tier 3 — Signal quality: score delta / watchlist
+          Tier 4 — Other
+        Returns the single highest-severity reason (never a list).
+        """
+        candidates = []
+        r = analysis.get("rejection_reason")
+        w = analysis.get("watchlist_reason")
+        if r:
+            candidates.append(r)
+        if w:
+            candidates.append(w)
+        if not candidates:
+            return "N/A"
+
+        TIER1 = ("RR_", "ZERO_SL", "BUY_SL_ABOVE", "SELL_SL_BELOW",
+                 "MISSING_ENTRY", "BUY_TP1_BELOW", "SELL_TP1_ABOVE")
+        TIER2 = ("HTF_CONFLICT", "HTF_DIRECTION")
+        TIER3 = ("SCORE_DELTA", "DELTA_")
+
+        for tier in (TIER1, TIER2, TIER3):
+            for c in candidates:
+                if any(c.startswith(t) for t in tier):
+                    return c
+        return candidates[0]
+
     def _hard_reject(self, analysis: dict, reason: str) -> dict:
         rec = analysis.get("recommendation", "?")
         logger.warning(f"REJECTED [{rec}] {reason}")
@@ -2291,6 +2420,7 @@ class MoshAIEngineV5:
         analysis.update({
             "recommendation":         "WAIT",
             "signal_type":            "WAIT",
+            "signal_status":          "REJECT",
             "ai_confidence_score":    min(float(analysis.get("ai_confidence_score") or 0), 45.0),
             "institutional_rejected": True,
             "rejection_reason":       reason,
@@ -2428,6 +2558,7 @@ class MoshAIEngineV5:
 
         analysis["recommendation"]        = direction
         analysis["signal_type"]           = direction
+        analysis["signal_status"]         = "PASS"
         analysis["smart_rescued"]         = True
         analysis["signal_quality"]        = "BORDERLINE"
         analysis["rescue_reason"]         = "rescued_near_threshold"
