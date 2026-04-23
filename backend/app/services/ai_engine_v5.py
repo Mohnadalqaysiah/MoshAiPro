@@ -89,6 +89,10 @@ class MoshAIEngineV5:
         self._perf: Dict[str, int] = {"wins": 0, "losses": 0}
         # Auto-calibration state: last signal timestamp per symbol (for silence detection)
         self._last_signal_issued: Dict[str, float] = {}
+        # Rolling signal history: key="{symbol}_{tf}" → list of {ts, passed, delta}
+        # Used by emergency calibration to measure pass_rate and avg_delta
+        self._signal_history: Dict[str, list] = {}
+        self._HISTORY_WINDOW = 20   # keep last 20 analyses per key
         logger.info(f"Mosh AI Engine v{self.version} initialized")
         logger.info(f"   Gemini v2: {'enabled' if gemini_engine.enabled else 'disabled'}")
 
@@ -361,6 +365,14 @@ class MoshAIEngineV5:
             analysis["from_cache"] = False
             analysis["cached_at"] = datetime.now().isoformat()
             analysis["cache_ttl_seconds"] = _SIGNAL_CACHE_TTL.get(timeframe, 1800)
+
+            # ── Record result for emergency calibration pass_rate tracking ───
+            self._record_analysis_result(
+                symbol, timeframe,
+                passed=analysis.get("signal_status") == "PASS",
+                delta=float(analysis.get("effective_delta") or 0),
+            )
+
             self._set_cached(symbol, timeframe, analysis)
 
             return analysis
@@ -786,10 +798,50 @@ class MoshAIEngineV5:
             required_delta = max(required_delta - 5, self._CALIB_DELTA_MIN)
             silence_relaxed = True
 
-        # ── 8. Apply hard limits (clamp) ──────────────────────────────────────
-        required_delta  = max(self._CALIB_DELTA_MIN,    min(self._CALIB_DELTA_MAX,    required_delta))
-        min_rr          = max(self._CALIB_RR_MIN,       min(self._CALIB_RR_MAX,       min_rr))
-        entry_tolerance = max(self._CALIB_TOL_MIN,      min(self._CALIB_TOL_MAX,      entry_tolerance))
+        # ── 8. EMERGENCY CALIBRATION MODE ────────────────────────────────────
+        # Activates when pass_rate < 50% over last 20 analyses.
+        # Adapts thresholds to market reality without removing risk controls.
+        pass_rate = self._get_pass_rate(symbol, timeframe)
+        emergency_active = pass_rate < 0.50
+        emergency_params = {}
+
+        if emergency_active:
+            avg_delta = self._get_avg_delta(symbol, timeframe)
+
+            # 1. Delta adaptive: anchor to recent market avg + 1 (floor=18)
+            required_delta = max(18, avg_delta + 1)
+
+            # 2. HTF conflict weight × 0.6 (passed to confidence calibration)
+            analysis["_htf_penalty_multiplier"] = 0.6
+
+            # 3. Relax RR by 0.2 (floor = 1.05 to preserve minimum risk ratio)
+            min_rr = max(1.05, min_rr - 0.2)
+
+            # 4. Partial confluence mode — soft approval active
+            analysis["_partial_confluence_mode"] = True
+
+            # 5. Soft override: 2 strong conditions → WATCHLIST becomes PASS
+            analysis["_soft_approval_mode"] = True
+
+            emergency_params = {
+                "active":          True,
+                "pass_rate":       round(pass_rate, 3),
+                "avg_delta":       round(avg_delta, 1),
+                "delta_override":  round(required_delta, 1),
+                "rr_override":     round(min_rr, 2),
+                "htf_multiplier":  0.6,
+            }
+            logger.warning(
+                f"🚨 EMERGENCY_CALIB [{symbol}/{timeframe}] "
+                f"pass_rate={pass_rate:.0%} avg_delta={avg_delta:.1f} "
+                f"→ delta={required_delta:.0f} RR≥{min_rr:.2f}"
+            )
+
+        # ── 9. Apply hard limits (clamp) ──────────────────────────────────────
+        delta_min = 18 if emergency_active else self._CALIB_DELTA_MIN
+        required_delta  = max(delta_min,               min(self._CALIB_DELTA_MAX,    required_delta))
+        min_rr          = max(self._CALIB_RR_MIN,      min(self._CALIB_RR_MAX,       min_rr))
+        entry_tolerance = max(self._CALIB_TOL_MIN,     min(self._CALIB_TOL_MAX,      entry_tolerance))
         cooldown_sec    = max(self._CALIB_COOLDOWN_MIN, min(self._CALIB_COOLDOWN_MAX, cooldown_sec))
 
         # ── 9. Apply calibrated values ────────────────────────────────────────
@@ -810,8 +862,10 @@ class MoshAIEngineV5:
             "reason": (
                 f"{market_state} + {volatility} volatility"
                 + (" | silence relaxed" if silence_relaxed else "")
+                + (" | EMERGENCY_CALIB" if emergency_active else "")
                 + f" | winrate={wr:.0%}"
             ),
+            "emergency": emergency_params or {"active": False, "pass_rate": round(pass_rate, 3)},
         }
         analysis["calibration_params"] = calibration
 
@@ -835,6 +889,27 @@ class MoshAIEngineV5:
     def _record_signal_issued(self, symbol: str, timeframe: str):
         """Called when a BUY/SELL passes all gates — updates silence tracker."""
         self._last_signal_issued[f"{symbol.upper()}_{timeframe}"] = time.time()
+
+    def _record_analysis_result(self, symbol: str, timeframe: str, passed: bool, delta: float):
+        """Rolling window tracker for emergency calibration mode."""
+        key = f"{symbol.upper()}_{timeframe}"
+        hist = self._signal_history.setdefault(key, [])
+        hist.append({"ts": time.time(), "passed": passed, "delta": abs(delta)})
+        if len(hist) > self._HISTORY_WINDOW:
+            self._signal_history[key] = hist[-self._HISTORY_WINDOW:]
+
+    def _get_pass_rate(self, symbol: str, timeframe: str) -> float:
+        """Fraction of recent analyses that produced a PASS signal (0.0–1.0)."""
+        hist = self._signal_history.get(f"{symbol.upper()}_{timeframe}", [])
+        if len(hist) < 3:
+            return 1.0   # not enough history — assume healthy
+        return sum(1 for h in hist if h["passed"]) / len(hist)
+
+    def _get_avg_delta(self, symbol: str, timeframe: str) -> float:
+        """Average effective_delta over recent analyses."""
+        hist = self._signal_history.get(f"{symbol.upper()}_{timeframe}", [])
+        deltas = [h["delta"] for h in hist if h["delta"] > 0]
+        return sum(deltas) / len(deltas) if deltas else 18.0
 
     # ═══════════════════════════════════════════════════════════════════════
     # EXPLAINABILITY LAYER — Audit-grade trace for every decision
@@ -1605,7 +1680,7 @@ class MoshAIEngineV5:
 
         # ── DECISION LAYER: delta below threshold → WATCHLIST, never REJECT ────
         # Score delta failure is a quality issue, not a risk violation.
-        # Only RR/HTF/SL can hard-reject. Everything else becomes WATCHLIST.
+        # Only RR/SL are hard gates.
         _is_watchlist = False
         if effective_delta < threshold:
             _is_watchlist = True
@@ -1617,6 +1692,40 @@ class MoshAIEngineV5:
                 f"eff_delta={effective_delta:.1f} < threshold={threshold:.1f} "
                 f"(noise={_low_tf_noise_penalty} trap={_range_trap_penalty})"
             )
+
+            # ── SOFT OVERRIDE (emergency mode): 2 strong conditions → PASS ──────
+            if analysis.get("_soft_approval_mode"):
+                score_dir_local = "BUY" if score_delta > 0 else "SELL"
+                strong = 0
+                if sweep_quality_raw in ("STRONG", "HIGH"):
+                    strong += 1
+                if has_bos and has_choch:
+                    strong += 1
+                # HTF aligned
+                if htf_analysis:
+                    ht = (htf_analysis.get("market_structure", {}).get("trend") or "").upper()
+                    htf_b_local = "BUY" if ht == "BULLISH" else ("SELL" if ht == "BEARISH" else None)
+                    if htf_b_local and htf_b_local == score_dir_local:
+                        strong += 1
+                # Zone aligned
+                pd_raw_local = (pd_zone.get("bias") or "NEUTRAL").upper()
+                zone_b_local = ("BUY" if pd_raw_local == "BUY" else
+                                "SELL" if pd_raw_local == "SELL" else None)
+                if zone_b_local and zone_b_local == score_dir_local:
+                    strong += 1
+                # Delta ≥ 80% of threshold
+                if abs(score_delta) >= threshold * 0.80:
+                    strong += 1
+
+                if strong >= 2:
+                    _is_watchlist = False
+                    analysis["soft_approved"]            = True
+                    analysis["soft_approval_conditions"] = strong
+                    analysis.pop("watchlist_reason", None)
+                    logger.info(
+                        f"SOFT_OVERRIDE [{symbol}/{timeframe}]: "
+                        f"{strong}/5 conditions → promoted to PASS"
+                    )
 
         # ── 5. Conflict Resolver — rebalanced: delta leads, sweep/struct follow ──
         #  Priority 1: Score delta direction (strongest signal in this rebalance)
@@ -2180,11 +2289,14 @@ class MoshAIEngineV5:
         elif analysis.get("zone_conflict_warning"):
             penalty += 8.0
             penalty_log.append(f"CounterZone(-8)")
-        # HTF conflict penalty — replaces hard rejection (context multiplier)
+        # HTF conflict penalty — context multiplier (emergency mode reduces weight by 0.6×)
         htf_pen = float(analysis.get("_htf_conflict_penalty") or 0)
         if htf_pen > 0:
+            htf_multiplier = float(analysis.get("_htf_penalty_multiplier") or 1.0)
+            htf_pen = round(htf_pen * htf_multiplier, 1)
             penalty += htf_pen
-            penalty_log.append(f"HTFConflict(-{htf_pen:.0f})")
+            penalty_log.append(f"HTFConflict(-{htf_pen:.0f})"
+                               + (" [×0.6 emergency]" if htf_multiplier < 1.0 else ""))
         # TP too close warning
         if analysis.get("tp_too_close_warning"):
             penalty += 8.0
