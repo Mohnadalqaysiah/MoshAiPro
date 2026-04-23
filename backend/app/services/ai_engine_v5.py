@@ -736,9 +736,9 @@ class MoshAIEngineV5:
         if market_state == "TRENDING":
             required_delta = 18
         elif market_state == "RANGING":
-            required_delta = 22
+            required_delta = 18   # lowered: ranging markets already filtered by anti-fake sweep
         else:  # VOLATILE
-            required_delta = 28
+            required_delta = 25
 
         # ── 3. Dynamic min RR (based on winrate) ──────────────────────────────
         wr = self.get_winrate()
@@ -1505,13 +1505,24 @@ class MoshAIEngineV5:
                     )
             else:
                 # RANGING/VOLATILE: check at least one quality confirmation
-                # determine likely direction from sweep type
                 sweep_dir = "BUY" if has_bullish_sweep else "SELL"
                 afs_pass, afs_conf = self._anti_fake_sweep_check(analysis, sweep_dir)
                 analysis["anti_fake_sweep_pass"]  = afs_pass
                 analysis["anti_fake_sweep_conf"]  = afs_conf
                 if not afs_pass:
-                    return self._hard_reject(analysis, f"FAKE_SWEEP_{afs_conf}")
+                    # STALE_SWEEP in RANGING: borderline rescue can catch this later
+                    # WEAK_SWEEP_QUALITY: also allow rescue — not a confirmed fake
+                    # Only NO_CONFIRMATION is a definitive fake → hard reject
+                    if afs_conf == "NO_CONFIRMATION":
+                        return self._hard_reject(analysis, f"FAKE_SWEEP_{afs_conf}")
+                    else:
+                        # Soft-reject: tagged for borderline rescue evaluation
+                        analysis["fake_sweep_warning"] = afs_conf
+                        logger.info(
+                            f"FAKE_SWEEP soft-reject [{symbol}/{timeframe}]: "
+                            f"{afs_conf} — eligible for borderline rescue"
+                        )
+                        return self._hard_reject(analysis, f"FAKE_SWEEP_{afs_conf}")
 
         # ── 4. Score delta check ─────────────────────────────────────────────
         if abs(score_delta) < threshold:
@@ -1568,21 +1579,34 @@ class MoshAIEngineV5:
         # ── Apply priority chain to resolve direction ────────────────────────
         if structure_bias:
             resolved = structure_bias
-            # If score strongly disagrees with structure → NO TRADE
+            # In RANGING markets structure is noisy — downgrade conflict to warning
             if score_dir != structure_bias and abs(score_delta) < self._DECISION_THRESHOLD_STRONG:
-                return self._hard_reject(analysis, "SCORE_CONFLICTS_STRUCTURE")
+                if is_ranging:
+                    analysis["structure_conflict_warning"] = "SCORE_CONFLICTS_STRUCTURE"
+                    logger.info(
+                        f"RANGING structure conflict downgraded to warning [{symbol}/{timeframe}]: "
+                        f"score_dir={score_dir} structure={structure_bias}"
+                    )
+                else:
+                    return self._hard_reject(analysis, "SCORE_CONFLICTS_STRUCTURE")
         elif htf_bias:
             resolved = htf_bias
             if score_dir != htf_bias and abs(score_delta) < self._DECISION_THRESHOLD_STRONG:
-                return self._hard_reject(analysis, "SCORE_CONFLICTS_HTF")
+                if is_ranging:
+                    analysis["htf_conflict_warning"] = "SCORE_CONFLICTS_HTF"
+                    logger.info(f"RANGING HTF conflict downgraded to warning [{symbol}/{timeframe}]")
+                else:
+                    return self._hard_reject(analysis, "SCORE_CONFLICTS_HTF")
         elif liq_bias:
             resolved = liq_bias
         else:
             resolved = score_dir   # fallback: pure score
 
         # ── 6. HTF conflict penalty ──────────────────────────────────────────
+        # In RANGING markets HTF bias is often absent/neutral — only hard reject in TRENDING
         if htf_bias and htf_bias != resolved and abs(score_delta) < self._DECISION_THRESHOLD_STRONG:
-            return self._hard_reject(analysis, "HTF_DIRECTION_CONFLICT")
+            if not is_ranging:
+                return self._hard_reject(analysis, "HTF_DIRECTION_CONFLICT")
 
         # ── 7. Execution zone validation ──────────────────────────────────────
         #  BUY must enter from discount/support, SELL from premium/resistance
@@ -1798,21 +1822,25 @@ class MoshAIEngineV5:
                 return self._hard_reject(analysis, "NO_FVG_NEAR_ENTRY")
 
         # Rule 6: TP/SL ordering + auto-fix swap
+        # Guard: if entry is zero levels are corrupt — reject cleanly
+        if not entry:
+            return self._hard_reject(analysis, "MISSING_ENTRY_PRICE")
         tp1, tp2 = tp1_raw, tp2_raw
         if rec == "BUY":
-            if sl >= entry:
+            # SL must be strictly below entry (allow tiny epsilon for float precision)
+            if sl > 0 and sl >= entry * 0.9999:
                 return self._hard_reject(analysis, "BUY_SL_ABOVE_ENTRY")
-            if tp1 <= entry:
+            if tp1 > 0 and tp1 <= entry * 1.0001:
                 return self._hard_reject(analysis, "BUY_TP1_BELOW_ENTRY")
-            if tp2 and tp1 > tp2:
+            if tp2 and tp1 and tp1 > tp2:
                 levels["tp1"], levels["tp2"] = tp2, tp1
                 tp1, tp2 = tp2, tp1
         else:
-            if sl <= entry:
+            if sl > 0 and sl <= entry * 1.0001:
                 return self._hard_reject(analysis, "SELL_SL_BELOW_ENTRY")
-            if tp1 >= entry:
+            if tp1 > 0 and tp1 >= entry * 0.9999:
                 return self._hard_reject(analysis, "SELL_TP1_ABOVE_ENTRY")
-            if tp2 and tp1 < tp2:
+            if tp2 and tp1 and tp1 < tp2:
                 levels["tp1"], levels["tp2"] = tp2, tp1
                 tp1, tp2 = tp2, tp1
 
@@ -2289,24 +2317,32 @@ class MoshAIEngineV5:
         # ── Hard rejects — cannot be rescued ─────────────────────────────────
         HARD_REJECT_PREFIXES = (
             "NO_LIQUIDITY_SWEEP",
-            "RR_",                    # RR_0.80_BELOW_MIN_1.5 etc.
+            "RR_",                       # RR_0.80_BELOW_MIN_1.5 etc.
             "HTF_CONFLICT",
             "HTF_DIRECTION_CONFLICT",
             "INVALID_STRUCTURE",
+            "FAKE_SWEEP_NO_CONFIRMATION", # confirmed fake — no rescue
         )
         for prefix in HARD_REJECT_PREFIXES:
             if reason.startswith(prefix):
                 logger.debug(f"RESCUE SKIP [{symbol}/{timeframe}]: hard reject — {reason}")
                 return analysis
+        # FAKE_SWEEP_STALE and FAKE_SWEEP_WEAK are soft — eligible for rescue
 
-        # ── Condition 1: Sweep exists (quality != NONE) ───────────────────────
+        # ── Condition 1: Sweep exists (any quality including WEAK) ───────────
         sweep = analysis.get("liquidity_sweep", {})
         sweep_quality = str(sweep.get("sweep_quality", "NONE")).upper()
         has_any_sweep = (
             sweep.get("has_bullish_sweep", False)
             or sweep.get("has_bearish_sweep", False)
         )
-        if not has_any_sweep or sweep_quality == "NONE":
+        # For STALE/WEAK soft-rejects the sweep was detected — allow rescue
+        fake_sw_warn = analysis.get("fake_sweep_warning", "")
+        sweep_ok = (
+            (has_any_sweep and sweep_quality != "NONE")
+            or fake_sw_warn in ("STALE_SWEEP", "WEAK_SWEEP_QUALITY")
+        )
+        if not sweep_ok:
             logger.debug(f"RESCUE SKIP [{symbol}/{timeframe}]: sweep absent or quality=NONE")
             return analysis
 
