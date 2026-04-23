@@ -205,15 +205,25 @@ async def analyze_market(
 @router.get("/latest")
 async def get_latest_signals(
     limit: int = 10,
+    hours: int = 12,   # only return signals created within this window
     db: Session = Depends(get_db)
 ):
     """
-    Get latest signals
+    Get latest ACTIVE/PENDING signals within the last `hours` window.
     """
     try:
-        signals = db.query(Signal).order_by(
-            Signal.created_at.desc()
-        ).limit(limit).all()
+        from datetime import timedelta
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+        signals = (
+            db.query(Signal)
+            .filter(
+                Signal.status.in_(["PENDING", "ACTIVE"]),
+                Signal.created_at >= cutoff,
+            )
+            .order_by(Signal.created_at.desc())
+            .limit(limit)
+            .all()
+        )
 
         return {
             "success": True,

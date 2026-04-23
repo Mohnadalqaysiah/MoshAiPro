@@ -31,27 +31,30 @@ export default function BestOpportunityWidget() {
   const [loading, setLoading] = useState(true)
   const [lastUpdated, setLastUpdated] = useState(null)
 
-  const fetch = async () => {
+  const loadBest = async () => {
     setLoading(true)
     try {
-      const res = await axios.get(`${API}/api/v1/signals/latest?limit=50`)
+      // hours=12: only ACTIVE/PENDING signals from last 12h
+      const res = await axios.get(`${API}/api/v1/signals/latest?limit=50&hours=12`)
       const signals = res.data.data || []
 
+      const now = Date.now()
       const active = signals.filter(s => {
         const rec  = s.recommendation || s.signal_type || ''
         const conf = s.ai_confidence_score || s.ai_confidence || 0
-        const rr   = s.risk_reward_ratio || s.levels?.risk_reward || 0
-        // Only valid directional signals with realistic quality
+        const rr   = s.risk_reward_ratio || 0
+        const age  = s.created_at ? (now - new Date(s.created_at).getTime()) / 3600000 : 99
         return (
           ['BUY', 'SELL'].includes(rec) &&
-          conf >= 55 && conf <= 95 &&   // cap 95 blocks inflated AI scores
-          rr >= 1.3                      // minimum viable RR
+          conf >= 55 && conf <= 95 &&
+          rr >= 1.3 &&
+          age <= 12   // client-side age guard (backup)
         )
       })
 
       if (active.length === 0) { setBest(null); return }
 
-      // Sort by combined score: 60% confidence + 40% RR normalised to 0–1 (max RR 4)
+      // Sort by combined score: 60% conf + 40% RR (normalised, max RR 4)
       const scored = active.map(s => ({
         ...s,
         _score: (
@@ -63,17 +66,21 @@ export default function BestOpportunityWidget() {
       setBest(top)
       setLastUpdated(new Date())
     } catch {
-      // silent
+      setBest(null)
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    fetch()
-    const id = setInterval(fetch, 2 * 60 * 1000) // refresh every 2 min
+    loadBest()
+    const id = setInterval(loadBest, 2 * 60 * 1000)
     return () => clearInterval(id)
   }, [])
+
+  const signalAge = best?.created_at
+    ? Math.round((Date.now() - new Date(best.created_at).getTime()) / 60000)
+    : null
 
   const rec   = best?.recommendation || best?.signal_type || ''
   const conf  = best?.ai_confidence_score || best?.ai_confidence || 0
@@ -113,7 +120,7 @@ export default function BestOpportunityWidget() {
           )}
         </div>
         <button
-          onClick={fetch}
+          onClick={loadBest}
           disabled={loading}
           className="p-1.5 rounded-lg hover:bg-white/10 transition-colors opacity-60 hover:opacity-100"
           title={isAr ? 'تحديث' : 'Refresh'}
@@ -139,7 +146,16 @@ export default function BestOpportunityWidget() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <span className="text-xl font-bold tracking-wide">{sym}</span>
-                <span className="text-xs opacity-50 best-opp-sub">{tx.tf}: {tf}</span>
+                <div className="flex flex-col leading-tight">
+                  <span className="text-xs opacity-50 best-opp-sub">{tx.tf}: {tf}</span>
+                  {signalAge !== null && (
+                    <span className="text-xs opacity-35 best-opp-sub">
+                      {signalAge < 60
+                        ? `${signalAge}${isAr ? 'د' : 'm'} ${isAr ? 'مضى' : 'ago'}`
+                        : `${Math.floor(signalAge/60)}${isAr ? 'س' : 'h'} ${isAr ? 'مضى' : 'ago'}`}
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 {tier === 'TIER_A' && (
