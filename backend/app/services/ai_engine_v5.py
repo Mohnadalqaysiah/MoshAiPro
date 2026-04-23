@@ -1436,7 +1436,10 @@ class MoshAIEngineV5:
         has_choch = bool(struct.get("choch_events"))
         any_sweep = has_bullish_sweep or has_bearish_sweep
 
-        if any_sweep and not has_bos and not has_choch:
+        # In TRENDING market → sweep MUST have structure shift (BOS/CHoCH)
+        # In RANGING/VOLATILE → sweep alone is sufficient (structure forms slower)
+        req_sweep_conf = analysis.get("_calib_req_sweep", True)
+        if req_sweep_conf and any_sweep and not has_bos and not has_choch:
             return self._hard_reject(analysis, "SWEEP_WITHOUT_STRUCTURE_SHIFT")
 
         # ── 4. Score delta check ─────────────────────────────────────────────
@@ -1628,7 +1631,10 @@ class MoshAIEngineV5:
 
         if not has_sweep:
             return self._hard_reject(analysis, "NO_LIQUIDITY_SWEEP")
-        if not has_aligned_bos and not has_choch:
+        # BOS/CHoCH required only when calibration demands it (TRENDING market)
+        # In RANGING market, sweep alone confirms institutional interest
+        req_sweep_conf = analysis.get("_calib_req_sweep", True)
+        if req_sweep_conf and not has_aligned_bos and not has_choch:
             return self._hard_reject(analysis, "NO_BOS_NO_CHOCH")
 
         # Rule 4: Closest zone only, no overlap
