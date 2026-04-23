@@ -450,16 +450,17 @@ export default function Admin() {
   )
 
   const TABS = [
-    { key:'stats',     icon:Activity,   label:'إحصائيات' },
-    { key:'users',     icon:Users,      label:'المستخدمون' },
-    { key:'payments',  icon:CreditCard, label:'المدفوعات' },
-    { key:'markets',   icon:BarChart2,  label:'الأسواق' },
-    { key:'signals',   icon:TrendingUp, label:'الإشارات' },
-    { key:'reports',   icon:FileText,   label:'تقارير الأداء' },
-    { key:'affiliate', icon:TrendUp,    label:'الأفلييت' },
-    { key:'messages',  icon:Send,       label:'رسائل تيليجرام' },
-    { key:'email',     icon:Mail,       label:'البريد' },
-    { key:'settings',  icon:Settings,   label:'الإعدادات' },
+    { key:'stats',      icon:Activity,      label:'إحصائيات' },
+    { key:'users',      icon:Users,         label:'المستخدمون' },
+    { key:'payments',   icon:CreditCard,    label:'المدفوعات' },
+    { key:'markets',    icon:BarChart2,     label:'الأسواق' },
+    { key:'signals',    icon:TrendingUp,    label:'الإشارات' },
+    { key:'reports',    icon:FileText,      label:'تقارير الأداء' },
+    { key:'affiliate',  icon:TrendUp,       label:'الأفلييت' },
+    { key:'messages',   icon:Send,          label:'رسائل تيليجرام' },
+    { key:'email',      icon:Mail,          label:'البريد' },
+    { key:'settings',   icon:Settings,      label:'الإعدادات' },
+    { key:'diagnostic', icon:AlertTriangle, label:'تشخيص النظام' },
   ]
 
   return (
@@ -1744,8 +1745,285 @@ export default function Admin() {
             </div>
           )}
 
+          {/* ── Diagnostic ── */}
+          {tab === 'diagnostic' && <DiagnosticPanel />}
+
         </main>
       </div>
+    </div>
+  )
+}
+
+// ── System Diagnostic Panel ───────────────────────────────────────────────────
+function DiagnosticPanel() {
+  const [data, setData]       = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError]     = useState(null)
+
+  const run = async () => {
+    setLoading(true); setError(null); setData(null)
+    try {
+      const res = await axios.get(`${API}/api/v1/admin/diagnostic`)
+      setData(res.data)
+    } catch(e) {
+      setError(e.response?.data?.detail || e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const verdictStyle = (v) => {
+    if (!v) return ''
+    if (v.includes('VALID'))     return 'bg-blue-900/30 border-blue-600 text-blue-300'
+    if (v.includes('FILTERING')) return 'bg-orange-900/30 border-orange-600 text-orange-300'
+    if (v.includes('BUG'))       return 'bg-red-900/30 border-red-600 text-red-300'
+    return 'bg-gray-800 border-gray-600 text-gray-300'
+  }
+
+  const stateColor = (s) => {
+    if (s === 'TRENDING')  return 'text-green-400'
+    if (s === 'VOLATILE')  return 'text-yellow-400'
+    if (s === 'TRAP')      return 'text-red-400'
+    return 'text-gray-400'
+  }
+
+  return (
+    <div className="space-y-6 max-w-6xl">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold flex items-center gap-2">
+            <AlertTriangle size={20} className="text-orange-400" /> تشخيص النظام
+          </h1>
+          <p className="text-gray-500 text-sm mt-1">تحليل كامل للـ pipeline — يكتشف سبب غياب الإشارات</p>
+        </div>
+        <button onClick={run} disabled={loading}
+          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition">
+          {loading ? <RefreshCw size={15} className="animate-spin" /> : <Activity size={15} />}
+          {loading ? 'جاري التشخيص...' : 'تشغيل التشخيص'}
+        </button>
+      </div>
+
+      {error && (
+        <div className="bg-red-900/30 border border-red-700 rounded-xl p-4 text-red-300 text-sm flex items-center gap-2">
+          <XCircle size={16} /> {error}
+        </div>
+      )}
+
+      {loading && (
+        <div className="bg-gray-800 border border-gray-700 rounded-2xl p-10 text-center">
+          <RefreshCw size={28} className="animate-spin text-blue-400 mx-auto mb-3" />
+          <p className="text-gray-400 text-sm">يحلل {10} رموز عبر كامل الـ pipeline...</p>
+          <p className="text-gray-600 text-xs mt-1">قد يستغرق 15-30 ثانية</p>
+        </div>
+      )}
+
+      {data && (
+        <div className="space-y-5">
+
+          {/* VERDICT */}
+          <div className={`border rounded-2xl p-5 ${verdictStyle(data.step7_diagnosis?.verdict)}`}>
+            <div className="flex items-center gap-3 mb-2">
+              <span className="text-2xl font-bold">{data.step7_diagnosis?.verdict}</span>
+            </div>
+            <p className="text-sm opacity-80">{data.step7_diagnosis?.reason}</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 text-xs">
+              {Object.entries(data.step7_diagnosis?.supporting_data || {}).map(([k,v]) => (
+                <div key={k} className="bg-black/20 rounded-lg p-2">
+                  <div className="opacity-60 mb-0.5">{k.replace(/_/g,' ')}</div>
+                  <div className="font-bold">{String(v)}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* STEP 1 — Market Activity */}
+          <div className="bg-gray-800 border border-gray-700 rounded-2xl overflow-hidden">
+            <div className="px-5 py-3 border-b border-gray-700 flex items-center justify-between">
+              <h2 className="font-semibold text-sm">Step 1 — حالة الأسواق</h2>
+              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${data.step1_market_activity?.market_global_state === 'ACTIVE' ? 'bg-green-900/40 text-green-400' : 'bg-red-900/40 text-red-400'}`}>
+                {data.step1_market_activity?.market_global_state}
+              </span>
+            </div>
+            <div className="p-4 overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-gray-500 border-b border-gray-700">
+                    {['رمز','حالة','تذبذب','BOS↑','BOS↓','Sweep','Breakout','ATR%'].map(h => (
+                      <th key={h} className="text-right pb-2 pr-3 font-medium">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(data.step1_market_activity?.symbols || {}).map(([sym, s]) => (
+                    <tr key={sym} className="border-b border-gray-700/40">
+                      <td className="py-2 pr-3 font-bold text-white">{sym}</td>
+                      {s.error ? (
+                        <td colSpan={7} className="py-2 text-red-400">{s.error}</td>
+                      ) : (
+                        <>
+                          <td className={`py-2 pr-3 font-semibold ${stateColor(s.market_state)}`}>{s.market_state}</td>
+                          <td className="py-2 pr-3 text-gray-400">{s.volatility}</td>
+                          <td className="py-2 pr-3 text-green-400">{s.bos_bull}</td>
+                          <td className="py-2 pr-3 text-red-400">{s.bos_bear}</td>
+                          <td className={`py-2 pr-3 ${s.sweep_detected > 0 ? 'text-yellow-400' : 'text-gray-600'}`}>{s.sweep_detected}</td>
+                          <td className={`py-2 pr-3 ${s.breakout_attempts >= 3 ? 'text-orange-400' : 'text-gray-500'}`}>{s.breakout_attempts}</td>
+                          <td className="py-2 pr-3 text-gray-400">{s.atr_pct}%</td>
+                        </>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* STEP 2 — Pipeline Trace */}
+          <div className="bg-gray-800 border border-gray-700 rounded-2xl overflow-hidden">
+            <div className="px-5 py-3 border-b border-gray-700">
+              <h2 className="font-semibold text-sm">Step 2 — Pipeline Trace</h2>
+            </div>
+            <div className="p-4 overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-gray-500 border-b border-gray-700">
+                    {['رمز','نتيجة','مرحلة الرفض','السبب','Δ','Δ مطلوب','R/R','R/R min'].map(h => (
+                      <th key={h} className="text-right pb-2 pr-3 font-medium">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(data.step2_pipeline_trace || []).map((t,i) => (
+                    <tr key={i} className="border-b border-gray-700/40">
+                      <td className="py-2 pr-3 font-bold">{t.symbol}</td>
+                      <td className={`py-2 pr-3 font-semibold ${t.decision === 'PASSED' ? 'text-green-400' : 'text-red-400'}`}>{t.decision || t.error}</td>
+                      <td className="py-2 pr-3 text-orange-400 text-xs">{t.failed_stage || '—'}</td>
+                      <td className="py-2 pr-3 text-gray-400 max-w-[200px] truncate" title={t.reason}>{t.reason || '—'}</td>
+                      <td className={`py-2 pr-3 font-mono ${(t.delta||0) >= (t.required_delta||20) ? 'text-green-400' : 'text-red-400'}`}>{t.delta ?? '—'}</td>
+                      <td className="py-2 pr-3 font-mono text-gray-400">{t.required_delta ?? '—'}</td>
+                      <td className={`py-2 pr-3 font-mono ${t.rr && t.min_rr && t.rr >= t.min_rr ? 'text-green-400' : 'text-red-400'}`}>{t.rr ?? '—'}</td>
+                      <td className="py-2 pr-3 font-mono text-gray-400">{t.min_rr ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* STEP 3 — Rejection Analysis */}
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="bg-gray-800 border border-gray-700 rounded-2xl p-5">
+              <h2 className="font-semibold text-sm mb-4">Step 3 — توزيع الرفض</h2>
+              <div className="space-y-2 text-xs">
+                {[
+                  { l: 'إجمالي محلل', v: data.step3_rejection_analysis?.total_analyzed },
+                  { l: 'اجتاز', v: data.step3_rejection_analysis?.total_passed, cls: 'text-green-400' },
+                  { l: 'مرفوض', v: data.step3_rejection_analysis?.total_rejected, cls: 'text-red-400' },
+                  { l: 'نسبة النجاح', v: data.step3_rejection_analysis?.pass_rate },
+                  { l: 'متوسط Delta', v: data.step3_rejection_analysis?.avg_delta },
+                  { l: 'متوسط R/R', v: data.step3_rejection_analysis?.avg_rr },
+                  { l: 'أكثر سبب رفض', v: data.step3_rejection_analysis?.most_common_rejection, cls: 'text-orange-400 font-mono' },
+                ].map(({l,v,cls}) => (
+                  <div key={l} className="flex justify-between items-center py-1 border-b border-gray-700/40">
+                    <span className="text-gray-400">{l}</span>
+                    <span className={cls || 'text-white font-semibold'}>{String(v ?? '—')}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-gray-800 border border-gray-700 rounded-2xl p-5">
+              <h2 className="font-semibold text-sm mb-4">توزيع أسباب الرفض</h2>
+              <div className="space-y-2 text-xs">
+                {Object.entries(data.step3_rejection_analysis?.rejection_distribution || {}).map(([reason, pct]) => (
+                  <div key={reason}>
+                    <div className="flex justify-between mb-1">
+                      <span className="text-gray-400 font-mono truncate max-w-[200px]">{reason}</span>
+                      <span className="text-white font-semibold">{pct}</span>
+                    </div>
+                    <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                      <div className="h-full bg-orange-500 rounded-full" style={{width: pct}} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* STEP 4 — Stress Test */}
+          <div className="bg-gray-800 border border-gray-700 rounded-2xl p-5">
+            <h2 className="font-semibold text-sm mb-3">Step 4 — Stress Test (محاكاة Δ-5 / R/R-0.2)</h2>
+            <div className="flex items-center gap-6 text-sm mb-3">
+              <span>ستنجح لو خُففت الحدود: <strong className="text-yellow-400">{data.step4_stress_test?.signals_would_pass}</strong> / {data.step4_stress_test?.total}</span>
+              <span className="text-gray-500 text-xs">{data.step4_stress_test?.quality_note}</span>
+            </div>
+            {(data.step4_stress_test?.details || []).length > 0 && (
+              <div className="space-y-1 text-xs">
+                {data.step4_stress_test.details.map((d,i) => (
+                  <div key={i} className="bg-yellow-900/10 border border-yellow-700/30 rounded-lg px-3 py-2 flex flex-wrap gap-4">
+                    <span className="font-bold text-yellow-400">{d.symbol}</span>
+                    <span className="text-gray-400">Δ: {d.delta} → {d.relaxed_delta}</span>
+                    <span className="text-gray-400">R/R: {d.rr} → {d.relaxed_rr}</span>
+                    <span className="text-orange-400">يمر عبر: {d.passes_on}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* STEP 5+6 — Cooldown + Calibration */}
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="bg-gray-800 border border-gray-700 rounded-2xl p-5">
+              <h2 className="font-semibold text-sm mb-3">Step 5 — Cooldown</h2>
+              <div className="space-y-1.5 text-xs">
+                {(data.step5_cooldown?.items || []).map((c,i) => (
+                  <div key={i} className={`flex justify-between items-center py-1.5 border-b border-gray-700/40 ${c.active ? 'text-red-400' : 'text-gray-400'}`}>
+                    <span className="font-bold">{c.symbol}</span>
+                    <span>{c.active ? `🔒 ${Math.floor(c.remaining_sec/60)}د متبقي` : '✅ متاح'}</span>
+                  </div>
+                ))}
+                <div className="pt-1 text-orange-400 font-semibold">محظور: {data.step5_cooldown?.blocked_count}</div>
+              </div>
+            </div>
+
+            <div className="bg-gray-800 border border-gray-700 rounded-2xl p-5">
+              <h2 className="font-semibold text-sm mb-3">Step 6 — Auto Calibration</h2>
+              <div className="space-y-1 text-xs mb-3">
+                <div className="flex justify-between"><span className="text-gray-400">Winrate</span><span className="text-white">{((data.step6_auto_calibration?.engine_winrate||0)*100).toFixed(1)}%</span></div>
+                <div className="flex justify-between"><span className="text-gray-400">Wins</span><span className="text-green-400">{data.step6_auto_calibration?.perf?.wins}</span></div>
+                <div className="flex justify-between"><span className="text-gray-400">Losses</span><span className="text-red-400">{data.step6_auto_calibration?.perf?.losses}</span></div>
+              </div>
+              <div className="space-y-1.5 text-xs">
+                {(data.step6_auto_calibration?.per_symbol || []).map((s,i) => (
+                  <div key={i} className="flex justify-between items-center border-b border-gray-700/40 pb-1">
+                    <span className="font-bold">{s.symbol}</span>
+                    <span className={stateColor(s.market_state)}>{s.market_state}</span>
+                    <span className="text-gray-400">Δ≥{s.delta}</span>
+                    <span className="text-gray-400">RR≥{s.min_rr}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* STEP 8 — Action Plan */}
+          <div className="bg-gray-800 border border-gray-700 rounded-2xl p-5">
+            <h2 className="font-semibold text-sm mb-3">Step 8 — خطة العمل</h2>
+            <div className="space-y-2">
+              {(data.step8_action_plan?.actions || []).map((a,i) => (
+                <div key={i} className="flex items-start gap-2 text-sm text-gray-300">
+                  <span className="text-blue-400 mt-0.5 shrink-0">→</span>
+                  <span>{a}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Meta */}
+          <div className="text-xs text-gray-600 text-left">
+            Generated: {data.diagnostic_meta?.generated_at} | {data.diagnostic_meta?.elapsed_ms}ms
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -1540,3 +1540,408 @@ def reengagement_send(
         "queued":    len(users),
         "message":   f"جاري إرسال {len(users)} رسالة في الخلفية",
     }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SYSTEM DIAGNOSTIC MODE
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_DIAG_SYMBOLS = [
+    "XAUUSD", "XAGUSD", "BTCUSD", "ETHUSD",
+    "EURUSD", "GBPUSD", "USDJPY",
+    "NAS100", "US30", "USOIL",
+]
+_DIAG_TIMEFRAME = "1h"
+
+
+@router.get("/diagnostic")
+async def system_diagnostic(
+    admin: User = Depends(get_admin_user),
+):
+    """
+    Full System Diagnostic Mode.
+    Steps 1-8: market state, pipeline trace, rejection analysis,
+    threshold stress test, cooldown check, calibration status, diagnosis, plan.
+    """
+    import time as _t
+    import asyncio
+
+    from app.services.ai_engine_v5 import mosh_ai_engine_v5 as _engine
+    from app.services.ict_engine import ict_engine as _ict
+    from app.services.smart_data import smart_data as _sd
+
+    started = _t.time()
+    results = {}
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # STEP 1 — Market Activity Check
+    # ─────────────────────────────────────────────────────────────────────────
+    step1 = {}
+    active_markets = 0
+
+    for sym in _DIAG_SYMBOLS:
+        try:
+            df = await _sd.get_ohlcv(sym, _DIAG_TIMEFRAME, bars=80)
+            if df is None or len(df) < 30:
+                step1[sym] = {"error": "no_data"}
+                continue
+
+            ict = _ict.full_analysis(df, sym, _DIAG_TIMEFRAME)
+
+            struct    = ict.get("market_structure", {})
+            sweep     = ict.get("liquidity_sweep", {})
+            mm        = ict.get("market_mode", {})
+            bos_list  = struct.get("bos_events", [])
+            bull_bos  = sum(1 for b in bos_list if "BULLISH" in b.get("type",""))
+            bear_bos  = sum(1 for b in bos_list if "BEARISH" in b.get("type",""))
+            trend     = struct.get("trend", "RANGING")
+            mode      = mm.get("mode", "UNKNOWN")
+
+            # count sweeps in last 20 candles
+            sweep_count = int(sweep.get("has_bullish_sweep", False)) + int(sweep.get("has_bearish_sweep", False))
+
+            # breakout attempts — candles closing beyond recent high/low
+            closes   = df["close"].values[-10:]
+            highs    = df["high"].values[-30:-10]
+            lows     = df["low"].values[-30:-10]
+            recent_h = float(highs.max()) if len(highs) else 0
+            recent_l = float(lows.min())  if len(lows)  else 0
+            breakouts = sum(1 for c in closes if c > recent_h or c < recent_l)
+
+            market_state = "RANGING"
+            if mode in ("VOLATILE","BREAKOUT") or breakouts >= 3:
+                market_state = "VOLATILE"
+            elif trend in ("BULLISH","BEARISH") or mode in ("TRENDING","TREND"):
+                market_state = "TRENDING"
+            if mm.get("in_range_trap") or ict.get("range_conflict",{}).get("in_range_trap"):
+                market_state = "TRAP"
+
+            # volatility from ATR%
+            lvls    = ict.get("levels", {})
+            atr     = float(lvls.get("atr") or 0)
+            price   = float(df["close"].iloc[-1])
+            atr_pct = atr / price if price else 0
+            vol     = "LOW" if atr_pct < 0.003 else ("HIGH" if atr_pct > 0.010 else "NORMAL")
+
+            if market_state in ("TRENDING", "VOLATILE"):
+                active_markets += 1
+
+            step1[sym] = {
+                "market_state":     market_state,
+                "volatility":       vol,
+                "trend":            trend,
+                "mode":             mode,
+                "bos_bull":         bull_bos,
+                "bos_bear":         bear_bos,
+                "sweep_detected":   sweep_count,
+                "breakout_attempts": breakouts,
+                "atr_pct":          round(atr_pct * 100, 3),
+            }
+        except Exception as e:
+            step1[sym] = {"error": str(e)}
+
+    global_state = "DEAD_MARKET" if active_markets == 0 else "ACTIVE"
+    results["step1_market_activity"] = {
+        "symbols":            step1,
+        "active_markets":     active_markets,
+        "total":              len(_DIAG_SYMBOLS),
+        "market_global_state": global_state,
+    }
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # STEP 2 + 3 — Pipeline Trace & Rejection Analysis
+    # ─────────────────────────────────────────────────────────────────────────
+    pipeline_traces = []
+    rejection_counts: dict = {}
+    delta_samples   = []
+    rr_samples      = []
+
+    for sym in _DIAG_SYMBOLS:
+        sym_data = step1.get(sym, {})
+        if "error" in sym_data:
+            continue
+        try:
+            df = await _sd.get_ohlcv(sym, _DIAG_TIMEFRAME, bars=150)
+            df_htf = await _sd.get_ohlcv(sym, "4h", bars=100)
+            if df is None or len(df) < 30:
+                continue
+
+            ict     = _ict.full_analysis(df, sym, _DIAG_TIMEFRAME)
+            htf_ict = _ict.full_analysis(df_htf, sym, "4h") if df_htf is not None and len(df_htf) >= 30 else None
+
+            # Run calibration
+            ict = _engine._auto_calibrate_thresholds(ict, sym, _DIAG_TIMEFRAME)
+            calib = ict.get("calibration_params", {})
+
+            # Run decision finalizer
+            ict_dec = _engine._decision_finalizer(ict.copy(), sym, _DIAG_TIMEFRAME, htf_ict)
+            decision  = ict_dec.get("recommendation", "WAIT")
+            rej_reason = ict_dec.get("rejection_reason") or ict_dec.get("no_trade_reason", "")
+
+            conf   = ict.get("confluence", {})
+            bull_s = float(conf.get("bull_score", 0))
+            bear_s = float(conf.get("bear_score", 0))
+            delta  = abs(bull_s - bear_s)
+            req_d  = calib.get("delta", 20)
+
+            failed_stage = None
+            if decision == "WAIT" and rej_reason:
+                failed_stage = "decision_finalizer"
+
+            # If passed decision, try gate
+            gate_rej = None
+            rr_val   = None
+            min_rr   = calib.get("min_rr", 1.4)
+            if decision in ("BUY","SELL"):
+                ict_gate = _engine._institutional_gate(ict_dec.copy(), sym, _DIAG_TIMEFRAME, htf_ict)
+                gate_passed = ict_gate.get("institutional_gate_passed", False)
+                gate_rej    = ict_gate.get("rejection_reason")
+                rr_val      = float(ict_gate.get("risk_reward_ratio") or ict_gate.get("gate_rr") or 0)
+                if not gate_passed and gate_rej:
+                    failed_stage = "institutional_gate"
+                    decision     = "REJECTED"
+                    rej_reason   = gate_rej
+
+            rr_samples.append(rr_val or 0)
+            delta_samples.append(delta)
+
+            final_status = "PASSED" if (decision in ("BUY","SELL") and not gate_rej) else "REJECTED"
+            trace = {
+                "symbol":          sym,
+                "timeframe":       _DIAG_TIMEFRAME,
+                "decision":        final_status,
+                "failed_stage":    failed_stage,
+                "reason":          rej_reason or "N/A",
+                "delta":           round(delta, 1),
+                "required_delta":  req_d,
+                "rr":              round(rr_val, 2) if rr_val else None,
+                "min_rr":          round(min_rr, 2),
+                "market_state":    calib.get("market_state","?"),
+                "calibrated":      bool(ict.get("calibration_params")),
+            }
+            pipeline_traces.append(trace)
+
+            if final_status == "REJECTED" and rej_reason:
+                key = str(rej_reason).split("_")[0:3]
+                key = "_".join(key)
+                rejection_counts[key] = rejection_counts.get(key, 0) + 1
+
+        except Exception as e:
+            pipeline_traces.append({"symbol": sym, "error": str(e)})
+
+    # aggregation
+    total_analyzed  = len([t for t in pipeline_traces if "error" not in t])
+    total_rejected  = len([t for t in pipeline_traces if t.get("decision") == "REJECTED"])
+    total_passed    = total_analyzed - total_rejected
+    avg_delta       = round(sum(delta_samples) / len(delta_samples), 1) if delta_samples else 0
+    avg_rr          = round(sum(rr_samples) / len(rr_samples), 2)       if rr_samples   else 0
+    most_common_rej = max(rejection_counts, key=rejection_counts.get) if rejection_counts else "N/A"
+    rej_dist = {
+        k: f"{round(v/total_rejected*100,1)}%" if total_rejected else "0%"
+        for k,v in sorted(rejection_counts.items(), key=lambda x: -x[1])
+    }
+
+    results["step2_pipeline_trace"] = pipeline_traces
+    results["step3_rejection_analysis"] = {
+        "total_analyzed":            total_analyzed,
+        "total_passed":              total_passed,
+        "total_rejected":            total_rejected,
+        "pass_rate":                 f"{round(total_passed/total_analyzed*100,1)}%" if total_analyzed else "0%",
+        "most_common_rejection":     most_common_rej,
+        "rejection_distribution":    rej_dist,
+        "avg_delta":                 avg_delta,
+        "avg_rr":                    avg_rr,
+        "required_delta_range":      "20-35",
+        "required_rr_range":         "1.2-2.0",
+    }
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # STEP 4 — Threshold Stress Test (simulation only, -5 delta / -0.2 RR)
+    # ─────────────────────────────────────────────────────────────────────────
+    stress_passed = 0
+    stress_details = []
+
+    for trace in pipeline_traces:
+        if "error" in trace:
+            continue
+        if trace["decision"] == "PASSED":
+            stress_passed += 1
+            continue
+        # would it pass with relaxed thresholds?
+        relaxed_d  = max(trace["required_delta"] - 5, 15)
+        relaxed_rr = max((trace["min_rr"] or 1.4) - 0.2, 1.0)
+        would_pass_delta = trace["delta"] >= relaxed_d
+        would_pass_rr    = (trace["rr"] or 0) >= relaxed_rr if trace["rr"] else False
+        if would_pass_delta or would_pass_rr:
+            stress_passed += 1
+            stress_details.append({
+                "symbol": trace["symbol"],
+                "reason": trace["reason"],
+                "delta":  trace["delta"], "relaxed_delta": relaxed_d,
+                "rr":     trace["rr"],    "relaxed_rr":    relaxed_rr,
+                "passes_on": "delta" if would_pass_delta else "rr",
+            })
+
+    results["step4_stress_test"] = {
+        "relaxed_delta":   "required - 5",
+        "relaxed_rr":      "min_rr - 0.2",
+        "signals_would_pass": stress_passed,
+        "total":           total_analyzed,
+        "quality_note":    "simulation only — not sent",
+        "details":         stress_details,
+    }
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # STEP 5 — Cooldown Check
+    # ─────────────────────────────────────────────────────────────────────────
+    import time as _t2
+    cooldown_status = []
+    blocked_count   = 0
+    for sym in _DIAG_SYMBOLS:
+        key  = f"{sym.upper()}_{_DIAG_TIMEFRAME}"
+        last = _engine._last_signal_time.get(key, 0)
+        cd   = _engine._COOLDOWN_SEC.get(_DIAG_TIMEFRAME, 3600)
+        elapsed   = int(_t2.time() - last) if last else None
+        remaining = max(0, cd - int(_t2.time() - last)) if last else 0
+        active    = bool(last and (_t2.time() - last < cd))
+        if active:
+            blocked_count += 1
+        cooldown_status.append({
+            "symbol":        sym,
+            "timeframe":     _DIAG_TIMEFRAME,
+            "cooldown_sec":  cd,
+            "last_signal_age_sec": elapsed,
+            "remaining_sec": remaining if active else 0,
+            "active":        active,
+        })
+    results["step5_cooldown"] = {
+        "items":         cooldown_status,
+        "blocked_count": blocked_count,
+    }
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # STEP 6 — Auto-Calibration Status
+    # ─────────────────────────────────────────────────────────────────────────
+    calib_summary = []
+    for trace in pipeline_traces:
+        if "error" not in trace:
+            calib_summary.append({
+                "symbol":       trace["symbol"],
+                "market_state": trace.get("market_state","?"),
+                "delta":        trace.get("required_delta"),
+                "min_rr":       trace.get("min_rr"),
+                "calibrated":   trace.get("calibrated", False),
+            })
+    results["step6_auto_calibration"] = {
+        "engine_winrate":    round(_engine.get_winrate(), 3),
+        "perf":              _engine._perf,
+        "silence_tracker":   {
+            k: f"{round((_t2.time()-v)/3600,1)}h ago"
+            for k,v in _engine._last_signal_issued.items()
+        },
+        "per_symbol": calib_summary,
+    }
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # STEP 7 — Final Diagnosis
+    # ─────────────────────────────────────────────────────────────────────────
+    diagnosis = "UNKNOWN"
+    diagnosis_reason = ""
+
+    # Check 1: dead market?
+    if global_state == "DEAD_MARKET":
+        diagnosis = "MARKET SILENCE (VALID)"
+        diagnosis_reason = "All symbols ranging/trapped — no BOS or momentum detected"
+
+    # Check 2: cooldown blocking everything?
+    elif blocked_count >= len(_DIAG_SYMBOLS) * 0.7:
+        diagnosis = "SYSTEM OVER-FILTERING"
+        diagnosis_reason = f"Cooldown blocking {blocked_count}/{len(_DIAG_SYMBOLS)} symbols"
+
+    # Check 3: most common rejection is score delta?
+    elif most_common_rej and "SCORE" in most_common_rej.upper() and avg_delta < 15:
+        diagnosis = "MARKET SILENCE (VALID)"
+        diagnosis_reason = f"avg delta={avg_delta} — genuine lack of directional confluence"
+
+    # Check 4: avg delta close to threshold but still failing?
+    elif avg_delta >= 12 and total_rejected >= total_analyzed * 0.7:
+        diagnosis = "SYSTEM OVER-FILTERING"
+        diagnosis_reason = f"avg delta={avg_delta} is close to threshold but {rej_dist} — thresholds may be too strict for current conditions"
+
+    # Check 5: gate rejections dominating?
+    elif most_common_rej and any(k in most_common_rej for k in ["RR_","SWEEP","BOS","CONF"]):
+        diagnosis = "SYSTEM OVER-FILTERING"
+        diagnosis_reason = f"Institutional gate over-filtering: most common = {most_common_rej}"
+
+    # Check 6: stress test shows many would pass
+    elif stress_passed > total_analyzed * 0.5 and total_passed == 0:
+        diagnosis = "SYSTEM OVER-FILTERING"
+        diagnosis_reason = f"{stress_passed}/{total_analyzed} would pass with relaxed thresholds — auto-calibration may need tuning"
+
+    else:
+        diagnosis = "MARKET SILENCE (VALID)"
+        diagnosis_reason = f"pass_rate={total_passed}/{total_analyzed} — market lacks sufficient confluence"
+
+    results["step7_diagnosis"] = {
+        "verdict":        diagnosis,
+        "reason":         diagnosis_reason,
+        "supporting_data": {
+            "global_market_state": global_state,
+            "active_markets":      active_markets,
+            "pass_rate":           f"{total_passed}/{total_analyzed}",
+            "avg_delta":           avg_delta,
+            "most_common_rej":     most_common_rej,
+            "cooldowns_active":    blocked_count,
+            "stress_would_pass":   stress_passed,
+        }
+    }
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # STEP 8 — Action Plan
+    # ─────────────────────────────────────────────────────────────────────────
+    action_plan = []
+
+    if diagnosis == "MARKET SILENCE (VALID)":
+        action_plan = [
+            "No action needed — silence is genuine.",
+            "Auto-calibration silence fallback will relax delta by 5 after 6h of no signals.",
+            "Monitor: if silence continues > 12h on TRENDING symbols → investigate data feed.",
+        ]
+    elif diagnosis == "SYSTEM OVER-FILTERING":
+        if "Cooldown" in diagnosis_reason:
+            action_plan = [
+                f"ACTION: Reduce cooldown for {_DIAG_TIMEFRAME} from {_engine._COOLDOWN_SEC.get(_DIAG_TIMEFRAME,3600)}s.",
+                "Safe range: RANGING→1h, TRENDING→2h (already handled by auto-calibration).",
+                "Check: are signals being issued but not tracked in _last_signal_time?",
+            ]
+        elif "gate" in diagnosis_reason.lower() or "RR" in most_common_rej:
+            action_plan = [
+                f"Most rejected by: {most_common_rej}",
+                "Safe fix: auto-calibration already reduces min_rr based on winrate.",
+                f"Current engine winrate: {round(_engine.get_winrate()*100,1)}% — if <40% min_rr=1.6 (strict is correct).",
+                "Consider: is sweep detection too strict? Check ICT engine sweep quality thresholds.",
+            ]
+        else:
+            action_plan = [
+                f"Most rejected by: {most_common_rej}",
+                f"avg_delta={avg_delta} vs required — auto-calibration will relax after 6h silence.",
+                "Manual option: reduce _DECISION_THRESHOLD_RANGE from 25 → 22 in auto_calibrate.",
+            ]
+    else:
+        action_plan = ["Investigate further — run diagnostic again in 30 minutes."]
+
+    results["step8_action_plan"] = {
+        "diagnosis": diagnosis,
+        "actions":   action_plan,
+    }
+
+    elapsed_ms = int((_t.time() - started) * 1000)
+    results["diagnostic_meta"] = {
+        "elapsed_ms":  elapsed_ms,
+        "symbols":     _DIAG_SYMBOLS,
+        "timeframe":   _DIAG_TIMEFRAME,
+        "generated_at": datetime.utcnow().isoformat() + "Z",
+    }
+
+    logger.info(f"🔬 Diagnostic complete in {elapsed_ms}ms — verdict: {diagnosis}")
+    return results
