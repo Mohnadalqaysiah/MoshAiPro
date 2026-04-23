@@ -722,11 +722,11 @@ class MoshAIEngineV5:
 
         # ── 2. Dynamic score delta ────────────────────────────────────────────
         if market_state == "TRENDING":
-            required_delta = 20
+            required_delta = 18
         elif market_state == "RANGING":
-            required_delta = 25
+            required_delta = 22
         else:  # VOLATILE
-            required_delta = 30
+            required_delta = 28
 
         # ── 3. Dynamic min RR (based on winrate) ──────────────────────────────
         wr = self.get_winrate()
@@ -1443,13 +1443,23 @@ class MoshAIEngineV5:
         has_choch = bool(struct.get("choch_events"))
         any_sweep = has_bullish_sweep or has_bearish_sweep
 
-        # In TRENDING market → sweep MUST have structure shift (BOS/CHoCH)
+        # In TRENDING market → sweep + (BOS OR CHoCH OR strong momentum candle)
         # In RANGING/VOLATILE → run Anti-Fake Sweep filter instead
         req_sweep_conf = analysis.get("_calib_req_sweep", True)
         if any_sweep and not has_bos and not has_choch:
             if req_sweep_conf:
-                # TRENDING: hard reject — no structure = no trade
-                return self._hard_reject(analysis, "SWEEP_WITHOUT_STRUCTURE_SHIFT")
+                # TRENDING: check strong momentum candle as fallback
+                sweep_raw  = analysis.get("liquidity_sweep", {})
+                sw_info    = (sweep_raw.get("ssl_sweep") or sweep_raw.get("bsl_sweep")) or {}
+                wick_atr   = float(sw_info.get("wick_atr_ratio") or 0)
+                body_ratio = float(sw_info.get("body_atr_ratio") or 0)
+                strong_momentum = (body_ratio >= 0.5 and wick_atr >= 2.0)
+                if not strong_momentum:
+                    return self._hard_reject(analysis, "SWEEP_WITHOUT_STRUCTURE_SHIFT")
+                analysis["trending_momentum_override"] = True
+                logger.info(
+                    f"TRENDING momentum override: body={body_ratio:.2f} wick={wick_atr:.2f} — structure waived"
+                )
             else:
                 # RANGING/VOLATILE: check at least one quality confirmation
                 # determine likely direction from sweep type
@@ -1827,9 +1837,12 @@ class MoshAIEngineV5:
         candles_since = int(sweep_info.get("candles_since") or 0)
         sweep_quality = str(sweep.get("sweep_quality", "NONE")).upper()
 
-        if candles_since > 10:
+        # Stale sweep limit — varies by timeframe (higher TF = slower structure)
+        tf = analysis.get("timeframe", "1h")
+        stale_limit = 20 if tf in ("4h", "1d") else 15
+        if candles_since > stale_limit:
             logger.warning(
-                f"ANTI_FAKE_SWEEP: stale sweep candles_since={candles_since} > 10"
+                f"ANTI_FAKE_SWEEP: stale sweep candles_since={candles_since} > {stale_limit} ({tf})"
             )
             return False, "STALE_SWEEP"
 
@@ -1840,7 +1853,7 @@ class MoshAIEngineV5:
         # ── Confirmation A: Strong rejection candle ───────────────────────────
         wick_atr   = float(sweep_info.get("wick_atr_ratio") or 0)
         body_ratio = float(sweep_info.get("body_atr_ratio") or 0)
-        conf_a     = (body_ratio >= 0.4 and wick_atr >= 1.5) if atr > 0 else False
+        conf_a     = (body_ratio >= 0.3 and wick_atr >= 1.5) if atr > 0 else False
 
         # ── Confirmation B: Entry inside valid OB (not overlapping, <= 0.3%) ──
         conf_b          = False
