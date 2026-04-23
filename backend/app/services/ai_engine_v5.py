@@ -1105,6 +1105,13 @@ class MoshAIEngineV5:
         if why_other:
             reason_trace["why_other_side_rejected"] = why_other
 
+        # Anti-Fake Sweep trace (only present for RANGING/VOLATILE)
+        afs_pass = analysis.get("anti_fake_sweep_pass")
+        afs_conf = analysis.get("anti_fake_sweep_conf")
+        if afs_pass is not None:
+            reason_trace["anti_fake_sweep_pass"]  = afs_pass
+            reason_trace["confirmation_used"]     = afs_conf
+
         analysis["reason_trace"] = reason_trace
 
         logger.info(
@@ -1437,10 +1444,21 @@ class MoshAIEngineV5:
         any_sweep = has_bullish_sweep or has_bearish_sweep
 
         # In TRENDING market → sweep MUST have structure shift (BOS/CHoCH)
-        # In RANGING/VOLATILE → sweep alone is sufficient (structure forms slower)
+        # In RANGING/VOLATILE → run Anti-Fake Sweep filter instead
         req_sweep_conf = analysis.get("_calib_req_sweep", True)
-        if req_sweep_conf and any_sweep and not has_bos and not has_choch:
-            return self._hard_reject(analysis, "SWEEP_WITHOUT_STRUCTURE_SHIFT")
+        if any_sweep and not has_bos and not has_choch:
+            if req_sweep_conf:
+                # TRENDING: hard reject — no structure = no trade
+                return self._hard_reject(analysis, "SWEEP_WITHOUT_STRUCTURE_SHIFT")
+            else:
+                # RANGING/VOLATILE: check at least one quality confirmation
+                # determine likely direction from sweep type
+                sweep_dir = "BUY" if has_bullish_sweep else "SELL"
+                afs_pass, afs_conf = self._anti_fake_sweep_check(analysis, sweep_dir)
+                analysis["anti_fake_sweep_pass"]  = afs_pass
+                analysis["anti_fake_sweep_conf"]  = afs_conf
+                if not afs_pass:
+                    return self._hard_reject(analysis, f"FAKE_SWEEP_{afs_conf}")
 
         # ── 4. Score delta check ─────────────────────────────────────────────
         if abs(score_delta) < threshold:
@@ -1632,10 +1650,21 @@ class MoshAIEngineV5:
         if not has_sweep:
             return self._hard_reject(analysis, "NO_LIQUIDITY_SWEEP")
         # BOS/CHoCH required only when calibration demands it (TRENDING market)
-        # In RANGING market, sweep alone confirms institutional interest
+        # In RANGING/VOLATILE: anti-fake sweep filter was already run in
+        # _decision_finalizer — here we only re-check if it wasn't run yet
         req_sweep_conf = analysis.get("_calib_req_sweep", True)
-        if req_sweep_conf and not has_aligned_bos and not has_choch:
-            return self._hard_reject(analysis, "NO_BOS_NO_CHOCH")
+        if not has_aligned_bos and not has_choch:
+            if req_sweep_conf:
+                return self._hard_reject(analysis, "NO_BOS_NO_CHOCH")
+            else:
+                # Only re-run if decision_finalizer didn't already check
+                if not analysis.get("anti_fake_sweep_pass") and analysis.get("anti_fake_sweep_conf") is None:
+                    afs_pass, afs_conf = self._anti_fake_sweep_check(analysis, rec)
+                    analysis["anti_fake_sweep_pass"] = afs_pass
+                    analysis["anti_fake_sweep_conf"] = afs_conf
+                if not analysis.get("anti_fake_sweep_pass", False):
+                    afs_conf = analysis.get("anti_fake_sweep_conf", "NO_CONFIRMATION")
+                    return self._hard_reject(analysis, f"FAKE_SWEEP_{afs_conf}")
 
         # Rule 4: Closest zone only, no overlap
         ob           = analysis.get("order_blocks", {})
@@ -1764,6 +1793,96 @@ class MoshAIEngineV5:
         if not valid:
             return None
         return min(valid, key=lambda o: abs((float(o["low"]) + float(o["high"])) / 2 - price))
+
+    def _anti_fake_sweep_check(
+        self,
+        analysis: dict,
+        rec: str,
+    ) -> tuple[bool, str]:
+        """
+        Anti-Fake Sweep Filter — only for RANGING / VOLATILE markets.
+        Called after sweep is confirmed but BOS/CHoCH is absent.
+
+        Requires at LEAST ONE of:
+          A) Strong rejection candle: body >= 0.4×ATR AND wick_ratio >= 1.5
+          B) Entry inside valid OB: not overlapping + distance <= 0.3%
+          C) Proximity to SSL/BSL: distance <= 0.2%
+
+        Also rejects if:
+          - candles_since_sweep > 10   (stale sweep)
+          - sweep_quality == "WEAK"    (low-conviction sweep)
+
+        Returns: (passed: bool, confirmation_used: str)
+        """
+        sweep   = analysis.get("liquidity_sweep", {})
+        ob      = analysis.get("order_blocks", {})
+        levels  = analysis.get("levels", {})
+        liquidity = analysis.get("liquidity", {})
+
+        entry   = float(levels.get("entry") or analysis.get("current_price") or 0)
+        atr     = float(levels.get("atr") or 0)
+
+        # ── Safety gates: reject outright before checking confirmations ───────
+        sweep_info = sweep.get("ssl_sweep" if rec == "BUY" else "bsl_sweep") or {}
+        candles_since = int(sweep_info.get("candles_since") or 0)
+        sweep_quality = str(sweep.get("sweep_quality", "NONE")).upper()
+
+        if candles_since > 10:
+            logger.warning(
+                f"ANTI_FAKE_SWEEP: stale sweep candles_since={candles_since} > 10"
+            )
+            return False, "STALE_SWEEP"
+
+        if sweep_quality == "WEAK":
+            logger.warning("ANTI_FAKE_SWEEP: sweep_quality=WEAK rejected")
+            return False, "WEAK_SWEEP_QUALITY"
+
+        # ── Confirmation A: Strong rejection candle ───────────────────────────
+        wick_atr   = float(sweep_info.get("wick_atr_ratio") or 0)
+        body_ratio = float(sweep_info.get("body_atr_ratio") or 0)
+        conf_a     = (body_ratio >= 0.4 and wick_atr >= 1.5) if atr > 0 else False
+
+        # ── Confirmation B: Entry inside valid OB (not overlapping, <= 0.3%) ──
+        conf_b          = False
+        ob_key          = "bullish_obs" if rec == "BUY" else "bearish_obs"
+        nearest_ob      = self._closest_zone(entry, ob.get(ob_key, []))
+        support_zone_b  = self._closest_zone(entry, ob.get("bullish_obs", []))
+        resist_zone_b   = self._closest_zone(entry, ob.get("bearish_obs", []))
+
+        # check no overlap
+        ob_overlap = (
+            support_zone_b and resist_zone_b
+            and float(support_zone_b["high"]) > float(resist_zone_b["low"])
+        )
+        if nearest_ob and not ob_overlap and entry > 0:
+            ob_lo  = float(nearest_ob.get("low", 0))
+            ob_hi  = float(nearest_ob.get("high", 0))
+            ob_mid = (ob_lo + ob_hi) / 2
+            dist   = abs(entry - ob_mid) / entry if entry else 1
+            conf_b = (ob_lo <= entry <= ob_hi or dist <= 0.003)
+
+        # ── Confirmation C: Close to SSL/BSL (within 0.2%) ───────────────────
+        conf_c     = False
+        target_liq = liquidity.get("nearest_bsl") if rec == "BUY" else liquidity.get("nearest_ssl")
+        if target_liq and entry > 0:
+            liq_dist = abs(entry - float(target_liq)) / entry
+            conf_c   = liq_dist <= 0.002
+
+        # ── Pick first passing confirmation ───────────────────────────────────
+        if conf_a:
+            return True, "rejection_candle"
+        if conf_b:
+            return True, "OB_alignment"
+        if conf_c:
+            return True, "liquidity_proximity"
+
+        logger.warning(
+            f"ANTI_FAKE_SWEEP: no confirmation — "
+            f"body={body_ratio:.2f} wick={wick_atr:.2f} "
+            f"ob_ok={conf_b} liq_ok={conf_c} "
+            f"candles={candles_since} quality={sweep_quality}"
+        )
+        return False, "NO_CONFIRMATION"
 
     def _hard_reject(self, analysis: dict, reason: str) -> dict:
         rec = analysis.get("recommendation", "?")
