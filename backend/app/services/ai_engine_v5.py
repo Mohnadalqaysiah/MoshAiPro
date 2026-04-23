@@ -1491,8 +1491,13 @@ class MoshAIEngineV5:
         elif not any_sweep:
             sweep_delta_adj = -5.0    # no sweep at all — penalty only
 
-        effective_delta = abs(score_delta) + sweep_delta_adj
+        # Dynamic delta buffer: small boost applied before threshold comparison
+        # RANGING = +2.0 (harder to get signal, more help needed)
+        # TRENDING/VOLATILE = +1.5
+        delta_buffer = 2.0 if is_ranging else 1.5
+        effective_delta = abs(score_delta) + sweep_delta_adj + delta_buffer
         analysis["sweep_delta_adj"] = sweep_delta_adj
+        analysis["delta_buffer"]    = delta_buffer
         analysis["effective_delta"] = round(effective_delta, 1)
 
         # Structure grace: if no BOS/CHoCH but sweep exists, tag pending — no reject
