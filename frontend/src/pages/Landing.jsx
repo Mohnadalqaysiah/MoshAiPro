@@ -120,7 +120,10 @@ export default function Landing() {
     <div className="min-h-screen bg-[#070b14] text-white overflow-x-hidden" dir={t.dir}>
 
       {/* ── Navbar ─────────────────────────────────────────────────────── */}
-      <header className={`sticky top-0 z-50 border-b transition-all duration-300 ease-in-out
+      {/* Spacer so content doesn't hide behind fixed header */}
+      <div className={`transition-all duration-300 ${scrolled ? 'h-13' : 'h-16'}`} aria-hidden="true" />
+
+      <header className={`fixed top-0 left-0 right-0 z-50 border-b transition-all duration-300 ease-in-out
         ${scrolled
           ? 'bg-[#070b14]/95 backdrop-blur-2xl border-white/8 shadow-lg shadow-black/30'
           : 'bg-[#070b14]/70 backdrop-blur-xl border-white/5'}
