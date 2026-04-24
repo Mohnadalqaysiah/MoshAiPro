@@ -23,6 +23,8 @@ const About          = lazy(() => import('./pages/About'))
 const Vision         = lazy(() => import('./pages/Vision'))
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
 const ReferralProgram = lazy(() => import('./pages/ReferralProgram'))
+const BlogList        = lazy(() => import('./pages/BlogList'))
+const BlogPost        = lazy(() => import('./pages/BlogPost'))
 const Admin          = lazy(() => import('./pages/Admin'))
 const Dashboard      = lazy(() => import('./pages/Dashboard'))
 const Signals        = lazy(() => import('./pages/Signals'))
@@ -76,6 +78,8 @@ function AppRoutes() {
         <Route path="/register"          element={user ? <Navigate to="/dashboard" /> : <Register />} />
         <Route path="/pricing"           element={<Pricing />} />
         <Route path="/referral"          element={<ReferralProgram />} />
+        <Route path="/blog"              element={<BlogList />} />
+        <Route path="/blog/:slug"        element={<BlogPost />} />
 
         {/* Admin */}
         <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />

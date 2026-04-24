@@ -641,6 +641,7 @@ export default function Landing() {
                 { to: '/register', label: t.footer.register },
                 { to: '/login',    label: t.footer.login },
                 { to: '/pricing',  label: t.footer.pricing },
+                { to: '/blog',     label: isAr ? 'المدونة' : 'Blog' },
               ]},
               { title: t.footer.company, links: [
                 { to: '/about',  label: t.footer.about },
