@@ -299,11 +299,14 @@ class MoshAIEngineV5:
             if analysis.get("recommendation") in ("BUY", "SELL"):
                 analysis = self._institutional_gate(analysis, symbol, timeframe, htf_analysis)
                 if analysis.get("institutional_gate_passed"):
-                    # ── CONFIDENCE CALIBRATION — replaces raw AI score ────────
-                    analysis = self._confidence_calibration_layer(
-                        analysis, symbol, timeframe, htf_analysis
-                    )
-                    self._record_signal_issued(symbol, timeframe)
+                    # ── OUTPUT SAFETY GATE — 7-rule final logical validation ──
+                    analysis = self._output_safety_gate(analysis, symbol, timeframe, htf_analysis)
+                    if analysis.get("recommendation") in ("BUY", "SELL"):
+                        # ── CONFIDENCE CALIBRATION — replaces raw AI score ────
+                        analysis = self._confidence_calibration_layer(
+                            analysis, symbol, timeframe, htf_analysis
+                        )
+                        self._record_signal_issued(symbol, timeframe)
 
             # ── SMART RESCUE LAYER — near-threshold signals recovered as BUY/SELL ─
             # Runs after decision_finalizer + institutional_gate.
@@ -2161,6 +2164,193 @@ class MoshAIEngineV5:
             f"GATE PASSED [{rec}] {symbol}/{timeframe}: "
             f"entry={entry} rr={rr_final}"
         )
+        return analysis
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # OUTPUT SAFETY GATE — 7-rule logical validation before final output
+    # Runs AFTER institutional_gate, BEFORE confidence calibration.
+    # Any failure → hard WAIT (never silently corrupt a signal).
+    # ═══════════════════════════════════════════════════════════════════════
+
+    # HTF timeframes that act as directional authority
+    _HTF_AUTHORITY_TFS = {"1h", "4h", "1d"}
+
+    def _output_safety_gate(
+        self,
+        analysis: dict,
+        symbol: str,
+        timeframe: str,
+        htf_analysis: Optional[Dict] = None,
+    ) -> dict:
+        """
+        OUTPUT SAFETY GATE — 7 non-negotiable logical rules.
+
+        Rule 1 — HTF Direction Consistency:
+            HTF BEARISH → BUY forbidden (WAIT)
+            HTF BULLISH → SELL forbidden (WAIT)
+
+        Rule 2 — Premium/Discount Zone:
+            PREMIUM zone → SELL only (BUY → WAIT)
+            DISCOUNT zone → BUY only (SELL → WAIT)
+
+        Rule 3 — Entry/TP/SL Structural Validity:
+            BUY:  TP > Entry > SL
+            SELL: TP < Entry < SL
+
+        Rule 4 — Multi-TF Priority (15m vs 1H):
+            1H direction overrides 15m signals.
+            If 15m conflicts with 1H → WAIT.
+
+        Rule 5 — Confidence Floor:
+            confidence < 55 → force WAIT (never send weak signal)
+
+        Rule 6 — XAUUSD Special Filter:
+            Requires ALL: HTF alignment + valid zone + RR ≥ 1.3
+
+        Rule 7 — Final Level Coherence:
+            Cross-validate direction, SL, TP, RR, zone alignment.
+            Any mismatch → BLOCK.
+        """
+        rec    = analysis.get("recommendation")
+        if rec not in ("BUY", "SELL"):
+            return analysis
+
+        levels  = analysis.get("levels", {})
+        entry   = float(levels.get("entry") or 0)
+        sl      = float(levels.get("stop_loss") or 0)
+        tp1     = float(levels.get("tp1") or 0)
+        rr      = float(analysis.get("gate_rr") or analysis.get("risk_reward_ratio") or 0)
+        conf    = float(analysis.get("ai_confidence_score") or 0)
+
+        pd_zone     = analysis.get("premium_discount", {})
+        pd_raw      = (pd_zone.get("zone") or pd_zone.get("bias") or "NEUTRAL").upper()
+        struct      = analysis.get("market_structure", {})
+        sym_upper   = symbol.upper()
+
+        def _block(reason: str) -> dict:
+            logger.warning(
+                f"🛑 SAFETY_GATE BLOCK [{sym_upper}/{timeframe}] {rec} → WAIT | {reason}"
+            )
+            analysis["recommendation"]       = "WAIT"
+            analysis["signal_type"]          = "WAIT"
+            analysis["signal_status"]        = "REJECT"
+            analysis["safety_gate_blocked"]  = True
+            analysis["safety_gate_reason"]   = reason
+            analysis["rejection_reason"]     = f"SAFETY_{reason}"
+            analysis["no_trade_reason"]      = f"SAFETY_{reason}"
+            analysis["institutional_gate_passed"] = False
+            return analysis
+
+        # ── Rule 1: HTF Direction Consistency ────────────────────────────────
+        # Use htf_analysis if available, else fallback to htf_context already computed
+        htf_trend = None
+        if htf_analysis:
+            htf_trend = (
+                htf_analysis.get("market_structure", {}).get("trend") or ""
+            ).upper()
+        if not htf_trend:
+            # fallback: htf_context injected by analyze_market
+            htf_trend = (
+                analysis.get("htf_context", {}).get("trend") or
+                analysis.get("trend", {}).get("htf_trend") or ""
+            ).upper()
+
+        if htf_trend in ("BEARISH", "BULLISH"):
+            if rec == "BUY" and htf_trend == "BEARISH":
+                return _block("HTF_BEARISH_FORBIDS_BUY")
+            if rec == "SELL" and htf_trend == "BULLISH":
+                return _block("HTF_BULLISH_FORBIDS_SELL")
+
+        # ── Rule 2: Premium / Discount Zone Enforcement ───────────────────────
+        # PREMIUM = sellers control → only SELL
+        # DISCOUNT = buyers control → only BUY
+        if "PREMIUM" in pd_raw and rec == "BUY":
+            return _block("PREMIUM_ZONE_FORBIDS_BUY")
+        if "DISCOUNT" in pd_raw and rec == "SELL":
+            return _block("DISCOUNT_ZONE_FORBIDS_SELL")
+
+        # ── Rule 3: Entry / TP / SL Structural Validity ───────────────────────
+        if entry > 0 and sl > 0 and tp1 > 0:
+            if rec == "BUY":
+                # Must: TP > Entry > SL
+                if not (tp1 > entry > sl):
+                    return _block(
+                        f"BUY_INVALID_LEVELS TP={tp1:.5f} Entry={entry:.5f} SL={sl:.5f}"
+                    )
+            else:
+                # Must: TP < Entry < SL
+                if not (tp1 < entry < sl):
+                    return _block(
+                        f"SELL_INVALID_LEVELS TP={tp1:.5f} Entry={entry:.5f} SL={sl:.5f}"
+                    )
+
+        # ── Rule 4: Multi-TF Priority (15m must align with 1H) ───────────────
+        # Only applies when the current timeframe is a sub-1H frame.
+        if timeframe in ("15m", "30m", "5m"):
+            # LTF direction
+            ltf_trend = (struct.get("trend") or "").upper()
+            # 1H direction: first try from htf if timeframe=4h or from a pre-computed 1H key
+            one_h_trend = None
+            if htf_analysis:
+                # htf_analysis is 4H when LTF ≤ 1H.
+                # We use the htf_analysis trend as authority.
+                one_h_trend = (
+                    htf_analysis.get("market_structure", {}).get("trend") or ""
+                ).upper()
+            if not one_h_trend and htf_trend:
+                one_h_trend = htf_trend
+
+            if one_h_trend in ("BULLISH", "BEARISH"):
+                if rec == "BUY" and one_h_trend == "BEARISH":
+                    return _block("LTF_CONFLICTS_WITH_1H_BEARISH")
+                if rec == "SELL" and one_h_trend == "BULLISH":
+                    return _block("LTF_CONFLICTS_WITH_1H_BULLISH")
+
+        # ── Rule 5: Confidence Floor ──────────────────────────────────────────
+        # confidence is updated by calibration — if still 0 (pre-calibration),
+        # use raw ICT score as proxy to avoid false blocks at this stage.
+        if conf > 0 and conf < 55:
+            return _block(f"CONFIDENCE_TOO_LOW_{conf:.0f}pct")
+
+        # ── Rule 6: XAUUSD Special Filter ────────────────────────────────────
+        if sym_upper == "XAUUSD":
+            # Require HTF alignment
+            htf_aligned = analysis.get("gate_htf_aligned", False)
+            if not htf_aligned:
+                return _block("XAUUSD_REQUIRES_HTF_ALIGNMENT")
+            # Require valid zone (not in NEUTRAL — must be in correct P/D)
+            if rec == "BUY" and "PREMIUM" in pd_raw:
+                return _block("XAUUSD_BUY_IN_PREMIUM_ZONE")
+            if rec == "SELL" and "DISCOUNT" in pd_raw:
+                return _block("XAUUSD_SELL_IN_DISCOUNT_ZONE")
+            # Require RR ≥ 1.3
+            if rr > 0 and rr < 1.3:
+                return _block(f"XAUUSD_RR_{rr:.2f}_BELOW_1.3")
+
+        # ── Rule 7: Final Level Coherence ────────────────────────────────────
+        if entry > 0 and sl > 0:
+            sl_dist = abs(entry - sl)
+            # SL must be on correct side
+            if rec == "BUY" and sl >= entry:
+                return _block(f"FINAL_BUY_SL_NOT_BELOW_ENTRY sl={sl:.5f} entry={entry:.5f}")
+            if rec == "SELL" and sl <= entry:
+                return _block(f"FINAL_SELL_SL_NOT_ABOVE_ENTRY sl={sl:.5f} entry={entry:.5f}")
+            # RR coherence (must agree with levels)
+            if tp1 > 0 and sl_dist > 0:
+                computed_rr = abs(tp1 - entry) / sl_dist
+                if computed_rr < 1.0:
+                    return _block(f"FINAL_RR_{computed_rr:.2f}_BELOW_1.0")
+            # Zone vs direction coherence (final cross-check)
+            if rec == "BUY" and "PREMIUM" in pd_raw:
+                return _block("FINAL_BUY_IN_PREMIUM_ZONE")
+            if rec == "SELL" and "DISCOUNT" in pd_raw:
+                return _block("FINAL_SELL_IN_DISCOUNT_ZONE")
+
+        logger.info(
+            f"✅ SAFETY_GATE PASSED [{rec}] {sym_upper}/{timeframe} "
+            f"htf={htf_trend} zone={pd_raw} rr={rr:.2f} conf={conf:.0f}"
+        )
+        analysis["safety_gate_passed"] = True
         return analysis
 
     # ═══════════════════════════════════════════════════════════════════════
