@@ -6,7 +6,7 @@ import useMarkets from '../hooks/useMarkets'
 import { User, Mail, Phone, Lock, Save, CheckCircle, AlertCircle, TrendingUp, Bell, Calculator, Gift, Copy, ExternalLink, Users, DollarSign } from 'lucide-react'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-const TIMEFRAMES = ['15m','1h','4h','1day']
+const TIMEFRAMES = ['15m','30m','1h','4h','1day']
 
 export default function Profile() {
   const { user, token, refreshUser } = useAuth()
@@ -19,8 +19,8 @@ export default function Profile() {
   const [trading, setTrading] = useState({ account_balance: user?.account_balance || 10000, risk_percent: user?.risk_percent || 1.5 })
   const [prefs, setPrefs]     = useState({
     notify_watchlist:      user?.notify_watchlist      || [],
-    notify_timeframe:      user?.notify_timeframe      || '1h',
-    notify_min_confidence: user?.notify_min_confidence || 65,
+    notify_timeframes:     user?.notify_timeframes     || (user?.notify_timeframe ? [user.notify_timeframe] : ['1h']),
+    notify_min_confidence: user?.notify_min_confidence ?? 65,
     notifications_enabled: user?.notifications_enabled !== false,
     language:              user?.language              || 'ar',
   })
@@ -118,6 +118,18 @@ export default function Profile() {
         ? p.notify_watchlist.filter(x => x !== m)
         : [...p.notify_watchlist, m],
     }))
+  }
+
+  const toggleTimeframe = (tf) => {
+    if (tf === 'all') {
+      setPrefs(p => ({ ...p, notify_timeframes: ['all'] }))
+      return
+    }
+    setPrefs(p => {
+      const current = p.notify_timeframes.filter(t => t !== 'all')
+      const next = current.includes(tf) ? current.filter(t => t !== tf) : [...current, tf]
+      return { ...p, notify_timeframes: next.length === 0 ? [tf] : next }
+    })
   }
 
   // حساب اللوت
@@ -307,20 +319,68 @@ export default function Profile() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm text-gray-400 mb-1.5">{isAr ? 'الفريم الزمني' : 'Timeframe'}</label>
-              <select value={prefs.notify_timeframe} onChange={e => setPrefs(p => ({...p, notify_timeframe: e.target.value}))}
-                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm">
-                {TIMEFRAMES.map(tf => <option key={tf} value={tf}>{tf}</option>)}
-              </select>
+          {/* Timeframes — multi-select */}
+          <div>
+            <label className="block text-sm text-gray-400 mb-2">
+              {isAr ? 'الفريمات الزمنية' : 'Timeframes'}
+              <span className="text-gray-600 text-xs mr-1">
+                ({prefs.notify_timeframes.includes('all')
+                  ? (isAr ? 'الكل' : 'All')
+                  : prefs.notify_timeframes.join(' · ')})
+              </span>
+            </label>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => toggleTimeframe('all')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  prefs.notify_timeframes.includes('all')
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                }`}>
+                {isAr ? 'كل الفريمات' : 'All TFs'}
+              </button>
+              {TIMEFRAMES.map(tf => (
+                <button key={tf} type="button" onClick={() => toggleTimeframe(tf)}
+                  disabled={prefs.notify_timeframes.includes('all')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-40 ${
+                    !prefs.notify_timeframes.includes('all') && prefs.notify_timeframes.includes(tf)
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                  }`}>
+                  {tf}
+                </button>
+              ))}
             </div>
-            <div>
-              <label className="block text-sm text-gray-400 mb-1.5">{isAr ? 'الحد الأدنى للثقة' : 'Min Confidence'}</label>
-              <select value={prefs.notify_min_confidence} onChange={e => setPrefs(p => ({...p, notify_min_confidence: Number(e.target.value)}))}
-                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm">
-                {[50,55,60,65,70,75,80].map(v => <option key={v} value={v}>{v}%</option>)}
-              </select>
+          </div>
+
+          {/* Min Confidence — quick-select */}
+          <div>
+            <label className="block text-sm text-gray-400 mb-2">
+              {isAr ? 'الحد الأدنى للثقة' : 'Min Confidence'}
+              <span className="text-gray-600 text-xs mr-1">
+                ({prefs.notify_min_confidence === 0
+                  ? (isAr ? 'أي نسبة' : 'Any')
+                  : `${prefs.notify_min_confidence}%+`})
+              </span>
+            </label>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => setPrefs(p => ({...p, notify_min_confidence: 0}))}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  prefs.notify_min_confidence === 0
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                }`}>
+                {isAr ? 'كل النسب' : 'Any %'}
+              </button>
+              {[50, 55, 60, 65, 70, 75, 80].map(v => (
+                <button key={v} type="button" onClick={() => setPrefs(p => ({...p, notify_min_confidence: v}))}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                    prefs.notify_min_confidence === v
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                  }`}>
+                  {v}%
+                </button>
+              ))}
             </div>
           </div>
 

@@ -52,11 +52,12 @@ class TradingSettingsIn(BaseModel):
     risk_percent: float = 1.5
 
 class NotificationPrefsIn(BaseModel):
-    notify_watchlist:      list = []
-    notify_timeframe:      str  = "1h"
-    notify_min_confidence: int  = 65
-    notifications_enabled: bool = True
-    language:              str  = "ar"
+    notify_watchlist:      list        = []
+    notify_timeframe:      str         = "1h"    # legacy
+    notify_timeframes:     list        = []       # ["1h","4h"] or ["all"]
+    notify_min_confidence: int         = 65
+    notifications_enabled: bool        = True
+    language:              str         = "ar"
 
 class ChangePasswordIn(BaseModel):
     old_password: str
@@ -471,7 +472,8 @@ def _user_info(user: User) -> dict:
         "language":              user.language or "ar",
         "notify_watchlist":      user.notify_watchlist or [],
         "notify_timeframe":      user.notify_timeframe or "1h",
-        "notify_min_confidence": user.notify_min_confidence or 65,
+        "notify_timeframes":     user.notify_timeframes or [user.notify_timeframe or "1h"],
+        "notify_min_confidence": user.notify_min_confidence if user.notify_min_confidence is not None else 65,
         "notifications_enabled": bool(user.notifications_enabled),
         "affiliate_code":        user.affiliate_code or "",
         "referred_by_code":      user.referred_by_code or "",
@@ -486,7 +488,8 @@ def get_preferences(user: User = Depends(get_current_user)):
     return {
         "notify_watchlist":      user.notify_watchlist or [],
         "notify_timeframe":      user.notify_timeframe or "1h",
-        "notify_min_confidence": user.notify_min_confidence or 65,
+        "notify_timeframes":     user.notify_timeframes or [user.notify_timeframe or "1h"],
+        "notify_min_confidence": user.notify_min_confidence if user.notify_min_confidence is not None else 65,
         "notifications_enabled": bool(user.notifications_enabled),
         "language":              user.language or "ar",
         "account_balance":       float(user.account_balance or 10000.0),
@@ -501,7 +504,8 @@ def update_preferences(
     db: Session = Depends(get_db),
 ):
     user.notify_watchlist      = data.notify_watchlist
-    user.notify_timeframe      = data.notify_timeframe
+    user.notify_timeframes     = data.notify_timeframes or [data.notify_timeframe]
+    user.notify_timeframe      = data.notify_timeframes[0] if data.notify_timeframes and data.notify_timeframes != ['all'] else data.notify_timeframe
     user.notify_min_confidence = data.notify_min_confidence
     user.notifications_enabled = data.notifications_enabled
     user.language              = data.language

@@ -25,6 +25,7 @@ def run():
     new_cols = [
         ("notify_watchlist",      "JSONB DEFAULT '[]'::jsonb"),
         ("notify_timeframe",      "VARCHAR DEFAULT '1h'"),
+        ("notify_timeframes",     "JSONB DEFAULT '[\"1h\"]'::jsonb"),
         ("notify_min_confidence", "INTEGER DEFAULT 65"),
     ]
     with engine.connect() as conn:

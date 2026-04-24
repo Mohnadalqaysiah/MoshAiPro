@@ -68,7 +68,8 @@ class User(Base):
 
     # Bot Notification Preferences
     notify_watchlist      = Column(JSON,    default=list)   # ["XAUUSD","BTCUSD"]
-    notify_timeframe      = Column(String,  default="1h")
+    notify_timeframe      = Column(String,  default="1h")   # legacy single value
+    notify_timeframes     = Column(JSON,    default=list)   # ["1h","4h"] or ["all"]
     notify_min_confidence = Column(Integer, default=65)
 
     # Affiliate
