@@ -8,7 +8,8 @@ const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 import {
   TrendingUp, Shield, Zap, Bot, Bell, BarChart2,
   ChevronLeft, ChevronRight, CheckCircle, Star,
-  LayoutDashboard, ArrowUpRight, Cpu, Lock, Target, Menu, X
+  LayoutDashboard, ArrowUpRight, Cpu, Lock, Target, Menu, X,
+  ArrowUp
 } from 'lucide-react'
 import PublicChatBot from '../components/PublicChatBot'
 import DemoSection from '../components/DemoSection'
@@ -86,6 +87,27 @@ export default function Landing() {
   const ChevronCta = isAr ? ChevronLeft : ChevronRight
   const [mobileOpen, setMobileOpen] = useState(false)
   const [livePlans, setLivePlans] = useState({})
+
+  // ── Scroll-aware header ──────────────────────────────────────────
+  const [scrolled,  setScrolled]  = useState(false)  // past 60px → compact
+  const [hidden,    setHidden]    = useState(false)   // scrolling down fast → hide
+  const [showTop,   setShowTop]   = useState(false)   // past 400px → show ↑ btn
+  const lastY = useRef(0)
+
+  useEffect(() => {
+    const onScroll = () => {
+      const y = window.scrollY
+      setScrolled(y > 60)
+      setShowTop(y > 400)
+      // hide header when scrolling down quickly, show when scrolling up
+      if (y > lastY.current + 8 && y > 120) setHidden(true)
+      else if (y < lastY.current - 4)        setHidden(false)
+      lastY.current = y
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+
   useReveal()
 
   useEffect(() => {
@@ -98,13 +120,18 @@ export default function Landing() {
     <div className="min-h-screen bg-[#070b14] text-white overflow-x-hidden" dir={t.dir}>
 
       {/* ── Navbar ─────────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-50 bg-[#070b14]/80 backdrop-blur-xl border-b border-white/5">
-        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+      <header className={`sticky top-0 z-50 border-b transition-all duration-300 ease-in-out
+        ${scrolled
+          ? 'bg-[#070b14]/95 backdrop-blur-2xl border-white/8 shadow-lg shadow-black/30'
+          : 'bg-[#070b14]/70 backdrop-blur-xl border-white/5'}
+        ${hidden ? '-translate-y-full' : 'translate-y-0'}
+      `}>
+        <div className={`max-w-6xl mx-auto px-4 flex items-center justify-between transition-all duration-300 ${scrolled ? 'h-13' : 'h-16'}`}>
           <Link to="/" className="flex items-center gap-2.5 group">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-bold text-base shadow-lg shadow-blue-500/30 group-hover:shadow-blue-500/50 transition-shadow">
+            <div className={`rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-bold shadow-lg shadow-blue-500/30 group-hover:shadow-blue-500/50 transition-all duration-300 ${scrolled ? 'w-8 h-8 text-sm' : 'w-9 h-9 text-base'}`}>
               Q
             </div>
-            <span className="font-bold text-lg tracking-tight">
+            <span className={`font-bold tracking-tight transition-all duration-300 ${scrolled ? 'text-base' : 'text-lg'}`}>
               Qaffel <span className="text-blue-400">AI</span>
             </span>
           </Link>
@@ -682,6 +709,23 @@ export default function Landing() {
       </footer>
 
       <PublicChatBot />
+
+      {/* ── Scroll-to-top button ───────────────────────────────────── */}
+      <button
+        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+        aria-label="Scroll to top"
+        className={`fixed bottom-6 ${isAr ? 'left-6' : 'right-6'} z-50 w-11 h-11 rounded-full
+          bg-gradient-to-br from-blue-600 to-indigo-600
+          flex items-center justify-center
+          shadow-lg shadow-blue-500/30
+          border border-blue-500/30
+          transition-all duration-300
+          hover:scale-110 hover:shadow-blue-500/50
+          ${showTop ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 translate-y-4 pointer-events-none'}
+        `}
+      >
+        <ArrowUp size={18} className="text-white" />
+      </button>
     </div>
   )
 }
