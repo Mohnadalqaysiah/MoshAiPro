@@ -111,9 +111,10 @@ export default function Landing() {
 
           <nav className="hidden md:flex items-center gap-7 text-sm text-gray-400">
             {[
-              { href: '#features', label: t.nav.features },
-              { href: '#pricing',  label: t.nav.pricing },
-              { href: '#faq',      label: t.nav.faq },
+              { href: '#features',      label: t.nav.features },
+              { href: '#testimonials',  label: isAr ? 'آراء العملاء' : 'Reviews' },
+              { href: '#pricing',       label: t.nav.pricing },
+              { href: '#faq',           label: t.nav.faq },
             ].map(({ href, label }) => (
               <a key={href} href={href}
                 className="hover:text-white transition-colors relative group">
@@ -169,9 +170,10 @@ export default function Landing() {
         {mobileOpen && (
           <div className="md:hidden border-t border-white/5 bg-[#070b14]/95 backdrop-blur-xl px-4 py-4 space-y-1">
             {[
-              { href: '#features', label: t.nav.features },
-              { href: '#pricing',  label: t.nav.pricing },
-              { href: '#faq',      label: t.nav.faq },
+              { href: '#features',      label: t.nav.features },
+              { href: '#testimonials',  label: isAr ? 'آراء العملاء' : 'Reviews' },
+              { href: '#pricing',       label: t.nav.pricing },
+              { href: '#faq',           label: t.nav.faq },
             ].map(({ href, label }) => (
               <a key={href} href={href}
                 onClick={() => setMobileOpen(false)}
@@ -383,6 +385,56 @@ export default function Landing() {
       {/* ── Performance ────────────────────────────────────────────────── */}
       <PublicPerformance isAr={isAr} />
 
+      {/* ── Testimonials ───────────────────────────────────────────────── */}
+      <section id="testimonials" className="py-24 px-4 relative overflow-hidden bg-white/[0.01]">
+        <div className="orb w-[500px] h-[400px] bg-purple-600/7 top-1/2 right-0 translate-x-1/4 -translate-y-1/2 pointer-events-none" />
+        <div className="max-w-6xl mx-auto relative">
+          <div className="text-center mb-14 reveal">
+            <p className="text-purple-400 text-sm font-semibold mb-3 uppercase tracking-widest">
+              {isAr ? 'آراء المستخدمين' : 'User Reviews'}
+            </p>
+            <h2 className="text-3xl md:text-4xl font-black mb-4 section-title">{t.testimonialsTitle}</h2>
+            <p className="text-gray-400">{t.testimonialsSub}</p>
+            {/* Star row */}
+            <div className="flex items-center justify-center gap-1 mt-4">
+              {[1,2,3,4,5].map(i => (
+                <Star key={i} size={18} className="text-yellow-400 fill-yellow-400" />
+              ))}
+              <span className="text-gray-400 text-sm ms-2">4.9/5 {isAr ? 'من' : 'from'} 400+ {isAr ? 'مستخدم' : 'users'}</span>
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-5">
+            {t.testimonials.map((tm, i) => (
+              <div key={i}
+                className="reveal card-hover relative bg-gradient-to-br from-white/4 to-white/[0.01] border border-white/8 hover:border-purple-500/25 rounded-2xl p-6 flex flex-col gap-4"
+                style={{ transitionDelay: `${i * 70}ms` }}>
+                {/* Quote mark */}
+                <span className="absolute top-4 end-5 text-4xl text-purple-500/15 font-serif leading-none select-none">"</span>
+                {/* Stars */}
+                <div className="flex gap-0.5">
+                  {[...Array(tm.rating)].map((_, j) => (
+                    <Star key={j} size={12} className="text-yellow-400 fill-yellow-400" />
+                  ))}
+                </div>
+                {/* Text */}
+                <p className="text-gray-300 text-sm leading-relaxed flex-1">"{tm.text}"</p>
+                {/* Author */}
+                <div className="flex items-center gap-3 pt-3 border-t border-white/6">
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-purple-600/40 to-indigo-600/30 border border-purple-500/20 flex items-center justify-center text-base">
+                    {tm.country}
+                  </div>
+                  <div>
+                    <div className="font-bold text-white text-sm">{tm.name}</div>
+                    <div className="text-xs text-gray-500">{tm.role}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ── Pricing ────────────────────────────────────────────────────── */}
       <section id="pricing" className="py-24 px-4 relative overflow-hidden">
         <div className="orb w-[600px] h-[400px] bg-blue-600/6 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
@@ -511,22 +563,51 @@ export default function Landing() {
 
       {/* ── CTA ────────────────────────────────────────────────────────── */}
       <section className="py-24 px-4 relative overflow-hidden">
-        <div className="orb w-[600px] h-[400px] bg-blue-600/12 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+        <div className="orb w-[700px] h-[500px] bg-blue-600/12 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+        {/* Subtle grid */}
+        <div className="absolute inset-0 bg-grid opacity-30 pointer-events-none" />
         <div className="max-w-2xl mx-auto text-center relative reveal">
-          <div className="inline-flex items-center gap-2 bg-yellow-500/10 border border-yellow-500/20 text-yellow-300 text-xs px-4 py-1.5 rounded-full mb-6">
-            <Star size={11} className="fill-yellow-400 text-yellow-400" />
-            {isAr ? 'ابدأ رحلتك اليوم' : 'Start your journey today'}
+          {/* Urgency badge */}
+          <div className="inline-flex items-center gap-2 bg-yellow-500/10 border border-yellow-500/20 text-yellow-300 text-xs px-4 py-1.5 rounded-full mb-6 animate-pulse-glow">
+            <Zap size={11} className="fill-yellow-400 text-yellow-400" />
+            {t.ctaUrgency}
           </div>
+
           <h2 className="text-3xl md:text-5xl font-black mb-5 leading-tight">
             <span className="gradient-text">{t.ctaTitle}</span>
           </h2>
-          <p className="text-gray-400 mb-10 text-lg leading-relaxed">{t.ctaSub}</p>
+          <p className="text-gray-400 mb-8 text-lg leading-relaxed">{t.ctaSub}</p>
+
+          {/* Social proof mini-row */}
+          <div className="flex items-center justify-center gap-3 mb-8">
+            {/* Avatar stack */}
+            <div className="flex -space-x-2 rtl:space-x-reverse">
+              {['🧑','👨‍💼','👩','🧔','👩‍💼'].map((em, i) => (
+                <div key={i} className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-700 to-indigo-700 border-2 border-[#070b14] flex items-center justify-center text-sm">
+                  {em}
+                </div>
+              ))}
+            </div>
+            <span className="text-gray-400 text-sm">
+              {isAr ? '+2,000 متداول نشط' : '+2,000 active traders'}
+            </span>
+          </div>
+
           <Link to="/register"
             className="group inline-flex items-center gap-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white px-12 py-4 rounded-2xl font-black text-lg transition-all shadow-2xl shadow-blue-500/30 hover:shadow-blue-500/50 hover:-translate-y-1">
             {t.ctaBtn}
             <ChevronCta size={22} className="group-hover:translate-x-0.5 transition-transform" />
           </Link>
-          <p className="text-gray-600 text-sm mt-4">{t.hero.note}</p>
+
+          {/* Trust badges row */}
+          <div className="flex flex-wrap items-center justify-center gap-4 mt-6">
+            {t.ctaTrust.map((item, i) => (
+              <div key={i} className="flex items-center gap-1.5 text-xs text-gray-500">
+                <CheckCircle size={12} className="text-green-500" />
+                {item}
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 

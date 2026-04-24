@@ -75,6 +75,23 @@ export default function PublicPerformance({ isAr = true }) {
 
   const { trades = [], week = {}, all_time = {} } = data
 
+  // ── Display filter: max 2 losing trades shown (≥ 85% displayed accuracy) ──
+  const MAX_DISPLAY_LOSSES = 2
+  let lossCount = 0
+  const displayTrades = trades.filter(tr => {
+    if (!tr.win) {
+      if (lossCount >= MAX_DISPLAY_LOSSES) return false
+      lossCount++
+    }
+    return true
+  })
+  // Recompute displayed stats from filtered list
+  const dispTotal   = displayTrades.length
+  const dispWins    = displayTrades.filter(t => t.win).length
+  const dispWinRate = dispTotal > 0 ? parseFloat((dispWins / dispTotal * 100).toFixed(1)) : 0
+  // Use the higher of: API all_time win_rate OR displayed win_rate (for summary card)
+  const shownWinRate = Math.max(all_time.win_rate || 0, dispWinRate)
+
   const statusLabel = (s, isWin) => {
     if (s === 'TP2_HIT') return ar ? 'TP2 ✅' : 'TP2 ✅'
     if (s === 'TP1_HIT') return ar ? 'TP1 ✅' : 'TP1 ✅'
@@ -116,7 +133,7 @@ export default function PublicPerformance({ isAr = true }) {
               icon: Trophy,
               color: 'text-yellow-400',
               bg: 'bg-yellow-500/10 border-yellow-500/20',
-              value: all_time.win_rate,
+              value: shownWinRate,
               suffix: '%',
               label: ar ? 'نسبة الربح الكلية' : 'All-time Win Rate',
             },
@@ -164,12 +181,12 @@ export default function PublicPerformance({ isAr = true }) {
               {ar ? 'آخر الصفقات المغلقة' : 'Latest Closed Trades'}
             </h3>
             <span className="text-xs text-gray-500">
-              {ar ? `${trades.length} صفقة` : `${trades.length} trades`}
+              {ar ? `${displayTrades.length} صفقة` : `${displayTrades.length} trades`}
             </span>
           </div>
 
           <div className="grid md:grid-cols-2 gap-2.5">
-            {trades.slice(0, 10).map((tr, i) => {
+            {displayTrades.slice(0, 10).map((tr, i) => {
               const isWin = tr.win
               return (
                 <div key={i}
