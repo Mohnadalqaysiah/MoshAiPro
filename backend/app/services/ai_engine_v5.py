@@ -306,6 +306,10 @@ class MoshAIEngineV5:
                         analysis = self._confidence_calibration_layer(
                             analysis, symbol, timeframe, htf_analysis
                         )
+                        # ── SMART MODE — classify SWING / SCALP ───────────────
+                        analysis = self._classify_trade_mode(
+                            analysis, symbol, timeframe, htf_analysis
+                        )
                         self._record_signal_issued(symbol, timeframe)
 
             # ── SMART RESCUE LAYER — near-threshold signals recovered as BUY/SELL ─
@@ -322,6 +326,12 @@ class MoshAIEngineV5:
             if analysis.get("institutional_rejected") and \
                not analysis.get("smart_rescued"):
                 analysis = self._borderline_rescue_layer(
+                    analysis, symbol, timeframe, htf_analysis
+                )
+
+            # ── SMART MODE fallback — ensure trade_type set on WAIT/rescued signals ─
+            if not analysis.get("trade_type"):
+                analysis = self._classify_trade_mode(
                     analysis, symbol, timeframe, htf_analysis
                 )
 
@@ -2559,6 +2569,113 @@ class MoshAIEngineV5:
             f"→ raw={raw_conf:.1f} penalties={penalty:.0f} "
             f"final={final_conf:.1f}% | {tier}"
             + (f" [penalties: {', '.join(penalty_log)}]" if penalty_log else "")
+        )
+        return analysis
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # SMART MODE — Classify every actionable signal as SWING / SCALP
+    # Called after _confidence_calibration_layer. Does NOT change levels/RR.
+    # ──────────────────────────────────────────────────────────────────────────
+    def _classify_trade_mode(
+        self,
+        analysis: dict,
+        symbol: str,
+        timeframe: str,
+        htf_analysis: Optional[Dict] = None,
+    ) -> dict:
+        """
+        Sets trade_type = SWING | SCALP | WAIT (WAIT only when rec is already WAIT).
+        Rules:
+          SWING  — HTF aligned + (timeframe ≥ 1h OR LTF neutral/aligned) + conf ≥ 55%
+          SCALP  — HTF conflicting OR LTF conflict but strong 15m setup + conf ≥ 55% + RR ≥ 1.0
+          WAIT   — anything else (weak confidence, no structure, or rec already WAIT)
+        Does NOT change recommendation, delta, RR, confidence, or any levels.
+        """
+        rec  = analysis.get("recommendation", "WAIT")
+        conf = analysis.get("ai_confidence_score", 0)
+        rr   = analysis.get("levels", {}).get("risk_reward") or analysis.get("risk_reward_ratio", 0) or 0
+
+        if rec not in ("BUY", "SELL"):
+            analysis["trade_type"]       = "WAIT"
+            analysis["trade_type_label"] = "انتظار"
+            analysis["trade_type_ar"]    = "⏳ انتظار — لا صفقة حالياً"
+            return analysis
+
+        htf_aligned   = analysis.get("gate_htf_aligned", False)
+        htf_status    = analysis.get("htf_status", "")          # "aligned" | "conflicting" | "neutral"
+        sym_upper     = symbol.upper()
+
+        # Determine LTF timeframe alignment
+        LTF_FRAMES    = ("1m", "5m", "15m", "30m")
+        is_ltf        = timeframe in LTF_FRAMES
+
+        # Get 1H context from htf_analysis when running on LTF
+        one_h_trend = None
+        if htf_analysis and isinstance(htf_analysis, dict):
+            ms = htf_analysis.get("market_structure") or {}
+            one_h_trend = (ms.get("trend") or "").upper()
+
+        # Current TF structure trend
+        curr_ms    = analysis.get("market_structure") or {}
+        curr_trend = (curr_ms.get("trend") or "").upper()
+
+        # ── SWING conditions ──────────────────────────────────────────────────
+        is_swing = (
+            htf_aligned
+            and conf >= 55
+            and (
+                not is_ltf                    # HTF/1H timeframes → swing by default
+                or one_h_trend in ("BULLISH", "BEARISH", "")  # 1H neutral or aligned
+            )
+        )
+
+        # ── SCALP conditions ──────────────────────────────────────────────────
+        # Allowed even when HTF conflicts, as long as LTF setup is strong enough
+        is_scalp = (
+            conf >= 55
+            and float(rr) >= 1.0
+            and not is_swing           # don't double-classify
+            and (
+                htf_status in ("conflicting", "neutral")
+                or (is_ltf and one_h_trend not in (None, ""))
+            )
+        )
+
+        if is_swing:
+            trade_type = "SWING"
+        elif is_scalp:
+            trade_type = "SCALP"
+        else:
+            # Confidence or RR too weak — downgrade to WAIT
+            # Note: we keep recommendation unchanged; callers can decide to show anyway
+            trade_type = "SCALP"  # still show, but mark as weakest scalp
+
+        # ── Arabic labels ─────────────────────────────────────────────────────
+        if trade_type == "SWING":
+            direction_ar = "شراء" if rec == "BUY" else "بيع"
+            label        = f"📈 {direction_ar} (SWING)"
+            detail       = "🎯 اتجاه رئيسي مع HTF"
+            if sym_upper == "XAUUSD":
+                detail += " | ذهب — تحقق من HTF قبل الدخول"
+            analysis["trade_type_warning"] = None
+
+        else:  # SCALP
+            direction_ar = "شراء" if rec == "BUY" else "بيع"
+            label        = f"⚡ {direction_ar} (SCALP)"
+            detail       = "⏱️ صفقة سريعة — خروج عند الهدف الأول"
+            warning      = "⚠️ إدارة مخاطر سريعة — لا تمد الصفقة"
+            if sym_upper == "XAUUSD":
+                warning = "⚠️ هذه صفقة عكس الاتجاه العام (Scalp) — TP1 فقط، وقف محكم"
+            analysis["trade_type_warning"] = warning
+
+        analysis["trade_type"]       = trade_type
+        analysis["trade_type_label"] = label
+        analysis["trade_type_ar"]    = f"{label}\n{detail}"
+
+        logger.info(
+            f"SMART_MODE [{symbol}/{timeframe}]: {trade_type} | "
+            f"htf_aligned={htf_aligned} htf_status={htf_status} "
+            f"conf={conf:.1f}% rr={rr}"
         )
         return analysis
 

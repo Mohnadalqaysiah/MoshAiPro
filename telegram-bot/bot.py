@@ -265,12 +265,15 @@ def fmt_analysis(data: dict, symbol: str, timeframe: str) -> str:
     if not data or data.get("error"):
         return f"❌ تعذر تحليل {symbol}."
 
-    rec    = data.get("recommendation", "WATCH")
-    emoji  = {"BUY":"🟢","SELL":"🔴","WATCH":"⚪","WAIT":"⚪"}.get(rec, "⚪")
-    rec_ar = {"BUY":"شراء","SELL":"بيع","WATCH":"مراقبة","WAIT":"انتظار"}.get(rec, rec)
-    conf   = data.get("ai_confidence_score", 0)
-    price  = data.get("current_price", 0)
-    lvls   = data.get("levels", {})
+    rec        = data.get("recommendation", "WATCH")
+    emoji      = {"BUY":"🟢","SELL":"🔴","WATCH":"⚪","WAIT":"⚪"}.get(rec, "⚪")
+    rec_ar     = {"BUY":"شراء","SELL":"بيع","WATCH":"مراقبة","WAIT":"انتظار"}.get(rec, rec)
+    conf       = data.get("ai_confidence_score", 0)
+    price      = data.get("current_price", 0)
+    lvls       = data.get("levels", {})
+    trade_type = data.get("trade_type", "")        # SWING | SCALP | WAIT
+    tt_label   = data.get("trade_type_label", "")  # Arabic label with emoji
+    tt_warning = data.get("trade_type_warning")    # Optional warning string
 
     entry_min = lvls.get("entry_zone_min")
     entry_max = lvls.get("entry_zone_max")
@@ -282,10 +285,26 @@ def fmt_analysis(data: dict, symbol: str, timeframe: str) -> str:
         tp2 = data["take_profit_zones"][1]
     rr  = lvls.get("risk_reward") or data.get("risk_reward_ratio")
 
+    # ── Smart Mode header ─────────────────────────────────────────────────────
+    if rec in ("BUY", "SELL") and tt_label:
+        mode_line = f"{tt_label}\n"
+        if trade_type == "SWING":
+            mode_line += "🎯 اتجاه رئيسي مع HTF\n"
+        elif trade_type == "SCALP":
+            mode_line += "⏱️ صفقة سريعة — خروج عند TP1\n"
+        if tt_warning:
+            mode_line += f"{tt_warning}\n"
+        mode_line += "\n"
+    elif rec == "WAIT":
+        mode_line = "⏳ *انتظار (NO TRADE)*\nلا يوجد إعداد واضح حالياً.\n\n"
+    else:
+        mode_line = ""
+
     msg = (
         f"🤖 *Qaffel AI — تحليل*\n"
         f"━━━━━━━━━━━━━━━━━━━━━━\n"
         f"📌 *{MARKET_NAMES.get(symbol,symbol)}*  │  `{timeframe}`  │  `{_fmt_price(price)}`\n\n"
+        + mode_line +
         f"{emoji} *{rec_ar}*   ·   ثقة `{conf:.1f}%`\n\n"
     )
     if entry_min and entry_max:
@@ -333,22 +352,34 @@ def fmt_analysis(data: dict, symbol: str, timeframe: str) -> str:
 
 def fmt_new_signal(s: dict) -> str:
     """تنسيق إشارة الأدمن للبث الفوري"""
-    stype  = s.get("signal_type", "BUY")
-    emoji  = "🟢" if stype == "BUY" else "🔴"
-    rec_ar = "شراء" if stype == "BUY" else "بيع"
-    mname  = MARKET_NAMES.get(s.get("market",""), s.get("market",""))
-    conf   = s.get("ai_confidence", 0)
-    tf     = TF_LABELS.get(s.get("timeframe",""), s.get("timeframe",""))
-    entry  = _fmt_price(s.get("entry_price"))
-    sl     = _fmt_price(s.get("stop_loss"))
-    tp1    = _fmt_price(s.get("take_profit_1"))
-    tp2    = _fmt_price(s.get("take_profit_2"))
-    rr     = s.get("risk_reward_ratio")
+    stype      = s.get("signal_type", "BUY")
+    emoji      = "🟢" if stype == "BUY" else "🔴"
+    rec_ar     = "شراء" if stype == "BUY" else "بيع"
+    mname      = MARKET_NAMES.get(s.get("market",""), s.get("market",""))
+    conf       = s.get("ai_confidence", 0)
+    tf         = TF_LABELS.get(s.get("timeframe",""), s.get("timeframe",""))
+    entry      = _fmt_price(s.get("entry_price"))
+    sl         = _fmt_price(s.get("stop_loss"))
+    tp1        = _fmt_price(s.get("take_profit_1"))
+    tp2        = _fmt_price(s.get("take_profit_2"))
+    rr         = s.get("risk_reward_ratio")
+    trade_type = s.get("trade_type", "")
+    tt_label   = s.get("trade_type_label", "")
+    tt_warning = s.get("trade_type_warning")
+
+    # ── Smart Mode line ───────────────────────────────────────────────────────
+    if trade_type == "SWING" and tt_label:
+        mode_line = f"{tt_label}  ·  🎯 اتجاه رئيسي\n"
+    elif trade_type == "SCALP" and tt_label:
+        mode_line = f"{tt_label}  ·  ⏱️ صفقة سريعة\n"
+    else:
+        mode_line = ""
 
     msg = (
         f"🚨 *إشارة جديدة │ Qaffel AI*\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"{emoji} *{rec_ar}*  ─  {mname}\n"
+        + (f"{mode_line}" if mode_line else "")
+        + f"{emoji} *{rec_ar}*  ─  {mname}\n"
         f"📊 ثقة: *{conf:.0f}%*   ⏱ {tf}\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"🎯 دخول:  `{entry}`\n"
@@ -358,6 +389,8 @@ def fmt_new_signal(s: dict) -> str:
     )
     if rr:
         msg += f"⚖️ R/R:   `{float(rr):.1f}x`\n"
+    if tt_warning:
+        msg += f"{tt_warning}\n"
 
     PHASE_AR = {"ACCUMULATION":"تراكم","DISTRIBUTION":"توزيع","MARKUP":"صعود","MARKDOWN":"هبوط"}
     ZONE_AR  = {"PREMIUM":"مرتفعة","DISCOUNT":"منخفضة","EQUILIBRIUM":"توازن"}
