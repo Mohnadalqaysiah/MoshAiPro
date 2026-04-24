@@ -23,20 +23,20 @@ settings = get_settings()
 
 PLANS = {
     "weekly": {
-        "name":        "الباقة الأسبوعية",
+        "name":        "الأسبوعية",
+        "name_en":     "Weekly",
         "price_usd":   7,
         "days":        7,
-        "analyses":    "غير محدود",
-        "chat":        "غير محدود",
-        "features":    ["تحليل ICT/SMC كامل", "وكيل الدردشة الذكي", "تنبيهات Telegram", "جميع الأزواج"],
+        "features":    ["تحليل ICT/SMC كامل", "شات AI غير محدود", "تنبيهات Telegram", "جميع الأزواج", "تحليل متعدد الفريمات"],
+        "features_en": ["Full ICT/SMC Analysis", "Unlimited AI Chat", "Telegram Alerts", "All Pairs", "Multi-Timeframe Analysis"],
     },
     "monthly": {
-        "name":        "الباقة الشهرية",
+        "name":        "الشهرية",
+        "name_en":     "Monthly",
         "price_usd":   30,
         "days":        30,
-        "analyses":    "غير محدود",
-        "chat":        "غير محدود",
-        "features":    ["كل مزايا الأسبوعية", "أولوية الدعم", "تقارير مفصّلة", "توفير 46%"],
+        "features":    ["كل مزايا الأسبوعي", "أولوية الدعم الفني", "تقارير أسبوعية مفصّلة", "وصول مبكر للمزايا الجديدة", "توفير 46%"],
+        "features_en": ["All Weekly Features", "Priority Support", "Detailed Weekly Reports", "Early Access to New Features", "Save 46%"],
         "popular":     True,
     },
 }
@@ -92,6 +92,13 @@ def get_plans(db: Session = Depends(get_db)):
         if feat_en_val:
             try:
                 plans[plan_key]["features_en"] = json.loads(feat_en_val)
+            except Exception:
+                pass
+        # Days override
+        days_val = db_settings.get(f"plan_{plan_key}_days")
+        if days_val:
+            try:
+                plans[plan_key]["days"] = int(days_val)
             except Exception:
                 pass
 

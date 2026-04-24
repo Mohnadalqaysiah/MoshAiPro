@@ -7,7 +7,7 @@ import {
   Search, Plus, Trash2, ToggleLeft, ToggleRight, TrendingUp,
   DollarSign, Activity, RefreshCw, Calendar,
   X, ExternalLink, Shield, AlertTriangle, Settings, Mail, Upload, Signal, Send,
-  FileText, TrendingUp as TrendUp
+  FileText, TrendingUp as TrendUp, Bell
 } from 'lucide-react'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -578,6 +578,22 @@ export default function Admin() {
                     }}
                     className="flex items-center gap-1 text-xs bg-green-800/60 hover:bg-green-700/60 text-green-300 border border-green-700/40 px-3 py-1.5 rounded-lg transition">
                     <RefreshCw size={12}/> تجديد المنتهيين
+                  </button>
+                  {/* Bulk Trial Reset */}
+                  <button
+                    onClick={async () => {
+                      if (!confirm('إعادة تعيين كريدت التجربة لجميع المستخدمين التجريبيين؟\nسيحصل كل مستخدم تجريبي على الحدود المضبوطة في الإعدادات.')) return
+                      const withNotify = confirm('إرسال إشعار تلغرام للمستخدمين؟')
+                      try {
+                        const r = await axios.post(`${API}/api/v1/admin/users/bulk-reset-trial`, { notify_telegram: withNotify })
+                        alert(`✅ تم تحديث ${r.data.reset} مستخدم تجريبي (${r.data.analysis_limit} تحليل / ${r.data.chat_limit} محادثة) | إشعارات: ${r.data.notified}`)
+                        loadUsers()
+                      } catch (e) {
+                        alert('خطأ: ' + (e.response?.data?.detail || e.message))
+                      }
+                    }}
+                    className="flex items-center gap-1 text-xs bg-yellow-900/40 hover:bg-yellow-800/50 text-yellow-300 border border-yellow-700/40 px-3 py-1.5 rounded-lg transition">
+                    <RefreshCw size={12}/> تحديث التجريبي للكل
                   </button>
                 </div>
               </div>
@@ -1525,35 +1541,54 @@ export default function Admin() {
                   <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-2">
                     <DollarSign size={13}/> الباقات والأسعار
                   </h2>
-                  <p className="text-xs text-gray-600">اتركها فارغة لاستخدام القيم الافتراضية</p>
+                  <p className="text-xs text-gray-600">اتركها فارغة لاستخدام القيم الافتراضية · التغييرات تظهر فوراً في صفحات الأسعار</p>
                   {[
-                    { key: 'weekly',  label: 'الأسبوعية', color: 'blue'   },
-                    { key: 'monthly', label: 'الشهرية',   color: 'purple' },
-                  ].map(({ key, label, color }) => (
+                    { key: 'weekly',  label: 'الأسبوعية', color: 'blue',   defaultPrice: '7',  defaultDays: '7'  },
+                    { key: 'monthly', label: 'الشهرية',   color: 'purple', defaultPrice: '30', defaultDays: '30' },
+                  ].map(({ key, label, color, defaultPrice, defaultDays }) => (
                     <div key={key} className={`bg-gray-900 border border-${color}-900/40 rounded-xl p-4 space-y-3`}>
-                      <h3 className={`text-xs font-bold text-${color}-400 uppercase tracking-wider`}>{label}</h3>
+                      <div className="flex items-center justify-between">
+                        <h3 className={`text-xs font-bold text-${color}-400 uppercase tracking-wider`}>{label}</h3>
+                        <span className="text-xs text-gray-600">الافتراضي: ${defaultPrice} / {defaultDays} يوم</span>
+                      </div>
 
-                      {/* Price */}
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1">
-                          <label className="text-xs text-gray-500 mb-1 block">السعر (USDT $)</label>
-                          <input type="number" min="0" step="0.01"
-                            value={settingEdits[`plan_${key}_price`] ?? (siteSettings[`plan_${key}_price`]?.value || '')}
-                            onChange={e => setSettingEdits(s => ({...s, [`plan_${key}_price`]: e.target.value}))}
-                            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white font-mono"
-                            placeholder="0" dir="ltr" />
+                      {/* Price + Days */}
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="flex items-center gap-1">
+                          <div className="flex-1">
+                            <label className="text-xs text-gray-500 mb-1 block">السعر ($)</label>
+                            <input type="number" min="0" step="0.01"
+                              value={settingEdits[`plan_${key}_price`] ?? (siteSettings[`plan_${key}_price`]?.value || '')}
+                              onChange={e => setSettingEdits(s => ({...s, [`plan_${key}_price`]: e.target.value}))}
+                              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white font-mono"
+                              placeholder={defaultPrice} dir="ltr" />
+                          </div>
+                          <button disabled={settingSaving===`plan_${key}_price`} onClick={() => saveSetting(`plan_${key}_price`)}
+                            className="mt-5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-2 py-2 rounded-lg transition">
+                            {settingSaving===`plan_${key}_price`?<RefreshCw size={12} className="animate-spin"/>:<CheckCircle size={12}/>}
+                          </button>
                         </div>
-                        <button disabled={settingSaving===`plan_${key}_price`} onClick={() => saveSetting(`plan_${key}_price`)}
-                          className="mt-5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-2.5 py-2 rounded-lg transition">
-                          {settingSaving===`plan_${key}_price`?<RefreshCw size={12} className="animate-spin"/>:<CheckCircle size={12}/>}
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <div className="flex-1">
+                            <label className="text-xs text-gray-500 mb-1 block">المدة (أيام)</label>
+                            <input type="number" min="1"
+                              value={settingEdits[`plan_${key}_days`] ?? (siteSettings[`plan_${key}_days`]?.value || '')}
+                              onChange={e => setSettingEdits(s => ({...s, [`plan_${key}_days`]: e.target.value}))}
+                              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white font-mono"
+                              placeholder={defaultDays} dir="ltr" />
+                          </div>
+                          <button disabled={settingSaving===`plan_${key}_days`} onClick={() => saveSetting(`plan_${key}_days`)}
+                            className="mt-5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-2 py-2 rounded-lg transition">
+                            {settingSaving===`plan_${key}_days`?<RefreshCw size={12} className="animate-spin"/>:<CheckCircle size={12}/>}
+                          </button>
+                        </div>
                       </div>
 
                       {/* Names */}
                       <div className="grid grid-cols-2 gap-2">
                         {[
-                          { fkey:`plan_${key}_name`,    label:'الاسم (ع)', dir:'rtl', ph:'اسم الباقة' },
-                          { fkey:`plan_${key}_name_en`, label:'Name (EN)', dir:'ltr', ph:'Plan Name'  },
+                          { fkey:`plan_${key}_name`,    label:'الاسم (ع)', dir:'rtl', ph: key==='weekly'?'الأسبوعية':'الشهرية' },
+                          { fkey:`plan_${key}_name_en`, label:'Name (EN)', dir:'ltr', ph: key==='weekly'?'Weekly':'Monthly'     },
                         ].map(f => (
                           <div key={f.fkey} className="flex items-center gap-1">
                             <div className="flex-1">
@@ -1572,21 +1607,26 @@ export default function Admin() {
                         ))}
                       </div>
 
-                      {/* Features JSON */}
-                      <div className="flex items-start gap-1">
-                        <div className="flex-1">
-                          <label className="text-xs text-gray-500 mb-1 block">المميزات (JSON عربي)</label>
-                          <textarea rows={2}
-                            value={settingEdits[`plan_${key}_features`] ?? (siteSettings[`plan_${key}_features`]?.value || '')}
-                            onChange={e => setSettingEdits(s => ({...s, [`plan_${key}_features`]: e.target.value}))}
-                            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-white font-mono resize-none"
-                            placeholder='["تحليل ICT/SMC", "تنبيهات Telegram"]' dir="ltr" />
+                      {/* Features — AR + EN */}
+                      {[
+                        { fkey:`plan_${key}_features`,    label:'المميزات (JSON عربي)', dir:'ltr', ph:'["تحليل ICT/SMC", "تنبيهات Telegram"]' },
+                        { fkey:`plan_${key}_features_en`, label:'Features (JSON EN)',   dir:'ltr', ph:'["Full ICT/SMC Analysis", "Telegram Alerts"]' },
+                      ].map(f => (
+                        <div key={f.fkey} className="flex items-start gap-1">
+                          <div className="flex-1">
+                            <label className="text-xs text-gray-500 mb-1 block">{f.label}</label>
+                            <textarea rows={2}
+                              value={settingEdits[f.fkey] ?? (siteSettings[f.fkey]?.value || '')}
+                              onChange={e => setSettingEdits(s => ({...s, [f.fkey]: e.target.value}))}
+                              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-white font-mono resize-none"
+                              placeholder={f.ph} dir={f.dir} />
+                          </div>
+                          <button disabled={settingSaving===f.fkey} onClick={() => saveSetting(f.fkey)}
+                            className="mt-5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-2 py-1.5 rounded-lg transition">
+                            {settingSaving===f.fkey?<RefreshCw size={11} className="animate-spin"/>:<CheckCircle size={11}/>}
+                          </button>
                         </div>
-                        <button disabled={settingSaving===`plan_${key}_features`} onClick={() => saveSetting(`plan_${key}_features`)}
-                          className="mt-5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-2 py-1.5 rounded-lg transition">
-                          {settingSaving===`plan_${key}_features`?<RefreshCw size={11} className="animate-spin"/>:<CheckCircle size={11}/>}
-                        </button>
-                      </div>
+                      ))}
                     </div>
                   ))}
                 </div>
@@ -1674,13 +1714,14 @@ export default function Admin() {
               {settingsSubTab === 'limits' && (
                 <div className="max-w-md space-y-3">
                   <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">حدود الاستخدام</h2>
+                  <p className="text-xs text-gray-600">0 = غير محدود</p>
                   {[
-                    { key:'trial_chat_limit',       label:'محادثات التجريبي',   badge:'تجريبي', color:'gray' },
-                    { key:'trial_analysis_limit',   label:'تحليلات التجريبي',   badge:'تجريبي', color:'gray' },
-                    { key:'weekly_chat_limit',      label:'محادثات الأسبوعي',   badge:'أسبوعي', color:'blue' },
-                    { key:'weekly_analysis_limit',  label:'تحليلات الأسبوعي',  badge:'أسبوعي', color:'blue' },
-                    { key:'monthly_chat_limit',     label:'محادثات الشهري',     badge:'شهري',   color:'purple' },
-                    { key:'monthly_analysis_limit', label:'تحليلات الشهري',    badge:'شهري',   color:'purple' },
+                    { key:'trial_chat_limit',       label:'محادثات التجريبي',   color:'gray' },
+                    { key:'trial_analysis_limit',   label:'تحليلات التجريبي',   color:'gray' },
+                    { key:'weekly_chat_limit',      label:'محادثات الأسبوعي',   color:'blue' },
+                    { key:'weekly_analysis_limit',  label:'تحليلات الأسبوعي',   color:'blue' },
+                    { key:'monthly_chat_limit',     label:'محادثات الشهري',     color:'purple' },
+                    { key:'monthly_analysis_limit', label:'تحليلات الشهري',     color:'purple' },
                   ].map(f => (
                     <div key={f.key} className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex items-center gap-2">
                       <div className="flex-1">
@@ -1696,6 +1737,38 @@ export default function Admin() {
                       </button>
                     </div>
                   ))}
+
+                  {/* Bulk Reset Trial */}
+                  <div className="mt-4 bg-yellow-900/20 border border-yellow-700/40 rounded-xl p-4 space-y-3">
+                    <h3 className="text-sm font-semibold text-yellow-300 flex items-center gap-2">
+                      <RefreshCw size={13}/> تحديث التجريبي للكل
+                    </h3>
+                    <p className="text-xs text-gray-400">يعيد تعيين كريدت التجربة لجميع المستخدمين التجريبيين وفق الحدود المضبوطة أعلاه.</p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={async () => {
+                          if (!confirm('إعادة تعيين التجربة لجميع المستخدمين التجريبيين؟')) return
+                          try {
+                            const r = await axios.post(`${API}/api/v1/admin/users/bulk-reset-trial`, { notify_telegram: false })
+                            setSettingMsg({ type:'ok', text:`✅ تم تحديث ${r.data.reset} مستخدم (${r.data.analysis_limit} تحليل / ${r.data.chat_limit} محادثة)` })
+                          } catch(e) { setSettingMsg({ type:'err', text: e.response?.data?.detail || 'خطأ' }) }
+                        }}
+                        className="flex-1 flex items-center justify-center gap-1.5 text-xs bg-yellow-700/40 hover:bg-yellow-600/50 text-yellow-200 px-3 py-2 rounded-lg transition">
+                        <RefreshCw size={12}/> بدون إشعار
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (!confirm('إعادة تعيين التجربة لجميع المستخدمين التجريبيين مع إرسال إشعار تلغرام؟')) return
+                          try {
+                            const r = await axios.post(`${API}/api/v1/admin/users/bulk-reset-trial`, { notify_telegram: true })
+                            setSettingMsg({ type:'ok', text:`✅ تم تحديث ${r.data.reset} مستخدم | إشعارات: ${r.data.notified}` })
+                          } catch(e) { setSettingMsg({ type:'err', text: e.response?.data?.detail || 'خطأ' }) }
+                        }}
+                        className="flex-1 flex items-center justify-center gap-1.5 text-xs bg-blue-700/40 hover:bg-blue-600/50 text-blue-200 px-3 py-2 rounded-lg transition">
+                        <Bell size={12}/> مع إشعار تلغرام
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
 

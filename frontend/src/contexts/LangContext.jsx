@@ -49,9 +49,9 @@ export const translations = {
     pricingTitle: 'أسعار بسيطة وشفافة',
     pricingSub:   'ابدأ مجاناً ثم اشترك بما يناسبك',
     plans: [
-      { name: 'تجريبي',  price: 'مجاني', period: '',        badge: null,       features: ['10 تحليلات', '20 رسالة شات', 'جميع الأسواق', 'ربط Telegram'],                                              cta: 'ابدأ مجاناً',  href: '/register', highlight: false },
-      { name: 'أسبوعي', price: '$7',    period: '/ أسبوع', badge: 'الأكثر طلباً', features: ['تحليلات غير محدودة', 'شات غير محدود', 'جميع الأسواق', 'ربط Telegram', 'تحليل متعدد الفريمات'], cta: 'اشترك الآن', href: '/pricing',  highlight: true },
-      { name: 'شهري',   price: '$30',   period: '/ شهر',   badge: null,       features: ['تحليلات غير محدودة', 'شات غير محدود', 'جميع الأسواق', 'ربط Telegram', 'أولوية الدعم'],                 cta: 'اشترك الآن', href: '/pricing',  highlight: false },
+      { name: 'تجريبي',  price: 'مجاني', period: '',        badge: null,         features: ['10 تحليلات', '20 رسالة شات', 'جميع الأسواق', 'ربط Telegram'],                                                                                          cta: 'ابدأ مجاناً',  href: '/register', highlight: false },
+      { name: 'أسبوعي', price: '$7',    period: '/ أسبوع', badge: null,         features: ['تحليلات ICT/SMC غير محدودة', 'شات AI غير محدود', 'جميع الأسواق', 'تنبيهات Telegram', 'تحليل متعدد الفريمات'],                                         cta: 'اشترك الآن', href: '/pricing',  highlight: false },
+      { name: 'شهري',   price: '$30',   period: '/ شهر',   badge: 'الأكثر توفيراً', features: ['كل مزايا الأسبوعي', 'أولوية الدعم الفني', 'تقارير أسبوعية مفصّلة', 'وصول مبكر للمزايا الجديدة', 'توفير 46% مقارنة بالأسبوعي'], cta: 'اشترك الآن', href: '/pricing',  highlight: true  },
     ],
     faqTitle: 'الأسئلة الشائعة',
     faq: [
@@ -128,9 +128,9 @@ export const translations = {
     pricingTitle: 'Simple, Transparent Pricing',
     pricingSub:   'Start free then subscribe to whatever suits you',
     plans: [
-      { name: 'Trial',   price: 'Free',  period: '',          badge: null,      features: ['10 Analyses', '20 Chat Messages', 'All Markets', 'Telegram Link'],                                      cta: 'Start Free',     href: '/register', highlight: false },
-      { name: 'Weekly',  price: '$7',    period: '/ week',    badge: 'Popular', features: ['Unlimited Analyses', 'Unlimited Chat', 'All Markets', 'Telegram Link', 'Multi-Timeframe Analysis'], cta: 'Subscribe Now', href: '/pricing',  highlight: true },
-      { name: 'Monthly', price: '$30',   period: '/ month',   badge: null,      features: ['Unlimited Analyses', 'Unlimited Chat', 'All Markets', 'Telegram Link', 'Priority Support'],          cta: 'Subscribe Now', href: '/pricing',  highlight: false },
+      { name: 'Trial',   price: 'Free',  period: '',        badge: null,          features: ['10 Analyses', '20 Chat Messages', 'All Markets', 'Telegram Link'],                                                                              cta: 'Start Free',    href: '/register', highlight: false },
+      { name: 'Weekly',  price: '$7',    period: '/ week',  badge: null,          features: ['Unlimited ICT/SMC Analyses', 'Unlimited AI Chat', 'All Markets', 'Telegram Alerts', 'Multi-Timeframe Analysis'],                               cta: 'Subscribe Now', href: '/pricing',  highlight: false },
+      { name: 'Monthly', price: '$30',   period: '/ month', badge: 'Best Value',  features: ['All Weekly Features', 'Priority Support', 'Detailed Weekly Reports', 'Early Access to New Features', 'Save 46% vs Weekly'], cta: 'Subscribe Now', href: '/pricing',  highlight: true  },
     ],
     faqTitle: 'Frequently Asked Questions',
     faq: [

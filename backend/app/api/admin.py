@@ -206,6 +206,57 @@ def reset_trial(
     return {"success": True, "message": "تم إعادة تعيين التجربة"}
 
 
+class BulkResetTrialIn(BaseModel):
+    notify_telegram: bool = False
+
+
+@router.post("/users/bulk-reset-trial")
+def bulk_reset_trial(
+    data: BulkResetTrialIn,
+    background: BackgroundTasks,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """إعادة تعيين كريدت التجربة لجميع المستخدمين التجريبيين دفعة واحدة"""
+    def _get_int(key: str, default: int) -> int:
+        r = db.query(SiteSettings).filter(SiteSettings.key == key).first()
+        try: return int(r.value) if r and r.value else default
+        except: return default
+
+    analysis_limit = _get_int("trial_analysis_limit", 10)
+    chat_limit     = _get_int("trial_chat_limit", 20)
+    now = datetime.now(timezone.utc)
+
+    trial_users = db.query(User).filter(User.plan == PlanType.TRIAL).all()
+    count = notified = 0
+
+    for user in trial_users:
+        user.trial_analyses_left = analysis_limit
+        user.trial_chat_left     = chat_limit
+        user.trial_started_at    = now
+        user.trial_ends_at       = now + timedelta(days=7)
+        user.is_active           = True
+        count += 1
+        if data.notify_telegram and user.telegram_id:
+            msg = (
+                f"🎁 <b>تم تجديد حسابك التجريبي!</b>\n\n"
+                f"التحليلات المتاحة: <b>{analysis_limit}</b>\n"
+                f"المحادثات المتاحة: <b>{chat_limit}</b>"
+            )
+            background.add_task(_send_telegram_message, user.telegram_id, msg)
+            notified += 1
+
+    db.commit()
+    logger.info(f"🔄 Bulk trial reset: {count} users, notified: {notified}")
+    return {
+        "success":        True,
+        "reset":          count,
+        "notified":       notified,
+        "analysis_limit": analysis_limit,
+        "chat_limit":     chat_limit,
+    }
+
+
 class RenewUserIn(BaseModel):
     days:             int    = 30
     plan:             str    = "monthly"   # monthly | weekly
@@ -417,7 +468,12 @@ def handle_payment(
         # فعّل اشتراك المستخدم
         user = db.query(User).filter(User.id == payment.user_id).first()
         if user:
-            days = 7 if payment.plan == PaymentPlan.WEEKLY else 30
+            # اقرأ المدة من SiteSettings إذا كانت مضبوطة
+            def _get_days(plan_key: str, default: int) -> int:
+                r = db.query(SiteSettings).filter(SiteSettings.key == f"plan_{plan_key}_days").first()
+                try: return int(r.value) if r and r.value else default
+                except: return default
+            days = _get_days("weekly", 7) if payment.plan == PaymentPlan.WEEKLY else _get_days("monthly", 30)
             # إذا عنده اشتراك نشط → أضف أيام
             if user.subscription_ends_at and user.subscription_ends_at > now:
                 user.subscription_ends_at += timedelta(days=days)

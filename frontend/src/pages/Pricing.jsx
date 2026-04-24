@@ -81,8 +81,9 @@ const DEFAULT_PLANS = [
     gradient: 'from-blue-900/40 to-blue-800/10',
     border: 'border-blue-500/60',
     glow: 'shadow-blue-500/20',
-    featuresAr: ['تحليل ICT/SMC كامل', 'وكيل الدردشة الذكي', 'تنبيهات Telegram', 'جميع الأزواج', 'دعم فني'],
-    featuresEn: ['Full ICT/SMC Analysis', 'AI Chat Agent', 'Telegram Alerts', 'All Pairs', 'Tech Support'],
+    popular: false,
+    featuresAr: ['تحليل ICT/SMC كامل', 'شات AI غير محدود', 'تنبيهات Telegram', 'جميع الأزواج', 'تحليل متعدد الفريمات'],
+    featuresEn: ['Full ICT/SMC Analysis', 'Unlimited AI Chat', 'Telegram Alerts', 'All Pairs', 'Multi-Timeframe Analysis'],
   },
   {
     key: 'monthly',
@@ -96,8 +97,8 @@ const DEFAULT_PLANS = [
     border: 'border-purple-500/60',
     glow: 'shadow-purple-500/20',
     popular: true,
-    featuresAr: ['كل مزايا الأسبوعية', 'أولوية الدعم الفني', 'تقارير أسبوعية مفصّلة', 'وصول لجميع الأزواج', 'توفير 46%'],
-    featuresEn: ['All Weekly Features', 'Priority Support', 'Detailed Weekly Reports', 'All Pairs Access', 'Save 46%'],
+    featuresAr: ['كل مزايا الأسبوعي', 'أولوية الدعم الفني', 'تقارير أسبوعية مفصّلة', 'وصول مبكر للمزايا الجديدة', 'توفير 46% مقارنة بالأسبوعي'],
+    featuresEn: ['All Weekly Features', 'Priority Support', 'Detailed Weekly Reports', 'Early Access to New Features', 'Save 46% vs Weekly'],
   },
 ]
 

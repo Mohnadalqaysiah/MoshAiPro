@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
+
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 import {
   TrendingUp, Shield, Zap, Bot, Bell, BarChart2,
   ChevronLeft, ChevronRight, CheckCircle, Star,
@@ -82,7 +85,14 @@ export default function Landing() {
   const isAr = lang === 'ar'
   const ChevronCta = isAr ? ChevronLeft : ChevronRight
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [livePlans, setLivePlans] = useState({})
   useReveal()
+
+  useEffect(() => {
+    axios.get(`${API}/api/v1/subscription/plans`)
+      .then(r => { if (r.data.plans) setLivePlans(r.data.plans) })
+      .catch(() => {})
+  }, [])
 
   return (
     <div className="min-h-screen bg-[#070b14] text-white overflow-x-hidden" dir={t.dir}>
@@ -389,6 +399,17 @@ export default function Landing() {
             {t.plans.map((p, i) => {
               const isHighlight = p.highlight
               const isFree = p.price === 'مجاني' || p.price === 'Free'
+              // Merge live API price for weekly/monthly
+              const planKey = p.name === 'أسبوعي' || p.name === 'Weekly' ? 'weekly'
+                            : p.name === 'شهري' || p.name === 'Monthly'  ? 'monthly'
+                            : null
+              const livePrice = planKey && livePlans[planKey]?.price_usd
+              const displayPrice = livePrice ? `$${livePrice}` : p.price
+              const liveFeaturesAr = planKey && livePlans[planKey]?.features
+              const liveFeaturesEn = planKey && livePlans[planKey]?.features_en
+              const displayFeatures = isFree ? p.features
+                : isAr ? (liveFeaturesAr || p.features)
+                : (liveFeaturesEn || p.features)
               return (
                 <div key={i}
                   className={`reveal relative flex flex-col rounded-2xl overflow-hidden transition-all duration-300 hover:-translate-y-1 ${
@@ -416,7 +437,7 @@ export default function Landing() {
                     {/* Price */}
                     <div className="flex items-end gap-1.5 mb-6">
                       <span className={`text-5xl font-black leading-none ${isHighlight ? 'bg-gradient-to-r from-blue-300 to-indigo-300 bg-clip-text text-transparent' : 'text-white'}`}>
-                        {p.price}
+                        {displayPrice}
                       </span>
                       {p.period && <span className="text-gray-500 text-sm mb-1">{p.period}</span>}
                     </div>
@@ -426,7 +447,7 @@ export default function Landing() {
 
                     {/* Features */}
                     <ul className="space-y-3 flex-1 mb-6">
-                      {p.features.map((f, j) => (
+                      {displayFeatures.map((f, j) => (
                         <li key={j} className="flex items-center gap-2.5 text-sm">
                           <div className={`w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 ${isHighlight ? 'bg-blue-500/25' : 'bg-white/8'}`}>
                             <CheckCircle size={10} className={isHighlight ? 'text-blue-300' : 'text-green-400'} />
