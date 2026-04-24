@@ -120,21 +120,18 @@ export default function Landing() {
     <div className="min-h-screen bg-[#070b14] text-white overflow-x-hidden" dir={t.dir}>
 
       {/* ── Navbar ─────────────────────────────────────────────────────── */}
-      {/* Spacer so content doesn't hide behind fixed header */}
-      <div className={`transition-all duration-300 ${scrolled ? 'h-13' : 'h-16'}`} aria-hidden="true" />
-
-      <header className={`fixed top-0 left-0 right-0 z-50 border-b transition-all duration-300 ease-in-out
+      <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ease-in-out
         ${scrolled
-          ? 'bg-[#070b14]/95 backdrop-blur-2xl border-white/8 shadow-lg shadow-black/30'
-          : 'bg-[#070b14]/70 backdrop-blur-xl border-white/5'}
+          ? 'bg-[#070b14]/96 backdrop-blur-2xl border-b border-white/10 shadow-xl shadow-black/40'
+          : 'bg-transparent border-b border-transparent'}
         ${hidden ? '-translate-y-full' : 'translate-y-0'}
       `}>
-        <div className={`max-w-6xl mx-auto px-4 flex items-center justify-between transition-all duration-300 ${scrolled ? 'h-13' : 'h-16'}`}>
+        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2.5 group">
-            <div className={`rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-bold shadow-lg shadow-blue-500/30 group-hover:shadow-blue-500/50 transition-all duration-300 ${scrolled ? 'w-8 h-8 text-sm' : 'w-9 h-9 text-base'}`}>
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-bold text-base shadow-lg shadow-blue-500/30 group-hover:shadow-blue-500/50 transition-shadow">
               Q
             </div>
-            <span className={`font-bold tracking-tight transition-all duration-300 ${scrolled ? 'text-base' : 'text-lg'}`}>
+            <span className="font-bold text-lg tracking-tight">
               Qaffel <span className="text-blue-400">AI</span>
             </span>
           </Link>
@@ -240,7 +237,7 @@ export default function Landing() {
       </header>
 
       {/* ── Hero ───────────────────────────────────────────────────────── */}
-      <section className="relative py-24 md:py-36 px-4 overflow-hidden bg-grid">
+      <section className="relative pt-36 pb-24 md:pt-44 md:pb-36 px-4 overflow-hidden bg-grid">
         {/* Orbs */}
         <div className="orb w-[500px] h-[500px] bg-blue-600/15 top-0 left-1/2 -translate-x-1/2 -translate-y-1/2" />
         <div className="orb w-[300px] h-[300px] bg-indigo-600/10 bottom-0 right-0" />
