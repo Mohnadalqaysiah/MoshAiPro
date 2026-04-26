@@ -5,10 +5,133 @@ Mosh AI Pro v5 - Trading Chat Agent (Professional)
 """
 
 import json
+import random
 import aiohttp
 from loguru import logger
 from app.config import get_settings
 from app.services.smart_data import smart_data
+
+# ─── ICT/SMC Knowledge Base (Local) ────────────────────────────────────────────
+CONCEPTS = {
+    "ob": """📦 **Order Block (OB) — كتلة الأوامر**
+
+هي آخر شمعة هابطة قبل حركة صاعدة قوية (OB صاعد)، أو آخر شمعة صاعدة قبل حركة هابطة قوية (OB هابط).
+
+تمثّل المنطقة اللي فيها البنوك والمؤسسات أعطت أوامرها — لذلك السعر بيرجع إليها عادةً لـ "يشيل الأوامر المتبقية".
+
+**كيف تستخدمها؟**
+• انتظر السعر يرجع للـ OB
+• تأكد فيه Sweep للسيولة قبله
+• دخول عند إعادة الاختبار مع شمعة تأكيد""",
+
+    "fvg": """💠 **Fair Value Gap (FVG) — فجوة القيمة العادلة**
+
+فجوة في السوق ناتجة عن حركة قوية جداً — ظل شمعة 1 وشمعة 3 ما تلمسا بعض، خلّا "فراغ" في السوق.
+
+السوق يميل لملء هذه الفجوات لأن فيها أوامر معلقة.
+
+**الاستخدام:**
+• FVG صاعد → دعم محتمل (سعر ينزل ليملأه ثم يصعد)
+• FVG هابط → مقاومة محتملة (سعر يصعد ليملأه ثم ينزل)""",
+
+    "bos": """🔄 **Break of Structure (BOS) — كسر الهيكل**
+
+عندما يكسر السعر أعلى قمة سابقة (BOS صاعد) أو أدنى قاع سابق (BOS هابط).
+
+يؤكد استمرار الاتجاه القائم.
+
+**الفرق بين BOS و CHoCH:**
+• BOS = استمرار الاتجاه ✅
+• CHoCH = تحذير من تغيير الاتجاه ⚠️""",
+
+    "choch": """⚡ **Change of Character (CHoCH) — تغيير الطابع**
+
+إشارة مبكرة لتغيير الاتجاه. السعر يكسر هيكلاً داخلياً عكس الاتجاه الرئيسي.
+
+**مثال:**
+في اتجاه صاعد: إذا كسر السعر آخر قاع داخلي → CHoCH → ابدأ تبحث عن إشارات بيع""",
+
+    "liquidity": """🧲 **Liquidity — السيولة**
+
+أوامر وقف الخسارة المتراكمة فوق القمم (BSL) أو تحت القيعان (SSL).
+
+المؤسسات تتحرك نحو هذه المناطق لتنفيذ صفقاتها الكبيرة — "تصطاد" أوامر الريتيل أولاً.
+
+**القاعدة الذهبية:** لا تدخل قبل ما يصير Sweep للسيولة القريبة.""",
+
+    "sweep": """🎣 **Liquidity Sweep — اصطياد السيولة**
+
+حركة سريعة يتجاوز فيها السعر منطقة سيولة (قمة أو قاع) ثم يرجع بسرعة.
+
+هذا يعني أن المؤسسات "أخذت" أوامر الوقف وجاهزة للتحرك بالاتجاه الحقيقي.
+
+**أهميته:** شرط أساسي للدخول في منهج ICT/SMC.""",
+
+    "premium": """📊 **Premium & Discount — الأسعار الممتازة والمخفضة**
+
+• **Premium (فوق 50% من الـ Range)** = سعر مرتفع = مثالي للبيع
+• **Discount (تحت 50%)** = سعر منخفض = مثالي للشراء
+• **Equilibrium (50%)** = توازن = انتظار وضوح
+
+يُحسب بناءً على آخر حركة هيكلية كبيرة.""",
+
+    "killzone": """⏰ **Kill Zones — الأوقات المثالية للتداول**
+
+الأوقات التي ترى فيها أكبر حركة من المؤسسات:
+
+• 🌏 **آسيا Open**: 00:00 – 03:00 UTC
+• 🇬🇧 **لندن Open**: 08:00 – 11:00 UTC  ← الأقوى
+• 🇺🇸 **نيويورك AM**: 13:30 – 16:00 UTC ← الأقوى
+• 🇺🇸 **نيويورك PM**: 19:00 – 21:00 UTC
+
+أقوى الإشارات تأتي في لندن ونيويورك صباحاً.""",
+
+    "wyckoff": """📈 **Wyckoff Method — منهج وايكوف**
+
+يصف دورة السوق في 4 مراحل:
+
+• **Accumulation** = البنوك تجمع → توقع صعود قريب
+• **Markup** = ارتفاع = ركب الموجة
+• **Distribution** = البنوك تبيع → توقع نزول
+• **Markdown** = هبوط = فرصة بيع أو انتظار""",
+
+    "rr": """⚖️ **Risk/Reward (R/R) — نسبة المخاطرة للمكافأة**
+
+• R/R 1:2 = تخاطر 100$ للربح 200$
+• R/R 1:3 = تخاطر 100$ للربح 300$
+
+**الحد الأدنى المقبول: 1:2**
+
+حتى لو نسبة إصابتك 40% — مع R/R 1:2 أنت في ربح!""",
+}
+
+_INTROS_BUY_HIGH  = [
+    "يا صديقي، الـ{sym} فرصة شراء قوية 🟢",
+    "الـ{sym} الوضع ممتاز للشراء — الإشارات متوافقة",
+    "شوف الـ{sym}، عندنا فرصة شراء بثقة عالية 🎯",
+    "الـ{sym} جاهز يصعد — البيانات تدعم الشراء بقوة",
+]
+_INTROS_BUY_MED   = [
+    "الـ{sym} يميل للشراء، بس فيه بعض تحفظات ⚠️",
+    "شوف، الـ{sym} عنده إشارات شراء متوسطة",
+    "الـ{sym} مايل للأعلى — إشارة متوسطة، إدارة خطر محكمة",
+]
+_INTROS_SELL_HIGH = [
+    "الـ{sym} ضغط بيع قوي — فرصة للبيع 🔴",
+    "يا صديقي، الـ{sym} الإشارات تقول بيع بثقة عالية",
+    "الـ{sym} وصل منطقة Premium ومكشوف للهبوط",
+    "شوف الـ{sym} — البيانات ترجح البيع بوضوح 📉",
+]
+_INTROS_SELL_MED  = [
+    "الـ{sym} يميل للبيع، لكن فيه تحفظات",
+    "الـ{sym} عنده إشارات بيع متوسطة — انتبه",
+]
+_INTROS_WAIT      = [
+    "الـ{sym} الوضع ما صار واضح بعد — أنصح بالانتظار ⏳",
+    "يا صديقي، الـ{sym} حالياً في Range، فيه مخاطرة",
+    "الـ{sym} ما عنده إشارة قاطعة — الصبر أحكم",
+    "الـ{sym} محتاج تأكيد أقوى — لا تتسرع",
+]
 
 settings = get_settings()
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
@@ -451,6 +574,189 @@ class TradingChatAgent:
 
         return "\n".join(str(l) for l in lines)
 
+    # ─── Local Intelligence Engine ───────────────────────────────────────────
+
+    def _generate_intro(self, rec: str, conf: float, sym: str) -> str:
+        if rec == "BUY":
+            pool = _INTROS_BUY_HIGH if conf >= 75 else _INTROS_BUY_MED
+        elif rec == "SELL":
+            pool = _INTROS_SELL_HIGH if conf >= 75 else _INTROS_SELL_MED
+        else:
+            pool = _INTROS_WAIT
+        return random.choice(pool).format(sym=sym)
+
+    def _detect_followup(self, message: str) -> str | None:
+        """يكشف نوع سؤال المتابعة — None إذا مش متابعة"""
+        msg = message.lower().strip()
+        if any(w in msg for w in ["ليه", "لماذا", "why", "السبب", "سبب", "علاش", "ايش السبب"]):
+            return "why"
+        if any(w in msg for w in ["sl", "وقف", "stop", "stop loss", "الوقف"]):
+            return "sl"
+        if any(w in msg for w in ["tp", "هدف", "أهداف", "اهداف", "target", "الأهداف"]):
+            return "tp"
+        if any(w in msg for w in ["دخول", "entry", "متى أدخل", "وقت الدخول", "نقطة الدخول", "ادخل"]):
+            return "entry"
+        if any(w in msg for w in ["ثقة", "نسبة الثقة", "confidence", "كم نسبة", "كم الثقة"]):
+            return "confidence"
+        if any(w in msg for w in ["تنصح", "توصي", "أدخل الآن", "أدخل حالاً", "ادخل الحين", "تشجعني"]):
+            return "advice"
+        if any(w in msg for w in ["شكرا", "شكراً", "مشكور", "ممتاز", "رائع", "تمام", "اوك", "ok", "حسنا", "موافق"]):
+            return "ack"
+        if any(w in msg for w in ["r/r", "rr", "نسبة المخاطرة", "المكافأة"]):
+            return "rr"
+        return None
+
+    def _handle_followup(self, ftype: str, last_analysis: dict, context: dict) -> str:
+        sym       = context.get("symbol", "")
+        rec       = last_analysis.get("recommendation", "WAIT")
+        conf      = last_analysis.get("ai_confidence_score", 0)
+        entry     = last_analysis.get("entry_zones", [])
+        sl        = last_analysis.get("stop_loss_zone")
+        tps       = last_analysis.get("take_profit_zones", [])
+        rr        = last_analysis.get("risk_reward_ratio", 0)
+        structure = last_analysis.get("market_structure", {})
+        confluence= last_analysis.get("confluence", {})
+        factors   = confluence.get("factors", [])
+        pd_z      = last_analysis.get("premium_discount", {})
+        kz        = last_analysis.get("kill_zone", {})
+
+        def _p(v):
+            if v is None: return "?"
+            if isinstance(v, dict):
+                lo = v.get("low") or v.get("Low")
+                hi = v.get("high") or v.get("High")
+                if lo and hi: return f"{float(lo):.2f}–{float(hi):.2f}"
+            try: return f"{float(v):.2f}"
+            except: return str(v)
+
+        if ftype == "why":
+            reasons = []
+            trend = structure.get("trend", "")
+            if trend:
+                reasons.append(f"الاتجاه {trend} مؤكد بكسر هيكلي (BOS)")
+            zone = pd_z.get("zone", "")
+            if zone == "Discount" and rec == "BUY":
+                reasons.append("السعر في منطقة Discount = مثالية للشراء")
+            elif zone == "Premium" and rec == "SELL":
+                reasons.append("السعر في Premium = مثالية للبيع")
+            for f in factors[:3]:
+                reasons.append(f)
+            if not reasons:
+                return f"الثقة {conf:.0f}% مبنية على تقاطع عوامل ICT/SMC — لكن ما في سبب واحد غالب."
+            return "**السبب:**\n" + "\n".join(f"• {r}" for r in reasons)
+
+        if ftype == "sl":
+            if sl:
+                return f"وقف الخسارة عند **{_p(sl)}**\n\nهذا المستوى تحت آخر منطقة دعم رئيسية — كسره يبطل الإشارة."
+            return "ما عندي وقف محدد لهذه الإشارة — انتظر تأكيداً أقوى قبل الدخول."
+
+        if ftype == "tp":
+            if tps:
+                lines = [f"• TP{i+1}: **{_p(tp)}**" for i, tp in enumerate(tps[:3])]
+                return "**الأهداف:**\n" + "\n".join(lines) + (f"\n\n⚖️ R/R: 1:{rr:.1f}" if rr else "")
+            return "الأهداف غير محددة بعد — الإشارة تحتاج تأكيداً."
+
+        if ftype == "entry":
+            if entry and rec in ["BUY", "SELL"]:
+                timing = ""
+                if not kz.get("is_optimal_time"):
+                    session = kz.get("active_session", "")
+                    timing = f"\n\n⏰ أفضل توقيت: Kill Zone القادمة — لندن (08:00 UTC) أو نيويورك (13:30 UTC)."
+                return f"نقطة الدخول: **{_p(entry[0])}**{timing}"
+            return "ما في دخول محدد الآن — انتظر إشارة أوضح."
+
+        if ftype == "confidence":
+            grade = "قوية 💪" if conf >= 80 else "متوسطة ⚠️" if conf >= 60 else "ضعيفة — تجنب ❌"
+            fc = confluence.get("factor_count", 0)
+            return f"**الثقة: {conf:.0f}%** — {grade}\n\n{fc} عوامل من 9 متوافقة مع الإشارة."
+
+        if ftype == "advice":
+            if conf >= 75 and rec in ["BUY", "SELL"]:
+                return (
+                    f"الإشارة {rec} قوية ({conf:.0f}%) — لكن أنا ما أعطي توصية مالية.\n\n"
+                    f"إذا قررت تدخل: لا تخاطر أكثر من **1-2%** من رأس مالك، وحط الوقف بالمكان الصحيح."
+                )
+            return f"الثقة {conf:.0f}% — متوسطة. أنصح بانتظار تأكيد أقوى قبل الدخول."
+
+        if ftype == "rr":
+            if rr:
+                return f"**R/R: 1:{rr:.1f}**\n\nيعني مقابل كل 1$ خسارة محتملة، الهدف الأول يعطيك **{rr:.1f}$**.\n\nأي R/R فوق 1:2 يُعتبر مقبول."
+            return "R/R غير محسوب لهذه الإشارة — تحتاج entry وSL وTP محددين."
+
+        if ftype == "ack":
+            return random.choice([
+                f"أي وقت 👊 — قولي إذا بدك تحليل {sym} من جديد أو زوج آخر",
+                "بالتوفيق! 🎯 — إذا احتجت شي ثاني أنا هون",
+                "حظاً موفقاً 🚀 — خبرني نتيجة الصفقة لاحقاً 😄",
+                "بالخير دايماً 💪 — قولي إذا تبي تحليل آخر",
+            ])
+
+        return ""
+
+    def _explain_concept_local(self, msg: str) -> str:
+        """شرح مفاهيم ICT/SMC بدون AI"""
+        concept_map = {
+            "ob":        ["order block", "ob ", " ob", "كتلة الأوامر", "اوردر بلوك", "كتلة"],
+            "fvg":       ["fvg", "fair value", "فجوة", "فير فالو", "fair value gap"],
+            "bos":       ["bos", "break of structure", "كسر الهيكل", "بريك اوف ستراكتشر"],
+            "choch":     ["choch", "cho ch", "change of character", "تغيير الطابع", "تغيير الاتجاه", "شوش"],
+            "liquidity": ["سيولة", "liquidity", "bsl", "ssl", "ليكويديتي"],
+            "sweep":     ["sweep", "سويب", "اصطياد السيولة", "ليكويديتي سويب"],
+            "premium":   ["premium", "discount", "بريميوم", "ديسكاونت", "ote", "equilibrium", "توازن", "60%", "61"],
+            "killzone":  ["killzone", "kill zone", "كيل زون", "جلسة", "جلسات", "لندن", "نيويورك", "اوقات"],
+            "wyckoff":   ["wyckoff", "وايكوف", "accumulation", "distribution", "تراكم", "توزيع", "وايكف"],
+            "rr":        ["r/r", "rr", "ريسك ريوارد", "نسبة المخاطرة", "risk reward", "المكافأة"],
+        }
+        for key, keywords in concept_map.items():
+            if any(kw in msg for kw in keywords):
+                return CONCEPTS.get(key, "")
+        return ""
+
+    def _local_general_response(self, msg: str) -> str:
+        """ردود ذكية للأسئلة العامة بدون API"""
+        if any(w in msg for w in ["أفضل وقت", "متى أتداول", "أحسن وقت", "أفضل جلسة"]):
+            return (
+                "⏰ **أفضل أوقات التداول:**\n\n"
+                "• 🇬🇧 **لندن Open** (08:00–11:00 UTC) — الأقوى\n"
+                "• 🇺🇸 **نيويورك AM** (13:30–16:00 UTC) — حركة واسعة\n"
+                "• 🌐 **تداخل لندن+نيويورك** (13:00–16:00 UTC) — أعلى سيولة\n\n"
+                "⚠️ تجنب: منتصف جلسة آسيا للعملات الرئيسية، وما قبيل الإغلاق الأسبوعي."
+            )
+        if any(w in msg for w in ["إدارة المخاطر", "رأس المال", "كم أخاطر", "نسبة المخاطرة", "مخاطرة"]):
+            return (
+                "⚖️ **قواعد إدارة المخاطر:**\n\n"
+                "• لا تخاطر أكثر من **1-2%** من رأس المال في صفقة واحدة\n"
+                "• R/R لا يقل عن **1:2** (هدف ضعف الخسارة)\n"
+                "• لا تفتح أكثر من **3-4 صفقات** بنفس الوقت\n"
+                "• لا تضاعف الخسارة (Revenge Trading) ❌\n\n"
+                "القاعدة الذهبية: **احمِ رأس مالك أولاً، الربح يأتي لاحقاً.**"
+            )
+        if any(w in msg for w in ["ict", "smc", "smart money", "ايسيتي", "منهج"]):
+            return (
+                "🧠 **ICT / SMC — Smart Money Concepts**\n\n"
+                "منهج يعتمد على تتبع حركة البنوك والمؤسسات بدل المؤشرات التقليدية.\n\n"
+                "**المفاهيم الأساسية:**\n"
+                "• Order Blocks (OB) — مناطق أوامر المؤسسات\n"
+                "• Fair Value Gaps (FVG) — فجوات السوق\n"
+                "• Liquidity Sweeps — اصطياد أوامر الريتيل\n"
+                "• Break of Structure (BOS / CHoCH) — كسر الهيكل\n"
+                "• Premium & Discount — مناطق الشراء والبيع\n\n"
+                "اسألني عن أي مفهوم بالتفصيل 👇"
+            )
+        if any(w in msg for w in ["شكرا", "شكراً", "مشكور", "ممتاز", "رائع"]):
+            return random.choice([
+                "بالتوفيق! 🎯 — أي وقت تحتاج تحليل قولي",
+                "العفو يا صديقي 💪 — قولي إذا بدك شي ثاني",
+                "بالخير دايماً 🚀 — خبرني نتيجة الصفقة 😄",
+            ])
+        # Default
+        return (
+            "يا صديقي، أنا مُوش — متخصص بتحليل الأسواق بمنهج ICT/SMC.\n\n"
+            "قولي أي زوج تبي أحلله:\n"
+            "مثال: *حلل الذهب على ساعة* أو *BTCUSD 4h*\n\n"
+            "أو اسألني عن مفهوم: OB، FVG، BOS، Kill Zones، Wyckoff، R/R..."
+        )
+
     # ─── Fallback (no Gemini) ────────────────────────────────────────────────
 
     def _build_direct_response(self, analysis: dict, symbol: str, timeframe: str, is_chart: bool = False) -> dict:
@@ -492,7 +798,11 @@ class TradingChatAgent:
 
         closed_note = "\n⛔ **السوق مغلق حالياً** — التحليل استرشادي فقط.\n" if not market_open else ""
 
+        intro = self._generate_intro(rec, conf, symbol)
+
         lines = [
+            intro,
+            "",
             f"📊 **{symbol} | {timeframe}**",
             closed_note,
             f"💰 السعر: **{float(price):.2f}**",
@@ -680,22 +990,32 @@ class TradingChatAgent:
 
         # ── تحية ──────────────────────────────────────────────────────────────
         if intent["is_greeting"] and not intent["is_analysis"] and not symbol:
-            msg = (
-                "👋 هلا! أنا مُوش، محللك في أسواق الـ ICT/SMC.\n\n"
-                "قولي أي زوج تبي أحلله وبأي إطار زمني، وأنا أعطيك:\n"
-                "📊 التحليل الكامل مع نقاط الدخول والأهداف\n"
-                "🕯️ شموع يابانية مباشرة\n"
-                "📐 Order Blocks, FVG, سيولة\n\n"
-                "مثال: *حلل البتكوين 15 دقيقة* 🚀"
-            )
+            msgs = [
+                "👋 هلا! أنا مُوش، محللك في أسواق الـ ICT/SMC.\n\nقولي أي زوج تبي أحلله وبأي إطار زمني 🎯\nمثال: *حلل الذهب على ساعة* أو *BTCUSD 4h*",
+                "👋 أهلاً! جاهز أحلل لك أي سوق بمنهج SMC/ICT.\n\nاكتب الزوج والإطار الزمني وأنا أبدأ 🚀",
+                "هلا وغلا 👋 — أنا مُوش، شايل أسرار Smart Money.\n\nقولي ايش تبي تحلل اليوم؟",
+            ]
+            msg = random.choice(msgs)
             reply = {"action": "text", "message": msg}
             history.append({"role": "assistant", "content": msg})
             return reply
 
+        # ── كشف أسئلة المتابعة (قبل أي شيء آخر) ────────────────────────────
+        last_analysis = context.get("last_analysis")
+        if last_analysis and not intent["is_analysis"] and not intent["is_chart"]:
+            ftype = self._detect_followup(user_message)
+            if ftype:
+                msg = self._handle_followup(ftype, last_analysis, context)
+                if msg:
+                    reply = {"action": "text", "message": msg}
+                    history.append({"role": "assistant", "content": msg})
+                    return reply
+
         # ── شرح مفهوم ────────────────────────────────────────────────────────
         if intent["is_explain"] and not intent["is_analysis"]:
-            raw = await self._call_gemini(history)
-            msg = raw.strip() if raw else "اسألني عن أي مفهوم: Order Blocks, FVG, BOS, CHoCH, Kill Zones, Wyckoff..."
+            msg = self._explain_concept_local(user_message.lower())
+            if not msg:
+                msg = self._local_general_response(user_message.lower())
             reply = {"action": "text", "message": msg}
             history.append({"role": "assistant", "content": msg})
             return reply
@@ -703,8 +1023,10 @@ class TradingChatAgent:
         # ── رسالة عامة بدون رمز ──────────────────────────────────────────────
         needs_analysis = intent["is_analysis"] or intent["is_report"] or intent["is_chart"]
         if not needs_analysis and not symbol:
-            raw = await self._call_gemini(history)
-            msg = raw.strip() if raw else "حدد الزوج الذي تريد تحليله (مثل: ذهب، بتكوين، يورو)"
+            # حاول شرح مفهوم أولاً، ثم رد عام
+            msg = self._explain_concept_local(user_message.lower())
+            if not msg:
+                msg = self._local_general_response(user_message.lower())
             reply = {"action": "text", "message": msg}
             history.append({"role": "assistant", "content": msg})
             return reply
@@ -719,8 +1041,12 @@ class TradingChatAgent:
         if intent["is_chart"]:
             candles = await self._fetch_candles(symbol, timeframe, limit=60)
 
-        # ── رد مع Gemini ─────────────────────────────────────────────────────
-        # لا ندعو Gemini إذا فشل التحليل أو رجع فارغاً أو فيه error
+        # ── حفظ التحليل في السياق للمتابعة ──────────────────────────────────
+        if analysis and not analysis.get("error"):
+            context["last_analysis"] = analysis
+            self.session_context[session_id] = context
+
+        # ── رد مع Gemini (إذا كان مفعّلاً) ──────────────────────────────────
         analysis_ok = bool(analysis) and not analysis.get("error") and analysis.get("current_price")
         if self.enabled and analysis_ok:
             extra_ctx = self._build_analysis_context(analysis, symbol, timeframe)
@@ -731,7 +1057,6 @@ class TradingChatAgent:
 
             if raw and raw.strip():
                 clean = raw.strip()
-                # تنظيف JSON إذا أرجع Gemini JSON بالغلط
                 if clean.startswith("{") or "```json" in clean:
                     try:
                         if "```json" in clean:
