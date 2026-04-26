@@ -33,6 +33,9 @@ async def chat_message(
     if not status["allowed"]:
         raise HTTPException(status_code=403, detail=status["reason"])
 
+    # الأدمن لا حدود عليه
+    is_admin = getattr(user, "role", "") == "admin"
+
     # حدود الرسائل اليومية حسب الخطة
     DAILY_CHAT_LIMITS = {
         PlanType.TRIAL:   0,    # يستخدم trial_chat_left
@@ -40,19 +43,20 @@ async def chat_message(
         PlanType.MONTHLY: 200,  # 200 رسالة/يوم
     }
 
-    if user.plan == PlanType.TRIAL and user.trial_chat_left <= 0:
-        raise HTTPException(
-            status_code=403,
-            detail="استهلكت رسائل المحادثة التجريبية. اشترك للمتابعة."
-        )
-
-    if user.plan in (PlanType.WEEKLY, PlanType.MONTHLY):
-        daily_limit = DAILY_CHAT_LIMITS[user.plan]
-        if user.chat_used_today >= daily_limit:
+    if not is_admin:
+        if user.plan == PlanType.TRIAL and user.trial_chat_left <= 0:
             raise HTTPException(
                 status_code=403,
-                detail=f"وصلت للحد اليومي ({daily_limit} رسالة). يتجدد غداً."
+                detail="استهلكت رسائل المحادثة التجريبية. اشترك للمتابعة."
             )
+
+        if user.plan in (PlanType.WEEKLY, PlanType.MONTHLY):
+            daily_limit = DAILY_CHAT_LIMITS[user.plan]
+            if user.chat_used_today >= daily_limit:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"وصلت للحد اليومي ({daily_limit} رسالة). يتجدد غداً."
+                )
 
     session_id = req.session_id or str(uuid.uuid4())
     try:
