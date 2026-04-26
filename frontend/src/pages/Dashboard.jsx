@@ -305,22 +305,42 @@ export default function Dashboard() {
       )}
 
       {/* ── Tab Bar ── */}
-      <div className="sticky top-0 z-10 -mx-4 px-4 py-2 bg-gray-950/95 backdrop-blur border-b border-white/6 mb-5">
-        <div className="flex gap-1">
+      <div className="sticky top-0 z-10 -mx-4 px-3 py-2.5 bg-[#070b14]/98 backdrop-blur-md border-b border-white/6 mb-5">
+        <div className="flex gap-1.5">
           {TABS.map(tab => {
             const isActive = activeTab === tab.id
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                style={isActive ? {
+                  boxShadow: '0 0 18px rgba(96,165,250,0.30), inset 0 0 14px rgba(59,130,246,0.08)'
+                } : {}}
+                className={`relative flex-1 flex flex-col items-center justify-center gap-1 py-2.5 px-1 rounded-xl transition-all duration-200 active:scale-95 border ${
                   isActive
-                    ? 'bg-blue-600/20 text-blue-300 border border-blue-500/40'
-                    : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
+                    ? 'bg-blue-600/15 border-blue-500/35 scale-[1.02]'
+                    : 'bg-transparent border-transparent hover:bg-white/4 hover:border-white/8'
                 }`}
               >
-                {tab.icon}
-                <span className="hidden sm:inline">{isAr ? tab.labelAr : tab.labelEn}</span>
+                {/* bottom glow accent */}
+                {isActive && (
+                  <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-7 h-[2px] rounded-full bg-blue-400"
+                    style={{ boxShadow: '0 0 8px 2px rgba(96,165,250,0.7)' }} />
+                )}
+
+                {/* icon */}
+                <span className={`transition-all duration-200 ${
+                  isActive ? 'text-blue-400 scale-110' : 'text-gray-600'
+                }`}>
+                  {tab.icon}
+                </span>
+
+                {/* label — always visible */}
+                <span className={`text-[10px] font-semibold leading-none transition-colors duration-200 ${
+                  isActive ? 'text-blue-300' : 'text-gray-600'
+                }`}>
+                  {isAr ? tab.labelAr : tab.labelEn}
+                </span>
               </button>
             )
           })}
