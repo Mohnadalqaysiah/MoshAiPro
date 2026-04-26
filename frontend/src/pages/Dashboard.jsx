@@ -387,6 +387,53 @@ export default function Dashboard() {
       {/* ══ TAB: الرئيسية ══ */}
       {activeTab === 'home' && (
         <div className="space-y-6">
+
+          {/* ── Telegram CTA — prominent for unlinked users ── */}
+          {showTgCard && (
+            <div className="relative overflow-hidden bg-gradient-to-r from-indigo-950/80 to-blue-950/80 border border-indigo-500/50 rounded-2xl p-5" dir="rtl">
+              {/* Background glow */}
+              <div className="absolute -top-6 -end-6 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
+              <div className="relative flex items-start gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-600/30 border border-indigo-500/40 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <Send size={20} className="text-indigo-300" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="text-white font-bold text-sm">اربط حسابك مع Telegram</h3>
+                    <span className="text-[10px] bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 px-2 py-0.5 rounded-full font-bold">مهم</span>
+                  </div>
+                  <p className="text-indigo-300/80 text-xs leading-relaxed mb-3">
+                    استقبل إشارات التداول، تنبيهات الجلسات، والأخبار الاقتصادية مباشرة على هاتفك عبر @{tgBot}
+                  </p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      onClick={openTgLink}
+                      disabled={tgLoading}
+                      className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 active:scale-95 disabled:opacity-60 text-white px-5 py-2 rounded-xl font-semibold text-sm transition-all"
+                    >
+                      {tgLoading ? <RefreshCw size={14} className="animate-spin" /> : <ExternalLink size={14} />}
+                      {tgLoading ? 'جاري...' : `ربط مع @${tgBot}`}
+                    </button>
+                    <button
+                      onClick={copyTgLink}
+                      disabled={tgLoading}
+                      className="flex items-center gap-1.5 text-indigo-400 hover:text-white border border-indigo-700/60 hover:border-indigo-400 px-3 py-2 rounded-xl text-sm transition-all"
+                    >
+                      {tgCopied ? <CheckCircle size={13} className="text-green-400" /> : <Copy size={13} />}
+                      {tgCopied ? 'تم النسخ' : 'نسخ الرابط'}
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('account')}
+                      className="text-xs text-indigo-600 hover:text-indigo-400 transition-colors ms-auto"
+                    >
+                      {isAr ? 'لاحقاً' : 'Later'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           <BestOpportunityWidget />
 
           {/* Quick Analyze */}
