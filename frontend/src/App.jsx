@@ -35,6 +35,7 @@ const Profile        = lazy(() => import('./pages/Profile'))
 const AffiliatePage  = lazy(() => import('./pages/AffiliatePage'))
 const MarketOverview = lazy(() => import('./pages/MarketOverview'))
 const Backtesting    = lazy(() => import('./pages/Backtesting'))
+const TradeJournal   = lazy(() => import('./pages/TradeJournal'))
 const ChatBot        = lazy(() => import('./components/ChatBot'))
 
 const PageLoader = () => (
@@ -103,6 +104,7 @@ function AppRoutes() {
                   <Route path="/affiliate"       element={<AffiliatePage />} />
                   <Route path="/market-overview" element={<MarketOverview />} />
                   <Route path="/backtesting"     element={<Backtesting />} />
+                  <Route path="/journal"         element={<TradeJournal />} />
                 </Routes>
               </main>
               <ChatBot />

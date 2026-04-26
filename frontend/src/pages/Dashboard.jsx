@@ -12,6 +12,10 @@ import SignalScorecard from '../components/SignalScorecard'
 import RedemptionWidget from '../components/RedemptionWidget'
 import BestOpportunityWidget from '../components/BestOpportunityWidget'
 import EconomicCalendar from '../components/EconomicCalendar'
+import SessionsClock from '../components/SessionsClock'
+import MarketHeatmap from '../components/MarketHeatmap'
+import ConfluenceModal from '../components/ConfluenceModal'
+import AchievementBadges from '../components/AchievementBadges'
 
 const T = {
   ar: {
@@ -60,9 +64,10 @@ export default function Dashboard() {
   const [relinking, setRelinking]   = useState(false)
   const [relinkDone, setRelinkDone] = useState(false)
   const [quickResult, setQuickResult] = useState(null)   // modal result
-  const [historyLimit, setHistoryLimit] = useState(10)   // show more — signal history
-  const [signalsLimit, setSignalsLimit] = useState(10)   // show more — recent signals
-  const [activeTab,    setActiveTab]    = useState('home')
+  const [historyLimit,    setHistoryLimit]    = useState(10)
+  const [signalsLimit,    setSignalsLimit]    = useState(10)
+  const [activeTab,       setActiveTab]       = useState('home')
+  const [confluenceSymbol, setConfluenceSymbol] = useState(null)  // ConfluenceModal
 
   // جلب آخر الإشارات
   useEffect(() => { fetchSignals(); fetchSignalHistory() }, [])
@@ -248,12 +253,41 @@ export default function Dashboard() {
           </div>
 
           {/* Footer */}
-          <div className="px-5 pb-4">
+          <div className="px-5 pb-4 flex gap-2">
+            <button
+              onClick={() => {
+                const sym  = result.market || result.symbol || ''
+                const lvl  = result.levels || {}
+                const fmt  = (v, d = 5) => v != null ? (typeof v === 'number' ? v.toFixed(d) : v) : '—'
+                const rec  = result.recommendation || result.signal_type || 'WATCH'
+                const conf = result.ai_confidence_score || result.ai_confidence || 0
+                const entry= lvl.entry || result.entry_zones?.[0]
+                const sl   = lvl.stop_loss || result.stop_loss_zone
+                const tp1  = lvl.tp1 || result.take_profit_zones?.[0]
+                const tp2  = lvl.tp2 || result.take_profit_zones?.[1]
+                const rr   = result.risk_reward || lvl.risk_reward
+                const text = [
+                  `📊 ${sym} — ${rec === 'BUY' ? '🟢 BUY' : rec === 'SELL' ? '🔴 SELL' : '👁 WATCH'}`,
+                  `✏️ Entry: ${fmt(entry)}`,
+                  `🛑 SL: ${fmt(sl)}`,
+                  tp1 ? `🎯 TP1: ${fmt(tp1)}` : null,
+                  tp2 ? `🎯 TP2: ${fmt(tp2)}` : null,
+                  rr  ? `⚖️ R/R: 1:${typeof rr === 'number' ? rr.toFixed(1) : rr}` : null,
+                  `💡 Conf: ${Math.round(conf)}%`,
+                  `🤖 Qaffel AI`,
+                ].filter(Boolean).join('\n')
+                navigator.clipboard.writeText(text)
+              }}
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 rounded-xl text-sm font-medium transition-colors"
+            >
+              <Copy size={14} />
+              {isAr ? 'نسخ' : 'Copy'}
+            </button>
             <button
               onClick={onClose}
-              className="w-full py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-xl text-sm font-medium transition-colors"
+              className="flex-1 py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-xl text-sm font-medium transition-colors"
             >
-              إغلاق
+              {isAr ? 'إغلاق' : 'Close'}
             </button>
           </div>
         </div>
@@ -286,8 +320,11 @@ export default function Dashboard() {
         </button>
       </div>
 
-      {/* Quick Analysis Modal */}
+      {/* Modals */}
       <QuickModal result={quickResult} onClose={() => setQuickResult(null)} />
+      {confluenceSymbol && (
+        <ConfluenceModal symbol={confluenceSymbol} onClose={() => setConfluenceSymbol(null)} />
+      )}
 
       {/* ── Global error banner (always visible) ── */}
       {error && (
@@ -360,7 +397,7 @@ export default function Dashboard() {
             <Zap size={16} className="text-yellow-400" />
             تحليل سريع
           </h2>
-          <span className="text-xs text-gray-500 hidden sm:block">كليك يسار = كاش · كليك يمين = تحديث فوري</span>
+          <span className="text-xs text-gray-500 hidden sm:block">كليك = كاش · شيفت+كليك = تحديث · كليك يمين = Confluence</span>
         </div>
 
         <div className="p-4">
@@ -391,8 +428,8 @@ export default function Dashboard() {
                       return (
                         <button
                           key={m.symbol}
-                          onClick={() => analyzeMarket(m.symbol, false)}
-                          onContextMenu={(e) => { e.preventDefault(); analyzeMarket(m.symbol, true) }}
+                          onClick={(e) => e.shiftKey ? analyzeMarket(m.symbol, true) : analyzeMarket(m.symbol, false)}
+                          onContextMenu={(e) => { e.preventDefault(); setConfluenceSymbol(m.symbol) }}
                           disabled={isAnalyzing}
                           className={`relative py-2.5 px-2 bg-gradient-to-b border rounded-xl text-xs font-semibold transition-all duration-200 select-none
                             ${meta.color}
@@ -548,6 +585,8 @@ export default function Dashboard() {
       {/* ══ TAB: الأسواق ══ */}
       {activeTab === 'markets' && (
         <div className="space-y-6">
+          <SessionsClock />
+          <MarketHeatmap onAnalyzeResult={(r) => setQuickResult(r)} />
           <EconomicCalendar />
           <SignalScorecard />
           <PriceAlertWidget />
@@ -707,6 +746,7 @@ export default function Dashboard() {
             </div>
           )}
 
+          <AchievementBadges />
           <ReferralWidget />
           <RedemptionWidget />
         </div>

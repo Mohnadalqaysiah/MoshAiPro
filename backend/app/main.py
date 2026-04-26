@@ -15,7 +15,7 @@ import shutil
 
 from app.config import get_settings
 from app.database import init_db, get_db
-from app.api import signals, markets, analytics, chat, auth, subscription, admin, bot, public_chat, analyses, affiliate, alerts, telegram_webhook
+from app.api import signals, markets, analytics, chat, auth, subscription, admin, bot, public_chat, analyses, affiliate, alerts, telegram_webhook, journal
 from app.services.gemini_engine import gemini_engine
 from app.services.rate_limiter import twelvedata_client
 from app.models.site_settings import SiteSettings
@@ -297,6 +297,7 @@ app.include_router(public_chat.router,  prefix="/api/v1/public",         tags=["
 app.include_router(analyses.router,     prefix="/api/v1/analyses",        tags=["Analyses"])
 app.include_router(affiliate.router,    prefix="/api/v1/affiliate",       tags=["Affiliate"])
 app.include_router(alerts.router,       prefix="/api/v1/alerts",           tags=["Alerts"])
+app.include_router(journal.router,     prefix="/api/v1/journal",          tags=["Journal"])
 
 
 # WebSocket endpoint for real-time updates

@@ -1,0 +1,39 @@
+{
+  "name": "Qaffel AI — منصة التداول الذكي",
+  "short_name": "Qaffel AI",
+  "description": "تحليل الأسواق بالذكاء الاصطناعي — Smart Money Concepts",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#070b14",
+  "theme_color": "#1d4ed8",
+  "lang": "ar",
+  "dir": "rtl",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "categories": ["finance", "business"],
+  "shortcuts": [
+    {
+      "name": "الإشارات",
+      "short_name": "إشارات",
+      "description": "تحليل الأسواق السريع",
+      "url": "/signals",
+      "icons": [{ "src": "/favicon.svg", "sizes": "any" }]
+    },
+    {
+      "name": "يومية التداول",
+      "short_name": "اليومية",
+      "description": "سجل صفقاتك",
+      "url": "/journal",
+      "icons": [{ "src": "/favicon.svg", "sizes": "any" }]
+    }
+  ]
+}
