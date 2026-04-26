@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import axios from 'axios'
-import { TrendingUp, TrendingDown, Activity, Zap, AlertCircle, RefreshCw, Send, ExternalLink, Copy, CheckCircle, X, ChevronDown, BarChart2, User, LayoutDashboard } from 'lucide-react'
+import { TrendingUp, TrendingDown, Activity, Zap, AlertCircle, RefreshCw, Send, ExternalLink, Copy, CheckCircle, X, ChevronDown, ChevronUp, BarChart2, User, LayoutDashboard, Share2, Wallet, Calculator } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import useMarkets from '../hooks/useMarkets'
 import { useLang } from '../contexts/LangContext'
@@ -16,6 +16,7 @@ import SessionsClock from '../components/SessionsClock'
 import MarketHeatmap from '../components/MarketHeatmap'
 import ConfluenceModal from '../components/ConfluenceModal'
 import AchievementBadges from '../components/AchievementBadges'
+import PWAInstallBanner from '../components/PWAInstallBanner'
 
 const T = {
   ar: {
@@ -68,6 +69,10 @@ export default function Dashboard() {
   const [signalsLimit,    setSignalsLimit]    = useState(10)
   const [activeTab,       setActiveTab]       = useState('home')
   const [confluenceSymbol, setConfluenceSymbol] = useState(null)  // ConfluenceModal
+  const [showCalc, setShowCalc]           = useState(false)      // position size calc
+  const [calcBalance, setCalcBalance]     = useState(1000)
+  const [calcRisk, setCalcRisk]           = useState(1)
+  const [copiedSignal, setCopiedSignal]   = useState(false)
 
   // جلب آخر الإشارات
   useEffect(() => { fetchSignals(); fetchSignalHistory() }, [])
@@ -188,22 +193,75 @@ export default function Dashboard() {
     const tp2   = lvl.tp2 || result.take_profit_zones?.[1]
     const rr    = result.risk_reward || lvl.risk_reward
     const price = result.current_price
+    const sym   = result.market || result.symbol || ''
     const fmt   = (v, d = 5) => v != null ? (typeof v === 'number' ? v.toFixed(d) : v) : '—'
 
     const recColor = rec === 'BUY' ? 'text-green-400' : rec === 'SELL' ? 'text-red-400' : 'text-yellow-400'
     const recBg    = rec === 'BUY' ? 'bg-green-500/10 border-green-600/40' : rec === 'SELL' ? 'bg-red-500/10 border-red-600/40' : 'bg-yellow-500/10 border-yellow-600/40'
     const recLabel = rec === 'BUY' ? '🟢 شراء' : rec === 'SELL' ? '🔴 بيع' : '👁 مراقبة'
 
+    // ── Position Size Calculator logic ──────────────────────────────────
+    const getPipValue = (s) => {
+      if (/XAUUSD|XAGUSD|XPTUSD/i.test(s)) return 100     // metals: $100/lot per $1 move
+      if (/JPY/i.test(s))                   return 1000    // JPY pairs: ~$1000/lot per 1 move
+      if (/NAS100|US30|SP500|DAX|UK100/i.test(s)) return 1 // indices: $1/lot per 1 pt
+      if (/USOIL|BRENT/i.test(s))           return 1000    // oil
+      if (/BTC|ETH|SOL|XRP|BNB/i.test(s))  return 1       // crypto
+      return 100000  // standard forex: $100k/lot per 1.0 move
+    }
+
+    let calcLot = null, calcRiskUSD = null, calcProfitUSD = null
+    if (entry != null && sl != null && calcBalance > 0 && calcRisk > 0) {
+      const slDist    = Math.abs(Number(entry) - Number(sl))
+      const pipVal    = getPipValue(sym)
+      if (slDist > 0) {
+        calcRiskUSD   = calcBalance * (calcRisk / 100)
+        calcLot       = calcRiskUSD / (slDist * pipVal)
+        if (tp1 != null) {
+          const tp1Dist  = Math.abs(Number(tp1) - Number(entry))
+          calcProfitUSD  = calcLot * tp1Dist * pipVal
+        }
+      }
+    }
+
+    const buildSignalText = () => [
+      `📊 ${sym} — ${rec === 'BUY' ? '🟢 BUY' : rec === 'SELL' ? '🔴 SELL' : '👁 WATCH'}`,
+      `✏️ Entry: ${fmt(entry)}`,
+      `🛑 SL: ${fmt(sl)}`,
+      tp1 ? `🎯 TP1: ${fmt(tp1)}` : null,
+      tp2 ? `🎯 TP2: ${fmt(tp2)}` : null,
+      rr  ? `⚖️ R/R: 1:${typeof rr === 'number' ? rr.toFixed(1) : rr}` : null,
+      `💡 Conf: ${Math.round(conf)}%`,
+      `🤖 Qaffel AI`,
+    ].filter(Boolean).join('\n')
+
+    const handleCopy = () => {
+      navigator.clipboard.writeText(buildSignalText())
+      setCopiedSignal(true)
+      setTimeout(() => setCopiedSignal(false), 2000)
+    }
+
+    const handleShare = async () => {
+      const text = buildSignalText()
+      if (navigator.share) {
+        try { await navigator.share({ text }) } catch { /* cancelled */ }
+      } else {
+        navigator.clipboard.writeText(text)
+        setCopiedSignal(true)
+        setTimeout(() => setCopiedSignal(false), 2000)
+      }
+    }
+
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={onClose}>
         <div
-          className="relative bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-sm shadow-2xl animate-fade-in"
+          className="relative bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-sm shadow-2xl animate-fade-in max-h-[90vh] overflow-y-auto"
           onClick={e => e.stopPropagation()}
         >
           {/* Header */}
           <div className={`flex items-center justify-between px-5 py-4 border-b ${recBg} rounded-t-2xl border-b-gray-700/50`}>
             <div className="flex items-center gap-3">
-              <span className="text-white font-bold text-lg">{result.market || result.symbol}</span>
+              <span className="text-white font-bold text-lg">{sym}</span>
               <span className={`font-bold text-base ${recColor}`}>{recLabel}</span>
             </div>
             <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors">
@@ -250,38 +308,92 @@ export default function Dashboard() {
                 {result.summary}
               </div>
             )}
+
+            {/* ── Position Size Calculator ──────────────────────────── */}
+            <div className="border border-gray-700/60 rounded-xl overflow-hidden">
+              <button
+                onClick={() => setShowCalc(v => !v)}
+                className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-800/60 hover:bg-gray-800 transition-colors text-sm"
+              >
+                <span className="flex items-center gap-2 text-gray-300 font-medium">
+                  <Calculator size={14} className="text-purple-400" />
+                  {isAr ? 'حاسبة حجم الصفقة' : 'Position Size Calc'}
+                </span>
+                {showCalc ? <ChevronUp size={14} className="text-gray-500" /> : <ChevronDown size={14} className="text-gray-500" />}
+              </button>
+
+              {showCalc && (
+                <div className="px-4 py-3 space-y-3 bg-gray-800/30" dir="rtl">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-xs text-gray-500 block mb-1">الرصيد ($)</label>
+                      <input
+                        type="number"
+                        value={calcBalance}
+                        onChange={e => setCalcBalance(Number(e.target.value))}
+                        className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white font-mono focus:border-purple-500 focus:outline-none"
+                        min="1"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500 block mb-1">المخاطرة (%)</label>
+                      <input
+                        type="number"
+                        value={calcRisk}
+                        onChange={e => setCalcRisk(Number(e.target.value))}
+                        className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white font-mono focus:border-purple-500 focus:outline-none"
+                        min="0.1"
+                        max="10"
+                        step="0.1"
+                      />
+                    </div>
+                  </div>
+
+                  {calcLot !== null ? (
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="bg-purple-900/20 border border-purple-700/30 rounded-lg px-2 py-2 text-center">
+                        <p className="text-[10px] text-purple-400 mb-0.5">حجم اللوت</p>
+                        <p className="text-white font-bold text-sm font-mono">{calcLot.toFixed(2)}</p>
+                      </div>
+                      <div className="bg-red-900/20 border border-red-700/30 rounded-lg px-2 py-2 text-center">
+                        <p className="text-[10px] text-red-400 mb-0.5">الخسارة</p>
+                        <p className="text-white font-bold text-sm font-mono">${calcRiskUSD?.toFixed(0)}</p>
+                      </div>
+                      {calcProfitUSD != null && (
+                        <div className="bg-green-900/20 border border-green-700/30 rounded-lg px-2 py-2 text-center">
+                          <p className="text-[10px] text-green-400 mb-0.5">الربح (TP1)</p>
+                          <p className="text-white font-bold text-sm font-mono">${calcProfitUSD.toFixed(0)}</p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-500 text-center py-1">أدخل الرصيد والمخاطرة لحساب اللوت</p>
+                  )}
+                  <p className="text-[10px] text-gray-600 text-center">* تقديري — يختلف حسب الوسيط والرافعة المالية</p>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Footer */}
           <div className="px-5 pb-4 flex gap-2">
             <button
-              onClick={() => {
-                const sym  = result.market || result.symbol || ''
-                const lvl  = result.levels || {}
-                const fmt  = (v, d = 5) => v != null ? (typeof v === 'number' ? v.toFixed(d) : v) : '—'
-                const rec  = result.recommendation || result.signal_type || 'WATCH'
-                const conf = result.ai_confidence_score || result.ai_confidence || 0
-                const entry= lvl.entry || result.entry_zones?.[0]
-                const sl   = lvl.stop_loss || result.stop_loss_zone
-                const tp1  = lvl.tp1 || result.take_profit_zones?.[0]
-                const tp2  = lvl.tp2 || result.take_profit_zones?.[1]
-                const rr   = result.risk_reward || lvl.risk_reward
-                const text = [
-                  `📊 ${sym} — ${rec === 'BUY' ? '🟢 BUY' : rec === 'SELL' ? '🔴 SELL' : '👁 WATCH'}`,
-                  `✏️ Entry: ${fmt(entry)}`,
-                  `🛑 SL: ${fmt(sl)}`,
-                  tp1 ? `🎯 TP1: ${fmt(tp1)}` : null,
-                  tp2 ? `🎯 TP2: ${fmt(tp2)}` : null,
-                  rr  ? `⚖️ R/R: 1:${typeof rr === 'number' ? rr.toFixed(1) : rr}` : null,
-                  `💡 Conf: ${Math.round(conf)}%`,
-                  `🤖 Qaffel AI`,
-                ].filter(Boolean).join('\n')
-                navigator.clipboard.writeText(text)
-              }}
-              className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 rounded-xl text-sm font-medium transition-colors"
+              onClick={handleCopy}
+              className={`flex items-center gap-1.5 px-3 py-2.5 border rounded-xl text-sm font-medium transition-all ${
+                copiedSignal
+                  ? 'bg-green-600/20 border-green-500/40 text-green-300'
+                  : 'bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border-blue-500/30'
+              }`}
             >
-              <Copy size={14} />
-              {isAr ? 'نسخ' : 'Copy'}
+              {copiedSignal ? <CheckCircle size={14} /> : <Copy size={14} />}
+              {copiedSignal ? (isAr ? 'تم!' : 'Copied!') : (isAr ? 'نسخ' : 'Copy')}
+            </button>
+            <button
+              onClick={handleShare}
+              className="flex items-center gap-1.5 px-3 py-2.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-xl text-sm font-medium transition-colors"
+            >
+              <Share2 size={14} />
+              {isAr ? 'مشاركة' : 'Share'}
             </button>
             <button
               onClick={onClose}
@@ -325,6 +437,9 @@ export default function Dashboard() {
       {confluenceSymbol && (
         <ConfluenceModal symbol={confluenceSymbol} onClose={() => setConfluenceSymbol(null)} />
       )}
+
+      {/* PWA Install Banner */}
+      <PWAInstallBanner />
 
       {/* ── Global error banner (always visible) ── */}
       {error && (
