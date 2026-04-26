@@ -1368,6 +1368,209 @@ async def market_session_notifier(app: Application):
         await asyncio.sleep(300)  # فحص كل 5 دقائق
 
 
+# ─── Background: Session Pre-Alert (30 min before London & NY) ───────────────
+# جلسات رئيسية بتوقيت UTC
+_SESSIONS = [
+    {"name_ar": "🌍 جلسة لندن",    "name_en": "London Session",    "utc_hour": 7,  "utc_min": 30},
+    {"name_ar": "🗽 جلسة نيويورك",  "name_en": "New York Session",  "utc_hour": 12, "utc_min": 30},
+    {"name_ar": "🌏 جلسة آسيا",     "name_en": "Asian Session",     "utc_hour": 23, "utc_min": 0 },
+]
+
+_SESSION_NOTIFIED: set = set()   # (date_str, session_name) — منع التكرار
+
+
+async def session_pre_alert(app: Application):
+    """يرسل تنبيهاً قبل 30 دقيقة من بدء كل جلسة رئيسية"""
+    logger.info("⏰ بدء مراقبة الجلسات اليومية…")
+    await asyncio.sleep(60)
+
+    while True:
+        try:
+            now = datetime.now(timezone.utc)
+            # فقط أيام العمل (الاثنين–الجمعة)
+            if now.weekday() < 5:
+                for sess in _SESSIONS:
+                    # وقت الجلسة
+                    sess_dt = now.replace(hour=sess["utc_hour"], minute=sess["utc_min"], second=0, microsecond=0)
+                    delta   = (sess_dt - now).total_seconds()
+                    key     = (now.strftime("%Y-%m-%d"), sess["name_en"])
+
+                    # إذا بقي بين 25 و35 دقيقة ولم نُرسل اليوم
+                    if 25 * 60 <= delta <= 35 * 60 and key not in _SESSION_NOTIFIED:
+                        _SESSION_NOTIFIED.add(key)
+                        mins_left = int(delta // 60)
+
+                        msg = (
+                            f"⏰ *تنبيه جلسة | {sess['name_ar']}*\n"
+                            f"━━━━━━━━━━━━━━━━━━\n"
+                            f"تفتح الجلسة خلال *{mins_left} دقيقة* 🔔\n\n"
+                            f"📋 *جهّز نفسك:*\n"
+                            f"• راجع الإعداد على HTF (4H)\n"
+                            f"• حدد مناطق OB وFVG الفعّالة\n"
+                            f"• لا تدخل صفقة قبل أول 15 دقيقة\n\n"
+                            f"_استخدم /menu → تحليل سريع لأي سوق_"
+                        )
+
+                        subs_data = await _get("/api/v1/bot/active-subscribers")
+                        subs = subs_data.get("subscribers", [])
+                        sent = 0
+                        for s in subs:
+                            tid = s.get("telegram_id")
+                            if not tid:
+                                continue
+                            try:
+                                await app.bot.send_message(
+                                    chat_id=int(tid), text=msg, parse_mode="Markdown"
+                                )
+                                sent += 1
+                                await asyncio.sleep(0.05)
+                            except Exception:
+                                pass
+                        logger.info(f"⏰ تنبيه {sess['name_ar']} → {sent} مشترك")
+
+        except Exception as e:
+            logger.error(f"session_pre_alert: {e}")
+
+        await asyncio.sleep(60)  # فحص كل دقيقة
+
+
+# ─── Background: Daily Morning Briefing ──────────────────────────────────────
+# يُرسل كل يوم عمل الساعة 05:00 UTC (08:00 توقيت الرياض/مكة)
+_BRIEFING_SENT_DATE: str = ""
+
+
+async def daily_briefing(app: Application):
+    """رسالة صباحية يومية: نظرة سريعة على XAUUSD + BTCUSD"""
+    logger.info("📰 بدء مهمة التقرير الصباحي…")
+    await asyncio.sleep(90)
+
+    global _BRIEFING_SENT_DATE
+    while True:
+        try:
+            now      = datetime.now(timezone.utc)
+            today    = now.strftime("%Y-%m-%d")
+            # 05:00 UTC = 08:00 مكة/الرياض — أيام العمل فقط
+            if now.weekday() < 5 and now.hour == 5 and 0 <= now.minute < 5 and _BRIEFING_SENT_DATE != today:
+                _BRIEFING_SENT_DATE = today
+
+                # اجلب تحليل سريع من الـ API لـ XAUUSD و BTCUSD
+                briefing_lines = []
+                for sym in ["XAUUSD", "BTCUSD", "EURUSD"]:
+                    try:
+                        res = await _post(f"/api/v1/bot/analyze",
+                                          json={"symbol": sym, "timeframe": "4h"})
+                        d   = res.get("data", {})
+                        rec = d.get("recommendation", "WAIT")
+                        conf = d.get("ai_confidence_score", 0)
+                        price = d.get("current_price", 0)
+                        rec_ar = {"BUY": "📈 شراء", "SELL": "📉 بيع", "WAIT": "⏳ انتظار"}.get(rec, rec)
+                        mname  = MARKET_NAMES.get(sym, sym)
+                        briefing_lines.append(
+                            f"{mname}: {rec_ar} | ثقة `{conf:.0f}%` | `{_fmt_price(price)}`"
+                        )
+                    except Exception:
+                        briefing_lines.append(f"{MARKET_NAMES.get(sym, sym)}: ⚠️ تعذّر التحليل")
+
+                dow_ar = ["الاثنين","الثلاثاء","الأربعاء","الخميس","الجمعة"][now.weekday()]
+                msg = (
+                    f"🌅 *صباح الخير — التقرير اليومي*\n"
+                    f"━━━━━━━━━━━━━━━━━━━━\n"
+                    f"📅 {dow_ar} {now.strftime('%d/%m/%Y')}\n\n"
+                    f"📊 *نظرة 4H على الأسواق الرئيسية:*\n"
+                    + "\n".join(f"• {l}" for l in briefing_lines) +
+                    f"\n\n"
+                    f"💡 *نصيحة اليوم:*\n"
+                    f"_لا تدخل صفقة دون تأكيد HTF + وجود OB أو FVG واضح_\n\n"
+                    f"_استخدم /menu لتحليل سوق محدد 🎯_"
+                )
+
+                subs_data = await _get("/api/v1/bot/active-subscribers")
+                subs = subs_data.get("subscribers", [])
+                sent = 0
+                for s in subs:
+                    tid = s.get("telegram_id")
+                    if not tid:
+                        continue
+                    try:
+                        await app.bot.send_message(
+                            chat_id=int(tid), text=msg, parse_mode="Markdown"
+                        )
+                        sent += 1
+                        await asyncio.sleep(0.05)
+                    except Exception:
+                        pass
+                logger.info(f"📰 تقرير صباحي → {sent} مشترك")
+
+        except Exception as e:
+            logger.error(f"daily_briefing: {e}")
+
+        await asyncio.sleep(60)
+
+
+# ─── Background: Economic News Warning ────────────────────────────────────────
+# جدول أخبار ثابت — يُرسل تنبيه 60 دقيقة قبل كل حدث
+# الأوقات UTC — يُحدَّث يدوياً أو يُستبدل بـ API مستقبلاً
+_ECON_EVENTS = [
+    # كل أول جمعة من الشهر 12:30 UTC — NFP
+    {"type": "NFP",   "weekday": 4, "utc_hour": 12, "utc_min": 30,
+     "msg_ar": "📊 *تحذير: NFP — وظائف غير الزراعية*\nالخبر بعد ساعة — من أقوى الأخبار تأثيراً على الذهب والدولار.\n⚠️ *لا تفتح صفقات جديدة الآن*\nانتظر 15 دقيقة بعد الإعلان قبل أي دخول."},
+    # كل أول أربعاء من الشهر — FOMC Minutes أو Fed Rate
+    {"type": "FOMC",  "weekday": 2, "utc_hour": 18, "utc_min": 0,
+     "msg_ar": "🏦 *تحذير: قرار الفيدرالي الأمريكي (FOMC)*\nالقرار بعد ساعة — يؤثر بشكل كبير على جميع الأسواق.\n⚠️ *أغلق صفقاتك المفتوحة أو ضيّق الوقف*\nالتقلب سيكون عالياً جداً."},
+    # منتصف كل شهر الثلاثاء 12:30 UTC — CPI
+    {"type": "CPI",   "weekday": 1, "utc_hour": 12, "utc_min": 30,
+     "msg_ar": "📈 *تحذير: مؤشر أسعار المستهلك (CPI)*\nالخبر بعد ساعة — يؤثر على الذهب والعملات تأثيراً كبيراً.\n⚠️ *احذر من الـ stop hunt قبل وبعد الخبر مباشرة*"},
+]
+
+_NEWS_NOTIFIED: set = set()  # (date_str, event_type)
+
+
+async def economic_news_alert(app: Application):
+    """يرسل تحذيراً قبل ساعة من الأخبار الاقتصادية المهمة"""
+    logger.info("📰 بدء مراقبة الأخبار الاقتصادية…")
+    await asyncio.sleep(120)
+
+    while True:
+        try:
+            now   = datetime.now(timezone.utc)
+            today = now.strftime("%Y-%m-%d")
+
+            for ev in _ECON_EVENTS:
+                if now.weekday() != ev["weekday"]:
+                    continue
+                ev_dt  = now.replace(hour=ev["utc_hour"], minute=ev["utc_min"], second=0, microsecond=0)
+                delta  = (ev_dt - now).total_seconds()
+                key    = (today, ev["type"])
+
+                # 55–65 دقيقة قبل الخبر ولم نُرسل اليوم
+                if 55 * 60 <= delta <= 65 * 60 and key not in _NEWS_NOTIFIED:
+                    _NEWS_NOTIFIED.add(key)
+
+                    subs_data = await _get("/api/v1/bot/active-subscribers")
+                    subs = subs_data.get("subscribers", [])
+                    sent = 0
+                    for s in subs:
+                        tid = s.get("telegram_id")
+                        if not tid:
+                            continue
+                        try:
+                            await app.bot.send_message(
+                                chat_id=int(tid),
+                                text=ev["msg_ar"],
+                                parse_mode="Markdown",
+                            )
+                            sent += 1
+                            await asyncio.sleep(0.05)
+                        except Exception:
+                            pass
+                    logger.info(f"📰 تنبيه {ev['type']} → {sent} مشترك")
+
+        except Exception as e:
+            logger.error(f"economic_news_alert: {e}")
+
+        await asyncio.sleep(60)
+
+
 # ─── Main ─────────────────────────────────────────────────────────────────────
 def main():
     if not BOT_TOKEN:
@@ -1386,10 +1589,13 @@ def main():
         asyncio.create_task(monitor_watchlists(application))
         asyncio.create_task(notify_expiry(application))
         asyncio.create_task(market_session_notifier(application))
+        asyncio.create_task(session_pre_alert(application))
+        asyncio.create_task(daily_briefing(application))
+        asyncio.create_task(economic_news_alert(application))
 
     app.post_init = post_init
 
-    logger.success("✅ البوت يعمل — 4 مهام خلفية نشطة")
+    logger.success("✅ البوت يعمل — 7 مهام خلفية نشطة")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 

@@ -11,6 +11,7 @@ import PriceAlertWidget from '../components/PriceAlertWidget'
 import SignalScorecard from '../components/SignalScorecard'
 import RedemptionWidget from '../components/RedemptionWidget'
 import BestOpportunityWidget from '../components/BestOpportunityWidget'
+import EconomicCalendar from '../components/EconomicCalendar'
 
 const T = {
   ar: {
@@ -355,6 +356,9 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* Economic Calendar */}
+      <EconomicCalendar />
 
       {/* Referral Widget */}
       <ReferralWidget />
