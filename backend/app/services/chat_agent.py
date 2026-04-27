@@ -181,6 +181,13 @@ GROQ_SYSTEM_PROMPT = """أنت "كفيل" — محلل تداول ذكي يتح�
 
 ⚠️ للمعلومات فقط، إدارة المخاطر مسؤوليتك.
 
+══ عند طلب الشرح (اشرح / وضّح / ايش يعني) ══
+إذا أُعطيت بيانات تحليل حقيقية:
+• اشرح ماذا تعني الأرقام بلغة بسيطة للمتداول المبتدئ
+• مثال: "OB صاعد عند 4689-4700 يعني منطقة دعم قوية، لو وصلها السعر توقع ارتداد"
+• لا تغير أي رقم، لا تضيف توصية جديدة، لا تقول "أنصح بالشراء"
+• اختم بسؤال: "شو تبي تعرف أكثر؟"
+
 ══ للأسئلة العامة أو المتابعة ══
 أجب بشكل طبيعي ومختصر — بدون تنسيق الجدول أعلاه."""
 
@@ -1127,20 +1134,32 @@ class TradingChatAgent:
                     history.append({"role": "assistant", "content": msg})
                     return reply
 
-        # ── شرح مفهوم / رسالة عامة ──────────────────────────────────────────
-        # is_explain يأخذ الأولوية حتى لو symbol موجود في السياق
+        # ── شرح / تفسير التحليل الأخير أو مفهوم عام ────────────────────────
         is_pure_explain = intent["is_explain"] and not intent["symbol_explicit"]
         if is_pure_explain or (not needs_analysis and not symbol):
-            local_msg = (
-                self._explain_concept_local(user_message.lower())
-                or self._local_general_response(user_message.lower())
-            )
+            groq_ctx = ""
+
+            # إذا فيه تحليل سابق → أعطِ Groq الأرقام الحقيقية ليشرحها
+            if last_analysis and is_pure_explain:
+                sym_ctx = context.get("symbol", "")
+                tf_ctx  = context.get("timeframe", "1h")
+                groq_ctx = (
+                    "المستخدم يطلب شرح أو تفسير التحليل التالي بلغة بسيطة.\n"
+                    "اشرح ماذا تعني هذه الأرقام للمتداول — بدون تغيير أي رقم أو إضافة توصية جديدة.\n\n"
+                    + self._build_analysis_context(last_analysis, sym_ctx, tf_ctx)
+                )
+
             if self.groq_enabled:
-                # Groq يُجيب بحرية على المحادثة العامة
-                raw = await self._call_groq(history)
-                msg = raw.strip() if raw else local_msg
+                raw = await self._call_groq(history, groq_ctx)
+                msg = raw.strip() if raw else (
+                    self._explain_concept_local(user_message.lower())
+                    or self._local_general_response(user_message.lower())
+                )
             else:
-                msg = local_msg
+                msg = (
+                    self._explain_concept_local(user_message.lower())
+                    or self._local_general_response(user_message.lower())
+                )
             reply = {"action": "text", "message": msg}
             history.append({"role": "assistant", "content": msg})
             return reply
