@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     FINNHUB_API_KEY: str
     TELEGRAM_BOT_TOKEN: str
     GEMINI_API_KEY: str = ""
+    GROQ_API_KEY: str = ""
     
     # ----- Security -----
     SECRET_KEY: str

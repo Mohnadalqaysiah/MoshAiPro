@@ -135,6 +135,24 @@ _INTROS_WAIT      = [
 
 settings = get_settings()
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+GROQ_URL   = "https://api.groq.com/openai/v1/chat/completions"
+GROQ_MODEL = "llama-3.3-70b-versatile"
+
+# ─── Groq System Prompt — شرح فقط، لا قرارات ────────────────────────────────
+GROQ_SYSTEM_PROMPT = """أنت "كفيل" — مساعد تداول ذكي يتحدث بالعربية العامية.
+
+قواعد صارمة لا تُخالَف أبداً:
+1. لا تغير أي رقم ورد في بيانات التحليل — Entry، SL، TP، الثقة، كلها تُعرض كما هي
+2. لا تغير التوصية (BUY/SELL/WAIT) — المحرك قرر وأنت تشرح فقط
+3. لا تضيف توصيات من عندك أو تناقض المحرك
+4. إذا لم تُعطَ بيانات تحليل → أجب على سؤال المستخدم بشكل طبيعي فقط
+
+أسلوبك:
+- لهجة عامية طبيعية (يا صديقي، شوف، الوضع هيك، إلخ)
+- مختصر ومباشر — بدون حشو أو مقدمات طويلة
+- استخدم الأرقام من البيانات بالضبط
+- إذا السوق مغلق نبّه لذلك
+- اختم بجملة تشجيعية قصيرة أو سؤال للمتابعة"""
 
 # ─── System Prompt ─────────────────────────────────────────────────────────────
 
@@ -252,8 +270,10 @@ class TradingChatAgent:
     MARKETS = ["XAUUSD", "BTCUSD", "EURUSD", "GBPUSD", "USDJPY", "USDCHF", "ETHUSD"]
 
     def __init__(self):
-        self.api_key = getattr(settings, "GEMINI_API_KEY", "")
-        self.enabled = bool(self.api_key and self.api_key not in ("", "your_gemini_api_key_here"))
+        self.api_key      = getattr(settings, "GEMINI_API_KEY", "")
+        self.groq_api_key = getattr(settings, "GROQ_API_KEY", "")
+        self.enabled      = bool(self.api_key and self.api_key not in ("", "your_gemini_api_key_here"))
+        self.groq_enabled = bool(self.groq_api_key and self.groq_api_key not in ("", "your_groq_api_key_here"))
         self.sessions: dict[str, list] = {}
         self.session_context: dict[str, dict] = {}
 
@@ -965,6 +985,53 @@ class TradingChatAgent:
             logger.error(f"Gemini chat error: {e}")
             return ""
 
+    # ─── Groq Call ───────────────────────────────────────────────────────────
+
+    async def _call_groq(self, messages: list, analysis_context: str = "") -> str:
+        """يستدعي Groq لشرح التحليل بلغة طبيعية — لا يتدخل في الأرقام أو القرارات"""
+        if not self.groq_enabled:
+            return ""
+
+        system_content = GROQ_SYSTEM_PROMPT
+        if analysis_context:
+            system_content += (
+                "\n\n══════════════════\n"
+                "بيانات التحليل الحقيقية (اعرضها كما هي بدون تغيير):\n"
+                + analysis_context
+            )
+
+        msgs = [{"role": "system", "content": system_content}]
+        for m in messages[-8:]:
+            msgs.append({
+                "role": "user" if m["role"] == "user" else "assistant",
+                "content": m["content"]
+            })
+
+        payload = {
+            "model": GROQ_MODEL,
+            "messages": msgs,
+            "temperature": 0.3,
+            "max_tokens": 800,
+        }
+
+        try:
+            async with aiohttp.ClientSession() as sess:
+                async with sess.post(
+                    GROQ_URL,
+                    json=payload,
+                    headers={"Authorization": f"Bearer {self.groq_api_key}"},
+                    timeout=aiohttp.ClientTimeout(total=20)
+                ) as resp:
+                    if resp.status != 200:
+                        body = await resp.text()
+                        logger.error(f"Groq {resp.status}: {body[:200]}")
+                        return ""
+                    data = await resp.json()
+                    return data["choices"][0]["message"]["content"]
+        except Exception as e:
+            logger.error(f"Groq error: {e}")
+            return ""
+
     # ─── Main Chat ───────────────────────────────────────────────────────────
 
     async def chat(self, session_id: str, user_message: str) -> dict:
@@ -1005,28 +1072,33 @@ class TradingChatAgent:
         if last_analysis and not intent["is_analysis"] and not intent["is_chart"]:
             ftype = self._detect_followup(user_message)
             if ftype:
-                msg = self._handle_followup(ftype, last_analysis, context)
+                # Groq يشرح المتابعة بلغة طبيعية إذا متاح
+                if self.groq_enabled:
+                    local_answer = self._handle_followup(ftype, last_analysis, context)
+                    ctx = f"سؤال متابعة من المستخدم عن التحليل السابق.\nالإجابة المحددة:\n{local_answer}"
+                    raw = await self._call_groq(history, ctx)
+                    msg = raw.strip() if raw else local_answer
+                else:
+                    msg = self._handle_followup(ftype, last_analysis, context)
                 if msg:
                     reply = {"action": "text", "message": msg}
                     history.append({"role": "assistant", "content": msg})
                     return reply
 
-        # ── شرح مفهوم ────────────────────────────────────────────────────────
-        if intent["is_explain"] and not intent["is_analysis"]:
-            msg = self._explain_concept_local(user_message.lower())
-            if not msg:
-                msg = self._local_general_response(user_message.lower())
-            reply = {"action": "text", "message": msg}
-            history.append({"role": "assistant", "content": msg})
-            return reply
-
-        # ── رسالة عامة بدون رمز ──────────────────────────────────────────────
+        # ── شرح مفهوم / رسالة عامة ───────────────────────────────────────────
         needs_analysis = intent["is_analysis"] or intent["is_report"] or intent["is_chart"]
-        if not needs_analysis and not symbol:
-            # حاول شرح مفهوم أولاً، ثم رد عام
-            msg = self._explain_concept_local(user_message.lower())
-            if not msg:
-                msg = self._local_general_response(user_message.lower())
+        if (intent["is_explain"] and not intent["is_analysis"]) or (not needs_analysis and not symbol):
+            if self.groq_enabled:
+                raw = await self._call_groq(history)
+                msg = raw.strip() if raw else (
+                    self._explain_concept_local(user_message.lower())
+                    or self._local_general_response(user_message.lower())
+                )
+            else:
+                msg = (
+                    self._explain_concept_local(user_message.lower())
+                    or self._local_general_response(user_message.lower())
+                )
             reply = {"action": "text", "message": msg}
             history.append({"role": "assistant", "content": msg})
             return reply
@@ -1046,15 +1118,28 @@ class TradingChatAgent:
             context["last_analysis"] = analysis
             self.session_context[session_id] = context
 
-        # ── رد مع Gemini (إذا كان مفعّلاً) ──────────────────────────────────
         analysis_ok = bool(analysis) and not analysis.get("error") and analysis.get("current_price")
+        extra_ctx = self._build_analysis_context(analysis, symbol, timeframe) if analysis_ok else ""
+        if candles:
+            extra_ctx += f"\n\nبيانات الشموع متوفرة ({len(candles)} شمعة)"
+
+        # ── Groq (الأولوية الأولى) ───────────────────────────────────────────
+        if self.groq_enabled and analysis_ok:
+            raw = await self._call_groq(history, extra_ctx)
+            if raw and raw.strip():
+                msg    = raw.strip()
+                action = "chart" if intent["is_chart"] else "report" if intent["is_report"] else "analyze"
+                reply  = {"action": action, "message": msg, "symbol": symbol, "timeframe": timeframe}
+                if analysis: reply["data"] = analysis
+                if candles:  reply["candles"] = candles
+                history.append({"role": "assistant", "content": msg})
+                if len(history) > 20:
+                    self.sessions[session_id] = history[-20:]
+                return reply
+
+        # ── Gemini (fallback إذا Groq غير متاح) ─────────────────────────────
         if self.enabled and analysis_ok:
-            extra_ctx = self._build_analysis_context(analysis, symbol, timeframe)
-            if candles:
-                extra_ctx += f"\n\nبيانات الشموع متوفرة ({len(candles)} شمعة)"
-
             raw = await self._call_gemini(history, extra_ctx)
-
             if raw and raw.strip():
                 clean = raw.strip()
                 if clean.startswith("{") or "```json" in clean:
@@ -1067,28 +1152,18 @@ class TradingChatAgent:
                         msg = clean
                 else:
                     msg = clean
-
                 action = "chart" if intent["is_chart"] else "report" if intent["is_report"] else "analyze"
-                reply = {
-                    "action": action,
-                    "message": msg,
-                    "symbol": symbol,
-                    "timeframe": timeframe,
-                }
-                if analysis:
-                    reply["data"] = analysis
-                if candles:
-                    reply["candles"] = candles
-
+                reply  = {"action": action, "message": msg, "symbol": symbol, "timeframe": timeframe}
+                if analysis: reply["data"] = analysis
+                if candles:  reply["candles"] = candles
                 history.append({"role": "assistant", "content": msg})
                 if len(history) > 20:
                     self.sessions[session_id] = history[-20:]
                 return reply
 
-        # ── رد مباشر بدون Gemini ─────────────────────────────────────────────
+        # ── Local fallback (بدون أي API) ────────────────────────────────────
         reply = self._build_direct_response(analysis, symbol, timeframe, intent["is_chart"])
-        if analysis:
-            reply["data"] = analysis
+        if analysis: reply["data"] = analysis
         if candles:
             reply["candles"] = candles
             reply["action"] = "chart"
