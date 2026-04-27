@@ -51,8 +51,8 @@ TIMEFRAMES = ["15m", "1h", "4h", "1day"]
 MONITOR_INTERVAL    = 900    # 15 min — watchlist monitoring
 BROADCAST_INTERVAL  = 60     # 1 min  — new admin signals
 EXPIRY_INTERVAL     = 3600   # 1 hr   — subscription expiry
-ALERT_COOLDOWN      = 60     # min    — per-user per-symbol same-direction cooldown
-DIRECTION_LOCK_MIN  = 240    # min    — قفل الاتجاه: بعد BUY لا يُرسل SELL لـ 4 ساعات
+ALERT_COOLDOWN      = 30     # min    — per-user per-symbol same-direction cooldown (كان 60)
+DIRECTION_LOCK_MIN  = 120    # min    — قفل الاتجاه (كان 240 — خُفِّف لـ 2 ساعة)
 
 # ─── In-memory state ──────────────────────────────────────────────────────────
 # uid → set of symbols
@@ -1143,24 +1143,19 @@ async def monitor_watchlists(app: Application):
                         pass
 
             # ── 2. مراقبة الأزواج
+            # المصدر الوحيد للـ Watchlist هو DB — لا merge مع الذاكرة المحلية
             db_users = (await _get("/api/v1/bot/all-watchlists")).get("users", [])
             merged: dict[int, tuple[set, str, int]] = {}
             for u in db_users:
                 try:
                     tid = int(u["telegram_id"])
-                    # فلترة إلى الرموز المعتمدة فقط — تتجاهل الرموز القديمة في DB
                     wl  = set(s.upper() for s in u.get("watchlist", [])) & _VALID_SYMBOLS
                     if wl:
                         merged[tid] = (wl, u.get("timeframe","1h"), u.get("min_confidence",65))
                 except Exception:
                     pass
-            for uid_, wl in list(_wl_symbols.items()):
-                if uid_ not in merged and wl:
-                    filtered = set(s.upper() for s in wl) & _VALID_SYMBOLS
-                    if filtered:
-                        merged[uid_] = (filtered, _wl_tf.get(uid_,"1h"), _wl_conf.get(uid_,65))
 
-            logger.info(f"🔍 دورة مراقبة — {len(merged)} مستخدم")
+            logger.info(f"🔍 دورة مراقبة — {len(merged)} مستخدم (من DB)")
             now = datetime.now(timezone.utc)
 
             for uid_, (watchlist, tf, min_conf) in merged.items():
