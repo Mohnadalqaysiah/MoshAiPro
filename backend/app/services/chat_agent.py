@@ -1097,38 +1097,44 @@ class TradingChatAgent:
             history.append({"role": "assistant", "content": msg})
             return reply
 
-        # ── كشف أسئلة المتابعة (قبل أي شيء آخر) ────────────────────────────
+        # ══════════════════════════════════════════════════════════════════════
+        # القاعدة الأساسية:
+        #   التحليل والإشارة  → المحرك المحلي دائماً (موثوق، منسق، ثابت)
+        #   المحادثة والشرح   → Groq (لغة طبيعية، أسئلة متابعة، مفاهيم)
+        # ══════════════════════════════════════════════════════════════════════
+
+        # ── كشف أسئلة المتابعة (بدون طلب تحليل جديد) ────────────────────────
         last_analysis = context.get("last_analysis")
-        if last_analysis and not intent["is_analysis"] and not intent["is_chart"]:
+        needs_analysis = intent["is_analysis"] or intent["is_report"] or intent["is_chart"]
+
+        if last_analysis and not needs_analysis and not symbol:
             ftype = self._detect_followup(user_message)
             if ftype:
-                # Groq يشرح المتابعة بلغة طبيعية إذا متاح
-                if self.groq_enabled:
-                    local_answer = self._handle_followup(ftype, last_analysis, context)
-                    ctx = f"سؤال متابعة من المستخدم عن التحليل السابق.\nالإجابة المحددة:\n{local_answer}"
-                    raw = await self._call_groq(history, ctx)
-                    msg = raw.strip() if raw else local_answer
-                else:
-                    msg = self._handle_followup(ftype, last_analysis, context)
-                if msg:
+                local_answer = self._handle_followup(ftype, last_analysis, context)
+                if local_answer:
+                    # Groq يُحسّن صياغة الإجابة المحلية
+                    if self.groq_enabled:
+                        ctx = f"المستخدم يسأل سؤال متابعة. الإجابة الصحيحة:\n{local_answer}\nأعد صياغتها بلغة عامية طبيعية ومختصرة بدون تغيير أي رقم."
+                        raw = await self._call_groq(history, ctx)
+                        msg = raw.strip() if raw else local_answer
+                    else:
+                        msg = local_answer
                     reply = {"action": "text", "message": msg}
                     history.append({"role": "assistant", "content": msg})
                     return reply
 
-        # ── شرح مفهوم / رسالة عامة ───────────────────────────────────────────
-        needs_analysis = intent["is_analysis"] or intent["is_report"] or intent["is_chart"]
-        if (intent["is_explain"] and not intent["is_analysis"]) or (not needs_analysis and not symbol):
+        # ── شرح مفهوم / رسالة عامة (بدون رمز محدد) ─────────────────────────
+        if (intent["is_explain"] and not needs_analysis) or (not needs_analysis and not symbol):
+            local_msg = (
+                self._explain_concept_local(user_message.lower())
+                or self._local_general_response(user_message.lower())
+            )
             if self.groq_enabled:
+                # Groq يُجيب بحرية على المحادثة العامة
                 raw = await self._call_groq(history)
-                msg = raw.strip() if raw else (
-                    self._explain_concept_local(user_message.lower())
-                    or self._local_general_response(user_message.lower())
-                )
+                msg = raw.strip() if raw else local_msg
             else:
-                msg = (
-                    self._explain_concept_local(user_message.lower())
-                    or self._local_general_response(user_message.lower())
-                )
+                msg = local_msg
             reply = {"action": "text", "message": msg}
             history.append({"role": "assistant", "content": msg})
             return reply
@@ -1136,67 +1142,27 @@ class TradingChatAgent:
         if not symbol:
             symbol = "XAUUSD"
 
-        # ── جلب البيانات ────────────────────────────────────────────────────
+        # ── جلب التحليل من المحرك ────────────────────────────────────────────
         logger.info(f"🔍 Chat: تحليل {symbol} {timeframe}")
         analysis = await self._fetch_analysis(symbol, timeframe)
         candles = []
         if intent["is_chart"]:
             candles = await self._fetch_candles(symbol, timeframe, limit=60)
 
-        # ── حفظ التحليل في السياق للمتابعة ──────────────────────────────────
+        # حفظ التحليل للمتابعة
         if analysis and not analysis.get("error"):
             context["last_analysis"] = analysis
+            context["symbol"]        = symbol
+            context["timeframe"]     = timeframe
             self.session_context[session_id] = context
 
-        analysis_ok = bool(analysis) and not analysis.get("error") and analysis.get("current_price")
-        extra_ctx = self._build_analysis_context(analysis, symbol, timeframe) if analysis_ok else ""
-        if candles:
-            extra_ctx += f"\n\nبيانات الشموع متوفرة ({len(candles)} شمعة)"
-
-        # ── Groq (الأولوية الأولى) ───────────────────────────────────────────
-        if self.groq_enabled and analysis_ok:
-            raw = await self._call_groq(history, extra_ctx)
-            if raw and raw.strip():
-                msg    = raw.strip()
-                action = "chart" if intent["is_chart"] else "report" if intent["is_report"] else "analyze"
-                reply  = {"action": action, "message": msg, "symbol": symbol, "timeframe": timeframe}
-                if analysis: reply["data"] = analysis
-                if candles:  reply["candles"] = candles
-                history.append({"role": "assistant", "content": msg})
-                if len(history) > 20:
-                    self.sessions[session_id] = history[-20:]
-                return reply
-
-        # ── Gemini (fallback إذا Groq غير متاح) ─────────────────────────────
-        if self.enabled and analysis_ok:
-            raw = await self._call_gemini(history, extra_ctx)
-            if raw and raw.strip():
-                clean = raw.strip()
-                if clean.startswith("{") or "```json" in clean:
-                    try:
-                        if "```json" in clean:
-                            clean = clean.split("```json")[1].split("```")[0].strip()
-                        obj = json.loads(clean)
-                        msg = obj.get("message", clean)
-                    except:
-                        msg = clean
-                else:
-                    msg = clean
-                action = "chart" if intent["is_chart"] else "report" if intent["is_report"] else "analyze"
-                reply  = {"action": action, "message": msg, "symbol": symbol, "timeframe": timeframe}
-                if analysis: reply["data"] = analysis
-                if candles:  reply["candles"] = candles
-                history.append({"role": "assistant", "content": msg})
-                if len(history) > 20:
-                    self.sessions[session_id] = history[-20:]
-                return reply
-
-        # ── Local fallback (بدون أي API) ────────────────────────────────────
+        # ── التحليل والإشارة: المحرك المحلي دائماً ──────────────────────────
+        # Groq وGemini لا يُستخدمان هنا — الـ format مضمون ومنسق
         reply = self._build_direct_response(analysis, symbol, timeframe, intent["is_chart"])
         if analysis: reply["data"] = analysis
         if candles:
             reply["candles"] = candles
-            reply["action"] = "chart"
+            reply["action"]  = "chart"
 
         history.append({"role": "assistant", "content": reply["message"]})
         if len(history) > 20:
