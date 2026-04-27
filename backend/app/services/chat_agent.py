@@ -368,18 +368,17 @@ class TradingChatAgent:
                 "غاز", "الغاز", "gas", "natgas", "natural gas", "غاز طبيعي",
             ],
         }
+        symbol_explicit = False  # هل ذُكر الرمز صراحةً في الرسالة الحالية؟
+
         for sym, words in aliases.items():
             if any(w in msg for w in words):
                 symbol = sym
+                symbol_explicit = True
                 break
 
         if not symbol:
-            symbol = ctx.get("symbol")
-
-        # كشف أي رمز مباشر كتبه المستخدم (مثل: AAPL, tsla, MSFT, aapl)
-        if not symbol:
+            # كشف أي رمز مباشر كتبه المستخدم (مثل: AAPL, tsla, MSFT)
             import re
-            # ابحث بحروف كبيرة أو صغيرة
             raw_sym = re.search(r'\b([A-Za-z]{2,6})\b', message)
             if raw_sym:
                 candidate = raw_sym.group(1).upper()
@@ -388,6 +387,10 @@ class TradingChatAgent:
                           "RSI","ATR","EMA","SMA","BOS","CHO","FVG","OB","HTF","LTF"}
                 if candidate not in ignore and len(candidate) >= 2:
                     symbol = candidate
+                    symbol_explicit = True
+
+        if not symbol:
+            symbol = ctx.get("symbol")  # من السياق فقط — غير صريح
 
         # ── كشف الإطار الزمني (عامية موسعة) ─────────────────────────────────
         timeframe = None
@@ -458,12 +461,13 @@ class TradingChatAgent:
             "معنى", "يعني ايش", "يعني شو", "ايش معنى", "شو يعني",
         ])
 
-        # إذا ذُكر رمز وحده = تحليل
-        if symbol and not is_analysis and not is_chart and not is_report:
+        # إذا ذُكر الرمز صراحةً في الرسالة (ليس من السياق) وليس شرحاً = تحليل
+        if symbol_explicit and not is_analysis and not is_chart and not is_report and not is_explain:
             is_analysis = True
 
         return {
             "symbol": symbol,
+            "symbol_explicit": symbol_explicit,
             "timeframe": timeframe,
             "is_analysis": is_analysis,
             "is_chart": is_chart,
@@ -1123,8 +1127,10 @@ class TradingChatAgent:
                     history.append({"role": "assistant", "content": msg})
                     return reply
 
-        # ── شرح مفهوم / رسالة عامة (بدون رمز محدد) ─────────────────────────
-        if (intent["is_explain"] and not needs_analysis) or (not needs_analysis and not symbol):
+        # ── شرح مفهوم / رسالة عامة ──────────────────────────────────────────
+        # is_explain يأخذ الأولوية حتى لو symbol موجود في السياق
+        is_pure_explain = intent["is_explain"] and not intent["symbol_explicit"]
+        if is_pure_explain or (not needs_analysis and not symbol):
             local_msg = (
                 self._explain_concept_local(user_message.lower())
                 or self._local_general_response(user_message.lower())
