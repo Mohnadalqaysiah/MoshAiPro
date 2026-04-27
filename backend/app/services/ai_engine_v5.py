@@ -314,8 +314,7 @@ class MoshAIEngineV5:
 
             # ── SMART RESCUE LAYER — near-threshold signals recovered as BUY/SELL ─
             # Runs after decision_finalizer + institutional_gate.
-            # If delta is close to threshold + real sweep + no strong HTF conflict
-            # + viable RR → passes signal as RESCUED_SIGNAL (not just WAIT).
+            # Volatility adaptation (SCALP_BOOST/SILENCE_BOOST) applied inside.
             if analysis.get("institutional_rejected") or \
                analysis.get("recommendation") == "WAIT":
                 analysis = self._smart_rescue_layer(
@@ -2977,7 +2976,13 @@ class MoshAIEngineV5:
                     f"[{symbol}/{timeframe}]"
                 )
 
-        # ── Condition 1: delta >= threshold - 3 ──────────────────────────────
+        # ── Volatility Adaptation — SCALP_BOOST / SILENCE_BOOST ─────────────
+        vola = self._get_volatility_mode(analysis, symbol, timeframe)
+        delta_tolerance = vola["delta_tolerance"]   # 0, 2, or 3
+        rescue_min_rr   = max(1.0, vola["min_rr"])  # never below 1.0
+        analysis["volatility_mode"] = vola["mode"]
+
+        # ── Condition 1: delta >= threshold - tolerance ───────────────────────
         decision_meta = analysis.get("decision_meta", {})
         raw_delta     = abs(float(decision_meta.get("score_delta", 0)))
         eff_delta     = float(analysis.get("effective_delta", raw_delta))
@@ -2986,10 +2991,12 @@ class MoshAIEngineV5:
             or analysis.get("_calib_delta")
             or 17
         )
-        if eff_delta < threshold - 3:
+        effective_threshold = threshold - delta_tolerance
+        if eff_delta < effective_threshold:
             logger.debug(
                 f"SMART_RESCUE SKIP [{symbol}/{timeframe}]: "
-                f"eff_delta={eff_delta:.1f} < threshold-3={threshold-3:.1f}"
+                f"eff_delta={eff_delta:.1f} < threshold-{delta_tolerance}={effective_threshold:.1f} "
+                f"[mode={vola['mode']}]"
             )
             return analysis
 
@@ -3008,10 +3015,23 @@ class MoshAIEngineV5:
             logger.debug(f"SMART_RESCUE SKIP [{symbol}/{timeframe}]: confirmed fake sweep")
             return analysis
 
-        # ── Condition 4: RR >= 1.1 (already checked >= 1.0 above) ────────────
-        if rr < 1.1:
-            logger.debug(f"SMART_RESCUE SKIP [{symbol}/{timeframe}]: RR={rr:.2f} < 1.1")
+        # ── Condition 4: RR >= rescue_min_rr (1.0 in SCALP/SILENCE, 1.1 in SWING) ──
+        if rr < rescue_min_rr:
+            logger.debug(
+                f"SMART_RESCUE SKIP [{symbol}/{timeframe}]: "
+                f"RR={rr:.2f} < {rescue_min_rr} [mode={vola['mode']}]"
+            )
             return analysis
+
+        # SILENCE_BOOST: سماح بإشارة واحدة فقط لكل رمز/إطار إذا confidence ≥ 55%
+        if vola["mode"] == "SILENCE_BOOST":
+            conf = float(analysis.get("ai_confidence_score") or 0)
+            if conf < 55:
+                logger.debug(
+                    f"SMART_RESCUE SKIP [{symbol}/{timeframe}]: "
+                    f"SILENCE_BOOST requires conf≥55, got {conf:.0f}"
+                )
+                return analysis
 
         # ── All conditions met → rescue as full BUY/SELL ─────────────────────
         direction = (
@@ -3181,6 +3201,66 @@ class MoshAIEngineV5:
         if wr >= 0.55: return 1.1
         if wr >= 0.40: return 1.1
         return 1.3   # winrate < 40%
+
+    # ─── SMART MODE: Volatility Adaptation ──────────────────────────────────
+
+    def _get_volatility_mode(self, analysis: dict, symbol: str, timeframe: str) -> dict:
+        """
+        يكشف حالة السوق ويحدد وضع المحرك:
+        - SCALP_BOOST: ATR منخفض أو سوق RANGING → تخفيف الشروط
+        - SILENCE_BOOST: ما في إشارة منذ > 4 ساعات → سماح بسكالب واحد
+        - SWING: حالة عادية
+
+        Returns dict with keys: mode, delta_tolerance, min_rr, silence_hours
+        """
+        import time as _t
+
+        # ── قراءة ATR وحالة السوق ─────────────────────────────────────────
+        atr       = float(analysis.get("atr") or 0)
+        price     = float(analysis.get("current_price") or 1)
+        structure = analysis.get("market_structure", {})
+        trend     = structure.get("trend", "").upper()
+        is_ranging = "RANGING" in trend or "MIXED" in trend
+
+        # ATR نسبي (% من السعر) — منخفض إذا < 0.3%
+        atr_pct   = (atr / price * 100) if price > 0 else 0
+        low_atr   = atr_pct < 0.30
+
+        # ── كشف الصمت (أكثر من 4 ساعات بدون إشارة) ────────────────────────
+        key = f"{symbol.upper()}_{timeframe}"
+        last_issued = self._last_signal_issued.get(key, 0)
+        silence_hours = (_t.time() - last_issued) / 3600 if last_issued else 999
+        long_silence  = silence_hours > 4.0
+
+        # ── تحديد الوضع ────────────────────────────────────────────────────
+        if is_ranging or low_atr:
+            mode           = "SCALP_BOOST"
+            delta_tolerance = 3    # تخفيف delta بـ -3
+            min_rr          = 1.0  # قبول RR ≥ 1.0
+        elif long_silence:
+            mode           = "SILENCE_BOOST"
+            delta_tolerance = 2    # تخفيف أخف
+            min_rr          = 1.0
+        else:
+            mode           = "SWING"
+            delta_tolerance = 0    # قواعد عادية
+            min_rr          = 1.1
+
+        logger.debug(
+            f"[VOLA_MODE] {symbol}/{timeframe}: mode={mode} "
+            f"atr_pct={atr_pct:.2f}% ranging={is_ranging} "
+            f"silence={silence_hours:.1f}h low_atr={low_atr}"
+        )
+
+        return {
+            "mode":            mode,
+            "delta_tolerance": delta_tolerance,
+            "min_rr":          min_rr,
+            "silence_hours":   round(silence_hours, 1),
+            "atr_pct":         round(atr_pct, 3),
+            "low_atr":         low_atr,
+            "is_ranging":      is_ranging,
+        }
 
     def check_cooldown(self, symbol: str, timeframe: str, override_sec: float = None) -> bool:
         import time as _t
