@@ -4,7 +4,7 @@ Plans, Binance USDT Payment, Status
 """
 import copy, json
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from loguru import logger
@@ -130,6 +130,7 @@ def get_status(
 @router.post("/pay")
 def submit_payment(
     data: PaymentIn,
+    background_tasks: BackgroundTasks,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -154,6 +155,22 @@ def submit_payment(
     db.refresh(payment)
 
     logger.info(f"💳 Payment submitted: user={user.email} plan={data.plan} tx={data.tx_id}")
+
+    # ── تنبيه الأدمن عبر Telegram ────────────────────────────────────────
+    from app.services.admin_notify import notify_admin_telegram
+    _plan_name = {"weekly": "أسبوعية ($7)", "monthly": "شهرية ($30)"}.get(data.plan, data.plan)
+    _msg = (
+        f"💳 <b>طلب دفع جديد!</b>\n"
+        f"━━━━━━━━━━━━━━━\n"
+        f"📧 المستخدم: <code>{user.email}</code>\n"
+        f"📦 الباقة: {_plan_name}\n"
+        f"💰 المبلغ: ${plan_info['price_usd']} USDT\n"
+        f"🌐 الشبكة: {data.network}\n"
+        f"🔑 TxID: <code>{data.tx_id}</code>\n"
+        f"🆔 Payment ID: {payment.id}"
+    )
+    background_tasks.add_task(notify_admin_telegram, _msg)
+
     return {
         "success": True,
         "message": "تم استلام طلب الدفع. سيتم التفعيل خلال 30 دقيقة بعد التحقق.",

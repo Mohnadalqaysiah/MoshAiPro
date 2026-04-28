@@ -155,6 +155,20 @@ def register(
     token = create_token(user.id, user.role)
     logger.info(f"✅ New user registered: {user.email} (ref={user.referred_by_code or 'none'})")
 
+    # ── تنبيه الأدمن عبر Telegram ────────────────────────────────────────
+    from app.services.admin_notify import notify_admin_telegram
+    _ref_note = f"\n🔗 إحالة: <code>{user.referred_by_code}</code>" if user.referred_by_code else ""
+    _msg = (
+        f"👤 <b>مستخدم جديد سجّل!</b>\n"
+        f"━━━━━━━━━━━━━━━\n"
+        f"📧 البريد: <code>{user.email}</code>\n"
+        f"👤 الاسم: {user.full_name or '—'}\n"
+        f"🎁 الخطة: تجريبية\n"
+        f"📊 تحليلات: {user.trial_analyses_left} | محادثات: {user.trial_chat_left}"
+        f"{_ref_note}"
+    )
+    background_tasks.add_task(notify_admin_telegram, _msg)
+
     # ── إيميل ترحيب في الخلفية ──────────────────────────────────────────
     smtp_pass = settings.SMTP_PASSWORD
     if smtp_pass:

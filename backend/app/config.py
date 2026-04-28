@@ -60,6 +60,7 @@ class Settings(BaseSettings):
     
     # ----- Telegram -----
     TELEGRAM_ADMIN_IDS: str = ""
+    ADMIN_TELEGRAM_ID: str = ""   # Numeric chat ID for @Mgaisi admin notifications
     TRIAL_PERIOD_DAYS: int = 7
     MAX_SIGNALS_PER_DAY: int = 10
     
