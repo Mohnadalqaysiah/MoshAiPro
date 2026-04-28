@@ -765,12 +765,14 @@ class MoshAIEngineV5:
             volatility = "NORMAL"
 
         # ── 2. Dynamic score delta ────────────────────────────────────────────
+        # Anchored to observed market reality (avg_delta ≈ 11-15 across all markets)
+        # Quality gates (sweep, RR, structure) remain — threshold controls sensitivity
         if market_state == "TRENDING":
-            required_delta = 15   # was 18 — anchored closer to real market avg (13-15)
+            required_delta = 13
         elif market_state == "RANGING":
-            required_delta = 14   # was 17
+            required_delta = 12
         else:  # VOLATILE
-            required_delta = 18   # was 25 — VOLATILE+LOW_ATR = choppy, not explosive
+            required_delta = 13   # VOLATILE ≠ explosive; choppy markets have low deltas
 
         # ── 3. Dynamic min RR (market_state-aware + winrate) ──────────────────
         wr = self.get_winrate()
@@ -854,12 +856,10 @@ class MoshAIEngineV5:
             )
 
         # ── 9. Apply hard limits (clamp) ──────────────────────────────────────
-        # Dynamic delta floor: max(13, avg_delta × 0.85)
-        # Old: max(16.0, ...) — this was overriding calibration even in weak markets
-        # With avg=13.1: max(16, 11.1)=16 → locked threshold at 16 regardless of market
-        # New: max(13.0, ...) — allows calibration to reach its computed value
-        avg_delta_floor = self._get_avg_delta(symbol, timeframe)
-        delta_min = max(13.0, avg_delta_floor * 0.85)
+        # Use fixed floor only — avg_delta_floor * 0.85 caused stale-history inflation
+        # After restart: _signal_history is empty → _get_avg_delta returns default
+        # Old default 18 → 18*0.85=15.3 floor locked ALL thresholds at 15.3 post-restart
+        delta_min = self._CALIB_DELTA_MIN    # 13 — fixed floor, no history dependency
         required_delta  = max(delta_min,               min(self._CALIB_DELTA_MAX,    required_delta))
         min_rr          = max(self._CALIB_RR_MIN,      min(self._CALIB_RR_MAX,       min_rr))
         entry_tolerance = max(self._CALIB_TOL_MIN,     min(self._CALIB_TOL_MAX,      entry_tolerance))
@@ -930,7 +930,9 @@ class MoshAIEngineV5:
         """Average effective_delta over recent analyses."""
         hist = self._signal_history.get(f"{symbol.upper()}_{timeframe}", [])
         deltas = [h["delta"] for h in hist if h["delta"] > 0]
-        return sum(deltas) / len(deltas) if deltas else 18.0
+        # Default was 18.0 — caused 18*0.85=15.3 floor after every Docker restart
+        # (history is in-memory; restart wipes it → stale 18 inflated the floor forever)
+        return sum(deltas) / len(deltas) if deltas else 12.0
 
     # ═══════════════════════════════════════════════════════════════════════
     # EXPLAINABILITY LAYER — Audit-grade trace for every decision
