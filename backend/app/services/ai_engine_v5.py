@@ -2112,8 +2112,10 @@ class MoshAIEngineV5:
             rr      = round(tp_dist / sl_dist, 2) if sl_dist > 0 else 0
             levels["risk_reward"]      = rr
             analysis["risk_reward_ratio"] = rr
-            if rr < min_rr:
-                return self._hard_reject(analysis, f"RR_{rr:.2f}_BELOW_MIN_{min_rr:.1f}")
+            # Use recovery floor if recovery succeeded (may be lower than original min_rr)
+            effective_min_rr = analysis.get("_recovery_min_rr", min_rr)
+            if rr < effective_min_rr:
+                return self._hard_reject(analysis, f"RR_{rr:.2f}_BELOW_MIN_{effective_min_rr:.1f}")
 
         # Rule 8: Distance filter — both are soft warnings only
         if tp_dist / entry < 0.003:
@@ -2938,9 +2940,10 @@ class MoshAIEngineV5:
           - Never tighten SL beyond OB high/low (structure must remain valid)
           - Never modify delta < 20 signals
         """
-        _RR_HARD_FLOOR   = 0.9    # absolute minimum even after recovery
+        _RR_HARD_FLOOR   = 0.9    # floor for strategies 1 & 2 (TP/SL optimisation)
+        _RR_FLOOR_HIGH   = 0.80   # floor for strategy 3 (delta >= 30, very strong)
         _DELTA_THRESHOLD = 25     # minimum delta to attempt recovery
-        _DELTA_EXCEPTION = 25     # minimum delta for 0.9 exception
+        _DELTA_EXCEPTION = 25     # minimum delta for high-delta exception
 
         # Read effective delta — from decision_meta or effective_delta field
         meta        = analysis.get("decision_meta", {})
@@ -3042,20 +3045,27 @@ class MoshAIEngineV5:
                                 recovered = True
                                 break
 
-        # ── Strategy 3: High-Delta Exception (RR ≥ 0.9 allowed) ─────────────
-        # Last resort — accept slightly below 1.0 when delta is very high
+        # ── Strategy 3: High-Delta Exception ─────────────────────────────────
+        # Last resort — accept RR slightly below 1.0 for very strong signals
+        # delta >= 30: allow RR >= 0.80 (EV positive at 70%+ winrate)
+        # delta >= 25: allow RR >= 0.90
         if not recovered and eff_delta >= _DELTA_EXCEPTION:
-            bos_list = struct.get("bos_events", [])
-            has_bos  = bool(bos_list)
-            new_rr   = round(abs(tp1 - entry) / sl_dist, 2)
-            if has_bos and new_rr >= _RR_HARD_FLOOR:
-                recovery_method = f"HIGH_DELTA_EXCEPTION_delta={eff_delta:.0f}"
+            bos_list     = struct.get("bos_events", [])
+            has_bos      = bool(bos_list)
+            new_rr       = round(abs(tp1 - entry) / sl_dist, 2)
+            rr_floor_s3  = _RR_FLOOR_HIGH if eff_delta >= 30 else _RR_HARD_FLOOR
+            if has_bos and new_rr >= rr_floor_s3:
+                recovery_method = f"HIGH_DELTA_EXCEPTION_delta={eff_delta:.0f}_floor={rr_floor_s3}"
+                analysis["_recovery_min_rr"] = rr_floor_s3   # gate will use this instead of 1.1
                 recovered = True
 
         if recovered and recovery_method:
             analysis["smart_rr_recovered"]  = True
             analysis["rr_recovery_method"]  = recovery_method
             analysis["rr_before_recovery"]  = rr
+            # Ensure _recovery_min_rr is set (strategies 1&2 use _RR_HARD_FLOOR)
+            if "_recovery_min_rr" not in analysis:
+                analysis["_recovery_min_rr"] = _RR_HARD_FLOOR
             logger.info(
                 f"SMART_RR_RECOVERY [{symbol}/{timeframe}]: "
                 f"rr={rr:.2f}→recovered method={recovery_method} delta={eff_delta:.0f}"
