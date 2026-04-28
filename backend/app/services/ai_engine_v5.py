@@ -766,11 +766,11 @@ class MoshAIEngineV5:
 
         # ── 2. Dynamic score delta ────────────────────────────────────────────
         if market_state == "TRENDING":
-            required_delta = 18
+            required_delta = 15   # was 18 — anchored closer to real market avg (13-15)
         elif market_state == "RANGING":
-            required_delta = 17   # sweep scoring factor replaces strict delta filter
+            required_delta = 14   # was 17
         else:  # VOLATILE
-            required_delta = 25
+            required_delta = 18   # was 25 — VOLATILE+LOW_ATR = choppy, not explosive
 
         # ── 3. Dynamic min RR (market_state-aware + winrate) ──────────────────
         wr = self.get_winrate()
@@ -821,8 +821,10 @@ class MoshAIEngineV5:
         if emergency_active:
             avg_delta = self._get_avg_delta(symbol, timeframe)
 
-            # 1. Delta adaptive: anchor to recent market avg + 1 (floor=18)
-            required_delta = max(18, avg_delta + 1)
+            # 1. Delta adaptive: anchor to recent market avg + 1 (floor=13)
+            # Old floor was 18 — this prevented emergency mode from ever helping
+            # when avg_delta is 12-17, max(18, avg+1) = 18 always → no relaxation
+            required_delta = max(13, avg_delta + 1)
 
             # 2. HTF conflict weight × 0.6 (passed to confidence calibration)
             analysis["_htf_penalty_multiplier"] = 0.6
@@ -851,10 +853,12 @@ class MoshAIEngineV5:
             )
 
         # ── 9. Apply hard limits (clamp) ──────────────────────────────────────
-        # Dynamic delta floor: max(16, avg_delta × 0.85) instead of fixed 20
-        # Emergency mode already set required_delta above — clamp only, don't re-override
+        # Dynamic delta floor: max(13, avg_delta × 0.85)
+        # Old: max(16.0, ...) — this was overriding calibration even in weak markets
+        # With avg=13.1: max(16, 11.1)=16 → locked threshold at 16 regardless of market
+        # New: max(13.0, ...) — allows calibration to reach its computed value
         avg_delta_floor = self._get_avg_delta(symbol, timeframe)
-        delta_min = max(16.0, avg_delta_floor * 0.85)
+        delta_min = max(13.0, avg_delta_floor * 0.85)
         required_delta  = max(delta_min,               min(self._CALIB_DELTA_MAX,    required_delta))
         min_rr          = max(self._CALIB_RR_MIN,      min(self._CALIB_RR_MAX,       min_rr))
         entry_tolerance = max(self._CALIB_TOL_MIN,     min(self._CALIB_TOL_MAX,      entry_tolerance))
