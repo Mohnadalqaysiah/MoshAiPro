@@ -51,11 +51,11 @@ _MAX_PRICE_GAP_USD = {
 # منطق: الإطار 1h يعني الشمعة تدوم 60 دقيقة → لا فائدة من إعادة التحليل كل 10 دقائق
 # TTL = ربع مدة الشمعة كحد أدنى لإعطاء وقت كافٍ لتشكّل الأنماط
 _SIGNAL_CACHE_TTL = {
-    "15m":   15 * 60,   # 15 دقيقة  (رُفع من 5  — توفير ~66% من calls الـ 15m)
-    "30m":   30 * 60,   # 30 دقيقة  (رُفع من 10 — توفير ~66%)
-    "1h":    60 * 60,   # ساعة كاملة (رُفع من 25 — توفير ~58%)
-    "4h":   180 * 60,   # 3 ساعات   (رُفع من 50 — توفير ~72%)
-    "1d":   480 * 60,   # 8 ساعات   (رُفع من 2  — يومي لا يتغير سريعاً)
+    "15m":   10 * 60,   # 10 دقائق — كل شمعة جديدة تستحق تحليلاً طازجاً
+    "30m":   15 * 60,   # 15 دقيقة
+    "1h":    20 * 60,   # 20 دقيقة — was 60 min (كان يمنع 3 شمعات كاملة)
+    "4h":    60 * 60,   # 60 دقيقة — was 180 min
+    "1d":   240 * 60,   # 4 ساعات  — was 8h
 }
 
 # نسبة تغير السعر التي تُلغي الكاش — مُشدَّدة لمنع إرسال مستويات قديمة
@@ -712,15 +712,15 @@ class MoshAIEngineV5:
     # ═══════════════════════════════════════════════════════════════════════
 
     # Hard limits — never exceeded regardless of market conditions
-    _CALIB_DELTA_MIN      = 20
+    _CALIB_DELTA_MIN      = 15       # was 20 — let calibration reach its computed value (17 for ranging)
     _CALIB_DELTA_MAX      = 35
-    _CALIB_RR_MIN         = 1.1
+    _CALIB_RR_MIN         = 1.0      # was 1.1 — RR≥1.0 is still a valid trade; 1.1 was over-filtering ranging setups
     _CALIB_RR_MAX         = 2.0
     _CALIB_TOL_MIN        = 0.0025   # 0.25%
     _CALIB_TOL_MAX        = 0.0060   # 0.60%
-    _CALIB_COOLDOWN_MIN   = 3600     # 1 hour
+    _CALIB_COOLDOWN_MIN   = 1800     # was 3600 — allow signal every 30 min (not forced 1h gap)
     _CALIB_COOLDOWN_MAX   = 14400    # 4 hours
-    _CALIB_SILENCE_HOURS  = 6        # silence window that triggers relaxed delta
+    _CALIB_SILENCE_HOURS  = 3        # was 6 — trigger silence relaxation after 3h not 6h
 
     def _auto_calibrate_thresholds(
         self,
