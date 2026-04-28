@@ -821,10 +821,11 @@ class MoshAIEngineV5:
         if emergency_active:
             avg_delta = self._get_avg_delta(symbol, timeframe)
 
-            # 1. Delta adaptive: anchor to recent market avg + 1 (floor=13)
-            # Old floor was 18 — this prevented emergency mode from ever helping
-            # when avg_delta is 12-17, max(18, avg+1) = 18 always → no relaxation
-            required_delta = max(13, avg_delta + 1)
+            # 1. Delta adaptive: set threshold BELOW recent avg (90% of avg)
+            # Old: max(13, avg+1) = ABOVE avg — opposite of relaxation!
+            # When avg=14.5: max(13, 14.5+1)=15.5 was STRICTER than base threshold
+            # New: max(12, avg*0.90) = slightly below avg → actually relaxes
+            required_delta = max(12, avg_delta * 0.90)
 
             # 2. HTF conflict weight × 0.6 (passed to confidence calibration)
             analysis["_htf_penalty_multiplier"] = 0.6
@@ -1675,8 +1676,14 @@ class MoshAIEngineV5:
 
         # ── SCORING LAYER: effective_delta ────────────────────────────────────
         # All quality signals feed into one number. No rejections here.
-        # RANGING = +2.0 buffer (harder market), TRENDING/VOLATILE = +1.5
-        delta_buffer = 2.0 if is_ranging else 1.5
+        # RANGING = +2.5 buffer, VOLATILE = +2.0, TRENDING = +1.5
+        # VOLATILE markets often have weak sweep detection despite real moves
+        if is_ranging:
+            delta_buffer = 2.5
+        elif mode == "VOLATILE" or market_mode.get("mode", "").upper() in ("VOLATILE", "BREAKOUT"):
+            delta_buffer = 2.0    # was 1.5 — VOLATILE suppresses sweep detection
+        else:
+            delta_buffer = 1.5
         effective_delta = (
             abs(score_delta)
             + sweep_delta_adj
