@@ -2102,7 +2102,18 @@ class MoshAIEngineV5:
         calib_rr = analysis.get("_calib_min_rr")
         min_rr = calib_rr if calib_rr is not None else self._get_min_rr()
         if rr < min_rr:
-            return self._hard_reject(analysis, f"RR_{rr:.2f}_BELOW_MIN_{min_rr:.1f}")
+            # ── SMART RR RECOVERY — attempt TP/SL optimisation before rejecting ──
+            analysis, levels, rr = self._smart_rr_recovery(
+                analysis, levels, entry, sl, tp1, rr, min_rr, rec, symbol, timeframe
+            )
+            sl_dist = abs(entry - float(levels.get("stop_loss") or sl))
+            tp1     = float(levels.get("tp1") or tp1)
+            tp_dist = abs(tp1 - entry)
+            rr      = round(tp_dist / sl_dist, 2) if sl_dist > 0 else 0
+            levels["risk_reward"]      = rr
+            analysis["risk_reward_ratio"] = rr
+            if rr < min_rr:
+                return self._hard_reject(analysis, f"RR_{rr:.2f}_BELOW_MIN_{min_rr:.1f}")
 
         # Rule 8: Distance filter — both are soft warnings only
         if tp_dist / entry < 0.003:
@@ -2895,6 +2906,166 @@ class MoshAIEngineV5:
                 if any(c.startswith(t) for t in tier):
                     return c
         return candidates[0]
+
+    def _smart_rr_recovery(
+        self,
+        analysis: dict,
+        levels: dict,
+        entry: float,
+        sl: float,
+        tp1: float,
+        rr: float,
+        min_rr: float,
+        rec: str,
+        symbol: str,
+        timeframe: str,
+    ):
+        """
+        SMART RR RECOVERY — tries to improve RR before rejecting a high-delta signal.
+
+        Only activates when:
+          - effective_delta >= 25  (strong confluence)
+          - RR is recoverable (not catastrophically bad)
+
+        Strategy (in order):
+          1. TP Extension  — extend TP1 to next liquidity level (BSL/SSL)
+          2. TP from OB    — use OB boundary as TP if further than current TP1
+          3. SL Tightening — move SL inside OB boundary (only if structure valid)
+          4. High-Delta Exception — accept RR ≥ 0.9 when delta ≥ 25 + BOS confirmed
+
+        Hard limits:
+          - Never allow recovered RR < 0.9
+          - Never tighten SL beyond OB high/low (structure must remain valid)
+          - Never modify delta < 20 signals
+        """
+        _RR_HARD_FLOOR   = 0.9    # absolute minimum even after recovery
+        _DELTA_THRESHOLD = 25     # minimum delta to attempt recovery
+        _DELTA_EXCEPTION = 25     # minimum delta for 0.9 exception
+
+        # Read effective delta — from decision_meta or effective_delta field
+        meta        = analysis.get("decision_meta", {})
+        eff_delta   = float(analysis.get("effective_delta") or
+                            abs(float(meta.get("score_delta") or 0)))
+        score_delta = abs(float((analysis.get("decision_meta") or {}).get("score_delta") or
+                                analysis.get("effective_delta") or 0))
+
+        # Skip recovery for weak signals
+        if eff_delta < _DELTA_THRESHOLD and score_delta < _DELTA_THRESHOLD:
+            return analysis, levels, rr
+
+        atr       = float(levels.get("atr") or 0)
+        liquidity = analysis.get("liquidity", {})
+        struct    = analysis.get("market_structure", {})
+        ob        = analysis.get("order_blocks", {})
+        sl_dist   = abs(entry - sl)
+
+        recovered = False
+        recovery_method = None
+
+        # ── Strategy 1: TP Extension to next liquidity ───────────────────────
+        if rec == "BUY":
+            bsl_levels = [
+                float(v) for v in [
+                    liquidity.get("nearest_bsl"),
+                    liquidity.get("bsl_1"),
+                    liquidity.get("bsl_2"),
+                ] if v and float(v) > entry * 1.002
+            ]
+            bsl_levels.sort()
+            for liq_tp in bsl_levels:
+                new_rr = round(abs(liq_tp - entry) / sl_dist, 2)
+                if new_rr >= _RR_HARD_FLOOR:
+                    atr_offset = atr * 0.3 if atr else 0
+                    levels["tp1"] = round(liq_tp - atr_offset, 5)
+                    levels["tp2"] = round(liq_tp, 5)
+                    levels["tp3"] = round(liq_tp + (atr * 1.5 if atr else liq_tp * 0.005), 5)
+                    recovery_method = f"TP_EXTENDED_TO_BSL_{liq_tp:.5g}"
+                    recovered = True
+                    break
+        else:  # SELL
+            ssl_levels = [
+                float(v) for v in [
+                    liquidity.get("nearest_ssl"),
+                    liquidity.get("ssl_1"),
+                    liquidity.get("ssl_2"),
+                ] if v and float(v) < entry * 0.998
+            ]
+            ssl_levels.sort(reverse=True)
+            for liq_tp in ssl_levels:
+                new_rr = round(abs(entry - liq_tp) / sl_dist, 2)
+                if new_rr >= _RR_HARD_FLOOR:
+                    atr_offset = atr * 0.3 if atr else 0
+                    levels["tp1"] = round(liq_tp + atr_offset, 5)
+                    levels["tp2"] = round(liq_tp, 5)
+                    levels["tp3"] = round(liq_tp - (atr * 1.5 if atr else liq_tp * 0.005), 5)
+                    recovery_method = f"TP_EXTENDED_TO_SSL_{liq_tp:.5g}"
+                    recovered = True
+                    break
+
+        # ── Strategy 2: SL Tightening to OB boundary ─────────────────────────
+        if not recovered:
+            bos_list    = struct.get("bos_events", [])
+            has_bos     = (
+                any("BULLISH" in b.get("type", "") for b in bos_list) if rec == "BUY"
+                else any("BEARISH" in b.get("type", "") for b in bos_list)
+            )
+            # Only tighten SL if BOS is confirmed (structure remains valid)
+            if has_bos:
+                ob_list = (ob.get("bullish_obs", []) if rec == "BUY"
+                           else ob.get("bearish_obs", []))
+                for zone in ob_list:
+                    try:
+                        z_lo = float(zone.get("low", 0))
+                        z_hi = float(zone.get("high", 0))
+                    except (TypeError, ValueError):
+                        continue
+                    if rec == "BUY" and z_lo > 0 and z_lo < entry:
+                        tight_sl   = z_lo * 0.9998   # just below OB low
+                        new_sl_dist = abs(entry - tight_sl)
+                        if new_sl_dist > 0 and new_sl_dist < sl_dist:
+                            new_rr = round(abs(tp1 - entry) / new_sl_dist, 2)
+                            if new_rr >= _RR_HARD_FLOOR:
+                                levels["stop_loss"] = round(tight_sl, 5)
+                                recovery_method = f"SL_TIGHTENED_TO_OB_LOW_{z_lo:.5g}"
+                                sl_dist  = new_sl_dist
+                                recovered = True
+                                break
+                    elif rec == "SELL" and z_hi > 0 and z_hi > entry:
+                        tight_sl    = z_hi * 1.0002   # just above OB high
+                        new_sl_dist = abs(tight_sl - entry)
+                        if new_sl_dist > 0 and new_sl_dist < sl_dist:
+                            new_rr = round(abs(entry - tp1) / new_sl_dist, 2)
+                            if new_rr >= _RR_HARD_FLOOR:
+                                levels["stop_loss"] = round(tight_sl, 5)
+                                recovery_method = f"SL_TIGHTENED_TO_OB_HIGH_{z_hi:.5g}"
+                                sl_dist  = new_sl_dist
+                                recovered = True
+                                break
+
+        # ── Strategy 3: High-Delta Exception (RR ≥ 0.9 allowed) ─────────────
+        # Last resort — accept slightly below 1.0 when delta is very high
+        if not recovered and eff_delta >= _DELTA_EXCEPTION:
+            bos_list = struct.get("bos_events", [])
+            has_bos  = bool(bos_list)
+            new_rr   = round(abs(tp1 - entry) / sl_dist, 2)
+            if has_bos and new_rr >= _RR_HARD_FLOOR:
+                recovery_method = f"HIGH_DELTA_EXCEPTION_delta={eff_delta:.0f}"
+                recovered = True
+
+        if recovered and recovery_method:
+            analysis["smart_rr_recovered"]  = True
+            analysis["rr_recovery_method"]  = recovery_method
+            analysis["rr_before_recovery"]  = rr
+            logger.info(
+                f"SMART_RR_RECOVERY [{symbol}/{timeframe}]: "
+                f"rr={rr:.2f}→recovered method={recovery_method} delta={eff_delta:.0f}"
+            )
+
+        # Recompute final rr from potentially updated levels
+        new_sl_dist = abs(entry - float(levels.get("stop_loss") or sl))
+        new_tp1     = float(levels.get("tp1") or tp1)
+        new_rr      = round(abs(new_tp1 - entry) / new_sl_dist, 2) if new_sl_dist > 0 else 0
+        return analysis, levels, new_rr
 
     def _hard_reject(self, analysis: dict, reason: str) -> dict:
         rec = analysis.get("recommendation", "?")
