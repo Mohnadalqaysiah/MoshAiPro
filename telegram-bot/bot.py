@@ -1453,11 +1453,11 @@ async def daily_briefing(app: Application):
                 for sym in ["XAUUSD", "BTCUSD", "EURUSD"]:
                     try:
                         res = await _post(f"/api/v1/bot/analyze",
-                                          json={"symbol": sym, "timeframe": "4h"})
+                                          params={"symbol": sym, "timeframe": "4h"})
                         d   = res.get("data", {})
                         rec = d.get("recommendation", "WAIT")
-                        conf = d.get("ai_confidence_score", 0)
-                        price = d.get("current_price", 0)
+                        conf = float(d.get("ai_confidence_score") or d.get("confidence_score") or 0)
+                        price = float(d.get("current_price") or 0)
                         rec_ar = {"BUY": "📈 شراء", "SELL": "📉 بيع", "WAIT": "⏳ انتظار"}.get(rec, rec)
                         mname  = MARKET_NAMES.get(sym, sym)
                         briefing_lines.append(
