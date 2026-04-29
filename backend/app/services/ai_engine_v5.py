@@ -712,7 +712,7 @@ class MoshAIEngineV5:
     # ═══════════════════════════════════════════════════════════════════════
 
     # Hard limits — never exceeded regardless of market conditions
-    _CALIB_DELTA_MIN      = 15       # was 20 — let calibration reach its computed value (17 for ranging)
+    _CALIB_DELTA_MIN      = 10       # floor only — base thresholds are 12-13; floor must be below them
     _CALIB_DELTA_MAX      = 35
     _CALIB_RR_MIN         = 1.0      # was 1.1 — RR≥1.0 is still a valid trade; 1.1 was over-filtering ranging setups
     _CALIB_RR_MAX         = 2.0
