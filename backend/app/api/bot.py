@@ -415,10 +415,21 @@ def bot_new_signals(
     _MAX_SIGNAL_AGE = {"1m":5,"5m":10,"15m":20,"30m":30,"1h":60,"4h":180,"1d":720}
     now = datetime.now(timezone.utc)
 
+    # الحد الأدنى للثقة للبث — إشارات أضعف من هذا لا ترسل للمشتركين
+    _MIN_BROADCAST_CONFIDENCE = 70
+
     result = []
     for s in signals:
         # ── لا تبث إشارة إذا السوق مغلق (إلا الكريبتو) ──────────────────
         if not _smart_data.is_market_open(s.market):
+            continue
+
+        # ── لا تبث إشارة ثقتها أقل من الحد الأدنى ───────────────────────
+        sig_conf = float(s.ai_confidence or 0)
+        if sig_conf < _MIN_BROADCAST_CONFIDENCE:
+            s.broadcast_sent = True
+            db.commit()
+            logger.info(f"⏭️  Signal #{s.id} [{s.market}] skipped — conf={sig_conf:.0f}% < {_MIN_BROADCAST_CONFIDENCE}%")
             continue
 
         # ── لا تبث إشارة قديمة (سعرها لم يعد صالحاً) ────────────────────
@@ -426,7 +437,6 @@ def bot_new_signals(
             age_min = (now - s.created_at).total_seconds() / 60
             max_age = _MAX_SIGNAL_AGE.get(s.timeframe or "1h", 60)
             if age_min > max_age:
-                # الإشارة قديمة جداً — علّمها كمُبثّة لتجنب إعادة محاولتها
                 s.broadcast_sent = True
                 db.commit()
                 logger.info(f"⏭️  Signal #{s.id} [{s.market}/{s.timeframe}] skipped — age {age_min:.0f}min > {max_age}min")
