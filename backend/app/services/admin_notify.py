@@ -7,11 +7,28 @@ from loguru import logger
 from app.config import get_settings
 
 
+def _resolve_bot_token(settings) -> str:
+    """Check SiteSettings DB for telegram_bot_token override, fall back to env var."""
+    try:
+        from app.database import SessionLocal
+        from app.models.site_settings import SiteSettings
+        db = SessionLocal()
+        try:
+            row = db.query(SiteSettings).filter(SiteSettings.key == "telegram_bot_token").first()
+            if row and row.value and row.value.strip():
+                return row.value.strip()
+        finally:
+            db.close()
+    except Exception:
+        pass
+    return (settings.TELEGRAM_BOT_TOKEN or "").strip()
+
+
 def notify_admin_telegram(message: str) -> None:
     """Send a Telegram message to the admin (ADMIN_TELEGRAM_ID). Runs in background."""
     settings = get_settings()
     admin_id = settings.ADMIN_TELEGRAM_ID.strip()
-    bot_token = settings.TELEGRAM_BOT_TOKEN.strip()
+    bot_token = _resolve_bot_token(settings)
 
     if not admin_id or not bot_token:
         return  # Not configured — silently skip

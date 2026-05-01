@@ -869,9 +869,20 @@ def send_email(
 
 # ─── Telegram Messages ────────────────────────────────────────────────────────
 
-def _send_telegram_message(chat_id: str, text: str) -> bool:
+def _get_bot_token(db: Session) -> str:
+    """Returns bot token: DB override first, then env var."""
+    row = db.query(SiteSettings).filter(SiteSettings.key == "telegram_bot_token").first()
+    if row and row.value and row.value.strip():
+        return row.value.strip()
+    return _settings.TELEGRAM_BOT_TOKEN or ""
+
+
+def _send_telegram_message(chat_id: str, text: str, db: Session = None) -> bool:
     """إرسال رسالة تيليجرام واحدة"""
-    url = f"https://api.telegram.org/bot{_settings.TELEGRAM_BOT_TOKEN}/sendMessage"
+    token = _get_bot_token(db) if db else (_settings.TELEGRAM_BOT_TOKEN or "")
+    if not token:
+        return False
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
     try:
         resp = requests.post(url, json=payload, timeout=10)
@@ -901,7 +912,7 @@ def send_telegram_message(
     db: Session = Depends(get_db),
 ):
     """إرسال رسالة تيليجرام — للمحددين أو للجميع"""
-    if not _settings.TELEGRAM_BOT_TOKEN:
+    if not _get_bot_token(db):
         raise HTTPException(400, "TELEGRAM_BOT_TOKEN غير مضبوط")
 
     # ── بناء الرسالة ───────────────────────────────────────────────────────
@@ -935,7 +946,7 @@ def send_telegram_message(
 
     # ── إرسال فوري للأعداد الصغيرة، خلفية للكبيرة ─────────────────────────
     if total <= 5:
-        sent = sum(1 for cid in chat_ids if _send_telegram_message(cid, text))
+        sent = sum(1 for cid in chat_ids if _send_telegram_message(cid, text, db))
         return {"message": f"✅ تم إرسال {sent}/{total} رسالة", "sent": sent, "total": total}
     else:
         background.add_task(_broadcast_task, chat_ids, text)
@@ -1329,7 +1340,7 @@ def send_performance_report(
     users = q.all()
 
     if data.channel == "telegram":
-        if not _settings.TELEGRAM_BOT_TOKEN:
+        if not _get_bot_token(db):
             raise HTTPException(400, "TELEGRAM_BOT_TOKEN غير مضبوط")
         tg_users = [u for u in users if u.telegram_id]
         if not tg_users:

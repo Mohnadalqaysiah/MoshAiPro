@@ -238,6 +238,7 @@ export default function Admin() {
   const [settingSaving, setSettingSaving] = useState('')
   const [settingMsg, setSettingMsg] = useState(null)
   const [settingsSubTab, setSettingsSubTab] = useState('site')
+  const [showBotToken, setShowBotToken] = useState(false)
 
   const [adminProfile, setAdminProfile] = useState({ current_password:'', new_email:'', new_password:'' })
   const [adminProfileSaving, setAdminProfileSaving] = useState(false)
@@ -1460,6 +1461,35 @@ export default function Admin() {
                         </div>
                       )
                     })}
+
+                    {/* ── Bot Token (sensitive) ───────────────────────────── */}
+                    <div className="bg-gray-900 border border-orange-900/40 rounded-xl p-4">
+                      <label className="block text-sm text-gray-300 font-medium mb-1">توكن بوت تيليجرام</label>
+                      <p className="text-xs text-gray-500 mb-2">يُستخدم لإرسال الإشارات والإشعارات · يُخزَّن في قاعدة البيانات ويُلغي قيمة .env</p>
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <input
+                            type={showBotToken ? 'text' : 'password'}
+                            value={settingEdits['telegram_bot_token'] ?? ''}
+                            onChange={e => setSettingEdits(s => ({...s, telegram_bot_token: e.target.value}))}
+                            placeholder="123456789:AAF..."
+                            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:ring-1 focus:ring-orange-500 pr-10"
+                            dir="ltr"
+                          />
+                          <button type="button" onClick={() => setShowBotToken(v => !v)}
+                            className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200 text-xs px-1">
+                            {showBotToken ? '🙈' : '👁'}
+                          </button>
+                        </div>
+                        <button disabled={settingSaving === 'telegram_bot_token'} onClick={() => saveSetting('telegram_bot_token')}
+                          className="flex items-center gap-1 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition">
+                          {settingSaving === 'telegram_bot_token' ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle size={13}/>} حفظ
+                        </button>
+                      </div>
+                      {siteSettings['telegram_bot_token']?.value && (
+                        <p className="mt-2 text-xs text-green-400 flex items-center gap-1"><CheckCircle size={11}/> توكن مخزَّن في قاعدة البيانات · يُستخدم حالياً</p>
+                      )}
+                    </div>
                   </div>
 
                   <div className="space-y-4">
