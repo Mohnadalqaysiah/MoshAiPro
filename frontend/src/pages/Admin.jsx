@@ -1044,6 +1044,7 @@ export default function Admin() {
                     <thead>
                       <tr className="text-gray-400 border-b border-gray-800">
                         <th className="pb-2 text-right font-medium pr-2">ID</th>
+                        <th className="pb-2 text-right font-medium">المستخدم</th>
                         <th className="pb-2 text-right font-medium">الزوج</th>
                         <th className="pb-2 text-right font-medium">النوع</th>
                         <th className="pb-2 text-right font-medium">الحالة</th>
@@ -1080,6 +1081,7 @@ export default function Admin() {
                           <>
                             <tr key={s.id} className="hover:bg-gray-800/40 transition-colors">
                               <td className="py-2 pr-2 text-gray-500">{s.id}</td>
+                              <td className="py-2 text-gray-400 max-w-[120px] truncate" title={s.user_email}>{s.user_email?.split('@')[0] ?? `#${s.user_id}`}</td>
                               <td className="py-2 font-semibold text-white">{s.market}</td>
                               <td className="py-2">
                                 <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${typeColor}`}>{s.signal_type}</span>

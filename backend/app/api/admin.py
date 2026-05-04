@@ -994,7 +994,8 @@ def admin_list_signals(
     db: Session = Depends(get_db),
 ):
     """قائمة كل الإشارات للأدمن"""
-    q = db.query(Signal)
+    from sqlalchemy.orm import joinedload
+    q = db.query(Signal).options(joinedload(Signal.user))
     if status != "all":
         try:
             q = q.filter(Signal.status == SignalStatus(status))
@@ -1147,9 +1148,11 @@ def _market_info(m: MarketConfig) -> dict:
 
 
 def _signal_info(s: Signal) -> dict:
+    user_email = s.user.email if hasattr(s, 'user') and s.user else None
     return {
         "id":            s.id,
         "user_id":       s.user_id,
+        "user_email":    user_email,
         "market":        s.market,
         "signal_type":   s.signal_type.value if hasattr(s.signal_type, 'value') else s.signal_type,
         "status":        s.status.value if hasattr(s.status, 'value') else s.status,
