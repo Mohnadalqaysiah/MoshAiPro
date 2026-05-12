@@ -2,10 +2,16 @@ import { useState } from 'react'
 import axios from 'axios'
 import { Mail, Send, CheckCircle, AlertCircle, Clock } from 'lucide-react'
 import PublicLayout from '../components/PublicLayout'
+import useSEO from '../hooks/useSEO'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 export default function Contact() {
+  useSEO({
+    title: 'تواصل معنا | Qaffel AI',
+    description: 'تواصل مع فريق Qaffel AI للدعم الفني أو الاستفسارات عن منصة إشارات التداول.',
+    canonical: 'https://qaffel.com/contact',
+  })
   const [form, setForm]     = useState({ name: '', email: '', subject: '', message: '' })
   const [sent, setSent]     = useState(false)
   const [loading, setLoading] = useState(false)

@@ -1,7 +1,13 @@
 import { Link } from 'react-router-dom'
 import PublicLayout from '../components/PublicLayout'
+import useSEO from '../hooks/useSEO'
 
 export default function Privacy() {
+  useSEO({
+    title: 'سياسة الخصوصية | Qaffel AI',
+    description: 'سياسة الخصوصية لمنصة Qaffel AI — كيف نجمع بياناتك ونحميها ونستخدمها.',
+    canonical: 'https://qaffel.com/privacy',
+  })
   return (
     <PublicLayout>
       {/* Content */}

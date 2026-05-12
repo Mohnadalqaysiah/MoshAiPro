@@ -1,8 +1,15 @@
+import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Users, Brain, Globe, Shield, Award, TrendingUp, CheckCircle, Star } from 'lucide-react'
 import PublicLayout from '../components/PublicLayout'
+import useSEO from '../hooks/useSEO'
 
 export default function About() {
+  useSEO({
+    title: 'من نحن | Qaffel AI — منصة إشارات تداول بالذكاء الاصطناعي',
+    description: 'تعرّف على Qaffel AI — فريق من خبراء التداول والذكاء الاصطناعي يبني أفضل منصة إشارات ICT/SMC للمتداولين العرب.',
+    canonical: 'https://qaffel.com/about',
+  })
   return (
     <PublicLayout>
 

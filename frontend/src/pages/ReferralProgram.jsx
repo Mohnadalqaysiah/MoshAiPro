@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useLang } from '../contexts/LangContext'
 import { useAuth } from '../contexts/AuthContext'
+import useSEO from '../hooks/useSEO'
 import {
   Gift, Users, DollarSign, Star, ChevronRight, ChevronLeft,
   Share2, CheckCircle, Zap, TrendingUp, Shield, Copy, ArrowUpRight
@@ -181,6 +182,11 @@ const T = {
 }
 
 export default function ReferralProgram() {
+  useSEO({
+    title: 'برنامج الإحالات | Qaffel AI — اربح بدعوة أصدقائك',
+    description: 'انضم لبرنامج إحالات Qaffel AI واكسب عمولة على كل مشترك تدعوه. دخل سلبي مستمر من منصة إشارات التداول الذكية.',
+    canonical: 'https://qaffel.com/referral',
+  })
   const { lang, toggle } = useLang()
   const { user } = useAuth()
   const isAr = lang === 'ar'

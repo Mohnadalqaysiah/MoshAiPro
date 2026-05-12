@@ -1,7 +1,13 @@
 import { Link } from 'react-router-dom'
 import PublicLayout from '../components/PublicLayout'
+import useSEO from '../hooks/useSEO'
 
 export default function Terms() {
+  useSEO({
+    title: 'الشروط والأحكام | Qaffel AI',
+    description: 'الشروط والأحكام لاستخدام منصة Qaffel AI لإشارات التداول بالذكاء الاصطناعي.',
+    canonical: 'https://qaffel.com/terms',
+  })
   return (
     <PublicLayout>
       {/* Content */}

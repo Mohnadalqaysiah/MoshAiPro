@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
 import { Check, Zap, Star, Copy, CheckCircle, AlertCircle, Shield, Clock } from 'lucide-react'
 import PublicLayout from '../components/PublicLayout'
+import useSEO from '../hooks/useSEO'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -103,6 +104,11 @@ const DEFAULT_PLANS = [
 ]
 
 export default function Pricing() {
+  useSEO({
+    title: 'أسعار الاشتراك | Qaffel AI — $7 أسبوعي أو $30 شهري',
+    description: 'اشترك في Qaffel AI بـ $7/أسبوع أو $30/شهر. احصل على إشارات تداول ICT/SMC غير محدودة للذهب والبيتكوين والفوركس مباشرة على Telegram.',
+    canonical: 'https://qaffel.com/pricing',
+  })
   const { user } = useAuth()
   const { lang } = useLang()
   const isAr = lang === 'ar'
