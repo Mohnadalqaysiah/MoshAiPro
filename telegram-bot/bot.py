@@ -101,6 +101,19 @@ def _fmt_pts(v) -> str:
     return f"{float(v):.2f}" if v is not None else "—"
 
 
+def get_confidence(data: dict) -> float:
+    if not isinstance(data, dict):
+        return 0.0
+    return float(
+        data.get("ai_confidence_score")
+        or data.get("ai_confidence")
+        or data.get("confidence_score")
+        or (data.get("out") or {}).get("confidence")
+        or (data.get("confluence") or {}).get("confidence")
+        or 0
+    )
+
+
 async def _get(path: str, params: dict = None, timeout: int = 15) -> dict:
     try:
         async with aiohttp.ClientSession() as s:
@@ -268,7 +281,7 @@ def fmt_analysis(data: dict, symbol: str, timeframe: str) -> str:
     rec        = data.get("recommendation", "WATCH")
     emoji      = {"BUY":"🟢","SELL":"🔴","WATCH":"⚪","WAIT":"⚪"}.get(rec, "⚪")
     rec_ar     = {"BUY":"شراء","SELL":"بيع","WATCH":"مراقبة","WAIT":"انتظار"}.get(rec, rec)
-    conf       = data.get("ai_confidence_score", 0)
+    conf       = get_confidence(data)
     price      = data.get("current_price", 0)
     lvls       = data.get("levels", {})
     trade_type = data.get("trade_type", "")        # SWING | SCALP | WAIT
@@ -356,7 +369,7 @@ def fmt_new_signal(s: dict) -> str:
     emoji      = "🟢" if stype == "BUY" else "🔴"
     rec_ar     = "شراء" if stype == "BUY" else "بيع"
     mname      = MARKET_NAMES.get(s.get("market",""), s.get("market",""))
-    conf       = s.get("ai_confidence", 0)
+    conf       = get_confidence(s)
     tf         = TF_LABELS.get(s.get("timeframe",""), s.get("timeframe",""))
     entry      = _fmt_price(s.get("entry_price"))
     sl         = _fmt_price(s.get("stop_loss"))
@@ -681,7 +694,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             for s in sigs:
                 stype  = s.get("signal_type", "BUY")
                 status = s.get("status", "ACTIVE")
-                conf   = s.get("ai_confidence") or s.get("ai_confidence_score") or 0
+                conf   = get_confidence(s)
                 mname  = MARKET_NAMES.get(s.get("market",""), s.get("market",""))
                 entry  = _fmt_price(s.get("entry_price"))
                 tp1    = _fmt_price(s.get("take_profit_1"))
@@ -1178,7 +1191,7 @@ async def monitor_watchlists(app: Application):
                         continue
 
                     rec  = data.get("recommendation","WATCH")
-                    conf = data.get("ai_confidence_score", 0)
+                    conf = get_confidence(data)
                     if rec not in ("BUY","SELL") or conf < min_conf:
                         continue
 
@@ -1456,8 +1469,12 @@ async def daily_briefing(app: Application):
                             f"/api/v1/bot/analyze?symbol={sym}&timeframe=4h"
                         )
                         d   = res.get("data", {})
+                        if not d or d.get("error") or "recommendation" not in d:
+                            briefing_lines.append(f"{MARKET_NAMES.get(sym, sym)}: ⚠️ تعذّر التحليل")
+                            continue
+
                         rec = d.get("recommendation", "WAIT")
-                        conf = float(d.get("ai_confidence_score") or d.get("confidence_score") or 0)
+                        conf = get_confidence(d)
                         price = float(d.get("current_price") or 0)
                         rec_ar = {"BUY": "📈 شراء", "SELL": "📉 بيع", "WAIT": "⏳ انتظار"}.get(rec, rec)
                         mname  = MARKET_NAMES.get(sym, sym)
