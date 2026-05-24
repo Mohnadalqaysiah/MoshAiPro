@@ -1652,6 +1652,11 @@ class MoshAIEngineV5:
                 self._DECISION_THRESHOLD_RANGE  if is_ranging
                 else self._DECISION_THRESHOLD_TREND
             )
+            # Gold needs slightly lower decision threshold because XAUUSD
+            # often generates valid setups with smaller directional delta.
+            if symbol.upper() == "XAUUSD":
+                threshold = max(15.0, threshold - 5.0)
+                analysis["xau_threshold_adjusted"] = threshold
 
         # ── 3. Sweep assessment — scoring factor, not hard gate ──────────────
         # Sweep presence/quality ADJUSTS score_delta, it does NOT reject alone.
@@ -2349,18 +2354,23 @@ class MoshAIEngineV5:
 
         # ── Rule 6: XAUUSD Special Filter ────────────────────────────────────
         if sym_upper == "XAUUSD":
-            # Require HTF alignment
+            # Require HTF alignment for swing signals only.
+            # Allow shorter-term XAUUSD scalp setups to pass without strict HTF alignment.
             htf_aligned = analysis.get("gate_htf_aligned", False)
-            if not htf_aligned:
+            if timeframe in ("1h", "4h", "1d") and not htf_aligned:
                 return _block("XAUUSD_REQUIRES_HTF_ALIGNMENT")
-            # Require valid zone (not in NEUTRAL — must be in correct P/D)
-            if rec == "BUY" and "PREMIUM" in pd_raw:
-                return _block("XAUUSD_BUY_IN_PREMIUM_ZONE")
-            if rec == "SELL" and "DISCOUNT" in pd_raw:
-                return _block("XAUUSD_SELL_IN_DISCOUNT_ZONE")
-            # Require RR ≥ 1.3
-            if rr > 0 and rr < 1.3:
-                return _block(f"XAUUSD_RR_{rr:.2f}_BELOW_1.3")
+
+            # Require valid zone for swings; ignore premium/discount hard block on scalps.
+            if timeframe in ("1h", "4h", "1d"):
+                if rec == "BUY" and "PREMIUM" in pd_raw:
+                    return _block("XAUUSD_BUY_IN_PREMIUM_ZONE")
+                if rec == "SELL" and "DISCOUNT" in pd_raw:
+                    return _block("XAUUSD_SELL_IN_DISCOUNT_ZONE")
+
+            # Require minimum RR
+            min_xau_rr = 1.3 if timeframe in ("1h", "4h", "1d") else 1.0
+            if rr > 0 and rr < min_xau_rr:
+                return _block(f"XAUUSD_RR_{rr:.2f}_BELOW_{min_xau_rr}")
 
         # ── Rule 7: Final Level Coherence ────────────────────────────────────
         if entry > 0 and sl > 0:
