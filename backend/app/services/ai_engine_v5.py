@@ -707,6 +707,57 @@ class MoshAIEngineV5:
         return analysis
 
     # ═══════════════════════════════════════════════════════════════════════
+    # MARKET REGIME DETECTION — Adaptive behavior based on confluence quality
+    # ═══════════════════════════════════════════════════════════════════════
+
+    def _detect_market_regime(self, analysis: dict) -> str:
+        """
+        Classify market into 4 regimes based on confluence, sweep quality, and volatility.
+        Returns: DEAD | NORMAL | ACTIVE | VOLATILE
+
+        DEAD:    confluence < 35, no sweep, weak structure
+        NORMAL:  confluence 35-50, mixed signals
+        ACTIVE:  confluence > 50, strong sweep, aligned structure
+        VOLATILE: high ATR + low confluence = choppy/ranging with spikes
+        """
+        confluence = analysis.get("confluence", {})
+        conf_score = float(confluence.get("confidence", 0))
+        direction  = confluence.get("direction", "WAIT")
+        
+        sweep_data = analysis.get("liquidity_sweep", {})
+        has_sweep  = sweep_data.get("has_bullish_sweep") or sweep_data.get("has_bearish_sweep")
+        sweep_quality = sweep_data.get("sweep_analysis", {}).get("sweep_quality", "NONE")
+        
+        struct = analysis.get("market_structure", {})
+        trend = str(struct.get("trend", "RANGING")).upper()
+        
+        levels = analysis.get("levels", {})
+        atr = float(levels.get("atr") or 0)
+        current_price = float(analysis.get("current_price") or 1)
+        atr_pct = (atr / current_price * 100) if current_price > 0 else 0
+        
+        # Confluence quality thresholds
+        strong_confluence = conf_score > 50
+        weak_confluence = conf_score < 35
+        
+        # Sweep quality
+        strong_sweep = sweep_quality in ("STRONG", "VERY_STRONG")
+        
+        # Structure alignment
+        has_bos = bool(struct.get("bos_events", []))
+        aligned_structure = direction != "WAIT" and has_bos
+        
+        # Classify regime
+        if weak_confluence and not has_sweep and not aligned_structure:
+            return "DEAD"
+        elif strong_confluence and (strong_sweep or aligned_structure):
+            return "ACTIVE"
+        elif atr_pct > 0.010 and conf_score < 45:
+            return "VOLATILE"  # Choppy + weak structure
+        else:
+            return "NORMAL"
+
+    # ═══════════════════════════════════════════════════════════════════════
     # AUTO CALIBRATION ENGINE — Adapts thresholds to market + performance
     # "Adapt thresholds — not logic"
     # ═══════════════════════════════════════════════════════════════════════
@@ -721,6 +772,7 @@ class MoshAIEngineV5:
     _CALIB_COOLDOWN_MIN   = 1800     # was 3600 — allow signal every 30 min (not forced 1h gap)
     _CALIB_COOLDOWN_MAX   = 14400    # 4 hours
     _CALIB_SILENCE_HOURS  = 3        # was 6 — trigger silence relaxation after 3h not 6h
+    _WINRATE_THRESHOLD    = 0.68     # don't raise thresholds if winrate already high
 
     def _auto_calibrate_thresholds(
         self,
@@ -764,25 +816,49 @@ class MoshAIEngineV5:
         else:
             volatility = "NORMAL"
 
-        # ── 2. Dynamic score delta ────────────────────────────────────────────
-        # Anchored to observed market reality (avg_delta ≈ 11-15 across all markets)
-        # Quality gates (sweep, RR, structure) remain — threshold controls sensitivity
-        if market_state == "TRENDING":
-            required_delta = 13
-        elif market_state == "RANGING":
-            required_delta = 12
-        else:  # VOLATILE
-            required_delta = 13   # VOLATILE ≠ explosive; choppy markets have low deltas
-
+        # ── 2. Market Regime Detection ────────────────────────────────────────
+        # Detect current market condition to adapt thresholds
+        market_regime = self._detect_market_regime(analysis)
+        
+        # ── 2b. Adaptive Delta Logic (regime-aware) ────────────────────────────
+        # DEAD market: remain strict (avoid forcing signals in dead zones)
+        # NORMAL market: standard thresholds
+        # ACTIVE market: relax slightly (allow refined entry optimization)
+        # VOLATILE market: moderate approach (avoid over-trading choppy conditions)
+        
+        regime_base_delta = {
+            "DEAD": 13,
+            "ACTIVE": 11,
+            "VOLATILE": 14,
+            "NORMAL": 12,
+        }.get(market_regime, 12)
+        required_delta = regime_base_delta
+        
+        delta_ranges = {
+            "RANGING": (10, 18),
+            "TRENDING": (12, 20),
+            "VOLATILE": (14, 22),
+        }
+        state_delta_floor, state_delta_ceiling = delta_ranges.get(market_state, (12, 20))
+        if market_regime == "DEAD":
+            state_delta_floor = max(state_delta_floor, 13)
+        
         # ── 3. Dynamic min RR (market_state-aware + winrate) ──────────────────
         wr = self.get_winrate()
-        # RANGING markets: lower RR bar (1.0) — smaller moves, tighter ranges
-        # TRENDING/VOLATILE: standard 1.1
-        base_rr = 1.0 if market_state == "RANGING" else 1.1
-        if wr < 0.40:
-            min_rr = max(base_rr + 0.2, 1.3)   # winrate penalty on top of base
+        
+        # PREVENT OVERFITTING: Don't raise thresholds if winrate already excellent
+        if wr >= self._WINRATE_THRESHOLD:  # >= 68%
+            # Winrate is good — don't keep tightening
+            required_delta = max(required_delta - 2, self._CALIB_DELTA_MIN)
+            min_rr = 1.0  # Allow 1.0 RR in high-quality regimes
         else:
-            min_rr = base_rr
+            # RANGING markets: lower RR bar (1.0) — smaller moves, tighter ranges
+            # TRENDING/VOLATILE: standard 1.1
+            base_rr = 1.0 if market_state == "RANGING" else 1.1
+            if wr < 0.40:
+                min_rr = max(base_rr + 0.2, 1.3)   # winrate penalty on top of base
+            else:
+                min_rr = base_rr
 
         # ── 4. Sweep confirmation requirement ────────────────────────────────
         require_sweep_confirmation = (market_state == "TRENDING")
@@ -859,17 +935,19 @@ class MoshAIEngineV5:
         # Use fixed floor only — avg_delta_floor * 0.85 caused stale-history inflation
         # After restart: _signal_history is empty → _get_avg_delta returns default
         # Old default 18 → 18*0.85=15.3 floor locked ALL thresholds at 15.3 post-restart
-        delta_min = self._CALIB_DELTA_MIN    # 13 — fixed floor, no history dependency
-        required_delta  = max(delta_min,               min(self._CALIB_DELTA_MAX,    required_delta))
-        min_rr          = max(self._CALIB_RR_MIN,      min(self._CALIB_RR_MAX,       min_rr))
-        entry_tolerance = max(self._CALIB_TOL_MIN,     min(self._CALIB_TOL_MAX,      entry_tolerance))
-        cooldown_sec    = max(self._CALIB_COOLDOWN_MIN, min(self._CALIB_COOLDOWN_MAX, cooldown_sec))
+        delta_min = self._CALIB_DELTA_MIN
+        required_delta = max(delta_min, min(self._CALIB_DELTA_MAX, required_delta))
+        required_delta = max(state_delta_floor, min(state_delta_ceiling, required_delta))
+        min_rr = max(self._CALIB_RR_MIN, min(self._CALIB_RR_MAX, min_rr))
+        entry_tolerance = max(self._CALIB_TOL_MIN, min(self._CALIB_TOL_MAX, entry_tolerance))
+        cooldown_sec = max(self._CALIB_COOLDOWN_MIN, min(self._CALIB_COOLDOWN_MAX, cooldown_sec))
 
         # ── 9. Apply calibrated values ────────────────────────────────────────
         # Score delta → read by _decision_finalizer via calibration_params
         # Min RR / tolerance → read by _institutional_gate via same dict
         calibration = {
             "market_state":               market_state,
+            "market_regime":              market_regime,  # NEW: regime-based adaptation
             "volatility":                 volatility,
             "winrate":                    round(wr, 3),
             "delta":                      required_delta,
@@ -881,10 +959,10 @@ class MoshAIEngineV5:
             "silence_hours":              round(silence_hours, 1),
             "silence_relaxed":            silence_relaxed,
             "reason": (
-                f"{market_state} + {volatility} volatility"
+                f"{market_state} + {volatility} volatility + {market_regime} regime"
                 + (" | silence relaxed" if silence_relaxed else "")
                 + (" | EMERGENCY_CALIB" if emergency_active else "")
-                + f" | winrate={wr:.0%}"
+                + (f" | HIGH_WINRATE({wr:.0%})" if wr >= self._WINRATE_THRESHOLD else f" | winrate={wr:.0%}")
             ),
             "emergency": emergency_params or {"active": False, "pass_rate": round(pass_rate, 3)},
         }
@@ -895,6 +973,7 @@ class MoshAIEngineV5:
         analysis["_calib_entry_tol"]   = entry_tolerance
         analysis["_calib_min_rr"]      = min_rr
         analysis["_calib_delta"]       = required_delta
+        analysis["_market_regime"]     = market_regime  # NEW: store regime for decision logic
         analysis["_calib_cooldown"]    = cooldown_sec
         analysis["_calib_req_sweep"]   = require_sweep_confirmation
 
@@ -2919,6 +2998,41 @@ class MoshAIEngineV5:
                     return c
         return candidates[0]
 
+    def _detect_smart_mode_signal(self, analysis: dict, symbol: str, timeframe: str) -> Optional[str]:
+        """
+        Detect signals that are structurally strong but slightly below ideal.
+        Smart Mode Signal labels a valid setup as higher-opportunity yet slightly aggressive.
+        """
+        rec = analysis.get("recommendation")
+        if rec not in ("BUY", "SELL"):
+            return None
+
+        calibrated_delta = float(analysis.get("_calib_delta") or 0)
+        effective_delta = float(analysis.get("effective_delta") or 0)
+        if calibrated_delta <= 0:
+            return None
+
+        delta_ratio = effective_delta / calibrated_delta
+        if delta_ratio < 0.80:
+            return None
+
+        if analysis.get("htf_conflict_warning"):
+            return None
+
+        primary_ob = analysis.get("primary_bull_ob") if rec == "BUY" else analysis.get("primary_bear_ob")
+        if not primary_ob:
+            return None
+
+        rr = float(analysis.get("risk_reward_ratio") or 0)
+        if rr < 1.0:
+            return None
+
+        logger.info(
+            f"⚡ SMART_MODE_SIGNAL [{symbol}/{timeframe}] "
+            f"rec={rec} delta_ratio={delta_ratio:.2f} rr={rr:.2f}"
+        )
+        return "SMART_MODE"
+
     def _smart_rr_recovery(
         self,
         analysis: dict,
@@ -2950,10 +3064,8 @@ class MoshAIEngineV5:
           - Never tighten SL beyond OB high/low (structure must remain valid)
           - Never modify delta < 20 signals
         """
-        _RR_HARD_FLOOR   = 0.9    # floor for strategies 1 & 2 (TP/SL optimisation)
-        _RR_FLOOR_HIGH   = 0.80   # floor for strategy 3 (delta >= 30, very strong)
-        _DELTA_THRESHOLD = 25     # minimum delta to attempt recovery
-        _DELTA_EXCEPTION = 25     # minimum delta for high-delta exception
+        _RR_HARD_FLOOR   = 1.0    # floor for strategies 1 & 2 (TP/SL optimisation)
+        _RR_FLOOR_HIGH   = 1.0    # floor for strong recovery only
 
         # Read effective delta — from decision_meta or effective_delta field
         meta        = analysis.get("decision_meta", {})
@@ -2961,9 +3073,14 @@ class MoshAIEngineV5:
                             abs(float(meta.get("score_delta") or 0)))
         score_delta = abs(float((analysis.get("decision_meta") or {}).get("score_delta") or
                                 analysis.get("effective_delta") or 0))
+        threshold   = float(analysis.get("_calib_delta") or
+                            abs(float(meta.get("threshold") or 0)) or
+                            self._DECISION_THRESHOLD_TREND)
 
-        # Skip recovery for weak signals
-        if eff_delta < _DELTA_THRESHOLD and score_delta < _DELTA_THRESHOLD:
+        # Skip recovery for weak signals or conflicting structure/HTF
+        if eff_delta < max(0.8 * threshold, 12.0) and score_delta < max(0.8 * threshold, 12.0):
+            return analysis, levels, rr
+        if analysis.get("htf_conflict_warning"):
             return analysis, levels, rr
 
         atr       = float(levels.get("atr") or 0)
