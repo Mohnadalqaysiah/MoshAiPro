@@ -2118,6 +2118,264 @@ class MoshAIEngineV5:
             analysis["_calib_cooldown"]    = cooldown_sec
             analysis["_calib_req_sweep"]   = require_sweep_confirmation
             return analysis
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # INSTITUTIONAL GATE — Single authoritative validation (Rules 1-16)
+    # ═══════════════════════════════════════════════════════════════════════
+
+    # Rule 5 — entry tolerance per timeframe
+    _ENTRY_TOLERANCE = {
+        "1m": 0.001, "5m": 0.001, "15m": 0.001,
+        "30m": 0.002, "1h": 0.002, "4h": 0.003, "1d": 0.003,
+    }
+
+    # Rule 11 — cooldown per timeframe (seconds) — EMERGENCY OVERRIDE
+    _COOLDOWN_SEC = {
+        "15m": 300,   # 5 دقائق
+        "30m": 600, # 10 دقائق
+        "1h": 900,  # 15 دقيقة
+        "4h": 2700, # 45 دقيقة
+        "1d": 7200, # 2 ساعات
+    }
+
+    # Rule 9 — default spread per symbol
+    _DEFAULT_SPREAD = {
+        "XAUUSD": 0.30, "XAGUSD": 0.02, "BTCUSD": 8.0, "ETHUSD": 0.8,
+        "EURUSD": 0.0001, "GBPUSD": 0.0002, "USDJPY": 0.02, "USDCHF": 0.0002,
+        "NAS100": 1.0, "US30": 2.0, "USOIL": 0.04, "BRENT": 0.04,
+    }
+
+    def _institutional_gate(
+        self,
+        analysis: dict,
+        symbol: str,
+        timeframe: str,
+        htf_analysis: Optional[Dict] = None,
+    ) -> dict:
+        """
+        INSTITUTIONAL MODE Hard Rejection Gate (Rules 1-16).
+        ICT Engine is the SOLE source of direction and trade levels.
+        Any single check failure -> REJECT immediately, no exceptions.
+        """
+        rec = analysis.get("recommendation")
+        if rec not in ("BUY", "SELL"):
+            return analysis
+
+        levels  = analysis.get("levels", {})
+        entry   = float(levels.get("entry") or 0)
+        sl      = float(levels.get("stop_loss") or 0)
+        tp1_raw = float(levels.get("tp1") or 0)
+        tp2_raw = float(levels.get("tp2") or 0)
+
+        if not entry or not sl or not tp1_raw:
+            # Try to recover entry from current_price
+            if not entry and analysis.get("current_price"):
+                entry = float(analysis["current_price"])
+                levels["entry"] = entry
+                logger.info(f"GATE: missing entry recovered from current_price={entry} [{symbol}]")
+            # Still missing after recovery → soft warning only, continue with partial levels
+            if not entry or not sl or not tp1_raw:
+                analysis["missing_levels_warning"] = True
+                logger.warning(f"GATE: MISSING_LEVELS [{symbol}/{timeframe}] — soft warning, continuing")
+
+        # Rule 2: Direction must match ICT confluence — soft warning only
+        ict_dir = analysis.get("confluence", {}).get("direction", "WAIT")
+        if ict_dir != rec:
+            analysis["direction_mismatch_warning"] = True
+            logger.info(f"GATE: DIRECTION_MISMATCH_ICT [{symbol}/{timeframe}] — warning only")
+
+        # Rule 3: Structure validation — sweep + aligned BOS/CHOCH
+        struct   = analysis.get("market_structure", {})
+        sweep    = analysis.get("liquidity_sweep", {})
+        bos_list = struct.get("bos_events", [])
+
+        has_sweep = (
+            sweep.get("has_bullish_sweep") if rec == "BUY"
+            else sweep.get("has_bearish_sweep")
+        )
+        has_aligned_bos = (
+            any("BULLISH" in b.get("type", "") for b in bos_list) if rec == "BUY"
+            else any("BEARISH" in b.get("type", "") for b in bos_list)
+        )
+        has_choch = bool(struct.get("choch_events"))
+
+        # Sweep is a scoring factor — absence penalises confidence only, never rejects.
+        if not has_sweep:
+            analysis["no_sweep_penalty"] = True
+            logger.info(f"GATE: no sweep [{rec}] {symbol}/{timeframe} — penalty applied, not rejected")
+        # Structure absence → soft warning only (no hard reject)
+        if not has_aligned_bos and not has_choch and not analysis.get("structure_grace"):
+            if not has_sweep:
+                analysis["no_sweep_no_structure_warning"] = True
+                logger.info(f"GATE: NO_SWEEP_NO_STRUCTURE [{symbol}/{timeframe}] — warning only")
+
+        # Rule 4: Single resolved OB per side — overlap resolved via priority, never rejected
+        ob        = analysis.get("order_blocks", {})
+        current_p = float(analysis.get("current_price") or entry)
+        # Re-use pre-resolved zones from _decision_finalizer if available,
+        # otherwise resolve now (covers cases where gate is called standalone)
+        if "primary_bull_ob" in analysis or "primary_bear_ob" in analysis:
+            support_zone = analysis.get("primary_bull_ob")
+            resist_zone  = analysis.get("primary_bear_ob")
+        else:
+            support_zone, resist_zone, _ov = self._resolve_ob_zones(
+                current_p,
+                ob.get("bullish_obs", []),
+                ob.get("bearish_obs", []),
+                rec,
+                htf_analysis,
+                analysis.get("liquidity", {}),
+            )
+
+        # Rule 5: Entry vs zone (dynamic tolerance) — soft warning only
+        tol = analysis.get("_calib_entry_tol") or self._ENTRY_TOLERANCE.get(timeframe, 0.002)
+        if rec == "BUY" and support_zone:
+            z_lo, z_hi = float(support_zone["low"]), float(support_zone["high"])
+            if not (z_lo <= entry <= z_hi or abs(entry - z_hi) / entry <= tol):
+                analysis["entry_not_near_zone_warning"] = True
+                logger.info(f"GATE: BUY_ENTRY_NOT_NEAR_SUPPORT [{symbol}/{timeframe}] — warning only")
+        elif rec == "SELL" and resist_zone:
+            z_lo, z_hi = float(resist_zone["low"]), float(resist_zone["high"])
+            if not (z_lo <= entry <= z_hi or abs(entry - z_lo) / entry <= tol):
+                analysis["entry_not_near_zone_warning"] = True
+                logger.info(f"GATE: SELL_ENTRY_NOT_NEAR_RESISTANCE [{symbol}/{timeframe}] — warning only")
+
+        # Rule 5b: OB depth — soft warning only
+        active_ob = support_zone if rec == "BUY" else resist_zone
+        if active_ob:
+            ob_lo  = float(active_ob.get("low",  0))
+            ob_hi  = float(active_ob.get("high", 0))
+            ob_rng = ob_hi - ob_lo
+            if ob_rng > 0 and entry > 0:
+                if rec == "BUY":
+                    depth_pct = (entry - ob_lo) / ob_rng
+                else:
+                    depth_pct = (ob_hi - entry) / ob_rng
+                if depth_pct > 0.70:
+                    analysis["entry_deep_in_ob_warning"] = True
+                    logger.info(f"GATE: ENTRY_TOO_DEEP_IN_OB {depth_pct*100:.0f}% [{symbol}/{timeframe}] — warning only")
+
+        # FVG proximity — soft warning only (no rejection)
+        fvg_data = analysis.get("fvg") or analysis.get("fair_value_gaps") or []
+        if fvg_data and isinstance(fvg_data, list) and entry > 0:
+            tol_fvg = tol * 3
+            fvg_near = any(
+                abs(((float(f.get("low", 0)) + float(f.get("high", 0))) / 2) - entry) / entry <= tol_fvg
+                for f in fvg_data
+                if isinstance(f, dict) and f.get("low") and f.get("high")
+            )
+            if not fvg_near:
+                analysis["no_fvg_near_entry_warning"] = True
+                logger.info(f"GATE: NO_FVG_NEAR_ENTRY [{symbol}/{timeframe}] — warning only")
+
+        # Rule 6: TP/SL ordering + auto-fix swap
+        # Guard: if entry is zero levels are corrupt — reject cleanly
+        if not entry:
+            return self._hard_reject(analysis, "MISSING_ENTRY_PRICE")
+        tp1, tp2 = tp1_raw, tp2_raw
+        if rec == "BUY":
+            # SL must be strictly below entry (allow tiny epsilon for float precision)
+            if sl > 0 and sl >= entry * 0.9999:
+                return self._hard_reject(analysis, "BUY_SL_ABOVE_ENTRY")
+            if tp1 > 0 and tp1 <= entry * 1.0001:
+                return self._hard_reject(analysis, "BUY_TP1_BELOW_ENTRY")
+            if tp2 and tp1 and tp1 > tp2:
+                levels["tp1"], levels["tp2"] = tp2, tp1
+                tp1, tp2 = tp2, tp1
+        else:
+            if sl > 0 and sl <= entry * 1.0001:
+                return self._hard_reject(analysis, "SELL_SL_BELOW_ENTRY")
+            if tp1 > 0 and tp1 >= entry * 0.9999:
+                return self._hard_reject(analysis, "SELL_TP1_ABOVE_ENTRY")
+            if tp2 and tp1 and tp1 < tp2:
+                levels["tp1"], levels["tp2"] = tp2, tp1
+                tp1, tp2 = tp2, tp1
+
+        # Rule 7: Dynamic RR threshold
+        sl_dist = abs(entry - sl)
+        tp_dist = abs(tp1 - entry)
+        if sl_dist <= 0:
+            return self._hard_reject(analysis, "ZERO_SL_DISTANCE")
+        rr = round(tp_dist / sl_dist, 2)
+        levels["risk_reward"] = rr
+        analysis["risk_reward_ratio"] = rr
+        # Use calibrated min_rr if available, else use performance-based dynamic RR
+        calib_rr = analysis.get("_calib_min_rr")
+        min_rr = calib_rr if calib_rr is not None else self._get_min_rr()
+        if rr < min_rr:
+            # ── SMART RR RECOVERY — attempt TP/SL optimisation before rejecting ──
+            analysis, levels, rr = self._smart_rr_recovery(
+                analysis, levels, entry, sl, tp1, rr, min_rr, rec, symbol, timeframe
+            )
+            sl_dist = abs(entry - float(levels.get("stop_loss") or sl))
+            tp1     = float(levels.get("tp1") or tp1)
+            tp_dist = abs(tp1 - entry)
+            rr      = round(tp_dist / sl_dist, 2) if sl_dist > 0 else 0
+            levels["risk_reward"]      = rr
+            analysis["risk_reward_ratio"] = rr
+            # Use recovery floor if recovery succeeded (may be lower than original min_rr)
+            effective_min_rr = analysis.get("_recovery_min_rr", min_rr)
+            if rr < effective_min_rr:
+                return self._hard_reject(analysis, f"RR_{rr:.2f}_BELOW_MIN_{effective_min_rr:.1f}")
+
+        # Rule 8: Distance filter — both are soft warnings only
+        if tp_dist / entry < 0.003:
+            analysis["tp_too_close_warning"] = True
+            logger.info(f"GATE: TP_TOO_CLOSE warning [{symbol}/{timeframe}] tp_dist={tp_dist:.5f}")
+        if sl_dist / entry < 0.002:
+            analysis["sl_too_close_warning"] = True
+            logger.info(f"GATE: SL_TOO_CLOSE warning [{symbol}/{timeframe}] sl_dist={sl_dist:.5f}")
+
+        # Rule 9: Spread filter — soft warning only
+        atr    = float(levels.get("atr") or 0)
+        spread = atr * 0.05 if atr > 0 else self._DEFAULT_SPREAD.get(symbol.upper(), entry * 0.0002)
+        if spread / sl_dist > 0.30:
+            analysis["spread_eats_risk_warning"] = True
+            logger.info(f"GATE: SPREAD_EATS_RISK warning [{symbol}/{timeframe}]")
+
+        # Rule 10: Liquidity-based TP placement
+        # TP1 = slightly BEFORE liquidity (avoid running into it)
+        # TP2 = AT liquidity level
+        # TP3 = BEYOND liquidity (runner)
+        liquidity   = analysis.get("liquidity", {})
+        nearest_bsl = liquidity.get("nearest_bsl")
+        nearest_ssl = liquidity.get("nearest_ssl")
+        atr_offset  = atr * 0.3 if atr else 0  # hold-back before liquidity
+
+        if rec == "BUY" and nearest_bsl and float(nearest_bsl) > entry:
+            liq_level = float(nearest_bsl)
+            if abs(liq_level - entry) / entry > 0.003:
+                liq_tp1 = round(liq_level - atr_offset, 5)   # before liquidity
+                liq_tp2 = round(liq_level, 5)                 # at liquidity
+                liq_tp3 = round(liq_level + (atr * 1.5 if atr else liq_level * 0.005), 5)
+                levels["tp1"] = liq_tp1
+                levels["tp2"] = liq_tp2
+                levels["tp3"] = liq_tp3
+                tp1 = liq_tp1
+        elif rec == "SELL" and nearest_ssl and float(nearest_ssl) < entry:
+            liq_level = float(nearest_ssl)
+            if abs(entry - liq_level) / entry > 0.003:
+                liq_tp1 = round(liq_level + atr_offset, 5)   # before liquidity
+                liq_tp2 = round(liq_level, 5)                 # at liquidity
+                liq_tp3 = round(liq_level - (atr * 1.5 if atr else liq_level * 0.005), 5)
+                levels["tp1"] = liq_tp1
+                levels["tp2"] = liq_tp2
+                levels["tp3"] = liq_tp3
+                tp1 = liq_tp1
+
+        # Rule 11: Cooldown — soft warning only, log but do not block
+        calib_cooldown = analysis.get("_calib_cooldown")
+        if not self.check_cooldown(symbol, timeframe, override_sec=calib_cooldown):
+            analysis["cooldown_active_warning"] = True
+            logger.info(f"GATE: COOLDOWN_ACTIVE [{symbol}/{timeframe}] — warning only, signal proceeds")
+
+        # Rule 14: HTF conflict — context flag + confidence penalty, NEVER rejection
+        # HTF is a multiplier, not a gate. Only RR/SL are hard gates.
+        if htf_analysis:
+            htf_trend = htf_analysis.get("market_structure", {}).get("trend", "RANGING")
+            if (rec == "BUY" and htf_trend == "BEARISH") or \
+               (rec == "SELL" and htf_trend == "BULLISH"):
+                analysis["htf_conflict_flag"]  = True
                 analysis["htf_status"]         = "conflicting"
                 # Merge with any existing penalty from _decision_finalizer
                 existing = float(analysis.get("_htf_conflict_penalty") or 0)
