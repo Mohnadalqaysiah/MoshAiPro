@@ -145,7 +145,7 @@ async def analyze_market(
             _cooldown_ok = mosh_ai_engine_v5.check_cooldown(symbol, timeframe)
 
             if rec in ("BUY", "SELL") and entry and sl and tp1 \
-                    and conf >= 65 and _rr_ok and not _rej and _cooldown_ok \
+                    and conf >= 55 and _rr_ok and not _rej and _cooldown_ok \
                     and analysis.get("market_open", True) and _sd.is_market_open(symbol):
 
                 sig_type  = SignalType.BUY if rec == "BUY" else SignalType.SELL
