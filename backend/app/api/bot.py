@@ -416,7 +416,9 @@ def bot_new_signals(
     now = datetime.now(timezone.utc)
 
     # الحد الأدنى للثقة للبث — إشارات أضعف من هذا لا ترسل للمشتركين
-    _MIN_BROADCAST_CONFIDENCE = 70
+    # تُقلل من 70% إلى 55% لتشمل إشارات الفوركس والمعادن والسلع والمؤشرات
+    # (حد الحفظ الأساسي هو 65% — إشارات 55-65% ستُحفظ لكن لن تُبث بدون هذا التعديل)
+    _MIN_BROADCAST_CONFIDENCE = 55
 
     result = []
     for s in signals:
