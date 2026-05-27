@@ -10,7 +10,7 @@ from loguru import logger
 
 from app.database import get_db
 from app.models.user import User, PlanType
-from app.models.signal import Signal, SignalStatus
+from app.models.signal import Signal, SignalStatus, SignalType
 from app.models.site_settings import SiteSettings
 from app.services.ai_engine_v5 import mosh_ai_engine_v5
 from app.services.smart_data import smart_data as _smart_data
@@ -77,6 +77,8 @@ async def bot_analyze(
     """
     تحليل من البوت - يتحقق أن المستخدم مرتبط وله اشتراك نشط
     telegram_id: اختياري، إذا أُرسل يتحقق من الاشتراك
+    
+    ✅ الآن يحفظ الإشارات تلقائياً في DB إذا استوفت الشروط!
     """
     # إذا أُرسل telegram_id → تحقق من الاشتراك
     if telegram_id:
@@ -96,6 +98,67 @@ async def bot_analyze(
 
     try:
         analysis = await mosh_ai_engine_v5.analyze_market(symbol=symbol, timeframe=timeframe, force_refresh=False)
+        
+        # ✅ حفظ الإشارة تلقائياً إذا استوفت شروط الجودة
+        try:
+            import hashlib
+            from datetime import timedelta
+            from app.models.signal import Signal, SignalType, SignalStatus
+            from app.services.smart_data import smart_data as _sd
+            
+            rec    = analysis.get("recommendation", "WAIT")
+            levels = analysis.get("levels", {})
+            entry  = levels.get("entry")
+            sl     = levels.get("stop_loss") or analysis.get("stop_loss_zone")
+            tp1    = levels.get("tp1")
+            tp2    = levels.get("tp2")
+            conf   = analysis.get("ai_confidence_score", 0)
+            rr     = levels.get("risk_reward")
+            
+            _rr_ok  = rr and float(rr) >= 1.2
+            _rej    = (analysis.get("validation_rejected") or
+                       analysis.get("sweep_gate_blocked") or
+                       analysis.get("price_gap_rejected"))
+            _cooldown_ok = mosh_ai_engine_v5.check_cooldown(symbol, timeframe)
+            
+            if rec in ("BUY", "SELL") and entry and sl and tp1 \
+                    and conf >= 40 and _rr_ok and not _rej and _cooldown_ok \
+                    and analysis.get("market_open", True) and _sd.is_market_open(symbol):
+                
+                sig_type  = SignalType.BUY if rec == "BUY" else SignalType.SELL
+                tf_hours  = {"1m":2,"5m":4,"15m":8,"30m":12,"1h":24,"4h":72,"1d":168,"1w":336}
+                expires_h = tf_hours.get(timeframe, 24)
+                expires_at = datetime.now(timezone.utc) + timedelta(hours=expires_h)
+                
+                sig_hash = hashlib.md5(
+                    f"{symbol}-{timeframe}-{rec}-{round(float(entry), 4)}".encode()
+                ).hexdigest()
+                existing = db.query(Signal).filter(Signal.signal_hash == sig_hash).first()
+                
+                if not existing:
+                    new_signal = Signal(
+                        market             = symbol,
+                        timeframe          = timeframe,
+                        signal_type        = sig_type,
+                        entry_price        = float(entry),
+                        stop_loss          = float(sl),
+                        take_profit_1      = float(tp1),
+                        take_profit_2      = float(tp2) if tp2 else None,
+                        risk_reward_ratio  = float(rr) if rr else None,
+                        ai_confidence      = float(conf),
+                        wyckoff_phase      = analysis.get("wyckoff_phase"),
+                        premium_discount   = analysis.get("premium_discount"),
+                        signal_hash        = sig_hash,
+                        status             = SignalStatus.ACTIVE,
+                        expires_at         = expires_at,
+                        broadcast_sent     = False,
+                    )
+                    db.add(new_signal)
+                    db.commit()
+                    logger.info(f"💾 Signal saved: {symbol}/{timeframe} {rec} @ {conf:.0f}% confidence")
+        except Exception as _se:
+            logger.warning(f"Signal save error in bot_analyze: {_se}")
+        
         return {"success": True, "data": analysis}
     except Exception as e:
         logger.error(f"Bot analyze error: {e}")
