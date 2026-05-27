@@ -1656,8 +1656,8 @@ class MoshAIEngineV5:
     # ═══════════════════════════════════════════════════════════════════════
 
     # Min score delta to issue a trade (trending vs ranging markets)
-    _DECISION_THRESHOLD_TREND  = 20   # need 20-pt lead in trending market
-    _DECISION_THRESHOLD_RANGE  = 35   # stricter in ranging/sideways market
+    _DECISION_THRESHOLD_TREND  = 18   # خُفّف من 20 → 18 لتشمل forex/metals (avg delta=18.5)
+    _DECISION_THRESHOLD_RANGE  = 30   # خُفّف من 35 → 30 لتحسين Pass Rate من 30% → ~50%
     _DECISION_THRESHOLD_STRONG = 40   # override HTF/zone conflicts if lead ≥40
 
     def _decision_finalizer(
