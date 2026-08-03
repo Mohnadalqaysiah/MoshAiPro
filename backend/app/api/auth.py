@@ -5,7 +5,7 @@ Register / Login / Profile / Link Telegram
 from datetime import datetime, timedelta, timezone
 import secrets
 import random
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from loguru import logger
@@ -81,8 +81,42 @@ class ContactIn(BaseModel):
     subject: str = ""
     message: str
 
+class VerifyEmailIn(BaseModel):
+    otp: str
+
+
 # OTP store: email → {otp, expires_at}
 _otp_store: dict = {}
+
+# Email-verification OTP store (separate from password-reset OTPs above)
+# email → {otp, expires_at, last_sent_at}
+_verify_otp_store: dict = {}
+
+
+def _client_ip(request: Request) -> str:
+    """Real client IP behind nginx reverse proxy (X-Forwarded-For), falling back to socket peer."""
+    xff = request.headers.get("x-forwarded-for", "")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.client.host if request.client else ""
+
+
+def _send_verification_otp(email: str, background_tasks: BackgroundTasks):
+    from app.services.email_service import send_email, verify_email_otp_body
+    otp = str(random.randint(100000, 999999))
+    _verify_otp_store[email] = {
+        "otp": otp,
+        "expires_at": datetime.now(timezone.utc) + timedelta(minutes=10),
+        "last_sent_at": datetime.now(timezone.utc),
+    }
+    smtp_pass = settings.SMTP_PASSWORD
+    if smtp_pass:
+        background_tasks.add_task(
+            send_email, email,
+            "رمز تفعيل حسابك — Qaffel AI",
+            verify_email_otp_body(otp), smtp_pass,
+        )
+    logger.info(f"📧 Verification OTP sent to {email}")
 
 
 # ─── Register ─────────────────────────────────────────────────────────────────
@@ -91,6 +125,7 @@ _otp_store: dict = {}
 def register(
     data: RegisterIn,
     background_tasks: BackgroundTasks,
+    request: Request,
     ref: str = Query(default=""),
     db: Session = Depends(get_db),
 ):
@@ -129,6 +164,8 @@ def register(
         telegram_link_token = secrets.token_urlsafe(16),
         affiliate_code      = new_code,
         referred_by_code    = clean_ref if referrer else None,
+        registration_ip     = _client_ip(request),
+        is_verified         = False,
     )
     db.add(user)
     db.commit()
@@ -176,7 +213,56 @@ def register(
         body = welcome_email_body(user.full_name or user.email, trial_days=TRIAL_DAYS, trial_analyses=10)
         background_tasks.add_task(send_email, user.email, "مرحباً بك في Qaffel AI 🎉", body, smtp_pass)
 
+    # ── رمز تفعيل البريد الإلكتروني ────────────────────────────────────
+    _send_verification_otp(user.email, background_tasks)
+
     return {"token": token, "user": _user_info(user)}
+
+
+# ─── Email Verification ────────────────────────────────────────────────────────
+
+@router.post("/verify-email")
+def verify_email(
+    data: VerifyEmailIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if user.is_verified:
+        return {"success": True, "message": "الحساب مُفعّل مسبقاً", "user": _user_info(user)}
+
+    stored = _verify_otp_store.get(user.email)
+    if not stored:
+        raise HTTPException(400, "لم يُطلب رمز تفعيل لهذا البريد. اطلب رمزاً جديداً")
+    if datetime.now(timezone.utc) > stored["expires_at"]:
+        _verify_otp_store.pop(user.email, None)
+        raise HTTPException(400, "انتهت صلاحية الرمز. اطلب رمزاً جديداً")
+    if stored["otp"] != data.otp.strip():
+        raise HTTPException(400, "رمز التحقق غير صحيح")
+
+    user.is_verified = True
+    db.commit()
+    _verify_otp_store.pop(user.email, None)
+
+    logger.info(f"✅ Email verified: {user.email}")
+    return {"success": True, "message": "تم تفعيل بريدك الإلكتروني بنجاح", "user": _user_info(user)}
+
+
+@router.post("/resend-verification")
+def resend_verification(
+    background_tasks: BackgroundTasks,
+    user: User = Depends(get_current_user),
+):
+    if user.is_verified:
+        return {"success": True, "message": "الحساب مُفعّل مسبقاً"}
+
+    last = _verify_otp_store.get(user.email)
+    if last:
+        elapsed = (datetime.now(timezone.utc) - last["last_sent_at"]).total_seconds()
+        if elapsed < 60:
+            raise HTTPException(429, f"انتظر {int(60 - elapsed)} ثانية قبل طلب رمز جديد")
+
+    _send_verification_otp(user.email, background_tasks)
+    return {"success": True, "message": "تم إرسال رمز تفعيل جديد إلى بريدك الإلكتروني"}
 
 
 # ─── Login ────────────────────────────────────────────────────────────────────
@@ -471,6 +557,7 @@ def _user_info(user: User) -> dict:
         "role":        user.role,
         "plan":        user.plan,
         "is_active":   user.is_active,
+        "is_verified": user.is_verified,
         "days_left":   days_left,
         "trial_analyses_left": user.trial_analyses_left,
         "trial_chat_left":     user.trial_chat_left,

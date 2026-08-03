@@ -108,6 +108,13 @@ def check_subscription(user: User, db: Session) -> dict:
 
     # تجريبي
     if user.plan == PlanType.TRIAL:
+        if not user.is_verified:
+            return {
+                "allowed": False,
+                "plan": "trial_unverified",
+                "reason": "يرجى تفعيل بريدك الإلكتروني لتفعيل التجربة المجانية",
+                "email_verification_required": True,
+            }
         if user.trial_ends_at and user.trial_ends_at < now:
             return {
                 "allowed": False,

@@ -88,6 +88,8 @@ function UserModal({ user: u, onClose, onUpdate }) {
               ['الهاتف', u.phone_number || '—'],
               ['الباقة', <PlanBadge key="p" plan={u.plan}/>],
               ['الحالة', u.is_active ? '✅ نشط' : '⛔ معلّق'],
+              ['تفعيل البريد', u.is_verified ? '✅ مُفعّل' : '⏳ غير مُفعّل'],
+              ['IP التسجيل', u.registration_ip ? (u.dup_ip_count > 1 ? `⚠️ ${u.registration_ip} (مشترك مع ${u.dup_ip_count - 1})` : u.registration_ip) : '—'],
               ['Telegram', u.telegram_username ? `@${u.telegram_username}` : '—'],
               ['الأيام المتبقية', `${u.days_left ?? '—'} يوم`],
               ['تاريخ التسجيل', u.created_at?.slice(0,10) || '—'],
@@ -610,6 +612,7 @@ export default function Admin() {
                       <th className="text-right py-2 px-3">الباقة</th>
                       <th className="text-right py-2 px-3">متبقي</th>
                       <th className="text-right py-2 px-3">Telegram</th>
+                      <th className="text-right py-2 px-3">IP</th>
                       <th className="text-right py-2 px-3">تسجيل</th>
                       <th className="text-right py-2 px-3">إجراء</th>
                     </tr>
@@ -628,6 +631,16 @@ export default function Admin() {
                         </td>
                         <td className="py-2.5 px-3 text-xs">
                           {u.telegram_id ? <span className="text-blue-400">✓ مرتبط</span> : <span className="text-gray-600">—</span>}
+                        </td>
+                        <td className="py-2.5 px-3 text-xs font-mono">
+                          {u.registration_ip ? (
+                            <span className={`flex items-center gap-1 ${u.dup_ip_count > 1 ? 'text-yellow-400' : 'text-gray-500'}`}>
+                              {u.dup_ip_count > 1 && (
+                                <AlertTriangle size={11} title={`مشترك مع ${u.dup_ip_count - 1} حساب آخر بنفس الـ IP`} />
+                              )}
+                              {u.registration_ip}
+                            </span>
+                          ) : <span className="text-gray-600">—</span>}
                         </td>
                         <td className="py-2.5 px-3 text-xs text-gray-500">{u.created_at?.slice(0,10)||'—'}</td>
                         <td className="py-2.5 px-3" onClick={e => e.stopPropagation()}>
@@ -1497,6 +1510,41 @@ export default function Admin() {
 
                     {/* ── Stripe (sensitive) ───────────────────────────── */}
                     <div className="bg-gray-900 border border-orange-900/40 rounded-xl p-4 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <label className="block text-sm text-gray-300 font-medium">تفعيل الدفع بالبطاقة</label>
+                          <p className="text-xs text-gray-500">يُظهر/يُخفي زر الدفع بالبطاقة بصفحة الأسعار</p>
+                        </div>
+                        <button
+                          onClick={() => saveSetting('stripe_enabled', (siteSettings['stripe_enabled']?.value ?? 'true') === 'false' ? 'true' : 'false')}
+                          disabled={settingSaving === 'stripe_enabled'}
+                          className={`w-11 h-6 rounded-full flex items-center px-0.5 transition-colors flex-shrink-0 ${
+                            (siteSettings['stripe_enabled']?.value ?? 'true') !== 'false'
+                              ? 'bg-green-600 justify-end'
+                              : 'bg-gray-700 justify-start'
+                          }`}
+                        >
+                          <span className="w-5 h-5 rounded-full bg-white" />
+                        </button>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm text-gray-300 font-medium mb-1">Stripe Publishable Key</label>
+                        <p className="text-xs text-gray-500 mb-2">من Stripe Dashboard → Developers → API keys (يبدأ بـ pk_)</p>
+                        <div className="flex gap-2">
+                          <input type="text"
+                            value={settingEdits['stripe_publishable_key'] ?? ''}
+                            onChange={e => setSettingEdits(s => ({...s, stripe_publishable_key: e.target.value}))}
+                            placeholder="pk_live_..."
+                            className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:ring-1 focus:ring-orange-500"
+                            dir="ltr" />
+                          <button disabled={settingSaving === 'stripe_publishable_key'} onClick={() => saveSetting('stripe_publishable_key')}
+                            className="flex items-center gap-1 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition">
+                            {settingSaving === 'stripe_publishable_key' ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle size={13}/>} حفظ
+                          </button>
+                        </div>
+                      </div>
+
                       <div>
                         <label className="block text-sm text-gray-300 font-medium mb-1">Stripe Secret Key</label>
                         <p className="text-xs text-gray-500 mb-2">من Stripe Dashboard → Developers → API keys · يُخزَّن في قاعدة البيانات ويُلغي قيمة .env</p>

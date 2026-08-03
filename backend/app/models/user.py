@@ -40,6 +40,10 @@ class User(Base):
     trial_ends_at      = Column(DateTime(timezone=True), nullable=True)
     subscription_ends_at = Column(DateTime(timezone=True), nullable=True)
 
+    # Anti-abuse
+    registration_ip    = Column(String, nullable=True, index=True)  # لكشف تعدد الحسابات
+    is_verified        = Column(Boolean, default=False, nullable=False)  # تحقق البريد عبر OTP
+
     # Usage counters (reset daily)
     analyses_used_today   = Column(Integer, default=0)
     chat_used_today       = Column(Integer, default=0)

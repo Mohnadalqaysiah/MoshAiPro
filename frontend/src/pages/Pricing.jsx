@@ -33,9 +33,10 @@ const T = {
     confirmBtn: 'تأكيد الدفع',
     sendingBtn: 'جاري الإرسال...',
     stripeBtn: (price) => `ادفع بالبطاقة الآن — $${price}`,
-    stripeRedirecting: 'جاري التحويل إلى Stripe...',
+    stripeRedirecting: 'جاري التحويل لصفحة الدفع...',
     orDivider: 'أو ادفع يدوياً بـ USDT',
     stripeInstant: 'تفعيل فوري تلقائي',
+    secureBadge: 'دفع آمن ومشفّر بالكامل — مدعوم من Stripe',
     doneTitle: 'تم استلام طلبك!',
     doneDesc: 'سيتم التحقق من الدفع وتفعيل حسابك خلال 30 دقيقة. ستصلك رسالة تأكيد.',
     dashboardBtn: 'العودة للمنصة',
@@ -66,9 +67,10 @@ const T = {
     confirmBtn: 'Confirm Payment',
     sendingBtn: 'Sending...',
     stripeBtn: (price) => `Pay by Card Now — $${price}`,
-    stripeRedirecting: 'Redirecting to Stripe...',
+    stripeRedirecting: 'Redirecting to payment page...',
     orDivider: 'Or pay manually with USDT',
     stripeInstant: 'Instant automatic activation',
+    secureBadge: 'Fully secure & encrypted — powered by Stripe',
     doneTitle: 'Request Received!',
     doneDesc: 'Payment will be verified and your account activated within 30 minutes.',
     dashboardBtn: 'Go to Dashboard',
@@ -132,11 +134,13 @@ export default function Pricing() {
   const [copied, setCopied]       = useState(false)
   const [WALLET, setWallet]       = useState('')
   const [PLANS, setPlans]         = useState(DEFAULT_PLANS)
+  const [cardPaymentEnabled, setCardPaymentEnabled] = useState(false)
 
   useEffect(() => {
     axios.get(`${API}/api/v1/subscription/plans`)
       .then(r => {
         if (r.data.wallet) setWallet(r.data.wallet)
+        setCardPaymentEnabled(!!r.data.card_payment_enabled)
         if (r.data.plans) {
           setPlans(DEFAULT_PLANS.map(p => {
             const api = r.data.plans[p.key]
@@ -322,22 +326,36 @@ export default function Pricing() {
                 </div>
               )}
 
-              {/* Stripe (card) */}
-              <button
-                onClick={payWithStripe}
-                disabled={stripeLoading}
-                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 disabled:opacity-60 text-white font-bold py-3.5 rounded-xl text-sm transition mb-3"
-              >
-                <Zap size={16} />
-                {stripeLoading ? t.stripeRedirecting : t.stripeBtn(plan?.price)}
-              </button>
-              <p className="text-xs text-gray-500 text-center mb-6">{t.stripeInstant}</p>
+              {/* Card payment */}
+              {cardPaymentEnabled && (
+                <>
+                  <button
+                    onClick={payWithStripe}
+                    disabled={stripeLoading}
+                    className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 disabled:opacity-60 text-white font-bold py-3.5 rounded-xl text-sm transition mb-3"
+                  >
+                    <Zap size={16} />
+                    {stripeLoading ? t.stripeRedirecting : t.stripeBtn(plan?.price)}
+                  </button>
 
-              <div className="flex items-center gap-3 mb-6">
-                <div className="flex-1 h-px bg-gray-800" />
-                <span className="text-xs text-gray-500">{t.orDivider}</span>
-                <div className="flex-1 h-px bg-gray-800" />
-              </div>
+                  {/* Payment method badges + trust line */}
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <span className="text-[10px] font-bold tracking-wide text-gray-400 border border-gray-700 rounded px-1.5 py-0.5">VISA</span>
+                    <span className="text-[10px] font-bold tracking-wide text-gray-400 border border-gray-700 rounded px-1.5 py-0.5">Mastercard</span>
+                    <span className="text-[10px] font-bold tracking-wide text-gray-400 border border-gray-700 rounded px-1.5 py-0.5">AMEX</span>
+                  </div>
+                  <p className="text-xs text-gray-500 text-center mb-1 flex items-center justify-center gap-1">
+                    <Shield size={11} className="text-green-400" /> {t.secureBadge}
+                  </p>
+                  <p className="text-xs text-gray-600 text-center mb-6">{t.stripeInstant}</p>
+
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="flex-1 h-px bg-gray-800" />
+                    <span className="text-xs text-gray-500">{t.orDivider}</span>
+                    <div className="flex-1 h-px bg-gray-800" />
+                  </div>
+                </>
+              )}
 
               {/* Wallet */}
               <div className="bg-gray-800/80 border border-gray-700/50 rounded-xl p-4 mb-6">

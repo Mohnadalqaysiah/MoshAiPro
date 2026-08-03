@@ -10,6 +10,7 @@ import './App.css'
 import Navbar             from './components/Navbar'
 import TrialBanner        from './components/TrialBanner'
 import TelegramLinkBanner from './components/TelegramLinkBanner'
+import EmailVerifyBanner  from './components/EmailVerifyBanner'
 
 // Lazy-load all pages — each becomes its own JS chunk
 const Landing        = lazy(() => import('./pages/Landing'))
@@ -90,6 +91,7 @@ function AppRoutes() {
           <ProtectedRoute>
             <div className="min-h-screen bg-gray-900 text-gray-100" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
               <Navbar />
+              <EmailVerifyBanner />
               <TrialBanner />
               <TelegramLinkBanner />
               <OnboardingTour />

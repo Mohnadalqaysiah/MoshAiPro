@@ -5,6 +5,7 @@ Full control: Users, Payments, Markets
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from pydantic import BaseModel
 from typing import Optional, List
 from loguru import logger
@@ -123,7 +124,23 @@ def list_users(
         )
     users = q.order_by(User.created_at.desc()).offset(skip).limit(limit).all()
     total = q.count()
-    return {"total": total, "users": [_user_info(u) for u in users]}
+
+    # عدّاد الحسابات المشتركة بنفس IP التسجيل (لكشف تعدد الحسابات)
+    dup_counts = dict(
+        db.query(User.registration_ip, func.count(User.id))
+        .filter(User.registration_ip.isnot(None))
+        .group_by(User.registration_ip)
+        .having(func.count(User.id) > 1)
+        .all()
+    )
+
+    infos = []
+    for u in users:
+        info = _user_info(u)
+        info["dup_ip_count"] = dup_counts.get(u.registration_ip, 1) if u.registration_ip else 0
+        infos.append(info)
+
+    return {"total": total, "users": infos}
 
 
 @router.get("/users/{user_id}")
@@ -1016,6 +1033,8 @@ def _user_info(u: User) -> dict:
         "role":          u.role,
         "plan":          u.plan,
         "is_active":     u.is_active,
+        "is_verified":   u.is_verified,
+        "registration_ip": u.registration_ip,
         "days_left":     days_left,
         "telegram_id":   u.telegram_id,
         "telegram_username": u.telegram_username,

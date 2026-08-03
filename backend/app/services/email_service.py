@@ -85,6 +85,43 @@ def otp_email_body(otp: str) -> str:
     """
 
 
+def verify_email_otp_body(otp: str) -> str:
+    return f"""
+    <div dir="rtl" style="font-family:Arial,sans-serif;max-width:520px;margin:auto;
+         background:#111827;border-radius:16px;padding:32px;color:#e5e7eb;">
+      <div style="text-align:center;margin-bottom:24px;">
+        <div style="display:inline-block;background:#3b82f6;border-radius:12px;
+             width:48px;height:48px;line-height:48px;font-size:22px;font-weight:bold;color:#fff;">Q</div>
+        <h2 style="margin:12px 0 4px;color:#fff;">Qaffel AI</h2>
+        <p style="margin:0;color:#9ca3af;font-size:14px;">تفعيل حسابك</p>
+      </div>
+
+      <p style="margin-bottom:8px;">مرحباً،</p>
+      <p style="color:#9ca3af;margin-bottom:24px;">
+        رمز تفعيل بريدك الإلكتروني:
+      </p>
+
+      <div style="background:#1f2937;border:2px solid #3b82f6;border-radius:14px;
+           padding:24px;text-align:center;margin-bottom:24px;">
+        <span style="font-size:40px;font-weight:bold;color:#3b82f6;
+              letter-spacing:12px;font-family:monospace;">{otp}</span>
+      </div>
+
+      <p style="color:#6b7280;font-size:13px;text-align:center;">
+        ⏱ صالح لمدة <strong style="color:#fbbf24;">10 دقائق</strong> فقط
+        &nbsp;·&nbsp; لا تشاركه مع أحد
+      </p>
+
+      <hr style="border:none;border-top:1px solid #374151;margin:24px 0;">
+      <p style="color:#4b5563;font-size:12px;text-align:center;margin:0;">
+        إذا لم تسجّل حساباً بهذا البريد، تجاهل هذا الإيميل.
+        &nbsp;·&nbsp;
+        <a href="https://qafeel.com" style="color:#3b82f6;text-decoration:none;">qafeel.com</a>
+      </p>
+    </div>
+    """
+
+
 _HEADER = """
 <div dir="rtl" style="font-family:Arial,sans-serif;max-width:540px;margin:auto;
      background:#0f172a;border-radius:16px;overflow:hidden;color:#e5e7eb;">

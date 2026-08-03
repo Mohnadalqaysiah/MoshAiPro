@@ -116,11 +116,14 @@ def _setting(db: Session, key: str, fallback: str) -> str:
 
 
 def _stripe_config(db: Session) -> dict:
+    enabled_val = _setting(db, "stripe_enabled", "true")
     return {
-        "secret_key":     _setting(db, "stripe_secret_key", settings.STRIPE_SECRET_KEY),
-        "webhook_secret": _setting(db, "stripe_webhook_secret", settings.STRIPE_WEBHOOK_SECRET),
-        "success_url":    _setting(db, "stripe_success_url", settings.STRIPE_SUCCESS_URL),
-        "cancel_url":     _setting(db, "stripe_cancel_url", settings.STRIPE_CANCEL_URL),
+        "enabled":          enabled_val.strip().lower() != "false",
+        "secret_key":       _setting(db, "stripe_secret_key", settings.STRIPE_SECRET_KEY),
+        "publishable_key":  _setting(db, "stripe_publishable_key", ""),
+        "webhook_secret":   _setting(db, "stripe_webhook_secret", settings.STRIPE_WEBHOOK_SECRET),
+        "success_url":      _setting(db, "stripe_success_url", settings.STRIPE_SUCCESS_URL),
+        "cancel_url":       _setting(db, "stripe_cancel_url", settings.STRIPE_CANCEL_URL),
     }
 
 
@@ -131,12 +134,14 @@ def get_plans(db: Session = Depends(get_db)):
     db_settings = {r.key: r.value for r in db.query(SiteSettings).all()}
     wallet = db_settings.get("usdt_wallet") or USDT_WALLET
     plans  = _resolve_plans(db)
+    stripe_cfg = _stripe_config(db)
 
     return {
         "plans": plans,
         "wallet": wallet,
         "network": USDT_NETWORK,
-        "note": "أرسل المبلغ بالضبط بالـ USDT ثم أدخل رقم المعاملة (TxID) للتحقق"
+        "note": "أرسل المبلغ بالضبط بالـ USDT ثم أدخل رقم المعاملة (TxID) للتحقق",
+        "card_payment_enabled": stripe_cfg["enabled"] and bool(stripe_cfg["secret_key"]),
     }
 
 
@@ -218,8 +223,8 @@ def create_stripe_checkout(
         raise HTTPException(400, "باقة غير صحيحة")
 
     cfg = _stripe_config(db)
-    if not cfg["secret_key"]:
-        raise HTTPException(500, "الدفع عبر Stripe غير مفعّل حالياً")
+    if not cfg["enabled"] or not cfg["secret_key"]:
+        raise HTTPException(500, "الدفع بالبطاقة غير متاح حالياً")
 
     plan_info = _resolve_plans(db)[data.plan]
 
