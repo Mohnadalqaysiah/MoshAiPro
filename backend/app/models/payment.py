@@ -28,8 +28,11 @@ class Payment(Base):
 
     plan        = Column(SAEnum(PaymentPlan), nullable=False)
     amount_usd  = Column(Float, nullable=False)          # 7 or 30
-    network     = Column(String, default="TRC20")        # TRC20 / BEP20
-    tx_id       = Column(String, unique=True, nullable=False)  # Binance TxID
+    network     = Column(String, default="TRC20")        # TRC20 / BEP20 / stripe
+    tx_id       = Column(String, unique=True, nullable=False)  # Binance TxID or Stripe Checkout Session ID
+
+    provider    = Column(String, default="usdt", nullable=False)  # "usdt" | "stripe"
+    stripe_payment_intent = Column(String, nullable=True)
 
     status      = Column(SAEnum(PaymentStatus), default=PaymentStatus.PENDING)
     admin_note  = Column(String, nullable=True)

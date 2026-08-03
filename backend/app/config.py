@@ -97,6 +97,12 @@ class Settings(BaseSettings):
     TRIAL_CHAT: int = 20
     TRIAL_DAYS: int = 7
 
+    # ----- Stripe -----
+    STRIPE_SECRET_KEY: str = ""
+    STRIPE_WEBHOOK_SECRET: str = ""
+    STRIPE_SUCCESS_URL: str = "https://qaffel.com/dashboard?stripe=success"
+    STRIPE_CANCEL_URL: str = "https://qaffel.com/pricing?stripe=cancel"
+
     class Config:
         env_file = ".env"
         case_sensitive = True

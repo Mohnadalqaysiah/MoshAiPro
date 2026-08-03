@@ -20,6 +20,7 @@ from app.models.affiliate import Affiliate, AffiliateReferral, TIER1_RATE, TIER2
 from app.models.signal import Signal, SignalStatus
 from app.services.auth_service import get_admin_user, hash_password, verify_password
 from app.services.smart_data import smart_data as _smart_data
+from app.services.subscription_service import activate_subscription_payment
 from app.config import get_settings
 
 _settings = get_settings()
@@ -458,79 +459,11 @@ def handle_payment(
     if not payment:
         raise HTTPException(404, "الدفع غير موجود")
 
-    now = datetime.now(timezone.utc)
-
     if data.action == "approve":
-        payment.status     = PaymentStatus.APPROVED
-        payment.admin_note = data.admin_note
+        payment.status      = PaymentStatus.APPROVED
+        payment.admin_note  = data.admin_note
         payment.approved_by = admin.id
-
-        # فعّل اشتراك المستخدم
-        user = db.query(User).filter(User.id == payment.user_id).first()
-        if user:
-            # اقرأ المدة من SiteSettings إذا كانت مضبوطة
-            def _get_days(plan_key: str, default: int) -> int:
-                r = db.query(SiteSettings).filter(SiteSettings.key == f"plan_{plan_key}_days").first()
-                try: return int(r.value) if r and r.value else default
-                except: return default
-            days = _get_days("weekly", 7) if payment.plan == PaymentPlan.WEEKLY else _get_days("monthly", 30)
-            # إذا عنده اشتراك نشط → أضف أيام
-            if user.subscription_ends_at and user.subscription_ends_at > now:
-                user.subscription_ends_at += timedelta(days=days)
-            else:
-                user.subscription_ends_at = now + timedelta(days=days)
-
-            user.plan      = PlanType(payment.plan.value)
-            user.is_active = True
-            logger.info(f"✅ Payment approved: user={user.email} plan={payment.plan} days={days}")
-
-            # ── Affiliate commission ──────────────────────────────────────
-            if user.referred_by_code:
-                ref_aff = db.query(Affiliate).filter(
-                    Affiliate.code == user.referred_by_code
-                ).first()
-                if ref_aff:
-                    already = db.query(AffiliateReferral).filter(
-                        AffiliateReferral.payment_id == payment.id
-                    ).first()
-                    if not already:
-                        rate = TIER2_RATE if ref_aff.total_referrals >= TIER2_THRESHOLD else TIER1_RATE
-                        tier = 2 if ref_aff.total_referrals >= TIER2_THRESHOLD else 1
-                        commission = round(payment.amount_usd * rate, 4)
-                        db.add(AffiliateReferral(
-                            affiliate_id       = ref_aff.id,
-                            referred_user_id   = user.id,
-                            payment_id         = payment.id,
-                            payment_amount_usd = payment.amount_usd,
-                            commission_rate    = rate,
-                            commission_usd     = commission,
-                            tier               = tier,
-                        ))
-                        ref_aff.total_referrals     += 1
-                        ref_aff.pending_balance_usd += commission
-                        # ── +50 نقطة إحالة للمُحيل عند اشتراك المدعو ──────
-                        if ref_user := db.query(User).filter(User.id == ref_aff.user_id).first():
-                            ref_user.referral_points = (ref_user.referral_points or 0) + 50
-                        logger.info(
-                            f"💰 Affiliate commission: referrer_id={ref_aff.user_id} "
-                            f"tier={tier} rate={rate*100:.0f}% earned={commission}$ +50pts"
-                        )
-                        # إيميل إشعار عمولة للمُحيل
-                        ref_user = db.query(User).filter(User.id == ref_aff.user_id).first()
-                        if ref_user and _settings.SMTP_PASSWORD:
-                            from app.services.email_service import send_email, affiliate_commission_email_body
-                            body = affiliate_commission_email_body(
-                                name=ref_user.full_name or ref_user.email,
-                                commission_usd=commission,
-                                referral_name=user.full_name or user.email,
-                                tier=tier,
-                                pending_balance=ref_aff.pending_balance_usd + commission,
-                            )
-                            background.add_task(
-                                send_email, ref_user.email,
-                                f"💰 عمولة جديدة ${commission:.2f} — Qaffel AI",
-                                body, _settings.SMTP_PASSWORD,
-                            )
+        activate_subscription_payment(db, payment, background)
 
     elif data.action == "reject":
         payment.status     = PaymentStatus.REJECTED
@@ -541,34 +474,19 @@ def handle_payment(
 
     db.commit()
 
-    # ── إيميل إشعار للمستخدم بعد الـ commit ──────────────────────────────
-    if _settings.SMTP_PASSWORD:
-        from app.services.email_service import (
-            send_email, payment_approved_email_body, payment_rejected_email_body
-        )
+    # ── إيميل رفض للمستخدم بعد الـ commit (إيميل القبول تُرسل داخل activate_subscription_payment) ──
+    if data.action == "reject" and _settings.SMTP_PASSWORD:
+        from app.services.email_service import send_email, payment_rejected_email_body
         _user = db.query(User).filter(User.id == payment.user_id).first()
         if _user:
-            if data.action == "approve":
-                days = 7 if payment.plan == PaymentPlan.WEEKLY else 30
-                ends_str = (_user.subscription_ends_at.strftime("%Y-%m-%d")
-                            if _user.subscription_ends_at else "—")
-                body = payment_approved_email_body(
-                    _user.full_name or _user.email,
-                    payment.plan.value, days, ends_str,
-                )
-                background.add_task(
-                    send_email, _user.email,
-                    "✅ تم تفعيل اشتراكك — Qaffel AI", body, _settings.SMTP_PASSWORD,
-                )
-            elif data.action == "reject":
-                body = payment_rejected_email_body(
-                    _user.full_name or _user.email,
-                    payment.plan.value, data.admin_note or "",
-                )
-                background.add_task(
-                    send_email, _user.email,
-                    "❌ تعذّر قبول دفعتك — Qaffel AI", body, _settings.SMTP_PASSWORD,
-                )
+            body = payment_rejected_email_body(
+                _user.full_name or _user.email,
+                payment.plan.value, data.admin_note or "",
+            )
+            background.add_task(
+                send_email, _user.email,
+                "❌ تعذّر قبول دفعتك — Qaffel AI", body, _settings.SMTP_PASSWORD,
+            )
 
     return {"success": True, "payment": _payment_info(payment)}
 
@@ -1118,6 +1036,7 @@ def _payment_info(p: Payment) -> dict:
         "plan":       p.plan,
         "amount_usd": p.amount_usd,
         "network":    p.network,
+        "provider":   p.provider,
         "tx_id":      p.tx_id,
         "status":     p.status,
         "admin_note": p.admin_note,

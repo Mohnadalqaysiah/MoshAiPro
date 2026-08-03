@@ -4,20 +4,23 @@ Plans, Binance USDT Payment, Status
 """
 import copy, json
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from loguru import logger
+import stripe
 
 from app.database import get_db
 from app.models.user import User, PlanType
 from app.models.payment import Payment, PaymentStatus, PaymentPlan
 from app.models.site_settings import SiteSettings
 from app.services.auth_service import get_current_user, check_subscription
+from app.services.subscription_service import activate_subscription_payment
 from app.config import get_settings
 
 router  = APIRouter()
 settings = get_settings()
+stripe.api_key = settings.STRIPE_SECRET_KEY
 
 # ─── Pricing Config ───────────────────────────────────────────────────────────
 
@@ -53,16 +56,16 @@ class PaymentIn(BaseModel):
     network: str = "TRC20"
 
 
-# ─── Endpoints ────────────────────────────────────────────────────────────────
+class StripeCheckoutIn(BaseModel):
+    plan: str    # weekly | monthly
 
-@router.get("/plans")
-def get_plans(db: Session = Depends(get_db)):
-    # Read all settings at once
+
+# ─── Helpers ──────────────────────────────────────────────────────────────────
+
+def _resolve_plans(db: Session) -> dict:
+    """Builds the PLANS dict with SiteSettings overrides applied."""
     db_settings = {r.key: r.value for r in db.query(SiteSettings).all()}
 
-    wallet = db_settings.get("usdt_wallet") or USDT_WALLET
-
-    # Build plans with DB overrides
     plans = copy.deepcopy(PLANS)
     for plan_key in ("weekly", "monthly"):
         # Price override
@@ -101,6 +104,17 @@ def get_plans(db: Session = Depends(get_db)):
                 plans[plan_key]["days"] = int(days_val)
             except Exception:
                 pass
+
+    return plans
+
+
+# ─── Endpoints ────────────────────────────────────────────────────────────────
+
+@router.get("/plans")
+def get_plans(db: Session = Depends(get_db)):
+    db_settings = {r.key: r.value for r in db.query(SiteSettings).all()}
+    wallet = db_settings.get("usdt_wallet") or USDT_WALLET
+    plans  = _resolve_plans(db)
 
     return {
         "plans": plans,
@@ -178,6 +192,108 @@ def submit_payment(
     }
 
 
+@router.post("/stripe/checkout")
+def create_stripe_checkout(
+    data: StripeCheckoutIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if data.plan not in PLANS:
+        raise HTTPException(400, "باقة غير صحيحة")
+    if not settings.STRIPE_SECRET_KEY:
+        raise HTTPException(500, "الدفع عبر Stripe غير مفعّل حالياً")
+
+    plan_info = _resolve_plans(db)[data.plan]
+
+    try:
+        session = stripe.checkout.Session.create(
+            mode="payment",
+            payment_method_types=["card"],
+            line_items=[{
+                "price_data": {
+                    "currency": "usd",
+                    "product_data": {"name": f"Qaffel AI — {plan_info['name_en']} Plan"},
+                    "unit_amount": int(round(plan_info["price_usd"] * 100)),
+                },
+                "quantity": 1,
+            }],
+            success_url=settings.STRIPE_SUCCESS_URL,
+            cancel_url=settings.STRIPE_CANCEL_URL,
+            client_reference_id=str(user.id),
+            customer_email=user.email,
+            metadata={"user_id": str(user.id), "plan": data.plan},
+        )
+    except Exception as e:
+        logger.error(f"❌ Stripe checkout session error: {e}")
+        raise HTTPException(500, "تعذّر إنشاء جلسة الدفع، حاول لاحقاً")
+
+    return {"url": session.url}
+
+
+@router.post("/stripe/webhook")
+async def stripe_webhook(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    payload    = await request.body()
+    sig_header = request.headers.get("stripe-signature", "")
+
+    try:
+        event = stripe.Webhook.construct_event(payload, sig_header, settings.STRIPE_WEBHOOK_SECRET)
+    except (ValueError, stripe.error.SignatureVerificationError) as e:
+        logger.warning(f"⚠️ Stripe webhook signature verification failed: {e}")
+        raise HTTPException(400, "Invalid signature")
+
+    if event["type"] == "checkout.session.completed":
+        session  = event["data"]["object"]
+        metadata = session.get("metadata") or {}
+        user_id  = metadata.get("user_id")
+        plan_key = metadata.get("plan")
+
+        if not user_id or plan_key not in PLANS:
+            logger.warning(f"⚠️ Stripe webhook missing/invalid metadata: {metadata}")
+            return {"received": True}
+
+        # Idempotency — Stripe may retry the same event
+        if db.query(Payment).filter(Payment.tx_id == session["id"]).first():
+            return {"received": True}
+
+        plan_info = _resolve_plans(db)[plan_key]
+
+        payment = Payment(
+            user_id     = int(user_id),
+            plan        = PaymentPlan(plan_key),
+            amount_usd  = plan_info["price_usd"],
+            network     = "stripe",
+            provider    = "stripe",
+            tx_id       = session["id"],
+            stripe_payment_intent = session.get("payment_intent"),
+            status      = PaymentStatus.APPROVED,
+        )
+        db.add(payment)
+        db.flush()
+
+        user = activate_subscription_payment(db, payment, background_tasks)
+        db.commit()
+
+        if user:
+            logger.info(f"💳 Stripe payment completed: user={user.email} plan={plan_key} session={session['id']}")
+            from app.services.admin_notify import notify_admin_telegram
+            _plan_name = {"weekly": "أسبوعية", "monthly": "شهرية"}.get(plan_key, plan_key)
+            _msg = (
+                f"💳 <b>دفعة Stripe جديدة (مفعّلة تلقائياً)!</b>\n"
+                f"━━━━━━━━━━━━━━━\n"
+                f"📧 المستخدم: <code>{user.email}</code>\n"
+                f"📦 الباقة: {_plan_name}\n"
+                f"💰 المبلغ: ${plan_info['price_usd']}\n"
+                f"🆔 Payment ID: {payment.id}"
+            )
+            background_tasks.add_task(notify_admin_telegram, _msg)
+
+    return {"received": True}
+
+
 @router.get("/payments")
 def my_payments(
     user: User = Depends(get_current_user),
@@ -197,6 +313,7 @@ def _payment_info(p: Payment) -> dict:
         "plan":       p.plan,
         "amount_usd": p.amount_usd,
         "network":    p.network,
+        "provider":   p.provider,
         "tx_id":      p.tx_id,
         "status":     p.status,
         "admin_note": p.admin_note,

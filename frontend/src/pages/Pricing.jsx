@@ -32,6 +32,10 @@ const T = {
     backBtn: 'رجوع',
     confirmBtn: 'تأكيد الدفع',
     sendingBtn: 'جاري الإرسال...',
+    stripeBtn: (price) => `ادفع بالبطاقة الآن — $${price}`,
+    stripeRedirecting: 'جاري التحويل إلى Stripe...',
+    orDivider: 'أو ادفع يدوياً بـ USDT',
+    stripeInstant: 'تفعيل فوري تلقائي',
     doneTitle: 'تم استلام طلبك!',
     doneDesc: 'سيتم التحقق من الدفع وتفعيل حسابك خلال 30 دقيقة. ستصلك رسالة تأكيد.',
     dashboardBtn: 'العودة للمنصة',
@@ -61,6 +65,10 @@ const T = {
     backBtn: 'Back',
     confirmBtn: 'Confirm Payment',
     sendingBtn: 'Sending...',
+    stripeBtn: (price) => `Pay by Card Now — $${price}`,
+    stripeRedirecting: 'Redirecting to Stripe...',
+    orDivider: 'Or pay manually with USDT',
+    stripeInstant: 'Instant automatic activation',
     doneTitle: 'Request Received!',
     doneDesc: 'Payment will be verified and your account activated within 30 minutes.',
     dashboardBtn: 'Go to Dashboard',
@@ -119,6 +127,7 @@ export default function Pricing() {
   const network = 'TRC20'
   const [step, setStep]           = useState('plan')
   const [loading, setLoading]     = useState(false)
+  const [stripeLoading, setStripeLoading] = useState(false)
   const [error, setError]         = useState('')
   const [copied, setCopied]       = useState(false)
   const [WALLET, setWallet]       = useState('')
@@ -164,6 +173,17 @@ export default function Pricing() {
       setError(err.response?.data?.detail || (isAr ? 'حدث خطأ. أعد المحاولة.' : 'An error occurred. Please try again.'))
     } finally {
       setLoading(false)
+    }
+  }
+
+  const payWithStripe = async () => {
+    setStripeLoading(true); setError('')
+    try {
+      const r = await axios.post(`${API}/api/v1/subscription/stripe/checkout`, { plan: selected })
+      window.location.href = r.data.url
+    } catch (err) {
+      setError(err.response?.data?.detail || (isAr ? 'حدث خطأ. أعد المحاولة.' : 'An error occurred. Please try again.'))
+      setStripeLoading(false)
     }
   }
 
@@ -292,8 +312,32 @@ export default function Pricing() {
               <p className="text-gray-400 text-sm mb-6">
                 {t.planLabel}: <span className="text-white font-medium">{planName}</span>
                 {' · '}
-                {t.amountLabel}: <span className="text-green-400 font-bold">${plan?.price} USDT</span>
+                {t.amountLabel}: <span className="text-green-400 font-bold">${plan?.price}</span>
               </p>
+
+              {error && (
+                <div className="flex items-center gap-2 text-red-400 text-sm mb-4 bg-red-900/20 border border-red-700/30 rounded-xl px-3 py-2.5">
+                  <AlertCircle size={14} />
+                  {error}
+                </div>
+              )}
+
+              {/* Stripe (card) */}
+              <button
+                onClick={payWithStripe}
+                disabled={stripeLoading}
+                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 disabled:opacity-60 text-white font-bold py-3.5 rounded-xl text-sm transition mb-3"
+              >
+                <Zap size={16} />
+                {stripeLoading ? t.stripeRedirecting : t.stripeBtn(plan?.price)}
+              </button>
+              <p className="text-xs text-gray-500 text-center mb-6">{t.stripeInstant}</p>
+
+              <div className="flex items-center gap-3 mb-6">
+                <div className="flex-1 h-px bg-gray-800" />
+                <span className="text-xs text-gray-500">{t.orDivider}</span>
+                <div className="flex-1 h-px bg-gray-800" />
+              </div>
 
               {/* Wallet */}
               <div className="bg-gray-800/80 border border-gray-700/50 rounded-xl p-4 mb-6">
@@ -327,13 +371,6 @@ export default function Pricing() {
                 />
                 <p className="text-xs text-gray-500 mt-1.5">{t.txNote}</p>
               </div>
-
-              {error && (
-                <div className="flex items-center gap-2 text-red-400 text-sm mb-4 bg-red-900/20 border border-red-700/30 rounded-xl px-3 py-2.5">
-                  <AlertCircle size={14} />
-                  {error}
-                </div>
-              )}
 
               <div className="flex gap-3">
                 <button
