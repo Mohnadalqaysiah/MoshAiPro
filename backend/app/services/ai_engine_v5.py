@@ -3183,6 +3183,7 @@ class MoshAIEngineV5:
         """
         _RR_HARD_FLOOR   = 1.0    # floor for strategies 1 & 2 (TP/SL optimisation)
         _RR_FLOOR_HIGH   = 1.0    # floor for strong recovery only
+        _DELTA_EXCEPTION = 25     # min effective_delta to attempt strategy 4 (High-Delta Exception)
 
         # Read effective delta — from decision_meta or effective_delta field
         meta        = analysis.get("decision_meta", {})
