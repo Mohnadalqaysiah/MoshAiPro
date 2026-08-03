@@ -20,7 +20,6 @@ from app.config import get_settings
 
 router  = APIRouter()
 settings = get_settings()
-stripe.api_key = settings.STRIPE_SECRET_KEY
 
 # ─── Pricing Config ───────────────────────────────────────────────────────────
 
@@ -106,6 +105,23 @@ def _resolve_plans(db: Session) -> dict:
                 pass
 
     return plans
+
+
+def _setting(db: Session, key: str, fallback: str) -> str:
+    """DB override first (SiteSettings), then env/config fallback — same pattern as telegram_bot_token."""
+    row = db.query(SiteSettings).filter(SiteSettings.key == key).first()
+    if row and row.value and row.value.strip():
+        return row.value.strip()
+    return fallback
+
+
+def _stripe_config(db: Session) -> dict:
+    return {
+        "secret_key":     _setting(db, "stripe_secret_key", settings.STRIPE_SECRET_KEY),
+        "webhook_secret": _setting(db, "stripe_webhook_secret", settings.STRIPE_WEBHOOK_SECRET),
+        "success_url":    _setting(db, "stripe_success_url", settings.STRIPE_SUCCESS_URL),
+        "cancel_url":     _setting(db, "stripe_cancel_url", settings.STRIPE_CANCEL_URL),
+    }
 
 
 # ─── Endpoints ────────────────────────────────────────────────────────────────
@@ -200,7 +216,9 @@ def create_stripe_checkout(
 ):
     if data.plan not in PLANS:
         raise HTTPException(400, "باقة غير صحيحة")
-    if not settings.STRIPE_SECRET_KEY:
+
+    cfg = _stripe_config(db)
+    if not cfg["secret_key"]:
         raise HTTPException(500, "الدفع عبر Stripe غير مفعّل حالياً")
 
     plan_info = _resolve_plans(db)[data.plan]
@@ -217,11 +235,12 @@ def create_stripe_checkout(
                 },
                 "quantity": 1,
             }],
-            success_url=settings.STRIPE_SUCCESS_URL,
-            cancel_url=settings.STRIPE_CANCEL_URL,
+            success_url=cfg["success_url"],
+            cancel_url=cfg["cancel_url"],
             client_reference_id=str(user.id),
             customer_email=user.email,
             metadata={"user_id": str(user.id), "plan": data.plan},
+            api_key=cfg["secret_key"],
         )
     except Exception as e:
         logger.error(f"❌ Stripe checkout session error: {e}")
@@ -238,9 +257,10 @@ async def stripe_webhook(
 ):
     payload    = await request.body()
     sig_header = request.headers.get("stripe-signature", "")
+    cfg        = _stripe_config(db)
 
     try:
-        event = stripe.Webhook.construct_event(payload, sig_header, settings.STRIPE_WEBHOOK_SECRET)
+        event = stripe.Webhook.construct_event(payload, sig_header, cfg["webhook_secret"])
     except (ValueError, stripe.error.SignatureVerificationError) as e:
         logger.warning(f"⚠️ Stripe webhook signature verification failed: {e}")
         raise HTTPException(400, "Invalid signature")
