@@ -28,6 +28,7 @@ def _norm_timeframe(tf: str) -> str:
 async def strategy_checker():
     from app.database import SessionLocal
     from app.models.strategy import Strategy, StrategyStatus, StrategyTriggerEvent
+    from app.models.user import UserRole, PlanType
     from app.services.strategy_engine import evaluate_strategy, build_telegram_message
     from app.services.ai_engine_v5 import mosh_ai_engine_v5
     from app.services.admin_notify import get_bot_token
@@ -43,6 +44,13 @@ async def strategy_checker():
                     continue
 
                 for s in active:
+                    # Strategy Builder alerting is subscriber-exclusive — if the
+                    # owner's subscription lapsed since activation, stop here
+                    # rather than keep alerting a now-trial/expired account.
+                    owner = s.user
+                    if not owner or (owner.role != UserRole.ADMIN and owner.plan not in (PlanType.WEEKLY, PlanType.MONTHLY)):
+                        continue
+
                     conditions = [c for g in s.groups for c in g.conditions]
                     if not conditions or not s.symbols:
                         continue

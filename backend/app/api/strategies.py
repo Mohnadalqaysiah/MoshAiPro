@@ -13,7 +13,8 @@ from pydantic import BaseModel, Field, ConfigDict
 from loguru import logger
 
 from app.database import get_db
-from app.services.auth_service import get_current_user
+from app.services.auth_service import get_current_user, check_subscription
+from app.models.user import User, UserRole, PlanType
 from app.models.strategy import (
     Strategy, StrategyGroup, StrategyCondition, StrategyTriggerEvent,
     StrategyStatus, GroupLogic,
@@ -23,6 +24,17 @@ from app.services.strategy_engine import (
 )
 
 router = APIRouter()
+
+
+def _require_paid(user: User, db: Session):
+    """Strategy Builder actions (save/activate/duplicate/delete/telegram-test)
+    are exclusive to active weekly/monthly subscribers. Trial users can browse
+    and simulate, but not persist or trigger real alerts."""
+    if user.role == UserRole.ADMIN:
+        return
+    check_subscription(user, db)  # downgrades an expired sub back to TRIAL as a side effect
+    if user.plan not in (PlanType.WEEKLY, PlanType.MONTHLY):
+        raise HTTPException(403, "هذه الميزة حصرية للمشتركين — اشترك لتفعيل استراتيجياتك الحقيقية")
 
 # نفس مجموعة الرموز الثمانية بالـ Prototype (SYMBOL_POOL بالفرونت)
 SIM_SYMBOLS = ["XAU/USD", "EUR/USD", "GBP/USD", "BTC/USD", "ETH/USD", "NAS100", "US30", "USOIL"]
@@ -207,6 +219,7 @@ def list_strategies(db: Session = Depends(get_db), user = Depends(get_current_us
 
 @router.post("")
 def create_strategy(body: StrategyIn, db: Session = Depends(get_db), user = Depends(get_current_user)):
+    _require_paid(user, db)
     if not body.name.strip():
         raise HTTPException(400, "اسم الاستراتيجية مطلوب")
     s = Strategy(user_id=user.id, name=body.name.strip(), status=StrategyStatus.DRAFT)
@@ -225,6 +238,7 @@ def get_strategy(strategy_id: int, db: Session = Depends(get_db), user = Depends
 
 @router.put("/{strategy_id}")
 def update_strategy(strategy_id: int, body: StrategyIn, db: Session = Depends(get_db), user = Depends(get_current_user)):
+    _require_paid(user, db)
     s = _get_owned(db, strategy_id, user)
     _apply_payload(db, s, body)
     db.commit()
@@ -234,6 +248,7 @@ def update_strategy(strategy_id: int, body: StrategyIn, db: Session = Depends(ge
 
 @router.delete("/{strategy_id}")
 def delete_strategy(strategy_id: int, db: Session = Depends(get_db), user = Depends(get_current_user)):
+    _require_paid(user, db)
     s = _get_owned(db, strategy_id, user)
     db.delete(s)
     db.commit()
@@ -242,6 +257,7 @@ def delete_strategy(strategy_id: int, db: Session = Depends(get_db), user = Depe
 
 @router.post("/{strategy_id}/duplicate")
 def duplicate_strategy(strategy_id: int, db: Session = Depends(get_db), user = Depends(get_current_user)):
+    _require_paid(user, db)
     s = _get_owned(db, strategy_id, user)
     clone = Strategy(
         user_id=user.id, name=f"{s.name} (نسخة)", symbols=s.symbols, timeframes=s.timeframes,
@@ -274,6 +290,7 @@ def duplicate_strategy(strategy_id: int, db: Session = Depends(get_db), user = D
 
 @router.put("/{strategy_id}/status")
 def set_status(strategy_id: int, body: StatusIn, db: Session = Depends(get_db), user = Depends(get_current_user)):
+    _require_paid(user, db)
     s = _get_owned(db, strategy_id, user)
     try:
         s.status = StrategyStatus(body.status)
@@ -381,6 +398,7 @@ def list_events(strategy_id: int, limit: int = 20, db: Session = Depends(get_db)
 
 @router.post("/{strategy_id}/telegram/test")
 async def send_test_alert(strategy_id: int, db: Session = Depends(get_db), user = Depends(get_current_user)):
+    _require_paid(user, db)
     s = _get_owned(db, strategy_id, user)
     if not user.telegram_id:
         raise HTTPException(400, "اربط حساب Telegram أولاً من صفحة الملف الشخصي قبل إرسال تنبيه تجريبي")

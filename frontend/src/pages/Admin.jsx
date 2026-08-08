@@ -497,7 +497,7 @@ export default function Admin() {
                 <t.icon size={16}/>{t.label}
               </button>
             ))}
-            <button onClick={() => navigate('/admin/strategy-builder')}
+            <button onClick={() => navigate('/strategies')}
               className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors text-amber-400/90 hover:text-amber-300 hover:bg-amber-950/30 border border-amber-900/40 mt-2">
               <Sparkles size={16}/>Strategy Builder
             </button>

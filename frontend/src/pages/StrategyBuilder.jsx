@@ -2,13 +2,14 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import axios from "axios";
 import { Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import StrategyBuilderTour from "../components/StrategyBuilderTour";
 import {
   Search, Plus, X, ChevronDown, ChevronRight, Copy, Trash2, Power,
   Edit3, Eye, Play, Send, Bot, Link2, Check, AlertTriangle, Sparkles,
   Activity, Layers, Target, CandlestickChart, Percent, BarChart3, Gauge,
   Waves, Clock, GitBranch, ShieldCheck, RefreshCw, Undo2, Redo2, Save,
   Radio, TrendingUp, ArrowLeft, Loader2, ListChecks, FileText, Zap,
-  SlidersHorizontal, MonitorDot, FolderOpen, Hammer, Ban,
+  SlidersHorizontal, MonitorDot, FolderOpen, Hammer, Ban, HelpCircle,
 } from "lucide-react";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
@@ -332,6 +333,14 @@ function Modal({ title, children, onClose, danger }) {
 export default function StrategyBuilder() {
   const { user } = useAuth();
   const tgConnected = !!user?.telegram_linked;
+  const isPaid = user?.role === "admin" || ["weekly", "monthly"].includes(user?.plan);
+  const [paywallOpen, setPaywallOpen] = useState(false);
+  const [tourForceOpen, setTourForceOpen] = useState(false);
+  const requirePaid = () => {
+    if (isPaid) return true;
+    setPaywallOpen(true);
+    return false;
+  };
 
   const [activeTab, setActiveTab] = useState("build");
   const [strategyName, setStrategyName] = useState("استراتيجية جديدة");
@@ -609,6 +618,7 @@ export default function StrategyBuilder() {
   }, [activeTab, currentStrategyId]);
 
   const toggleMonitor = async () => {
+    if (!requirePaid()) return;
     if (!currentStrategyId) return showToast("احفظ الاستراتيجية أولًا لتفعيل المراقبة الحقيقية");
     const next = monitor.active ? "DISABLED" : "ACTIVE";
     try {
@@ -623,6 +633,7 @@ export default function StrategyBuilder() {
 
   /* ---------------- save / load strategies (REAL — DB-backed) ---------------- */
   const saveStrategy = async (activate) => {
+    if (!requirePaid()) return;
     if (conditions.length === 0) return showToast("أضف شروطًا قبل الحفظ");
     setSaving(true);
     try {
@@ -666,6 +677,7 @@ export default function StrategyBuilder() {
   };
 
   const duplicateSaved = async (rec) => {
+    if (!requirePaid()) return;
     try {
       await axios.post(`${API}/api/v1/strategies/${rec.id}/duplicate`);
       await loadSaved();
@@ -676,6 +688,7 @@ export default function StrategyBuilder() {
   };
 
   const toggleSavedStatus = async (rec) => {
+    if (!requirePaid()) return;
     const next = rec.status === "ACTIVE" ? "DISABLED" : "ACTIVE";
     try {
       await axios.put(`${API}/api/v1/strategies/${rec.id}/status`, { status: next });
@@ -699,6 +712,7 @@ export default function StrategyBuilder() {
   };
 
   const sendTestTelegramAlert = async () => {
+    if (!requirePaid()) return;
     if (!currentStrategyId) return showToast("احفظ الاستراتيجية أولًا");
     if (!tgConnected) return showToast("اربط حساب Telegram أولًا من صفحة الملف الشخصي");
     try {
@@ -745,6 +759,9 @@ export default function StrategyBuilder() {
               <div style={{ fontFamily: FD, fontWeight: 600, fontSize: 14.5 }}>Qaffel Strategy Terminal</div>
               <div style={{ color: C.sub, fontSize: 10.5, fontFamily: FM }}>LIVE — SMC/ICT مربوطة بمحرك التحليل الحقيقي</div>
             </div>
+            <button onClick={() => setTourForceOpen(true)} title="جولة تعريفية" style={{ color: C.muted }} className="hover:text-white p-1 rounded-md">
+              <HelpCircle size={15} />
+            </button>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 text-[11px]" style={{ fontFamily: FM }}>
@@ -759,6 +776,13 @@ export default function StrategyBuilder() {
             <Pill color={tgConnected ? C.teal : C.muted} bg={tgConnected ? C.tealSoft : "transparent"} border={tgConnected ? C.teal : C.border}>
               <Bot size={11} /> {tgConnected ? "TELEGRAM CONNECTED" : "TELEGRAM OFFLINE"}
             </Pill>
+            {!isPaid && (
+              <Link to="/pricing">
+                <Pill color={C.gold} bg={C.goldSoft} border={C.gold}>
+                  🔒 وضع المعاينة — اشترك للتفعيل
+                </Pill>
+              </Link>
+            )}
           </div>
         </div>
 
@@ -1443,7 +1467,7 @@ export default function StrategyBuilder() {
                   <IconBtn icon={Copy} onClick={() => duplicateSaved(r)} title="تكرار" />
                   <IconBtn icon={Power} onClick={() => toggleSavedStatus(r)} title="تفعيل/تعطيل" color={r.status === "ACTIVE" ? C.teal : C.muted} />
                   <IconBtn icon={Eye} onClick={() => setViewTarget(r)} title="عرض" />
-                  <IconBtn icon={Trash2} onClick={() => setDeleteTarget(r)} title="حذف" color={C.red} />
+                  <IconBtn icon={Trash2} onClick={() => { if (requirePaid()) setDeleteTarget(r); }} title="حذف" color={C.red} />
                 </div>
               </div>
             ))}
@@ -1478,11 +1502,26 @@ export default function StrategyBuilder() {
         </Modal>
       )}
 
+      {paywallOpen && (
+        <Modal title="🔒 ميزة حصرية للمشتركين" onClose={() => setPaywallOpen(false)}>
+          <p style={{ color: C.sub, fontSize: 13 }} className="mb-4 leading-relaxed">
+            حفظ الاستراتيجيات، تفعيل المراقبة الحقيقية، وإرسال تنبيهات Telegram متاحة للمشتركين (أسبوعي/شهري) فقط.
+            تقدر تبني وتجرّب (Simulate) استراتيجيتك الآن مجانًا — واشترك لتفعيلها فعليًا على السوق.
+          </p>
+          <div className="flex gap-2 justify-end">
+            <button onClick={() => setPaywallOpen(false)} style={{ background: C.surfaceHi, border: `1px solid ${C.border}`, color: C.text }} className="px-3.5 py-2 rounded-lg text-sm">لاحقًا</button>
+            <Link to="/pricing" style={{ background: C.gold, color: "#1A1200" }} className="px-3.5 py-2 rounded-lg text-sm font-semibold">اشترك الآن</Link>
+          </div>
+        </Modal>
+      )}
+
       {toast && (
         <div style={{ background: C.surfaceHi, border: `1px solid ${C.gold}`, color: C.text }} className="fixed bottom-5 left-1/2 -translate-x-1/2 px-4 py-2.5 rounded-xl text-sm shadow-2xl fade-in z-50">
           {toast}
         </div>
       )}
+
+      <StrategyBuilderTour isPaid={isPaid} forceOpen={tourForceOpen} onForceClose={() => setTourForceOpen(false)} />
     </div>
   );
 }

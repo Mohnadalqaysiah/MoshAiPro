@@ -86,7 +86,9 @@ function AppRoutes() {
 
         {/* Admin */}
         <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
-        <Route path="/admin/strategy-builder" element={<AdminRoute><StrategyBuilder /></AdminRoute>} />
+
+        {/* Strategy Builder — full-bleed terminal UI, any logged-in user (paid actions gated inside) */}
+        <Route path="/strategies" element={<ProtectedRoute><StrategyBuilder /></ProtectedRoute>} />
 
         {/* Protected */}
         <Route path="/*" element={

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { TrendingUp, BarChart2, Activity, Zap, LogOut, Shield, User, Menu, X, Settings, History, Globe, Sun, Moon, BookOpen } from 'lucide-react'
+import { TrendingUp, BarChart2, Activity, Zap, LogOut, Shield, User, Menu, X, Settings, History, Globe, Sun, Moon, BookOpen, Sparkles } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
 import { useTheme } from '../contexts/ThemeContext'
@@ -25,6 +25,7 @@ export default function Navbar() {
     { path: '/backtesting',    label: isAr ? 'الأداء التاريخي': 'Backtesting',    icon: <BarChart2 size={16} /> },
     { path: '/analytics',      label: isAr ? 'التحليلات'      : 'Analytics',      icon: <TrendingUp size={16} /> },
     { path: '/journal',        label: isAr ? 'يومية التداول'  : 'Journal',         icon: <BookOpen size={16} /> },
+    { path: '/strategies',     label: isAr ? 'بناء الاستراتيجيات' : 'Strategies', icon: <Sparkles size={16} /> },
   ]
 
   const handleLogout = () => { logout(); navigate('/login') }
