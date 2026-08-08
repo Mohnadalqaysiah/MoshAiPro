@@ -754,6 +754,7 @@ export default function Admin() {
                       <option value="crypto">كريبتو</option>
                       <option value="commodity">سلع</option>
                       <option value="index">مؤشرات</option>
+                      <option value="gulf">🕌 أسواق خليجية</option>
                     </select>
                   </div>
                 </div>
