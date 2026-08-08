@@ -11,6 +11,10 @@ import sys
 sys.path.insert(0, "/app")
 from app.database import SessionLocal
 from app.models.market_config import MarketConfig
+# User has relationship("Strategy") + غيرها من الموديلات — لازم تكون كل
+# الكلاسات المرتبطة مستوردة قبل أول query، وإلا SQLAlchemy يفشل بمحاولة
+# تهيئة mapper الـ User (KeyError عند تحليل الأسماء بالـ registry).
+from app.models import user, payment, signal, analysis_log, affiliate, price_alert, strategy  # noqa: F401
 
 # (symbol, display_name, sort_order) — نفس الترتيب المنطقي: تداول أولاً ثم باقي الخليج
 GULF_MARKETS = [

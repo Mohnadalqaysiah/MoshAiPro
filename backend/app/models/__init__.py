@@ -12,6 +12,10 @@ from app.models.analysis_log import AnalysisLog
 from app.models.site_settings import SiteSettings
 from app.models.affiliate import Affiliate, AffiliateReferral
 from app.models.price_alert import PriceAlert, AlertDirection
+from app.models.strategy import (
+    Strategy, StrategyGroup, StrategyCondition, StrategyTriggerEvent,
+    StrategyStatus, GroupLogic,
+)
 
 __all__ = [
     "User", "UserRole", "PlanType",
@@ -23,4 +27,6 @@ __all__ = [
     "SiteSettings",
     "Affiliate", "AffiliateReferral",
     "PriceAlert", "AlertDirection",
+    "Strategy", "StrategyGroup", "StrategyCondition", "StrategyTriggerEvent",
+    "StrategyStatus", "GroupLogic",
 ]
