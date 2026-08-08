@@ -24,6 +24,11 @@ def _resolve_bot_token(settings) -> str:
     return (settings.TELEGRAM_BOT_TOKEN or "").strip()
 
 
+def get_bot_token() -> str:
+    """Public helper: resolves the active Telegram bot token (DB override first, then env)."""
+    return _resolve_bot_token(get_settings())
+
+
 def notify_admin_telegram(message: str) -> None:
     """Send a Telegram message to the admin (ADMIN_TELEGRAM_ID). Runs in background."""
     settings = get_settings()

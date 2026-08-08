@@ -15,7 +15,7 @@ import shutil
 
 from app.config import get_settings
 from app.database import init_db, get_db
-from app.api import signals, markets, analytics, chat, auth, subscription, admin, bot, public_chat, analyses, affiliate, alerts, telegram_webhook, journal
+from app.api import signals, markets, analytics, chat, auth, subscription, admin, bot, public_chat, analyses, affiliate, alerts, telegram_webhook, journal, strategies
 from app.services.gemini_engine import gemini_engine
 from app.services.rate_limiter import twelvedata_client
 from app.models.site_settings import SiteSettings
@@ -145,9 +145,15 @@ async def lifespan(app: FastAPI):
     alert_task = asyncio.create_task(_price_alert_checker())
     logger.success("✅ Price alert checker started")
 
+    # بدء مهمة مراقبة الاستراتيجيات (Strategy Builder)
+    from app.services.strategy_checker import strategy_checker
+    strategy_task = asyncio.create_task(strategy_checker())
+    logger.success("✅ Strategy checker started")
+
     yield
 
     alert_task.cancel()
+    strategy_task.cancel()
 
     # Shutdown
     logger.info("👋 Shutting down Mosh AI Pro v5...")
@@ -298,6 +304,7 @@ app.include_router(analyses.router,     prefix="/api/v1/analyses",        tags=[
 app.include_router(affiliate.router,    prefix="/api/v1/affiliate",       tags=["Affiliate"])
 app.include_router(alerts.router,       prefix="/api/v1/alerts",           tags=["Alerts"])
 app.include_router(journal.router,     prefix="/api/v1/journal",          tags=["Journal"])
+app.include_router(strategies.router,  prefix="/api/v1/strategies",       tags=["Strategies"])
 
 
 # WebSocket endpoint for real-time updates

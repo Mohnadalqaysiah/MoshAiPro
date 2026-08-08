@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import axios from "axios";
+import { Link } from "react-router-dom";
+import { useAuth } from "../contexts/AuthContext";
 import {
   Search, Plus, X, ChevronDown, ChevronRight, Copy, Trash2, Power,
   Edit3, Eye, Play, Send, Bot, Link2, Check, AlertTriangle, Sparkles,
@@ -7,6 +10,16 @@ import {
   Radio, TrendingUp, ArrowLeft, Loader2, ListChecks, FileText, Zap,
   SlidersHorizontal, MonitorDot, FolderOpen, Hammer, Ban,
 } from "lucide-react";
+
+const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
+// أنواع الشروط المربوطة فعليًا بمحرك التحليل الحقيقي (ai_engine_v5) —
+// نفس القائمة الموجودة بـ backend/app/services/strategy_engine.py::SUPPORTED_CONDITION_TYPES
+const IMPLEMENTED_TYPES = new Set([
+  "bos", "choch", "ob", "fvg", "liquidity", "eqh", "eql", "premium", "killzone",
+  "london", "newyork", "asian", "killzones",
+  "rsi", "macd", "ema", "stoch", "atrv",
+]);
 
 /* =========================================================================
    DESIGN TOKENS — Qaffel / Premium Fintech Trading Terminal
@@ -317,16 +330,18 @@ function Modal({ title, children, onClose, danger }) {
    MAIN COMPONENT
 ========================================================================= */
 export default function StrategyBuilder() {
-  const demo = useMemo(buildDemoState, []);
+  const { user } = useAuth();
+  const tgConnected = !!user?.telegram_linked;
 
   const [activeTab, setActiveTab] = useState("build");
-  const [strategyName, setStrategyName] = useState("London Gold Liquidity Reversal");
+  const [strategyName, setStrategyName] = useState("استراتيجية جديدة");
   const [symbols, setSymbols] = useState(["XAU/USD"]);
   const [timeframes, setTimeframes] = useState(["1H", "15m", "5m"]);
 
-  const [groups, setGroups] = useState(demo.groups);
-  const [conditions, setConditions] = useState(demo.conditions);
-  const [activeGroupId, setActiveGroupId] = useState("gA");
+  const [groups, setGroups] = useState([]);
+  const [conditions, setConditions] = useState([]);
+  const [currentStrategyId, setCurrentStrategyId] = useState(null);
+  const [activeGroupId, setActiveGroupId] = useState(null);
   const [activeCat, setActiveCat] = useState("smc");
   const [search, setSearch] = useState("");
 
@@ -334,19 +349,32 @@ export default function StrategyBuilder() {
   const [triggerActions, setTriggerActions] = useState({ createSignal: true, sendTelegram: true, monitorEntry: true });
   const [execCfg, setExecCfg] = useState({ entry: "Market", sl: "Below Swing Low", tp: "Risk/Reward", rr: "2" });
 
-  const [tgConnected, setTgConnected] = useState(true);
-  const [tgChannel, setTgChannel] = useState("@mosh_trading_alerts");
+  const [tgChannel, setTgChannel] = useState("");
   const [tgFields, setTgFields] = useState({ entry: true, sl: true, tp: true, rr: true, confidence: true, conditions: true, chart: false });
 
   const [sim, setSim] = useState({ status: "idle", results: [] });
-  const [monitor, setMonitor] = useState({ active: false, events: [], lastScan: null, nextScan: null });
+  const [monitor, setMonitor] = useState({ active: false, events: [], lastScan: null });
 
-  const [saved, setSaved] = useState([
-    { id: "demo1", name: "London Gold Liquidity Reversal", symbol: "XAU/USD", timeframe: "15M", confidence: 82, conditions: 6, schools: 4, status: "ACTIVE", lastTrigger: "اليوم 14:32", signals: 24 },
-  ]);
+  const [saved, setSaved] = useState([]);
+  const [savedLoading, setSavedLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [viewTarget, setViewTarget] = useState(null);
   const [toast, setToast] = useState(null);
+
+  const loadSaved = useCallback(async () => {
+    setSavedLoading(true);
+    try {
+      const r = await axios.get(`${API}/api/v1/strategies`);
+      setSaved(r.data.strategies || []);
+    } catch {
+      // تُعرض حالة فارغة بأمان — لا نخترع بيانات
+    } finally {
+      setSavedLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadSaved(); }, [loadSaved]);
 
   const history = useRef([]);
   const historyIdx = useRef(-1);
@@ -439,7 +467,16 @@ export default function StrategyBuilder() {
   const clearStrategy = () => {
     mutate([], []);
     setActiveGroupId(null);
+    setCurrentStrategyId(null);
     showToast("تم مسح الاستراتيجية");
+  };
+
+  const loadDemoIntoEditor = () => {
+    const demo = buildDemoState();
+    mutate(demo.groups, demo.conditions);
+    setActiveGroupId(demo.groups[0]?.id || null);
+    setCurrentStrategyId(null);
+    showToast("تم تحميل استراتيجية تجريبية — عدّلها ثم احفظها لتصبح حقيقية");
   };
 
   const filteredItems = useMemo(() => {
@@ -464,10 +501,22 @@ export default function StrategyBuilder() {
     })
     .join(" و ");
 
-  /* ---------------- execution preview (mock) ---------------- */
+  /* ---------------- live price (real, falls back to a reference price if unavailable) ---------------- */
+  const [livePrice, setLivePrice] = useState(null);
+  useEffect(() => {
+    const sym = symbols[0];
+    if (!sym) { setLivePrice(null); return; }
+    let stop = false;
+    axios.get(`${API}/api/v1/markets/${sym.replace("/", "")}/price`)
+      .then((r) => { if (!stop) setLivePrice(r.data?.data?.price ?? null); })
+      .catch(() => { if (!stop) setLivePrice(null); });
+    return () => { stop = true; };
+  }, [symbols]);
+
+  /* ---------------- execution preview ---------------- */
   const execPreview = useMemo(() => {
     const sym = symbols[0] || "XAU/USD";
-    const bp = basePrice(sym);
+    const bp = livePrice ?? basePrice(sym);
     const dist = bp * 0.003;
     const entry = bp + dist * 0.4;
     const sl = execCfg.sl.includes("ATR") ? entry - dist * 1.2 : entry - dist;
@@ -478,7 +527,7 @@ export default function StrategyBuilder() {
       entry: fmtPrice(sym, entry), sl: fmtPrice(sym, sl),
       tp1: fmtPrice(sym, tp1), tp2: fmtPrice(sym, tp2), sym,
     };
-  }, [symbols, execCfg]);
+  }, [symbols, execCfg, livePrice]);
 
   /* ---------------- telegram template ---------------- */
   const tgTemplate = useMemo(() => {
@@ -505,92 +554,159 @@ export default function StrategyBuilder() {
     return lines.join("\n");
   }, [symbols, timeframes, tgFields, execPreview, execCfg, totalWeight, enabledConditions]);
 
-  /* ---------------- simulation ---------------- */
-  const runSimulation = () => {
+  /* ---------------- strategy payload (matches backend StrategyIn) ---------------- */
+  const buildPayload = () => ({
+    name: strategyName, symbols, timeframes, minScore, triggerActions, execCfg,
+    tgChannel, tgFields, groups, conditions,
+  });
+
+  /* ---------------- simulation (REAL — evaluates against live analyze_market()) ---------------- */
+  const runSimulation = async () => {
+    if (enabledConditions.length === 0) return showToast("أضف شروطًا قبل تشغيل المحاكاة");
     setSim({ status: "scanning", results: [] });
-    setTimeout(() => {
-      const results = SYMBOL_POOL.map((m, idx) => {
-        const bias = symbols.includes(m.s) ? 0.82 : 0.45;
-        const matched = enabledConditions.map((c) => ({ ...c, hit: Math.random() < bias }));
-        const score = Math.min(100, matched.filter((c) => c.hit).reduce((a, c) => a + Number(c.weight || 0), 0));
-        const groupsOk = groups
-          .filter((g) => conditions.some((c) => c.groupId === g.id))
-          .every((g) => {
-            const mem = matched.filter((c) => c.groupId === g.id);
-            if (mem.length === 0) return true;
-            const hits = mem.filter((c) => (c.not ? !c.hit : c.hit)).length;
-            if (g.logic === "AND") return hits === mem.length;
-            if (g.logic === "OR") return hits > 0;
-            return hits >= (g.atLeast || 1);
-          });
-        const triggered = groupsOk && score >= minScore && enabledConditions.length > 0;
-        return { symbol: m.s, matched, score, triggered, price: fmtPrice(m.s, m.base * (1 + (Math.random() - 0.5) * 0.002)) };
-      });
-      setSim({ status: "done", results });
-    }, 1300);
-  };
-
-  /* ---------------- live monitor ---------------- */
-  const monitorTimer = useRef(null);
-  const scriptedEvents = [
-    (s) => `${s} — Liquidity Sweep detected`,
-    (s) => `${s} — BOS confirmed`,
-    (s) => `${s} — FVG formed`,
-    (s) => `${s} — Score = ${totalWeight}`,
-    (s) => `Telegram Alert Sent ✓`,
-  ];
-  const evtIdx = useRef(0);
-
-  const toggleMonitor = () => {
-    if (monitor.active) {
-      clearInterval(monitorTimer.current);
-      setMonitor((m) => ({ ...m, active: false }));
-      return;
-    }
-    const now = new Date();
-    setMonitor({ active: true, events: [], lastScan: now.toLocaleTimeString("ar-EG"), nextScan: new Date(now.getTime() + 8000).toLocaleTimeString("ar-EG") });
-    evtIdx.current = 0;
-    monitorTimer.current = setInterval(() => {
-      const sym = symbols[0] || "XAU/USD";
-      const msg = scriptedEvents[evtIdx.current % scriptedEvents.length](sym);
-      evtIdx.current += 1;
-      const now2 = new Date();
-      setMonitor((m) => ({
-        active: true,
-        events: [{ id: nextId(), time: now2.toLocaleTimeString("ar-EG"), msg }, ...m.events].slice(0, 12),
-        lastScan: now2.toLocaleTimeString("ar-EG"),
-        nextScan: new Date(now2.getTime() + 8000).toLocaleTimeString("ar-EG"),
+    try {
+      const res = currentStrategyId
+        ? await axios.post(`${API}/api/v1/strategies/${currentStrategyId}/evaluate`)
+        : await axios.post(`${API}/api/v1/strategies/evaluate-preview`, buildPayload());
+      const results = (res.data.results || []).map((r) => ({
+        symbol: r.symbol,
+        matched: (r.matched || []).map((m) => ({ ...m })),
+        unsupported: r.unsupported || [],
+        score: r.score ?? 0,
+        triggered: !!r.triggered,
+        price: r.price != null ? fmtPrice(r.symbol, r.price) : "—",
+        error: r.error || null,
       }));
-    }, 3200);
+      setSim({ status: "done", results });
+    } catch (e) {
+      setSim({ status: "idle", results: [] });
+      showToast(e.response?.data?.detail || "فشل تشغيل المحاكاة");
+    }
   };
-  useEffect(() => () => clearInterval(monitorTimer.current), []);
 
-  /* ---------------- save / load strategies ---------------- */
-  const saveStrategy = (activate) => {
-    if (conditions.length === 0) return showToast("أضف شروطًا قبل الحفظ");
-    const rec = {
-      id: nextId(), name: strategyName, symbol: symbols[0] || "-", timeframe: (timeframes[timeframes.length - 1] || "-").toUpperCase(),
-      confidence: totalWeight, conditions: conditions.length, schools: schoolsUsed,
-      status: activate ? "ACTIVE" : "DRAFT", lastTrigger: activate ? "لم يُشغّل بعد" : "—", signals: 0,
-      _groups: groups, _conditions: conditions, _symbols: symbols, _timeframes: timeframes,
+  /* ---------------- live monitor (REAL — polls saved trigger events) ---------------- */
+  useEffect(() => {
+    if (activeTab !== "monitoring" || !currentStrategyId) return;
+    let stopped = false;
+    const poll = async () => {
+      try {
+        const r = await axios.get(`${API}/api/v1/strategies/${currentStrategyId}/events?limit=15`);
+        if (stopped) return;
+        setMonitor({
+          active: r.data.status === "ACTIVE",
+          events: (r.data.events || []).map((e) => ({
+            id: e.id,
+            time: e.createdAt ? new Date(e.createdAt).toLocaleTimeString("ar-EG") : "",
+            msg: `${e.symbol} — Score ${e.score}${e.triggered ? " — ✓ TRIGGERED" : ""}${e.telegramSent ? " — Telegram Alert Sent ✓" : ""}`,
+          })),
+          lastScan: r.data.events?.[0]?.createdAt ? new Date(r.data.events[0].createdAt).toLocaleTimeString("ar-EG") : null,
+        });
+      } catch { /* تُترك الحالة كما هي عند فشل الاستطلاع */ }
     };
-    setSaved((prev) => [rec, ...prev]);
-    showToast(activate ? "تم الحفظ والتفعيل" : "تم حفظ المسودة");
+    poll();
+    const id = setInterval(poll, 10000);
+    return () => { stopped = true; clearInterval(id); };
+  }, [activeTab, currentStrategyId]);
+
+  const toggleMonitor = async () => {
+    if (!currentStrategyId) return showToast("احفظ الاستراتيجية أولًا لتفعيل المراقبة الحقيقية");
+    const next = monitor.active ? "DISABLED" : "ACTIVE";
+    try {
+      await axios.put(`${API}/api/v1/strategies/${currentStrategyId}/status`, { status: next });
+      setMonitor((m) => ({ ...m, active: next === "ACTIVE" }));
+      await loadSaved();
+      showToast(next === "ACTIVE" ? "تم تفعيل المراقبة — يفحصها الخادم كل 5 دقائق" : "تم إيقاف المراقبة");
+    } catch {
+      showToast("فشل تحديث حالة المراقبة");
+    }
   };
-  const loadStrategy = (rec) => {
-    if (!rec._groups) return showToast("عرض فقط — لا يمكن تحرير هذه البطاقة التجريبية");
-    setGroups(rec._groups); setConditions(rec._conditions);
-    setSymbols(rec._symbols || symbols); setTimeframes(rec._timeframes || timeframes);
-    setStrategyName(rec.name); setActiveGroupId(rec._groups[0]?.id || null);
-    setActiveTab("build");
-    showToast("تم تحميل الاستراتيجية للتحرير");
+
+  /* ---------------- save / load strategies (REAL — DB-backed) ---------------- */
+  const saveStrategy = async (activate) => {
+    if (conditions.length === 0) return showToast("أضف شروطًا قبل الحفظ");
+    setSaving(true);
+    try {
+      let id = currentStrategyId;
+      if (id) {
+        await axios.put(`${API}/api/v1/strategies/${id}`, buildPayload());
+      } else {
+        const res = await axios.post(`${API}/api/v1/strategies`, buildPayload());
+        id = res.data.id;
+        setCurrentStrategyId(id);
+      }
+      if (activate) {
+        await axios.put(`${API}/api/v1/strategies/${id}/status`, { status: "ACTIVE" });
+      }
+      await loadSaved();
+      showToast(activate ? "تم الحفظ والتفعيل" : "تم حفظ المسودة");
+    } catch (e) {
+      showToast(e.response?.data?.detail || "فشل الحفظ");
+    } finally {
+      setSaving(false);
+    }
   };
-  const duplicateSaved = (rec) => setSaved((prev) => [{ ...rec, id: nextId(), name: `${rec.name} (نسخة)`, status: "DRAFT" }, ...prev]);
-  const toggleSavedStatus = (id) => setSaved((prev) => prev.map((r) => (r.id === id ? { ...r, status: r.status === "ACTIVE" ? "DISABLED" : "ACTIVE" } : r)));
-  const confirmDelete = () => {
-    setSaved((prev) => prev.filter((r) => r.id !== deleteTarget.id));
-    setDeleteTarget(null);
-    showToast("تم حذف الاستراتيجية");
+
+  const loadStrategy = async (rec) => {
+    try {
+      const r = await axios.get(`${API}/api/v1/strategies/${rec.id}`);
+      const d = r.data;
+      setGroups(d.groups); setConditions(d.conditions);
+      setSymbols(d.symbols?.length ? d.symbols : symbols);
+      setTimeframes(d.timeframes?.length ? d.timeframes : timeframes);
+      setStrategyName(d.name); setMinScore(d.minScore);
+      setTriggerActions(d.triggerActions); setExecCfg(d.execCfg);
+      setTgChannel(d.tgChannel || ""); setTgFields(d.tgFields);
+      setCurrentStrategyId(d.id);
+      setActiveGroupId(d.groups[0]?.id || null);
+      setActiveTab("build");
+      showToast("تم تحميل الاستراتيجية للتحرير");
+    } catch {
+      showToast("فشل تحميل الاستراتيجية");
+    }
+  };
+
+  const duplicateSaved = async (rec) => {
+    try {
+      await axios.post(`${API}/api/v1/strategies/${rec.id}/duplicate`);
+      await loadSaved();
+      showToast("تم نسخ الاستراتيجية");
+    } catch {
+      showToast("فشل نسخ الاستراتيجية");
+    }
+  };
+
+  const toggleSavedStatus = async (rec) => {
+    const next = rec.status === "ACTIVE" ? "DISABLED" : "ACTIVE";
+    try {
+      await axios.put(`${API}/api/v1/strategies/${rec.id}/status`, { status: next });
+      await loadSaved();
+    } catch {
+      showToast("فشل تحديث الحالة");
+    }
+  };
+
+  const confirmDelete = async () => {
+    try {
+      await axios.delete(`${API}/api/v1/strategies/${deleteTarget.id}`);
+      if (currentStrategyId === deleteTarget.id) setCurrentStrategyId(null);
+      await loadSaved();
+      showToast("تم حذف الاستراتيجية");
+    } catch {
+      showToast("فشل حذف الاستراتيجية");
+    } finally {
+      setDeleteTarget(null);
+    }
+  };
+
+  const sendTestTelegramAlert = async () => {
+    if (!currentStrategyId) return showToast("احفظ الاستراتيجية أولًا");
+    if (!tgConnected) return showToast("اربط حساب Telegram أولًا من صفحة الملف الشخصي");
+    try {
+      const r = await axios.post(`${API}/api/v1/strategies/${currentStrategyId}/telegram/test`);
+      showToast(r.data.message || "تم الإرسال ✅");
+    } catch (e) {
+      showToast(e.response?.data?.detail || "فشل إرسال التنبيه");
+    }
   };
 
   const toggleSymbol = (s) => setSymbols((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
@@ -627,7 +743,7 @@ export default function StrategyBuilder() {
             </div>
             <div>
               <div style={{ fontFamily: FD, fontWeight: 600, fontSize: 14.5 }}>Qaffel Strategy Terminal</div>
-              <div style={{ color: C.sub, fontSize: 10.5, fontFamily: FM }}>PROTOTYPE • MOCK DATA ONLY</div>
+              <div style={{ color: C.sub, fontSize: 10.5, fontFamily: FM }}>LIVE — SMC/ICT مربوطة بمحرك التحليل الحقيقي</div>
             </div>
           </div>
 
@@ -732,6 +848,9 @@ export default function StrategyBuilder() {
                         <div className="flex items-center gap-1.5">
                           <span style={{ width: 5, height: 5, borderRadius: 99, background: cat.color }} />
                           <span style={{ fontSize: 12.5, fontWeight: 500 }}>{item.label}</span>
+                          {!IMPLEMENTED_TYPES.has(item.type) && (
+                            <span title="غير مربوط بمحرك التحليل الحقيقي بعد" style={{ color: C.muted, fontSize: 9, border: `1px solid ${C.border}` }} className="px-1 py-0.5 rounded">تجريبي</span>
+                          )}
                         </div>
                         <div style={{ color: C.muted, fontSize: 10.5 }} className="mt-0.5">{item.desc}</div>
                       </div>
@@ -790,11 +909,11 @@ export default function StrategyBuilder() {
                 <IconBtn icon={Redo2} onClick={redo} title="إعادة" />
                 <IconBtn icon={RefreshCw} onClick={clearStrategy} title="مسح الكل" color={C.red} />
                 <div className="flex-1" />
-                <button onClick={() => saveStrategy(false)} style={{ background: C.surfaceHi, border: `1px solid ${C.border}`, color: C.text }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12.5px]">
-                  <Save size={13} /> حفظ كمسودة
+                <button disabled={saving} onClick={() => saveStrategy(false)} style={{ background: C.surfaceHi, border: `1px solid ${C.border}`, color: C.text, opacity: saving ? 0.6 : 1 }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12.5px]">
+                  {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} حفظ كمسودة
                 </button>
-                <button onClick={() => saveStrategy(true)} style={{ background: C.gold, color: "#1A1200", fontWeight: 600, animation: conditions.length ? "glowPulse 2.6s infinite" : "none" }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12.5px]">
-                  <Check size={13} /> حفظ وتفعيل
+                <button disabled={saving} onClick={() => saveStrategy(true)} style={{ background: C.gold, color: "#1A1200", fontWeight: 600, opacity: saving ? 0.6 : 1, animation: conditions.length && !saving ? "glowPulse 2.6s infinite" : "none" }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12.5px]">
+                  {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} حفظ وتفعيل
                 </button>
               </div>
 
@@ -816,9 +935,12 @@ export default function StrategyBuilder() {
 
               {/* groups list */}
               {groups.length === 0 && (
-                <div style={{ background: C.surface, border: `1px dashed ${C.border}`, color: C.muted }} className="rounded-2xl py-12 flex flex-col items-center gap-2 text-sm">
+                <div style={{ background: C.surface, border: `1px dashed ${C.border}`, color: C.muted }} className="rounded-2xl py-12 flex flex-col items-center gap-3 text-sm">
                   <Layers size={22} />
                   أنشئ مجموعة أولى، ثم أضف شروطًا من المكتبة على اليمين
+                  <button onClick={loadDemoIntoEditor} style={{ background: C.goldSoft, border: `1px solid ${C.gold}`, color: C.gold }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px]">
+                    <Sparkles size={12} /> جرّب استراتيجية تجريبية جاهزة
+                  </button>
                 </div>
               )}
 
@@ -883,6 +1005,9 @@ export default function StrategyBuilder() {
                                 className="rounded-xl p-2.5 flex flex-wrap items-center gap-2"
                               >
                                 <Pill color={cat.color} bg={`${cat.color}1A`} border={cat.color} style={{ fontSize: 10 }}>{cat.label}</Pill>
+                                {!IMPLEMENTED_TYPES.has(c.type) && (
+                                  <span title="غير مربوط بمحرك التحليل الحقيقي بعد — لا يُحتسب بالسكور" style={{ color: C.muted, fontSize: 9, border: `1px solid ${C.border}` }} className="px-1 py-0.5 rounded">تجريبي</span>
+                                )}
                                 <input
                                   value={c.label}
                                   onChange={(e) => updateCondition(c.id, { label: e.target.value })}
@@ -1118,17 +1243,28 @@ export default function StrategyBuilder() {
                           {r.triggered ? "TRIGGERED" : "WAITING"}
                         </Pill>
                       </div>
-                      <div className="flex flex-wrap gap-1 mb-2">
-                        {r.matched.slice(0, 8).map((m) => (
-                          <span key={m.id} style={{ color: m.hit ? C.teal : C.muted, fontSize: 10.5, fontFamily: FM }} className="flex items-center gap-0.5">
-                            {m.hit ? <Check size={10} /> : <X size={10} />} {m.label}
-                          </span>
-                        ))}
-                      </div>
-                      <div className="flex items-center justify-between" style={{ fontFamily: FM, fontSize: 11 }}>
-                        <span style={{ color: C.sub }}>Price {r.price}</span>
-                        <span style={{ color: r.score >= minScore ? C.gold : C.sub }}>Score {r.score}</span>
-                      </div>
+                      {r.error ? (
+                        <div style={{ color: C.red, fontSize: 11.5 }} className="mb-2">{r.error}</div>
+                      ) : (
+                        <>
+                          <div className="flex flex-wrap gap-1 mb-2">
+                            {r.matched.slice(0, 8).map((m) => (
+                              <span key={m.id} style={{ color: m.hit ? C.teal : C.muted, fontSize: 10.5, fontFamily: FM }} className="flex items-center gap-0.5">
+                                {m.hit ? <Check size={10} /> : <X size={10} />} {m.label}
+                              </span>
+                            ))}
+                          </div>
+                          {r.unsupported?.length > 0 && (
+                            <div style={{ color: C.gold, fontSize: 10 }} className="mb-2 flex items-center gap-1">
+                              <AlertTriangle size={10} /> {r.unsupported.length} شرط غير مدعوم بعد (لم يُحتسب)
+                            </div>
+                          )}
+                          <div className="flex items-center justify-between" style={{ fontFamily: FM, fontSize: 11 }}>
+                            <span style={{ color: C.sub }}>Price {r.price}</span>
+                            <span style={{ color: r.score >= minScore ? C.gold : C.sub }}>Score {r.score}</span>
+                          </div>
+                        </>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1138,7 +1274,7 @@ export default function StrategyBuilder() {
             {sim.status === "idle" && (
               <div style={{ background: C.surface, border: `1px dashed ${C.border}`, color: C.muted }} className="rounded-2xl py-14 flex flex-col items-center gap-2 text-sm">
                 <Radio size={22} />
-                اضغط SIMULATE STRATEGY لبدء فحص وهمي للأسواق
+                اضغط SIMULATE STRATEGY لفحص حقيقي للأسواق مقابل محرك التحليل
               </div>
             )}
           </div>
@@ -1152,16 +1288,25 @@ export default function StrategyBuilder() {
                 <div style={{ fontFamily: FD, fontWeight: 600, fontSize: 14.5 }} className="flex items-center gap-2">
                   <Bot size={16} color={tgConnected ? C.teal : C.muted} /> Telegram Notification
                 </div>
-                <button
-                  onClick={() => setTgConnected((v) => !v)}
-                  style={{ background: tgConnected ? C.tealSoft : C.surfaceHi, border: `1px solid ${tgConnected ? C.teal : C.border}`, color: tgConnected ? C.teal : C.sub }}
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px]"
-                >
-                  <Link2 size={11} /> {tgConnected ? "متصل (Mock)" : "غير متصل"}
-                </button>
+                {tgConnected ? (
+                  <span
+                    style={{ background: C.tealSoft, border: `1px solid ${C.teal}`, color: C.teal }}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px]"
+                  >
+                    <Link2 size={11} /> متصل
+                  </span>
+                ) : (
+                  <Link
+                    to="/profile"
+                    style={{ background: C.surfaceHi, border: `1px solid ${C.border}`, color: C.sub }}
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] hover:opacity-90"
+                  >
+                    <Link2 size={11} /> اربط حسابك الآن
+                  </Link>
+                )}
               </div>
 
-              <label style={{ color: C.sub, fontSize: 11 }}>Channel</label>
+              <label style={{ color: C.sub, fontSize: 11 }}>Channel / Chat ID <span style={{ color: C.muted }}>(اختياري — فارغ = يُرسل لحسابك المرتبط)</span></label>
               <input value={tgChannel} onChange={(e) => setTgChannel(e.target.value)} style={{ background: C.surfaceHi, border: `1px solid ${C.border}`, color: C.text, fontFamily: FM }} className="w-full rounded-lg px-3 py-2 text-sm mt-1 mb-4" />
 
               <div style={{ color: C.sub, fontSize: 11 }} className="mb-2">Include in message</div>
@@ -1182,12 +1327,15 @@ export default function StrategyBuilder() {
               </div>
 
               <button
-                onClick={() => showToast("تم إرسال تنبيه تجريبي (Mock) ✓")}
+                onClick={sendTestTelegramAlert}
                 style={{ background: C.gold, color: "#1A1200", fontWeight: 600 }}
                 className="w-full rounded-lg py-2.5 text-sm flex items-center justify-center gap-2"
               >
                 <Send size={14} /> Send Test Alert
               </button>
+              {!currentStrategyId && (
+                <p style={{ color: C.muted, fontSize: 10.5 }} className="text-center mt-2">احفظ الاستراتيجية أولًا لتفعيل الإرسال الحقيقي</p>
+              )}
             </div>
 
             <div style={{ background: C.surface, border: `1px solid ${C.border}` }} className="rounded-2xl p-5">
@@ -1217,24 +1365,28 @@ export default function StrategyBuilder() {
               <div style={{ fontFamily: FM, fontSize: 12.5, color: C.sub }} className="flex flex-col gap-2 mb-4">
                 <div className="flex justify-between"><span>Monitoring</span><span style={{ color: C.text }}>{symbols.length || SYMBOL_POOL.length} Markets</span></div>
                 <div className="flex justify-between"><span>Last Scan</span><span style={{ color: C.text }}>{monitor.lastScan || "—"}</span></div>
-                <div className="flex justify-between"><span>Next Scan</span><span style={{ color: C.text }}>{monitor.nextScan || "—"}</span></div>
+                <div className="flex justify-between"><span>Check Interval</span><span style={{ color: C.text }}>~5 دقائق</span></div>
               </div>
 
               <button
                 onClick={toggleMonitor}
-                style={{ background: monitor.active ? C.redSoft : C.tealSoft, border: `1px solid ${monitor.active ? C.red : C.teal}`, color: monitor.active ? C.red : C.teal }}
+                disabled={!currentStrategyId}
+                style={{ background: monitor.active ? C.redSoft : C.tealSoft, border: `1px solid ${monitor.active ? C.red : C.teal}`, color: monitor.active ? C.red : C.teal, opacity: currentStrategyId ? 1 : 0.5 }}
                 className="w-full rounded-lg py-2.5 text-sm flex items-center justify-center gap-2"
               >
                 <Power size={14} /> {monitor.active ? "إيقاف المراقبة" : "بدء المراقبة"}
               </button>
+              {!currentStrategyId && (
+                <p style={{ color: C.muted, fontSize: 10.5 }} className="text-center mt-2">احفظ الاستراتيجية أولًا</p>
+              )}
             </div>
 
             <div style={{ background: C.surface, border: `1px solid ${C.border}` }} className="rounded-2xl p-5">
-              <div style={{ fontFamily: FD, fontWeight: 600, fontSize: 14.5 }} className="mb-3">Live Events (Mock)</div>
+              <div style={{ fontFamily: FD, fontWeight: 600, fontSize: 14.5 }} className="mb-3">Live Events</div>
               {monitor.events.length === 0 && (
                 <div style={{ color: C.muted }} className="flex flex-col items-center justify-center py-16 text-sm gap-2">
                   <MonitorDot size={22} />
-                  ابدأ المراقبة لعرض أحداث حية وهمية
+                  ابدأ المراقبة لعرض أحداث الفحص الحقيقية (يفحص الخادم كل 5 دقائق تقريبًا)
                 </div>
               )}
               <div className="flex flex-col gap-2 max-h-[420px] overflow-auto scroll-thin">
@@ -1252,7 +1404,12 @@ export default function StrategyBuilder() {
         {/* ============ TAB: SAVED ============ */}
         {activeTab === "saved" && (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {saved.length === 0 && (
+            {savedLoading && (
+              <>
+                {[0, 1, 2].map((i) => <div key={i} className="skeleton h-40 rounded-2xl" />)}
+              </>
+            )}
+            {!savedLoading && saved.length === 0 && (
               <div style={{ background: C.surface, border: `1px dashed ${C.border}`, color: C.muted }} className="col-span-full rounded-2xl py-14 flex flex-col items-center gap-2 text-sm">
                 <FolderOpen size={22} /> لا توجد استراتيجيات محفوظة بعد
               </div>
@@ -1284,7 +1441,7 @@ export default function StrategyBuilder() {
                 <div style={{ borderTop: `1px solid ${C.borderSoft}` }} className="pt-2.5 flex items-center gap-1 flex-wrap">
                   <IconBtn icon={Edit3} onClick={() => loadStrategy(r)} title="تحرير" color={C.blue} />
                   <IconBtn icon={Copy} onClick={() => duplicateSaved(r)} title="تكرار" />
-                  <IconBtn icon={Power} onClick={() => toggleSavedStatus(r.id)} title="تفعيل/تعطيل" color={r.status === "ACTIVE" ? C.teal : C.muted} />
+                  <IconBtn icon={Power} onClick={() => toggleSavedStatus(r)} title="تفعيل/تعطيل" color={r.status === "ACTIVE" ? C.teal : C.muted} />
                   <IconBtn icon={Eye} onClick={() => setViewTarget(r)} title="عرض" />
                   <IconBtn icon={Trash2} onClick={() => setDeleteTarget(r)} title="حذف" color={C.red} />
                 </div>

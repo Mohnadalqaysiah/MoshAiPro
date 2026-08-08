@@ -92,6 +92,7 @@ class User(Base):
     analysis_logs = relationship("AnalysisLog", back_populates="user", cascade="all, delete-orphan")
     affiliate     = relationship("Affiliate",   back_populates="user", uselist=False, cascade="all, delete-orphan")
     price_alerts  = relationship("PriceAlert",  back_populates="user", cascade="all, delete-orphan")
+    strategies    = relationship("Strategy",    back_populates="user", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<User(id={self.id}, email={self.email}, plan={self.plan})>"
