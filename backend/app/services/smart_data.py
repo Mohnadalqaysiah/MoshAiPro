@@ -95,6 +95,21 @@ FINNHUB_MAP = {
     "NATGAS":  "OANDA:NATGAS_USD",
 }
 
+# ─── الأسواق الخليجية — عبر TradingView التاريخي (مجاني، بدون اشتراك) ─────────
+# لا يغطيها yfinance ولا Finnhub. مجموعة بداية تمثيلية — أضف أي رمز آخر بنفس
+# صيغة "EXCHANGE:TICKER" من TradingView (تأكد من الرمز على tradingview.com أولاً).
+GULF_SYMBOL_MAP = {
+    # تداول — السوق السعودي
+    "ARAMCO": "TADAWUL:2222",
+    "RAJHI":  "TADAWUL:1120",
+    "SABIC":  "TADAWUL:2010",
+    "STC":    "TADAWUL:7010",
+    "TASI":   "TADAWUL:TASI",
+    # سوق دبي المالي
+    "EMAAR":  "DFM:EMAAR",
+    "DFMGI":  "DFM:DFMGI",
+}
+
 # yfinance interval map
 YF_INTERVAL_MAP = {
     "1m":  "1m",
@@ -180,6 +195,10 @@ class SmartDataProvider:
             df = await asyncio.get_event_loop().run_in_executor(
                 None, self._fetch_finnhub_candles, symbol, timeframe, bars
             )
+
+        # 2.5 الأسواق الخليجية — TradingView التاريخي (مجاني بالكامل)
+        if df is None and symbol.upper() in GULF_SYMBOL_MAP:
+            df = await self._fetch_tv_gulf_history(symbol, timeframe, bars)
 
         # 3. TwelveData — فقط إذا فعّله الأدمن صراحةً
         if df is None and self._td_enabled and self._td_runtime_key:
@@ -309,6 +328,38 @@ class SmartDataProvider:
 
         except Exception as e:
             logger.warning(f"Finnhub candles error {symbol}: {e}")
+            return None
+
+    # ─── TradingView (الأسواق الخليجية) ────────────────────────────────────
+
+    async def _fetch_tv_gulf_history(self, symbol: str, timeframe: str, bars: int) -> Optional[pd.DataFrame]:
+        """شموع تداول/الأسواق الخليجية عبر TradingView التاريخي — بدون اشتراك."""
+        try:
+            from app.services.tv_price_feed import fetch_tv_history
+            tv_symbol = GULF_SYMBOL_MAP.get(symbol.upper())
+            if not tv_symbol:
+                return None
+
+            raw_bars = await fetch_tv_history(tv_symbol, timeframe, bars=bars)
+            if not raw_bars or len(raw_bars) < 10:
+                logger.warning(f"⚠️ TV Gulf history: no data for {symbol} ({tv_symbol})")
+                return None
+
+            df = pd.DataFrame(raw_bars, columns=["datetime", "open", "high", "low", "close", "volume"])
+            df["datetime"] = pd.to_datetime(df["datetime"], unit="s", utc=True)
+            for col in ["open", "high", "low", "close", "volume"]:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+            df = df.dropna(subset=["open", "high", "low", "close"]).sort_values("datetime")
+            df = df.tail(bars).reset_index(drop=True)
+
+            if len(df) < 10:
+                return None
+
+            logger.info(f"✅ TV Gulf history: {symbol} ({tv_symbol}) {timeframe} — {len(df)} bars")
+            return df
+
+        except Exception as e:
+            logger.warning(f"TV Gulf history error {symbol}: {e}")
             return None
 
     # ─── TwelveData ───────────────────────────────────────────────────────

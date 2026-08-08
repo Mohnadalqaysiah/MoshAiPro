@@ -284,5 +284,94 @@ class TVPriceFeed:
             pass
 
 
+# ─── Historical OHLCV (chart session) ──────────────────────────────────────────
+# اتصال منفصل قصير العمر لكل طلب — لا علاقة له بالـ WebSocket الدائم أعلاه
+# (اللي بيتابع فقط آخر سعر). يُستخدم بروتوكول resolve_symbol/create_series،
+# نفس اللي بيغذّي الشارت المجاني على tradingview.com — بدون أي مفتاح أو اشتراك.
+
+_TV_RESOLUTION_MAP: dict[str, str] = {
+    "1m": "1", "5m": "5", "15m": "15", "30m": "30",
+    "1h": "60", "4h": "240", "1d": "1D", "1day": "1D", "1w": "1W",
+}
+
+
+def _parse_tv_messages(raw: str) -> list[dict]:
+    """يفكّك إطار TradingView الخام لكل رسائل JSON بداخله (نسخة عامة من _handle_message)."""
+    parts = raw.split("~m~")
+    out = []
+    i = 2
+    while i < len(parts):
+        msg_text = parts[i]
+        if msg_text and not msg_text.startswith("~h~"):
+            try:
+                out.append(json.loads(msg_text))
+            except json.JSONDecodeError:
+                pass
+        i += 2
+    return out
+
+
+async def fetch_tv_history(tv_symbol: str, timeframe: str, bars: int = 150, timeout_s: float = 15.0) -> Optional[list]:
+    """
+    يجلب شموع تاريخية حقيقية من TradingView (بدون اشتراك) لأي رمز بصيغة
+    "EXCHANGE:TICKER" — مثال: "TADAWUL:2222", "DFM:EMAAR".
+    يرجع list من [timestamp, open, high, low, close, volume] أو None عند الفشل.
+    """
+    import websockets
+
+    freq = _TV_RESOLUTION_MAP.get(timeframe, "60")
+    chart_session = _rand_session().replace("qs_", "cs_")
+    quote_session = _rand_session()
+    resolve_arg = "=" + json.dumps({"symbol": tv_symbol, "adjustment": "splits"})
+    headers = {
+        "Origin": "https://www.tradingview.com",
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        ),
+    }
+
+    try:
+        async with websockets.connect(
+            _TV_URL, additional_headers=headers,
+            ping_interval=20, ping_timeout=10, close_timeout=5,
+        ) as ws:
+            await ws.send(_pack("set_auth_token", ["unauthorized_user_token"]))
+            await ws.send(_pack("set_locale", ["en", "US"]))
+            await ws.send(_pack("chart_create_session", [chart_session, ""]))
+            await ws.send(_pack("quote_create_session", [quote_session]))
+            await ws.send(_pack("quote_set_fields", [quote_session, "lp"]))
+            await ws.send(_pack("quote_add_symbols", [quote_session, tv_symbol]))
+            await ws.send(_pack("resolve_symbol", [chart_session, "sds_sym_1", resolve_arg]))
+            await ws.send(_pack("create_series", [chart_session, "sds_1", "s0", "sds_sym_1", freq, bars, ""]))
+
+            loop = asyncio.get_event_loop()
+            deadline = loop.time() + timeout_s
+            while loop.time() < deadline:
+                try:
+                    raw = await asyncio.wait_for(ws.recv(), timeout=max(0.1, deadline - loop.time()))
+                except asyncio.TimeoutError:
+                    break
+                if "~h~" in raw:
+                    await ws.send(raw)
+                    continue
+                for msg in _parse_tv_messages(raw):
+                    m = msg.get("m")
+                    if m == "timescale_update":
+                        try:
+                            series = msg["p"][1]["sds_1"]["s"]
+                            return [bar["v"] for bar in series]
+                        except (KeyError, IndexError, TypeError):
+                            return None
+                    if m in ("symbol_error", "series_error", "critical_error"):
+                        logger.warning(f"📡 TV history error for {tv_symbol}: {msg}")
+                        return None
+    except Exception as e:
+        logger.warning(f"📡 TV history fetch failed for {tv_symbol}: {e}")
+        return None
+    return None
+
+
 # ─── Singleton ───────────────────────────────────────────────────────────────
 tv_feed = TVPriceFeed()
