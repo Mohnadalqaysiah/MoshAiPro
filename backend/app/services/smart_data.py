@@ -660,6 +660,21 @@ class SmartDataProvider:
         meta = self.get_realtime_price_with_meta(symbol)
         return meta["price"] if meta else None
 
+    async def get_current_price_async(self, symbol: str) -> Optional[float]:
+        """نسخة async — تغطي الأسواق الخليجية عبر آخر إغلاق من TradingView
+        (get_current_price المتزامنة لا تغطيها لعدم وجودها بـ Finnhub/yfinance)."""
+        sym_up = symbol.upper()
+        if sym_up in GULF_SYMBOL_MAP:
+            try:
+                from app.services.tv_price_feed import fetch_tv_history
+                bars = await fetch_tv_history(GULF_SYMBOL_MAP[sym_up], "1m", bars=1, timeout_s=8)
+                if bars:
+                    return float(bars[-1][4])  # آخر إغلاق
+            except Exception as e:
+                logger.debug(f"Gulf live price fallback failed for {symbol}: {e}")
+            return None
+        return self.get_current_price(symbol)
+
     def is_market_open(self, symbol: str) -> bool:
         """
         فحص دقيق لحالة السوق:

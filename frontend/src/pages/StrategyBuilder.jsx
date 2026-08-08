@@ -67,6 +67,24 @@ const SYMBOL_POOL = [
   { s: "NAS100", base: 18620, dp: 1 },
   { s: "US30", base: 39840, dp: 0 },
   { s: "USOIL", base: 78.4, dp: 2 },
+  // أسواق خليجية — بيانات حقيقية عبر TradingView (بدون اشتراك)
+  { s: "ARAMCO", base: 26.6, dp: 2, gulf: true },
+  { s: "RAJHI", base: 64.55, dp: 2, gulf: true },
+  { s: "SABIC", base: 50.55, dp: 2, gulf: true },
+  { s: "STC", base: 43.38, dp: 2, gulf: true },
+  { s: "SNB", base: 40.86, dp: 2, gulf: true },
+  { s: "MAADEN", base: 60.45, dp: 2, gulf: true },
+  { s: "ALMARAI", base: 47.24, dp: 2, gulf: true },
+  { s: "BAHRI", base: 30.24, dp: 2, gulf: true },
+  { s: "ALINMA", base: 23.91, dp: 2, gulf: true },
+  { s: "TASI", base: 10811.6, dp: 1, gulf: true },
+  { s: "EMAAR", base: 11.2, dp: 2, gulf: true },
+  { s: "EMIRATESNBD", base: 32.06, dp: 2, gulf: true },
+  { s: "DIB", base: 7.55, dp: 2, gulf: true },
+  { s: "DFMGI", base: 5944.5, dp: 1, gulf: true },
+  { s: "FAB", base: 19.98, dp: 2, gulf: true },
+  { s: "ADNOCDIST", base: 4.07, dp: 2, gulf: true },
+  { s: "QNBK", base: 17.15, dp: 2, gulf: true },
 ];
 const fmtPrice = (sym, val) => {
   const meta = SYMBOL_POOL.find((x) => x.s === sym) || { dp: 2 };
@@ -752,6 +770,14 @@ export default function StrategyBuilder() {
       <header style={{ borderBottom: `1px solid ${C.border}`, background: "rgba(7,8,11,0.92)" }} className="sticky top-0 z-30 backdrop-blur">
         <div className="px-4 md:px-8 py-3 flex flex-wrap items-center gap-3 justify-between max-w-[1500px] mx-auto">
           <div className="flex items-center gap-2.5">
+            <Link
+              to="/dashboard"
+              title="العودة للوحة التحكم"
+              style={{ background: C.surfaceHi, border: `1px solid ${C.border}`, color: C.sub }}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] hover:text-white hover:border-gray-500 transition"
+            >
+              <ArrowLeft size={13} style={{ transform: "scaleX(-1)" }} /> لوحة التحكم
+            </Link>
             <div style={{ background: C.goldSoft, border: `1px solid ${C.gold}` }} className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0">
               <Sparkles size={16} color={C.gold} />
             </div>

@@ -11,6 +11,7 @@ from app.database import get_db
 from app.models.market_config import MarketConfig
 from app.models.signal import Signal, SignalStatus
 from app.services.auth_service import get_current_user
+from app.services.smart_data import smart_data
 
 settings = get_settings()
 router = APIRouter()
@@ -193,7 +194,7 @@ async def get_current_price(symbol: str):
     Get current price for a market
     """
     try:
-        price = data_provider.get_current_price(symbol)
+        price = await smart_data.get_current_price_async(symbol)
         
         if price is None:
             raise HTTPException(status_code=404, detail=f"Price not available for {symbol}")
@@ -223,7 +224,7 @@ async def get_market_candles(
     Get candlestick data for a market
     """
     try:
-        df = data_provider.get_market_data(symbol, interval, limit)
+        df = await smart_data.get_ohlcv(symbol, interval, bars=limit)
         
         if df is None:
             raise HTTPException(status_code=404, detail=f"Data not available for {symbol}")

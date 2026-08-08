@@ -302,8 +302,12 @@ def set_status(strategy_id: int, body: StatusIn, db: Session = Depends(get_db), 
 
 # ─── Evaluation (real Simulation) ──────────────────────────────────────────────
 
-async def _run_evaluation(db: Session, groups, conditions, min_score: int) -> List[dict]:
+async def _run_evaluation(db: Session, groups, conditions, min_score: int, symbols: List[str]) -> List[dict]:
     from app.services.ai_engine_v5 import mosh_ai_engine_v5
+
+    # يفحص الرموز اللي اختارها المستخدم فعليًا بالاستراتيجية — لا فائدة من
+    # محاكاة استراتيجية مبنية على ARAMCO مقابل مجموعة أسواق فوركس ثابتة.
+    scan_symbols = symbols or SIM_SYMBOLS
 
     timeframe_candidates = sorted({c.timeframe for c in conditions if c.enabled}) or ["15m"]
     tf = _norm_timeframe(timeframe_candidates[-1])
@@ -321,7 +325,7 @@ async def _run_evaluation(db: Session, groups, conditions, min_score: int) -> Li
             "unsupported": result["unsupported"],
         }
 
-    return list(await asyncio.gather(*[_one(sym) for sym in SIM_SYMBOLS]))
+    return list(await asyncio.gather(*[_one(sym) for sym in scan_symbols]))
 
 
 def _flat_conditions(s: Strategy) -> List[StrategyCondition]:
@@ -333,7 +337,7 @@ async def evaluate_saved(strategy_id: int, db: Session = Depends(get_db), user =
     s = _get_owned(db, strategy_id, user)
     if not _flat_conditions(s):
         raise HTTPException(400, "أضف شروطًا للاستراتيجية أولًا")
-    results = await _run_evaluation(db, s.groups, _flat_conditions(s), s.min_score)
+    results = await _run_evaluation(db, s.groups, _flat_conditions(s), s.min_score, s.symbols or [])
     return {"results": results}
 
 
@@ -366,7 +370,7 @@ async def evaluate_preview(body: StrategyIn, db: Session = Depends(get_db), user
 
     fake_groups = [_FakeGroup(g) for g in body.groups]
     fake_conditions = [_FakeCondition(c) for c in body.conditions]
-    results = await _run_evaluation(db, fake_groups, fake_conditions, body.minScore)
+    results = await _run_evaluation(db, fake_groups, fake_conditions, body.minScore, body.symbols or [])
     return {"results": results}
 
 
