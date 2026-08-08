@@ -7,7 +7,7 @@ import {
   Search, Plus, Trash2, ToggleLeft, ToggleRight, TrendingUp,
   DollarSign, Activity, RefreshCw, Calendar,
   X, ExternalLink, Shield, AlertTriangle, Settings, Mail, Upload, Signal, Send,
-  FileText, TrendingUp as TrendUp, Bell
+  FileText, TrendingUp as TrendUp, Bell, Sparkles
 } from 'lucide-react'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -497,6 +497,10 @@ export default function Admin() {
                 <t.icon size={16}/>{t.label}
               </button>
             ))}
+            <button onClick={() => navigate('/admin/strategy-builder')}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors text-amber-400/90 hover:text-amber-300 hover:bg-amber-950/30 border border-amber-900/40 mt-2">
+              <Sparkles size={16}/>Strategy Builder
+            </button>
           </nav>
           <div className="p-3 border-t border-gray-800">
             <button onClick={() => navigate('/dashboard')} className="w-full flex items-center gap-2 text-xs text-gray-500 hover:text-white px-3 py-2 rounded-lg hover:bg-gray-800">

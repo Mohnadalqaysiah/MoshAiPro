@@ -27,6 +27,7 @@ const ReferralProgram = lazy(() => import('./pages/ReferralProgram'))
 const BlogList        = lazy(() => import('./pages/BlogList'))
 const BlogPost        = lazy(() => import('./pages/BlogPost'))
 const Admin          = lazy(() => import('./pages/Admin'))
+const StrategyBuilder = lazy(() => import('./pages/StrategyBuilder'))
 const Dashboard      = lazy(() => import('./pages/Dashboard'))
 const Signals        = lazy(() => import('./pages/Signals'))
 const Markets        = lazy(() => import('./pages/Markets'))
@@ -85,6 +86,7 @@ function AppRoutes() {
 
         {/* Admin */}
         <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
+        <Route path="/admin/strategy-builder" element={<AdminRoute><StrategyBuilder /></AdminRoute>} />
 
         {/* Protected */}
         <Route path="/*" element={
