@@ -9,7 +9,7 @@ Secondary: TwelveData (paid, for real-time)
 import asyncio
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict
 from loguru import logger
 import requests
@@ -99,16 +99,57 @@ FINNHUB_MAP = {
 # لا يغطيها yfinance ولا Finnhub. مجموعة بداية تمثيلية — أضف أي رمز آخر بنفس
 # صيغة "EXCHANGE:TICKER" من TradingView (تأكد من الرمز على tradingview.com أولاً).
 GULF_SYMBOL_MAP = {
-    # تداول — السوق السعودي
-    "ARAMCO": "TADAWUL:2222",
-    "RAJHI":  "TADAWUL:1120",
-    "SABIC":  "TADAWUL:2010",
-    "STC":    "TADAWUL:7010",
-    "TASI":   "TADAWUL:TASI",
+    # تداول — السوق السعودي (كل الرموز تحقّقت ببيانات حقيقية حية قبل الإضافة)
+    "ARAMCO":  "TADAWUL:2222",
+    "RAJHI":   "TADAWUL:1120",
+    "SABIC":   "TADAWUL:2010",
+    "STC":     "TADAWUL:7010",
+    "TASI":    "TADAWUL:TASI",
+    "SNB":     "TADAWUL:1180",   # البنك الأهلي السعودي
+    "MAADEN":  "TADAWUL:1211",   # معادن
+    "ALMARAI": "TADAWUL:2280",   # المراعي
+    "BAHRI":   "TADAWUL:4030",   # البحري
+    "ALINMA":  "TADAWUL:1150",   # مصرف الإنماء
     # سوق دبي المالي
-    "EMAAR":  "DFM:EMAAR",
-    "DFMGI":  "DFM:DFMGI",
+    "EMAAR":       "DFM:EMAAR",
+    "DFMGI":       "DFM:DFMGI",
+    "EMIRATESNBD": "DFM:EMIRATESNBD",
+    "DIB":         "DFM:DIB",        # بنك دبي الإسلامي
+    # سوق أبوظبي للأوراق المالية
+    "FAB":       "ADX:FAB",          # بنك أبوظبي الأول
+    "ADNOCDIST": "ADX:ADNOCDIST",
+    # بورصة قطر
+    "QNBK": "QSE:QNBK",              # بنك قطر الوطني
 }
+
+# ساعات التداول لكل بورصة خليجية — (أيام الأسبوع بترميز Python: Mon=0..Sun=6،
+# دقيقة الفتح UTC، دقيقة الإغلاق UTC). المصدر: مواقع البورصات الرسمية (تحقّق دوري مطلوب
+# عند تغيير مواعيدها، مثل تعديلات رمضان بتداول).
+GULF_EXCHANGE_HOURS = {
+    # تداول: الأحد-الخميس 10:00-15:00 بتوقيت الرياض (UTC+3) → 07:00-12:00 UTC
+    "TADAWUL": ({6, 0, 1, 2, 3}, 7 * 60, 12 * 60),
+    # سوق دبي المالي: الاثنين-الجمعة 10:00-14:45 بتوقيت الإمارات (UTC+4) → 06:00-10:45 UTC
+    "DFM":     ({0, 1, 2, 3, 4}, 6 * 60, 10 * 60 + 45),
+    # سوق أبوظبي: الاثنين-الجمعة 10:00-14:45 بتوقيت الإمارات (UTC+4) → 06:00-10:45 UTC
+    "ADX":     ({0, 1, 2, 3, 4}, 6 * 60, 10 * 60 + 45),
+    # بورصة قطر: الأحد-الخميس 09:30-13:00 بتوقيت الدوحة (UTC+3) → 06:30-10:00 UTC
+    "QSE":     ({6, 0, 1, 2, 3}, 6 * 60 + 30, 10 * 60),
+}
+
+
+def _gulf_market_open(tv_symbol: str) -> Optional[bool]:
+    """يفحص ساعات تداول البورصة الخليجية المستخرجة من رمز TradingView (مثال: "TADAWUL:2222").
+    يرجع None لو البورصة غير معروفة (حتى يقرر المستدعي استخدام منطق افتراضي آخر)."""
+    exchange = tv_symbol.split(":")[0] if ":" in tv_symbol else ""
+    hours = GULF_EXCHANGE_HOURS.get(exchange)
+    if not hours:
+        return None
+    days, open_min, close_min = hours
+    now = datetime.now(timezone.utc)
+    if now.weekday() not in days:
+        return False
+    minute_of_day = now.hour * 60 + now.minute
+    return open_min <= minute_of_day < close_min
 
 # yfinance interval map
 YF_INTERVAL_MAP = {
@@ -629,8 +670,17 @@ class SmartDataProvider:
             "BTCUSD","ETHUSD","BNBUSD","SOLUSD","XRPUSD","ADAUSD","DOTUSD",
             "LTCUSD","LINKUSD","MATICUSD","AVAXUSD","ATOMUSD","UNIUSD","TRXUSD",
         }
-        if symbol.upper() in _CRYPTO:
+        sym_up = symbol.upper()
+        if sym_up in _CRYPTO:
             return True  # كريبتو 24/7 — كل الباقي يتبع جدول الفوركس
+
+        # الأسواق الخليجية — جدول أيام/ساعات خاص بكل بورصة، مختلف عن أسبوع الفوركس
+        gulf_tv_symbol = GULF_SYMBOL_MAP.get(sym_up)
+        if gulf_tv_symbol:
+            gulf_open = _gulf_market_open(gulf_tv_symbol)
+            if gulf_open is not None:
+                return gulf_open
+
         from datetime import timezone as _tz
         now = datetime.now(_tz.utc)
         wd  = now.weekday()   # 0=Mon … 4=Fri 5=Sat 6=Sun

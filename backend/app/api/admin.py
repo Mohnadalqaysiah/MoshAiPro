@@ -902,6 +902,7 @@ def _calc_points(market: str, price_diff: float) -> float:
     Crypto  ×1    → $1   move = 1 pt  (BTC $500 move = 500 pts)
     Indices ×1    → 1 index point = 1 pt (NAS100 +40 = 40 pts)
     Oil/Gas ×10   → $0.1 move = 1 pt
+    Gulf    ×10   → نفس مقياس المعادن (أسهم بأسعار مشابهة النطاق: عشرات الريال/الدرهم)
     JPY     ×100  → standard yen pips
     Forex   ×10000→ standard pips (0.0001 = 1 pip)
     """
@@ -914,6 +915,10 @@ def _calc_points(market: str, price_diff: float) -> float:
         return round(price_diff * 1.0, 2)    # indices: 1 index point = 1 pt
     elif symbol in ("USOIL", "OIL", "NATGAS", "BRENT"):
         return round(price_diff * 10, 2)     # oil/gas: $0.1 per point
+    elif symbol in ("ARAMCO", "RAJHI", "SABIC", "STC", "TASI", "SNB", "MAADEN", "ALMARAI",
+                     "BAHRI", "ALINMA", "EMAAR", "DFMGI", "EMIRATESNBD", "DIB",
+                     "FAB", "ADNOCDIST", "QNBK"):
+        return round(price_diff * 10, 2)     # أسهم خليجية: 0.1 ريال/درهم لكل نقطة
     elif symbol.endswith("JPY"):
         return round(price_diff * 100, 2)    # yen pairs
     else:

@@ -25,6 +25,10 @@ CATEGORIES: dict[str, dict] = {
     "forex":       {"label": "💱 فوركس",   "symbols": ["EURUSD", "GBPUSD", "USDJPY", "USDCHF", "AUDUSD", "USDCAD"]},
     "commodities": {"label": "🛢 سلع",    "symbols": ["USOIL", "NATGAS"]},
     "indices":     {"label": "📈 مؤشرات", "symbols": ["NAS100", "US30", "SP500"]},
+    "gulf":        {"label": "🕌 أسواق خليجية", "symbols": [
+        "ARAMCO", "RAJHI", "SABIC", "STC", "SNB", "MAADEN", "ALMARAI", "BAHRI", "ALINMA",
+        "EMAAR", "EMIRATESNBD", "DIB", "FAB", "ADNOCDIST", "QNBK",
+    ]},
 }
 
 MARKET_NAMES: dict[str, str] = {
@@ -34,6 +38,32 @@ MARKET_NAMES: dict[str, str] = {
     "USDJPY":"💴 USD/JPY",  "USDCHF":"🇨🇭 USD/CHF", "AUDUSD":"🦘 AUD/USD", "USDCAD":"🍁 USD/CAD",
     "USOIL": "🛢 نفط",     "NATGAS":"🔥 غاز",
     "NAS100":"📈 ناسداك",  "US30":  "📊 داو",       "SP500": "📉 S&P500",
+    "ARAMCO":"🇸🇦 أرامكو", "RAJHI":"🇸🇦 الراجحي", "SABIC":"🇸🇦 سابك", "STC":"🇸🇦 إس تي سي",
+    "SNB":"🇸🇦 الأهلي",    "MAADEN":"🇸🇦 معادن",  "ALMARAI":"🇸🇦 المراعي",
+    "BAHRI":"🇸🇦 البحري",  "ALINMA":"🇸🇦 الإنماء",
+    "EMAAR": "🇦🇪 إعمار",  "EMIRATESNBD":"🇦🇪 بنك الإمارات دبي الوطني", "DIB":"🇦🇪 دبي الإسلامي",
+    "FAB":"🇦🇪 أبوظبي الأول", "ADNOCDIST":"🇦🇪 أدنوك للتوزيع",
+    "QNBK":"🇶🇦 قطر الوطني",
+}
+
+# رموز الأسواق الخليجية — جدول تداول خاص (أيام/ساعات) مختلف عن أسبوع الفوركس،
+# مطابق لـ GULF_SYMBOL_MAP/GULF_EXCHANGE_HOURS في backend/app/services/smart_data.py
+GULF_MARKETS: dict[str, str] = {
+    "ARAMCO": "TADAWUL", "RAJHI": "TADAWUL", "SABIC": "TADAWUL", "STC": "TADAWUL",
+    "SNB": "TADAWUL", "MAADEN": "TADAWUL", "ALMARAI": "TADAWUL", "BAHRI": "TADAWUL", "ALINMA": "TADAWUL",
+    "EMAAR": "DFM", "EMIRATESNBD": "DFM", "DIB": "DFM",
+    "FAB": "ADX", "ADNOCDIST": "ADX",
+    "QNBK": "QSE",
+}
+GULF_EXCHANGE_HOURS = {
+    # تداول: الأحد-الخميس 10:00-15:00 بتوقيت الرياض (UTC+3) → 07:00-12:00 UTC
+    "TADAWUL": ({6, 0, 1, 2, 3}, 7 * 60, 12 * 60),
+    # سوق دبي المالي: الاثنين-الجمعة 10:00-14:45 بتوقيت الإمارات (UTC+4) → 06:00-10:45 UTC
+    "DFM":     ({0, 1, 2, 3, 4}, 6 * 60, 10 * 60 + 45),
+    # سوق أبوظبي: الاثنين-الجمعة 10:00-14:45 بتوقيت الإمارات (UTC+4) → 06:00-10:45 UTC
+    "ADX":     ({0, 1, 2, 3, 4}, 6 * 60, 10 * 60 + 45),
+    # بورصة قطر: الأحد-الخميس 09:30-13:00 بتوقيت الدوحة (UTC+3) → 06:30-10:00 UTC
+    "QSE":     ({6, 0, 1, 2, 3}, 6 * 60 + 30, 10 * 60),
 }
 
 CRYPTO_MARKETS = {
@@ -70,10 +100,22 @@ def is_market_open(symbol: str) -> bool:
     """
     فحص دقيق لحالة السوق:
     - كريبتو: مفتوح 24/7
+    - أسواق خليجية: جدول أيام/ساعات خاص بكل بورصة (تداول/DFM)
     - فوركس/ذهب/نفط/مؤشرات: مغلق السبت كاملاً + الأحد حتى 22:00 UTC + الجمعة بعد 22:00 UTC
     """
-    if symbol.upper() in CRYPTO_MARKETS:
+    sym_up = symbol.upper()
+    if sym_up in CRYPTO_MARKETS:
         return True  # كريبتو 24/7
+
+    exchange = GULF_MARKETS.get(sym_up)
+    if exchange:
+        days, open_min, close_min = GULF_EXCHANGE_HOURS[exchange]
+        now = datetime.now(timezone.utc)
+        if now.weekday() not in days:
+            return False
+        minute_of_day = now.hour * 60 + now.minute
+        return open_min <= minute_of_day < close_min
+
     now = datetime.now(timezone.utc)
     wd  = now.weekday()   # 0=Mon … 4=Fri 5=Sat 6=Sun
     # السبت كله مغلق
