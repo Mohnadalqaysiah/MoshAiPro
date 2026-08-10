@@ -4,6 +4,7 @@ Plans, Binance USDT Payment, Status
 """
 import copy, json
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -254,6 +255,43 @@ def create_stripe_checkout(
     return {"url": session.url}
 
 
+@router.post("/stripe/payment-intent")
+def create_stripe_payment_intent(
+    data: StripeCheckoutIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """إنشاء PaymentIntent لعرض نموذج بطاقة مدمج داخل الصفحة (Stripe Elements)
+    بدون تحويل المستخدم لصفحة Stripe المستضافة."""
+    if data.plan not in PLANS:
+        raise HTTPException(400, "باقة غير صحيحة")
+
+    cfg = _stripe_config(db)
+    if not cfg["enabled"] or not cfg["secret_key"]:
+        raise HTTPException(500, "الدفع بالبطاقة غير متاح حالياً")
+
+    plan_info = _resolve_plans(db)[data.plan]
+
+    try:
+        intent = stripe.PaymentIntent.create(
+            amount=int(round(plan_info["price_usd"] * 100)),
+            currency="usd",
+            automatic_payment_methods={"enabled": True},
+            receipt_email=user.email,
+            description=f"Qaffel AI — {plan_info['name_en']} Plan",
+            metadata={"user_id": str(user.id), "plan": data.plan},
+            api_key=cfg["secret_key"],
+        )
+    except Exception as e:
+        logger.error(f"❌ Stripe payment intent error: {e}")
+        raise HTTPException(500, "تعذّر بدء عملية الدفع، حاول لاحقاً")
+
+    return {
+        "client_secret": intent.client_secret,
+        "publishable_key": cfg["publishable_key"],
+    }
+
+
 @router.post("/stripe/webhook")
 async def stripe_webhook(
     request: Request,
@@ -273,50 +311,70 @@ async def stripe_webhook(
     if event["type"] == "checkout.session.completed":
         session  = event["data"]["object"]
         metadata = session.get("metadata") or {}
-        user_id  = metadata.get("user_id")
-        plan_key = metadata.get("plan")
-
-        if not user_id or plan_key not in PLANS:
-            logger.warning(f"⚠️ Stripe webhook missing/invalid metadata: {metadata}")
-            return {"received": True}
-
-        # Idempotency — Stripe may retry the same event
-        if db.query(Payment).filter(Payment.tx_id == session["id"]).first():
-            return {"received": True}
-
-        plan_info = _resolve_plans(db)[plan_key]
-
-        payment = Payment(
-            user_id     = int(user_id),
-            plan        = PaymentPlan(plan_key),
-            amount_usd  = plan_info["price_usd"],
-            network     = "stripe",
-            provider    = "stripe",
-            tx_id       = session["id"],
-            stripe_payment_intent = session.get("payment_intent"),
-            status      = PaymentStatus.APPROVED,
+        _finalize_stripe_payment(
+            db, background_tasks,
+            user_id=metadata.get("user_id"), plan_key=metadata.get("plan"),
+            tx_id=session["id"], payment_intent_id=session.get("payment_intent"),
         )
-        db.add(payment)
-        db.flush()
 
-        user = activate_subscription_payment(db, payment, background_tasks)
-        db.commit()
-
-        if user:
-            logger.info(f"💳 Stripe payment completed: user={user.email} plan={plan_key} session={session['id']}")
-            from app.services.admin_notify import notify_admin_telegram
-            _plan_name = {"weekly": "أسبوعية", "monthly": "شهرية"}.get(plan_key, plan_key)
-            _msg = (
-                f"💳 <b>دفعة Stripe جديدة (مفعّلة تلقائياً)!</b>\n"
-                f"━━━━━━━━━━━━━━━\n"
-                f"📧 المستخدم: <code>{user.email}</code>\n"
-                f"📦 الباقة: {_plan_name}\n"
-                f"💰 المبلغ: ${plan_info['price_usd']}\n"
-                f"🆔 Payment ID: {payment.id}"
-            )
-            background_tasks.add_task(notify_admin_telegram, _msg)
+    elif event["type"] == "payment_intent.succeeded":
+        # نموذج البطاقة المدمج بالصفحة (Stripe Elements) — بدون تحويل خارجي
+        intent   = event["data"]["object"]
+        metadata = intent.get("metadata") or {}
+        _finalize_stripe_payment(
+            db, background_tasks,
+            user_id=metadata.get("user_id"), plan_key=metadata.get("plan"),
+            tx_id=intent["id"], payment_intent_id=intent["id"],
+        )
 
     return {"received": True}
+
+
+def _finalize_stripe_payment(
+    db: Session, background_tasks: BackgroundTasks,
+    user_id: Optional[str], plan_key: Optional[str],
+    tx_id: str, payment_intent_id: Optional[str],
+) -> None:
+    """Shared activation logic for both the hosted-Checkout and embedded
+    PaymentIntent flows — idempotent on `tx_id` since Stripe may retry events."""
+    if not user_id or plan_key not in PLANS:
+        logger.warning(f"⚠️ Stripe webhook missing/invalid metadata: user_id={user_id} plan={plan_key}")
+        return
+
+    if db.query(Payment).filter(Payment.tx_id == tx_id).first():
+        return
+
+    plan_info = _resolve_plans(db)[plan_key]
+
+    payment = Payment(
+        user_id     = int(user_id),
+        plan        = PaymentPlan(plan_key),
+        amount_usd  = plan_info["price_usd"],
+        network     = "stripe",
+        provider    = "stripe",
+        tx_id       = tx_id,
+        stripe_payment_intent = payment_intent_id,
+        status      = PaymentStatus.APPROVED,
+    )
+    db.add(payment)
+    db.flush()
+
+    user = activate_subscription_payment(db, payment, background_tasks)
+    db.commit()
+
+    if user:
+        logger.info(f"💳 Stripe payment completed: user={user.email} plan={plan_key} tx={tx_id}")
+        from app.services.admin_notify import notify_admin_telegram
+        _plan_name = {"weekly": "أسبوعية", "monthly": "شهرية"}.get(plan_key, plan_key)
+        _msg = (
+            f"💳 <b>دفعة Stripe جديدة (مفعّلة تلقائياً)!</b>\n"
+            f"━━━━━━━━━━━━━━━\n"
+            f"📧 المستخدم: <code>{user.email}</code>\n"
+            f"📦 الباقة: {_plan_name}\n"
+            f"💰 المبلغ: ${plan_info['price_usd']}\n"
+            f"🆔 Payment ID: {payment.id}"
+        )
+        background_tasks.add_task(notify_admin_telegram, _msg)
 
 
 @router.get("/payments")

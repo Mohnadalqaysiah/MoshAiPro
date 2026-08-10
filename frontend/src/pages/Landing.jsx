@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import PublicChatBot from '../components/PublicChatBot'
 import DemoSection from '../components/DemoSection'
+import StrategyBuilderDemo from '../components/StrategyBuilderDemo'
 import AffiliateSection from '../components/AffiliateSection'
 import PublicPerformance from '../components/PublicPerformance'
 
@@ -139,6 +140,7 @@ export default function Landing() {
           <nav className="hidden md:flex items-center gap-7 text-sm text-gray-400">
             {[
               { href: '#features',      label: t.nav.features },
+              { href: '#strategy-builder-demo', label: isAr ? 'بناء الاستراتيجيات' : 'Strategy Builder' },
               { href: '#testimonials',  label: isAr ? 'آراء العملاء' : 'Reviews' },
               { href: '#pricing',       label: t.nav.pricing },
               { href: '#faq',           label: t.nav.faq },
@@ -198,6 +200,7 @@ export default function Landing() {
           <div className="md:hidden border-t border-white/5 bg-[#070b14]/95 backdrop-blur-xl px-4 py-4 space-y-1">
             {[
               { href: '#features',      label: t.nav.features },
+              { href: '#strategy-builder-demo', label: isAr ? 'بناء الاستراتيجيات' : 'Strategy Builder' },
               { href: '#testimonials',  label: isAr ? 'آراء العملاء' : 'Reviews' },
               { href: '#pricing',       label: t.nav.pricing },
               { href: '#faq',           label: t.nav.faq },
@@ -381,6 +384,9 @@ export default function Landing() {
 
       {/* ── Demo Section ───────────────────────────────────────────────── */}
       <DemoSection isAr={isAr} />
+
+      {/* ── Strategy Builder Interactive Demo ──────────────────────────── */}
+      <StrategyBuilderDemo isAr={isAr} />
 
       {/* ── How it works ───────────────────────────────────────────────── */}
       <section className="py-24 px-4 relative overflow-hidden">

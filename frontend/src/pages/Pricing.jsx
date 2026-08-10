@@ -3,9 +3,10 @@ import { Link } from 'react-router-dom'
 import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
-import { Check, Zap, Star, Copy, CheckCircle, AlertCircle, Shield, Clock } from 'lucide-react'
+import { Check, Zap, Star, Copy, CheckCircle, AlertCircle, Shield, Clock, ChevronDown, CreditCard, Loader2 } from 'lucide-react'
 import PublicLayout from '../components/PublicLayout'
 import useSEO from '../hooks/useSEO'
+import StripeInlineCheckout from '../components/StripeInlineCheckout'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -32,13 +33,20 @@ const T = {
     backBtn: 'رجوع',
     confirmBtn: 'تأكيد الدفع',
     sendingBtn: 'جاري الإرسال...',
-    stripeBtn: (price) => `ادفع بالبطاقة الآن — $${price}`,
+    stripeBtn: (price) => `ادفع الآن — $${price}`,
+    stripePaying: 'جاري تنفيذ الدفع...',
     stripeRedirecting: 'جاري التحويل لصفحة الدفع...',
     orDivider: 'أو ادفع يدوياً بـ USDT',
-    stripeInstant: 'تفعيل فوري تلقائي',
+    cryptoToggle: 'الدفع بعملة رقمية (USDT) بدلاً من ذلك',
+    stripeInstant: 'تفعيل فوري تلقائي — بدون مغادرة الصفحة',
     secureBadge: 'دفع آمن ومشفّر بالكامل — مدعوم من Stripe',
+    cardLoading: 'جاري تجهيز نموذج الدفع...',
     doneTitle: 'تم استلام طلبك!',
     doneDesc: 'سيتم التحقق من الدفع وتفعيل حسابك خلال 30 دقيقة. ستصلك رسالة تأكيد.',
+    doneTitleCard: 'تم تفعيل اشتراكك!',
+    doneDescCard: 'دفعتك بالبطاقة تمّت وتم تفعيل باقتك فوراً. استمتع بالمنصة!',
+    activatingTitle: 'تم الدفع بنجاح!',
+    activatingDesc: 'جاري تفعيل اشتراكك الآن...',
     dashboardBtn: 'العودة للمنصة',
     guarantee: 'آمن ومشفّر',
     support: 'دعم 24/7',
@@ -66,13 +74,20 @@ const T = {
     backBtn: 'Back',
     confirmBtn: 'Confirm Payment',
     sendingBtn: 'Sending...',
-    stripeBtn: (price) => `Pay by Card Now — $${price}`,
+    stripeBtn: (price) => `Pay Now — $${price}`,
+    stripePaying: 'Processing payment...',
     stripeRedirecting: 'Redirecting to payment page...',
     orDivider: 'Or pay manually with USDT',
-    stripeInstant: 'Instant automatic activation',
+    cryptoToggle: 'Pay with crypto (USDT) instead',
+    stripeInstant: 'Instant automatic activation — no page redirect',
     secureBadge: 'Fully secure & encrypted — powered by Stripe',
+    cardLoading: 'Preparing payment form...',
     doneTitle: 'Request Received!',
     doneDesc: 'Payment will be verified and your account activated within 30 minutes.',
+    doneTitleCard: 'Subscription Activated!',
+    doneDescCard: 'Your card payment went through and your plan is active now. Enjoy the platform!',
+    activatingTitle: 'Payment Successful!',
+    activatingDesc: 'Activating your subscription now...',
     dashboardBtn: 'Go to Dashboard',
     guarantee: 'Secure & Encrypted',
     support: '24/7 Support',
@@ -129,12 +144,18 @@ export default function Pricing() {
   const network = 'TRC20'
   const [step, setStep]           = useState('plan')
   const [loading, setLoading]     = useState(false)
-  const [stripeLoading, setStripeLoading] = useState(false)
   const [error, setError]         = useState('')
   const [copied, setCopied]       = useState(false)
   const [WALLET, setWallet]       = useState('')
   const [PLANS, setPlans]         = useState(DEFAULT_PLANS)
   const [cardPaymentEnabled, setCardPaymentEnabled] = useState(false)
+  const [showCrypto, setShowCrypto] = useState(false)
+  const [paidVia, setPaidVia]     = useState('usdt')
+
+  // Stripe Elements — نموذج بطاقة مدمج داخل الصفحة
+  const [clientSecret, setClientSecret]         = useState('')
+  const [publishableKey, setPublishableKey]     = useState('')
+  const [intentLoading, setIntentLoading]       = useState(false)
 
   useEffect(() => {
     axios.get(`${API}/api/v1/subscription/plans`)
@@ -180,15 +201,37 @@ export default function Pricing() {
     }
   }
 
-  const payWithStripe = async () => {
-    setStripeLoading(true); setError('')
+  const startCardPayment = async (planKey) => {
+    setIntentLoading(true); setError(''); setClientSecret(''); setPublishableKey('')
     try {
-      const r = await axios.post(`${API}/api/v1/subscription/stripe/checkout`, { plan: selected })
-      window.location.href = r.data.url
+      const r = await axios.post(`${API}/api/v1/subscription/stripe/payment-intent`, { plan: planKey })
+      setClientSecret(r.data.client_secret)
+      setPublishableKey(r.data.publishable_key)
     } catch (err) {
-      setError(err.response?.data?.detail || (isAr ? 'حدث خطأ. أعد المحاولة.' : 'An error occurred. Please try again.'))
-      setStripeLoading(false)
+      setError(err.response?.data?.detail || (isAr ? 'تعذّر تجهيز الدفع بالبطاقة. جرّب USDT بالأسفل.' : 'Could not start card payment. Try USDT below.'))
+    } finally {
+      setIntentLoading(false)
     }
+  }
+
+  const goToPay = () => {
+    setStep('pay')
+    if (cardPaymentEnabled) startCardPayment(selected)
+  }
+
+  const onStripeSuccess = async () => {
+    setPaidVia('card')
+    setStep('activating')
+    // الويبهوك يفعّل الاشتراك بشكل غير متزامن — نستطلع الحالة لثوانٍ قليلة
+    // كي تظهر شاشة النجاح بمجرد اكتمال التفعيل الفعلي، لا قبله.
+    for (let i = 0; i < 8; i++) {
+      await new Promise(res => setTimeout(res, 1200))
+      try {
+        const r = await axios.get(`${API}/api/v1/subscription/status`)
+        if (r.data.plan === selected) break
+      } catch { /* استمر بالاستطلاع */ }
+    }
+    setStep('done')
   }
 
   const plan = PLANS.find(p => p.key === selected)
@@ -296,7 +339,7 @@ export default function Pricing() {
                 </div>
               ) : (
                 <button
-                  onClick={() => setStep('pay')}
+                  onClick={goToPay}
                   className={`w-full font-bold py-4 rounded-2xl text-base flex items-center justify-center gap-2 transition-all hover:scale-[1.02] shadow-xl ${
                     plan?.color === 'purple'
                       ? 'bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white shadow-purple-500/30'
@@ -326,85 +369,123 @@ export default function Pricing() {
                 </div>
               )}
 
-              {/* Card payment */}
+              {/* Card payment — primary, inline (Stripe Elements — no redirect) */}
               {cardPaymentEnabled && (
                 <>
-                  <button
-                    onClick={payWithStripe}
-                    disabled={stripeLoading}
-                    className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 disabled:opacity-60 text-white font-bold py-3.5 rounded-xl text-sm transition mb-3"
-                  >
-                    <Zap size={16} />
-                    {stripeLoading ? t.stripeRedirecting : t.stripeBtn(plan?.price)}
-                  </button>
-
-                  {/* Payment method badges + trust line */}
-                  <div className="flex items-center justify-center gap-2 mb-2">
-                    <span className="text-[10px] font-bold tracking-wide text-gray-400 border border-gray-700 rounded px-1.5 py-0.5">VISA</span>
-                    <span className="text-[10px] font-bold tracking-wide text-gray-400 border border-gray-700 rounded px-1.5 py-0.5">Mastercard</span>
-                    <span className="text-[10px] font-bold tracking-wide text-gray-400 border border-gray-700 rounded px-1.5 py-0.5">AMEX</span>
+                  <div className="flex items-center gap-2 mb-3">
+                    <CreditCard size={15} className="text-indigo-400" />
+                    <span className="text-sm font-semibold text-gray-200">
+                      {isAr ? 'الدفع بالبطاقة' : 'Pay by Card'}
+                    </span>
+                    <div className="flex items-center gap-1.5 ms-auto">
+                      <span className="text-[10px] font-bold tracking-wide text-gray-400 border border-gray-700 rounded px-1.5 py-0.5">VISA</span>
+                      <span className="text-[10px] font-bold tracking-wide text-gray-400 border border-gray-700 rounded px-1.5 py-0.5">Mastercard</span>
+                      <span className="text-[10px] font-bold tracking-wide text-gray-400 border border-gray-700 rounded px-1.5 py-0.5">AMEX</span>
+                    </div>
                   </div>
-                  <p className="text-xs text-gray-500 text-center mb-1 flex items-center justify-center gap-1">
-                    <Shield size={11} className="text-green-400" /> {t.secureBadge}
-                  </p>
+
+                  <div className="bg-gray-800/60 border border-gray-700/50 rounded-xl p-4 mb-3">
+                    {intentLoading && (
+                      <div className="flex items-center justify-center gap-2 py-8 text-gray-400 text-sm">
+                        <Loader2 size={16} className="animate-spin" /> {t.cardLoading}
+                      </div>
+                    )}
+                    {!intentLoading && clientSecret && (
+                      <StripeInlineCheckout
+                        clientSecret={clientSecret}
+                        publishableKey={publishableKey}
+                        payBtnLabel={t.stripeBtn(plan?.price)}
+                        payingLabel={t.stripePaying}
+                        onSuccess={onStripeSuccess}
+                        isAr={isAr}
+                      />
+                    )}
+                  </div>
+
                   <p className="text-xs text-gray-600 text-center mb-6">{t.stripeInstant}</p>
 
-                  <div className="flex items-center gap-3 mb-6">
-                    <div className="flex-1 h-px bg-gray-800" />
-                    <span className="text-xs text-gray-500">{t.orDivider}</span>
-                    <div className="flex-1 h-px bg-gray-800" />
-                  </div>
+                  <button
+                    onClick={() => setShowCrypto(s => !s)}
+                    className="w-full flex items-center justify-center gap-1.5 text-xs text-gray-500 hover:text-gray-300 py-2 mb-2 transition"
+                  >
+                    {t.cryptoToggle}
+                    <ChevronDown size={13} className={`transition-transform ${showCrypto ? 'rotate-180' : ''}`} />
+                  </button>
                 </>
               )}
 
-              {/* Wallet */}
-              <div className="bg-gray-800/80 border border-gray-700/50 rounded-xl p-4 mb-6">
-                <p className="text-xs text-gray-400 mb-2">{t.sendToLabel}</p>
-                <div className="flex items-center gap-2">
-                  <code className="flex-1 text-xs text-green-400 font-mono break-all leading-relaxed">{WALLET}</code>
-                  <button onClick={copyWallet} className="flex items-center gap-1 text-xs text-gray-400 hover:text-white bg-gray-700 hover:bg-gray-600 px-2.5 py-1.5 rounded-lg flex-shrink-0 transition">
-                    {copied ? <><CheckCircle size={13} className="text-green-400" /> {t.copiedBtn}</> : <><Copy size={13} /> {t.copyBtn}</>}
-                  </button>
-                </div>
-                <div className="flex items-center gap-2 mt-3">
-                  <span className="text-xs px-3 py-1 rounded-full border border-blue-500/50 text-blue-400 bg-blue-900/20 font-medium">
-                    {t.networkLabel}: TRC20
-                  </span>
-                </div>
-                <p className="text-xs text-yellow-400/90 mt-3 leading-relaxed">
-                  {t.warning(plan?.price)}
-                </p>
-              </div>
+              {/* Crypto (USDT) — secondary, collapsed by default when card payment is available */}
+              {(showCrypto || !cardPaymentEnabled) && (
+                <div className={cardPaymentEnabled ? 'pt-2 border-t border-gray-800' : ''}>
+                  {/* Wallet */}
+                  <div className="bg-gray-800/80 border border-gray-700/50 rounded-xl p-4 mb-6 mt-4">
+                    <p className="text-xs text-gray-400 mb-2">{t.sendToLabel}</p>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 text-xs text-green-400 font-mono break-all leading-relaxed">{WALLET}</code>
+                      <button onClick={copyWallet} className="flex items-center gap-1 text-xs text-gray-400 hover:text-white bg-gray-700 hover:bg-gray-600 px-2.5 py-1.5 rounded-lg flex-shrink-0 transition">
+                        {copied ? <><CheckCircle size={13} className="text-green-400" /> {t.copiedBtn}</> : <><Copy size={13} /> {t.copyBtn}</>}
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2 mt-3">
+                      <span className="text-xs px-3 py-1 rounded-full border border-blue-500/50 text-blue-400 bg-blue-900/20 font-medium">
+                        {t.networkLabel}: TRC20
+                      </span>
+                    </div>
+                    <p className="text-xs text-yellow-400/90 mt-3 leading-relaxed">
+                      {t.warning(plan?.price)}
+                    </p>
+                  </div>
 
-              {/* TxID */}
-              <div className="mb-5">
-                <label className="block text-sm text-gray-300 font-medium mb-1.5">{t.txLabel}</label>
-                <input
-                  type="text"
-                  value={txId}
-                  onChange={e => setTxId(e.target.value)}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono transition"
-                  placeholder={t.txPlaceholder}
-                  dir="ltr"
-                />
-                <p className="text-xs text-gray-500 mt-1.5">{t.txNote}</p>
-              </div>
+                  {/* TxID */}
+                  <div className="mb-5">
+                    <label className="block text-sm text-gray-300 font-medium mb-1.5">{t.txLabel}</label>
+                    <input
+                      type="text"
+                      value={txId}
+                      onChange={e => setTxId(e.target.value)}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono transition"
+                      placeholder={t.txPlaceholder}
+                      dir="ltr"
+                    />
+                    <p className="text-xs text-gray-500 mt-1.5">{t.txNote}</p>
+                  </div>
 
-              <div className="flex gap-3">
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setStep('plan')}
+                      className="flex-1 border border-gray-700 text-gray-400 hover:text-white hover:border-gray-600 py-3 rounded-xl text-sm transition"
+                    >
+                      {t.backBtn}
+                    </button>
+                    <button
+                      onClick={submitPayment}
+                      disabled={loading}
+                      className="flex-1 bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 disabled:from-green-900 disabled:to-green-900 text-white font-bold py-3 rounded-xl text-sm transition"
+                    >
+                      {loading ? t.sendingBtn : t.confirmBtn}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {!showCrypto && cardPaymentEnabled && (
                 <button
                   onClick={() => setStep('plan')}
-                  className="flex-1 border border-gray-700 text-gray-400 hover:text-white hover:border-gray-600 py-3 rounded-xl text-sm transition"
+                  className="w-full border border-gray-700 text-gray-400 hover:text-white hover:border-gray-600 py-3 rounded-xl text-sm transition"
                 >
                   {t.backBtn}
                 </button>
-                <button
-                  onClick={submitPayment}
-                  disabled={loading}
-                  className="flex-1 bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 disabled:from-green-900 disabled:to-green-900 text-white font-bold py-3 rounded-xl text-sm transition"
-                >
-                  {loading ? t.sendingBtn : t.confirmBtn}
-                </button>
+              )}
+            </div>
+          )}
+
+          {step === 'activating' && (
+            <div className="text-center bg-gray-900 border border-gray-800 rounded-2xl p-12 max-w-lg mx-auto">
+              <div className="w-16 h-16 bg-indigo-500/20 rounded-full flex items-center justify-center mx-auto mb-5">
+                <Loader2 size={32} className="text-indigo-400 animate-spin" />
               </div>
+              <h2 className="text-2xl font-bold text-white mb-3">{t.activatingTitle}</h2>
+              <p className="text-gray-400 text-sm leading-relaxed">{t.activatingDesc}</p>
             </div>
           )}
 
@@ -413,8 +494,8 @@ export default function Pricing() {
               <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-5">
                 <CheckCircle size={36} className="text-green-400" />
               </div>
-              <h2 className="text-2xl font-bold text-white mb-3">{t.doneTitle}</h2>
-              <p className="text-gray-400 text-sm leading-relaxed">{t.doneDesc}</p>
+              <h2 className="text-2xl font-bold text-white mb-3">{paidVia === 'card' ? t.doneTitleCard : t.doneTitle}</h2>
+              <p className="text-gray-400 text-sm leading-relaxed">{paidVia === 'card' ? t.doneDescCard : t.doneDesc}</p>
               <Link to="/dashboard" className="mt-8 inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-xl font-semibold text-sm transition">
                 {t.dashboardBtn}
               </Link>
