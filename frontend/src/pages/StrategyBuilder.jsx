@@ -675,7 +675,7 @@ export default function StrategyBuilder() {
     }
   };
 
-  const loadStrategy = async (rec) => {
+  const loadStrategy = async (rec, tab = "build") => {
     try {
       const r = await axios.get(`${API}/api/v1/strategies/${rec.id}`);
       const d = r.data;
@@ -687,8 +687,8 @@ export default function StrategyBuilder() {
       setTgChannel(d.tgChannel || ""); setTgFields(d.tgFields);
       setCurrentStrategyId(d.id);
       setActiveGroupId(d.groups[0]?.id || null);
-      setActiveTab("build");
-      showToast("تم تحميل الاستراتيجية للتحرير");
+      setActiveTab(tab);
+      showToast(tab === "monitoring" ? "تم فتح المراقبة الحية لهذه الاستراتيجية" : "تم تحميل الاستراتيجية للتحرير");
     } catch {
       showToast("فشل تحميل الاستراتيجية");
     }
@@ -1490,6 +1490,7 @@ export default function StrategyBuilder() {
 
                 <div style={{ borderTop: `1px solid ${C.borderSoft}` }} className="pt-2.5 flex items-center gap-1 flex-wrap">
                   <IconBtn icon={Edit3} onClick={() => loadStrategy(r)} title="تحرير" color={C.blue} />
+                  <IconBtn icon={MonitorDot} onClick={() => loadStrategy(r, "monitoring")} title="المراقبة الحية" color={C.teal} />
                   <IconBtn icon={Copy} onClick={() => duplicateSaved(r)} title="تكرار" />
                   <IconBtn icon={Power} onClick={() => toggleSavedStatus(r)} title="تفعيل/تعطيل" color={r.status === "ACTIVE" ? C.teal : C.muted} />
                   <IconBtn icon={Eye} onClick={() => setViewTarget(r)} title="عرض" />
