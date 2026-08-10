@@ -22,6 +22,13 @@ const IMPLEMENTED_TYPES = new Set([
   "rsi", "macd", "ema", "stoch", "atrv",
 ]);
 
+// أنواع الشروط الرقمية — القيمة عندها لازم تكون بصيغة "<30" / ">=70" حتى
+// يقدر المحرك الحقيقي يقارنها رقمياً (backend/app/services/strategy_engine.py
+// ::_parse_numeric). قيمة بدون عامل مقارنة (متل "30" لوحدها) بتترفض بصمت
+// وتُحتسب "غير مدعومة" — لهيك بنبني هون واجهة عامل+رقم بدل حقل نص حر.
+const NUMERIC_VALUE_TYPES = new Set(["rsi", "macd", "ema", "stoch", "atrv"]);
+const NUMERIC_OPS = ["<", "<=", ">", ">=", "="];
+
 /* =========================================================================
    DESIGN TOKENS — Qaffel / Premium Fintech Trading Terminal
 ========================================================================= */
@@ -1058,6 +1065,9 @@ export default function StrategyBuilder() {
                                 {!IMPLEMENTED_TYPES.has(c.type) && (
                                   <span title="غير مربوط بمحرك التحليل الحقيقي بعد — لا يُحتسب بالسكور" style={{ color: C.muted, fontSize: 9, border: `1px solid ${C.border}` }} className="px-1 py-0.5 rounded">تجريبي</span>
                                 )}
+                                {NUMERIC_VALUE_TYPES.has(c.type) && !/-?\d/.test(c.value || "") && (
+                                  <span title="أدخل رقمًا حتى يُحتسب هذا الشرط بالتقييم الحقيقي" style={{ color: C.red, fontSize: 9, border: `1px solid ${C.red}` }} className="px-1 py-0.5 rounded">بلا قيمة</span>
+                                )}
                                 <input
                                   value={c.label}
                                   onChange={(e) => updateCondition(c.id, { label: e.target.value })}
@@ -1079,13 +1089,41 @@ export default function StrategyBuilder() {
                                 >
                                   {TF_MODES.map((t) => <option key={t}>{t}</option>)}
                                 </select>
-                                <input
-                                  value={c.value}
-                                  placeholder="قيمة / وصف"
-                                  onChange={(e) => updateCondition(c.id, { value: e.target.value })}
-                                  style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.text, fontFamily: FM, fontSize: 11, width: 90 }}
-                                  className="rounded-md px-2 py-1"
-                                />
+                                {NUMERIC_VALUE_TYPES.has(c.type) ? (
+                                  (() => {
+                                    const m = /^\s*(<=|>=|<|>|=)?\s*(-?\d+(?:\.\d+)?)?\s*$/.exec(c.value || "");
+                                    const op = m?.[1] || "<";
+                                    const num = m?.[2] ?? "";
+                                    return (
+                                      <div className="flex items-center gap-1">
+                                        <select
+                                          value={op}
+                                          onChange={(e) => updateCondition(c.id, { value: `${e.target.value}${num}` })}
+                                          style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.text, fontFamily: FM, fontSize: 11 }}
+                                          className="rounded-md px-1 py-1"
+                                        >
+                                          {NUMERIC_OPS.map((o) => <option key={o} value={o}>{o}</option>)}
+                                        </select>
+                                        <input
+                                          type="number"
+                                          value={num}
+                                          placeholder="30"
+                                          onChange={(e) => updateCondition(c.id, { value: `${op}${e.target.value}` })}
+                                          style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.text, fontFamily: FM, fontSize: 11, width: 55 }}
+                                          className="rounded-md px-2 py-1"
+                                        />
+                                      </div>
+                                    );
+                                  })()
+                                ) : (
+                                  <input
+                                    value={c.value}
+                                    placeholder="قيمة / وصف"
+                                    onChange={(e) => updateCondition(c.id, { value: e.target.value })}
+                                    style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.text, fontFamily: FM, fontSize: 11, width: 90 }}
+                                    className="rounded-md px-2 py-1"
+                                  />
+                                )}
                                 <div className="flex items-center gap-1" style={{ color: C.muted, fontSize: 10.5 }}>
                                   Weight
                                   <input
