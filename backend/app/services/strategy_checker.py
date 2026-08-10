@@ -25,6 +25,8 @@ def _norm_timeframe(tf: str) -> str:
     return (tf or "1h").lower()
 
 
+_LOCK_KEY = 90210001  # arbitrary unique advisory-lock key for this task
+
 async def strategy_checker():
     from app.database import SessionLocal
     from app.models.strategy import Strategy, StrategyStatus, StrategyTriggerEvent
@@ -32,7 +34,15 @@ async def strategy_checker():
     from app.services.strategy_engine import evaluate_strategy, build_telegram_message
     from app.services.ai_engine_v5 import mosh_ai_engine_v5
     from app.services.admin_notify import get_bot_token
+    from app.services.worker_lock import try_acquire_singleton_lock
     import aiohttp
+
+    # production runs multiple uvicorn workers — only one of them should
+    # actually run this loop, or triggered strategies would alert Telegram
+    # once per worker.
+    lock_conn = try_acquire_singleton_lock(_LOCK_KEY, "Strategy checker")
+    if lock_conn is None:
+        return
 
     while True:
         try:
@@ -107,3 +117,5 @@ async def strategy_checker():
             break
         except Exception as e:
             logger.error(f"Strategy checker error: {e}")
+
+    lock_conn.close()

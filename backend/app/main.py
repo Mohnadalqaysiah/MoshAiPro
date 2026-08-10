@@ -25,6 +25,8 @@ from fastapi import Depends
 settings = get_settings()
 
 
+_PRICE_ALERT_LOCK_KEY = 90210002  # arbitrary unique advisory-lock key for this task
+
 # ── Price Alert Background Checker ────────────────────────────────────────────
 async def _price_alert_checker():
     """يفحص تنبيهات الأسعار كل 30 ثانية ويرسل إشعار تلغرام عند التفعيل"""
@@ -33,6 +35,13 @@ async def _price_alert_checker():
     from app.database import SessionLocal
     from app.models.price_alert import PriceAlert, AlertDirection
     from app.services.tv_price_feed import tv_feed
+    from app.services.worker_lock import try_acquire_singleton_lock
+
+    # production runs multiple uvicorn workers — only one of them should
+    # actually run this loop, or a triggered alert would send once per worker.
+    lock_conn = try_acquire_singleton_lock(_PRICE_ALERT_LOCK_KEY, "Price alert checker")
+    if lock_conn is None:
+        return
 
     SYMBOL_NAMES = {
         "XAUUSD": "🥇 الذهب", "XAGUSD": "🥈 الفضة",
@@ -100,6 +109,8 @@ async def _price_alert_checker():
             break
         except Exception as e:
             logger.error(f"Price alert checker error: {e}")
+
+    lock_conn.close()
 
 
 # Configure logging
