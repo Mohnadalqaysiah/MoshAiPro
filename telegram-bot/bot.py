@@ -95,6 +95,36 @@ last_alert:   dict            = {}
 notified_expiry: set          = set()
 
 
+# عرض بشري لوقت فتح كل بورصة خليجية (محلي) — يُستخدم برسالة "السوق مغلق"
+_GULF_OPEN_LOCAL = {
+    "TADAWUL": ("10:00", "بتوقيت الرياض"),
+    "DFM":     ("10:00", "بتوقيت الإمارات"),
+    "ADX":     ("10:00", "بتوقيت الإمارات"),
+    "QSE":     ("09:30", "بتوقيت الدوحة"),
+}
+_AR_WEEKDAY = {0: "الاثنين", 1: "الثلاثاء", 2: "الأربعاء", 3: "الخميس", 4: "الجمعة", 5: "السبت", 6: "الأحد"}
+
+
+def gulf_reopen_text(exchange: str) -> str:
+    """نص عربي دقيق بمتى تفتح البورصة الخليجية القادمة — بديل رسالة
+    "يفتح يوم الاثنين" العامة يلي كانت مكتوبة لكل الأسواق بدون تفريق."""
+    days, open_min, close_min = GULF_EXCHANGE_HOURS[exchange]
+    open_label, tz_label = _GULF_OPEN_LOCAL[exchange]
+    now = datetime.now(timezone.utc)
+    wd = now.weekday()
+    minute_of_day = now.hour * 60 + now.minute
+
+    if wd in days and minute_of_day < open_min:
+        return f"يفتح اليوم الساعة {open_label} {tz_label}"
+
+    for delta in range(1, 8):
+        cand = (wd + delta) % 7
+        if cand in days:
+            day_label = "غداً" if delta == 1 else _AR_WEEKDAY[cand]
+            return f"يفتح {day_label} الساعة {open_label} {tz_label}"
+    return f"يفتح الساعة {open_label} {tz_label}"
+
+
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 def is_market_open(symbol: str) -> bool:
     """
@@ -623,10 +653,14 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if d.startswith("sym_"):
         symbol = d[4:]
         if not is_market_open(symbol):
+            exchange = GULF_MARKETS.get(symbol.upper())
+            if exchange:
+                reopen_line = f"السوق مغلق حالياً خارج ساعات التداول اليومية.\n{gulf_reopen_text(exchange)}."
+            else:
+                reopen_line = "مغلق خلال عطلة نهاية الأسبوع.\nيفتح مجدداً يوم الاثنين."
             await q.edit_message_text(
                 f"🔴 *السوق مغلق*\n\n"
-                f"{MARKET_NAMES.get(symbol,symbol)} مغلق خلال عطلة نهاية الأسبوع.\n"
-                f"يفتح مجدداً يوم الاثنين.",
+                f"{MARKET_NAMES.get(symbol,symbol)} {reopen_line}",
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton("🔙 رجوع", callback_data="m_analyze")]
