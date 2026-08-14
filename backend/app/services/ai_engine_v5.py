@@ -310,21 +310,26 @@ class MoshAIEngineV5:
                         )
                         self._record_signal_issued(symbol, timeframe)
 
-            # ── SMART RESCUE LAYER — near-threshold signals recovered as BUY/SELL ─
-            # Runs after decision_finalizer + institutional_gate.
-            # Volatility adaptation (SCALP_BOOST/SILENCE_BOOST) applied inside.
-            if analysis.get("institutional_rejected") or \
-               analysis.get("recommendation") == "WAIT":
-                analysis = self._smart_rescue_layer(
-                    analysis, symbol, timeframe, htf_analysis
-                )
+            # ── SMART RESCUE LAYER — DISABLED FROM PRODUCTION (2026-08-14) ──────
+            # Architectural shift: strict veto rules (HTF/zone/risk-integrity)
+            # must never be overridable, no matter how the rescue conditions
+            # look afterward. Kept as a callable method for offline analysis/
+            # simulation only — not invoked from the live analyze_market()
+            # pipeline anymore.
+            # if analysis.get("institutional_rejected") or \
+            #    analysis.get("recommendation") == "WAIT":
+            #     analysis = self._smart_rescue_layer(
+            #         analysis, symbol, timeframe, htf_analysis
+            #     )
 
-            # ── BORDERLINE RESCUE — older soft-rescue (WAIT only, not BUY/SELL) ─
-            if analysis.get("institutional_rejected") and \
-               not analysis.get("smart_rescued"):
-                analysis = self._borderline_rescue_layer(
-                    analysis, symbol, timeframe, htf_analysis
-                )
+            # ── BORDERLINE RESCUE — DISABLED FROM PRODUCTION (2026-08-14) ───────
+            # Never promoted a trade to live BUY/SELL on its own, but kept for
+            # symmetry with the line above — also analysis-only now.
+            # if analysis.get("institutional_rejected") and \
+            #    not analysis.get("smart_rescued"):
+            #     analysis = self._borderline_rescue_layer(
+            #         analysis, symbol, timeframe, htf_analysis
+            #     )
 
             # ── SMART MODE fallback — ensure trade_type set on WAIT/rescued signals ─
             if not analysis.get("trade_type"):
@@ -371,6 +376,14 @@ class MoshAIEngineV5:
                 f"rec={analysis.get('recommendation', 'WAIT')}"
             )
 
+            # ── DECISION LAYER — which stage decided the outcome (2026-08-14,
+            # Phase 4) — for weekly monitoring: is rejection mostly a hard
+            # veto (healthy) or mostly low quality (normal in a quiet market)?
+            analysis["decision_layer"] = self._classify_decision_layer(
+                analysis.get("rejection_reason") or analysis.get("no_trade_reason") or "",
+                analysis.get("recommendation", "WAIT"),
+            )
+
             # ── حفظ في الكاش ─────────────────────────────────────────────
             analysis["from_cache"] = False
             analysis["cached_at"] = datetime.now().isoformat()
@@ -392,6 +405,47 @@ class MoshAIEngineV5:
             import traceback
             traceback.print_exc()
             return self._error_response(symbol, str(e))
+
+    async def analyze_market_multi_tf(
+        self,
+        symbol: str,
+        timeframes: Optional[list] = None,
+        force_refresh: bool = False,
+        account_balance: float = 10000.0,
+        max_risk_percent: float = 1.5,
+    ) -> Dict[str, Dict]:
+        """
+        Phase 5 (2026-08-14) — widen opportunity via independent timeframes
+        instead of loosening any single signal's bar. Runs analyze_market()
+        in parallel across multiple timeframes for the same symbol; each
+        timeframe is a fully independent decision through the complete
+        pipeline (Phases 1-4: risk-integrity gates, HTF/zone vetoes,
+        balanced confluence) — no blending or averaging across timeframes.
+
+        Each timeframe still derives its own HTF exactly like a standalone
+        analyze_market() call always has (unchanged rule, line ~203):
+            htf_timeframe = "4h" if timeframe in ("1h","15m","30m") else "1d"
+        This means 15m and 1h share the SAME 4h HTF reference — a real HTF
+        veto is therefore likely to hit both of them together more often
+        than it independently hits 4h (whose own HTF is 1d, unrelated to the
+        4h candle both 15m/1h are compared against). This is a real
+        correlation to expect in the results, not a bug.
+
+        Does NOT auto-save any signal — callers (e.g. the watchlist monitor)
+        save each qualifying timeframe result separately, same as a normal
+        analyze_market() caller would.
+
+        Returns {timeframe: analysis_dict}.
+        """
+        tfs = timeframes or ["15m", "1h", "4h"]
+        results = await asyncio.gather(*[
+            self.analyze_market(
+                symbol=symbol, timeframe=tf, force_refresh=force_refresh,
+                account_balance=account_balance, max_risk_percent=max_risk_percent,
+            )
+            for tf in tfs
+        ])
+        return dict(zip(tfs, results))
 
     # الأسواق التي تستخدم Futures في yfinance (GC=F, SI=F ...)
     _FUTURES_SPOT_SYMBOLS = {"XAUUSD", "XAGUSD"}
@@ -887,45 +941,32 @@ class MoshAIEngineV5:
             required_delta = max(required_delta - 5, self._CALIB_DELTA_MIN)
             silence_relaxed = True
 
-        # ── 8. EMERGENCY CALIBRATION MODE ────────────────────────────────────
-        # Activates when pass_rate < 50% over last 20 analyses.
-        # Adapts thresholds to market reality without removing risk controls.
+        # ── 8. PERFORMANCE TIGHTENING MODE (2026-08-14) ──────────────────────
+        # Activates when pass_rate < 50% over last 20 analyses for this
+        # symbol/timeframe. A low pass rate means recent signals here have
+        # been low-quality, not that the bar is unreasonably high — so this
+        # now TIGHTENS thresholds instead of relaxing them. Replaces the old
+        # "EMERGENCY CALIBRATION MODE", which did the opposite (lowered
+        # delta/RR requirements and enabled soft-approval/partial-confluence
+        # shortcuts) — that philosophy is what let weak, frequently-losing
+        # signals through in the first place.
         pass_rate = self._get_pass_rate(symbol, timeframe)
-        emergency_active = pass_rate < 0.50
-        emergency_params = {}
+        tightening_active = pass_rate < 0.50
+        tightening_params = {}
 
-        if emergency_active:
-            avg_delta = self._get_avg_delta(symbol, timeframe)
+        if tightening_active:
+            required_delta = min(required_delta + 3, self._CALIB_DELTA_MAX)
+            min_rr          = min(min_rr + 0.1, self._CALIB_RR_MAX)
 
-            # 1. Delta adaptive: set threshold BELOW recent avg (90% of avg)
-            # Old: max(13, avg+1) = ABOVE avg — opposite of relaxation!
-            # When avg=14.5: max(13, 14.5+1)=15.5 was STRICTER than base threshold
-            # New: max(12, avg*0.90) = slightly below avg → actually relaxes
-            required_delta = max(12, avg_delta * 0.90)
-
-            # 2. HTF conflict weight × 0.6 (passed to confidence calibration)
-            analysis["_htf_penalty_multiplier"] = 0.6
-
-            # 3. Relax RR by 0.2 (floor = 1.05 to preserve minimum risk ratio)
-            min_rr = max(1.05, min_rr - 0.2)
-
-            # 4. Partial confluence mode — soft approval active
-            analysis["_partial_confluence_mode"] = True
-
-            # 5. Soft override: 2 strong conditions → WATCHLIST becomes PASS
-            analysis["_soft_approval_mode"] = True
-
-            emergency_params = {
-                "active":          True,
-                "pass_rate":       round(pass_rate, 3),
-                "avg_delta":       round(avg_delta, 1),
-                "delta_override":  round(required_delta, 1),
-                "rr_override":     round(min_rr, 2),
-                "htf_multiplier":  0.6,
+            tightening_params = {
+                "active":     True,
+                "pass_rate":  round(pass_rate, 3),
+                "delta_tightened_to": round(required_delta, 1),
+                "rr_tightened_to":    round(min_rr, 2),
             }
             logger.warning(
-                f"🚨 EMERGENCY_CALIB [{symbol}/{timeframe}] "
-                f"pass_rate={pass_rate:.0%} avg_delta={avg_delta:.1f} "
+                f"🔒 PERFORMANCE_TIGHTENING [{symbol}/{timeframe}] "
+                f"pass_rate={pass_rate:.0%} "
                 f"→ delta={required_delta:.0f} RR≥{min_rr:.2f}"
             )
 
@@ -959,10 +1000,10 @@ class MoshAIEngineV5:
             "reason": (
                 f"{market_state} + {volatility} volatility + {market_regime} regime"
                 + (" | silence relaxed" if silence_relaxed else "")
-                + (" | EMERGENCY_CALIB" if emergency_active else "")
+                + (" | PERFORMANCE_TIGHTENING" if tightening_active else "")
                 + (f" | HIGH_WINRATE({wr:.0%})" if wr >= self._WINRATE_THRESHOLD else f" | winrate={wr:.0%}")
             ),
-            "emergency": emergency_params or {"active": False, "pass_rate": round(pass_rate, 3)},
+            "tightening": tightening_params or {"active": False, "pass_rate": round(pass_rate, 3)},
         }
         analysis["calibration_params"] = calibration
 
@@ -1824,39 +1865,13 @@ class MoshAIEngineV5:
                 f"(noise={_low_tf_noise_penalty} trap={_range_trap_penalty})"
             )
 
-            # ── SOFT OVERRIDE (emergency mode): 2 strong conditions → PASS ──────
-            if analysis.get("_soft_approval_mode"):
-                score_dir_local = "BUY" if score_delta > 0 else "SELL"
-                strong = 0
-                if sweep_quality_raw in ("STRONG", "HIGH"):
-                    strong += 1
-                if has_bos and has_choch:
-                    strong += 1
-                # HTF aligned
-                if htf_analysis:
-                    ht = (htf_analysis.get("market_structure", {}).get("trend") or "").upper()
-                    htf_b_local = "BUY" if ht == "BULLISH" else ("SELL" if ht == "BEARISH" else None)
-                    if htf_b_local and htf_b_local == score_dir_local:
-                        strong += 1
-                # Zone aligned
-                pd_raw_local = (pd_zone.get("bias") or "NEUTRAL").upper()
-                zone_b_local = ("BUY" if pd_raw_local == "BUY" else
-                                "SELL" if pd_raw_local == "SELL" else None)
-                if zone_b_local and zone_b_local == score_dir_local:
-                    strong += 1
-                # Delta ≥ 80% of threshold
-                if abs(score_delta) >= threshold * 0.80:
-                    strong += 1
-
-                if strong >= 2:
-                    _is_watchlist = False
-                    analysis["soft_approved"]            = True
-                    analysis["soft_approval_conditions"] = strong
-                    analysis.pop("watchlist_reason", None)
-                    logger.info(
-                        f"SOFT_OVERRIDE [{symbol}/{timeframe}]: "
-                        f"{strong}/5 conditions → promoted to PASS"
-                    )
+            # NOTE (2026-08-14): the old "soft override" here — promoting a
+            # below-threshold WATCHLIST result to a live PASS whenever 2+ of
+            # {sweep quality, BOS+CHoCH, HTF alignment, zone alignment, delta
+            # ≥80% of threshold} were true — was removed. It only ever
+            # activated under _soft_approval_mode, which PERFORMANCE_TIGHTENING
+            # mode (step 8 above) no longer sets; a below-threshold signal now
+            # always stays WATCHLIST, full stop.
 
         # ── 5. Conflict Resolver — rebalanced: delta leads, sweep/struct follow ──
         #  Priority 1: Score delta direction (strongest signal in this rebalance)
@@ -1920,64 +1935,46 @@ class MoshAIEngineV5:
                 # TRENDING: use structure as tiebreaker only if delta is borderline
                 resolved = structure_bias
 
-        # ── 6. HTF assessment ─────────────────────────────────────────────────
-        # A clear HTF trend conflicting with the resolved LTF direction is now a
-        # real gate, not just a confidence penalty. Previously this only docked
-        # confidence (comment used to read "NEVER rejection"), which let BUY
-        # signals fire repeatedly against a bearish HTF trend and get stopped
-        # out over and over (e.g. XAUUSD, 2026-08-13 — ~20 consecutive BUY
-        # signals against HTF, almost all SL_HIT). Same override precedent as
-        # the structure-conflict check above (step 5): a genuinely strong local
-        # delta can still justify a real counter-trend reversal trade.
+        # ── 6. HTF assessment — UNCONDITIONAL VETO (2026-08-14, Phase 2) ────────
+        # Any conflict between the resolved LTF direction and the HTF trend is
+        # a direct hard reject, full stop — no strong_override / high-delta
+        # exception anymore. That exception was the exact mechanism that let
+        # a delta=48 BUY fire against a bearish HTF and pass (documented via
+        # synthetic before/after test on 2026-08-14: before this change,
+        # forcing score_delta=48 against an opposing HTF returned BUY with
+        # htf_status=conflicting; existential rules must not have a "but the
+        # score was high enough" escape hatch).
         if htf_bias and htf_bias != resolved:
-            strong_override = abs(score_delta) >= self._DECISION_THRESHOLD_STRONG
             analysis["htf_conflict_warning"] = f"HTF={htf_bias} vs resolved={resolved}"
-            if not strong_override:
-                logger.info(
-                    f"HTF_DIRECTION_CONFLICT → REJECTED (delta not strong enough to override) "
-                    f"[{symbol}/{timeframe}]: resolved={resolved} htf={htf_bias} "
-                    f"delta={score_delta:+.1f} threshold={self._DECISION_THRESHOLD_STRONG}"
-                )
-                # Hard reject via the same path _institutional_gate uses — sets
-                # _pre_reject_rec/_pre_reject_levels/rejection_reason and clears
-                # levels, so downstream rescue layers see a real rejection
-                # instead of an empty rejection_reason they'd otherwise ignore.
-                # Early return: nothing after this point in the function can
-                # overwrite the WAIT decision.
-                analysis["recommendation"] = resolved  # _hard_reject logs this as the rejected rec
-                return self._hard_reject(analysis, "HTF_CONFLICT_REJECTED")
-            else:
-                analysis["htf_status"] = "conflicting"
-                # Penalty applied in confidence calibration layer
-                analysis["_htf_conflict_penalty"] = (
-                    20.0 if (not is_ranging and abs(score_delta) < self._DECISION_THRESHOLD_STRONG)
-                    else 10.0
-                )
-                logger.info(
-                    f"HTF_DIRECTION_CONFLICT → strong delta override, scoring penalty "
-                    f"{analysis['_htf_conflict_penalty']:.0f} [{symbol}/{timeframe}]"
-                )
+            logger.info(
+                f"HTF_DIRECTION_CONFLICT → REJECTED (unconditional veto, no delta exception) "
+                f"[{symbol}/{timeframe}]: resolved={resolved} htf={htf_bias} delta={score_delta:+.1f}"
+            )
+            # Hard reject via the same path _institutional_gate uses — sets
+            # _pre_reject_rec/_pre_reject_levels/rejection_reason and clears
+            # levels, so downstream rescue layers see a real rejection
+            # instead of an empty rejection_reason they'd otherwise ignore.
+            # Early return: nothing after this point in the function can
+            # overwrite the WAIT decision.
+            analysis["recommendation"] = resolved  # _hard_reject logs this as the rejected rec
+            return self._hard_reject(analysis, "HTF_CONFLICT_REJECTED")
         elif htf_bias and htf_bias == resolved:
             analysis["htf_status"] = "aligned"
         else:
             analysis["htf_status"] = "neutral"
 
-        # ── 7. Zone assessment — scoring penalty only, never rejection ──────────
+        # ── 7. Zone assessment — UNCONDITIONAL VETO (2026-08-14, Phase 2) ───────
+        # Same treatment as HTF above: trading a BUY into a Premium zone (or a
+        # SELL into Discount) is a direct hard reject now, not a confidence
+        # penalty that a high delta could shrug off.
         if resolved == "BUY" and zone_bias == "SELL":
-            if abs(score_delta) < self._DECISION_THRESHOLD_STRONG:
-                analysis["zone_conflict_warning"]      = "BUY_IN_PREMIUM_ZONE"
-                analysis["_zone_confidence_penalty"]   = 12.0
-                logger.info(f"SCORING: BUY_IN_PREMIUM_ZONE penalty=12 [{symbol}/{timeframe}]")
+            analysis["zone_conflict_warning"] = "BUY_IN_PREMIUM_ZONE"
+            analysis["recommendation"] = resolved
+            return self._hard_reject(analysis, "ZONE_CONFLICT_BUY_IN_PREMIUM")
         elif resolved == "SELL" and zone_bias == "BUY":
-            if abs(score_delta) < self._DECISION_THRESHOLD_STRONG:
-                analysis["zone_conflict_warning"] = (
-                    "SELL_IN_DISCOUNT_ZONE" if is_ranging else "SELL_IN_DISCOUNT_TRENDING"
-                )
-                analysis["_zone_confidence_penalty"] = 12.0
-                logger.info(
-                    f"SCORING: SELL_IN_DISCOUNT penalty=12 [{symbol}/{timeframe}] "
-                    f"(ranging={is_ranging})"
-                )
+            analysis["zone_conflict_warning"] = "SELL_IN_DISCOUNT_ZONE"
+            analysis["recommendation"] = resolved
+            return self._hard_reject(analysis, "ZONE_CONFLICT_SELL_IN_DISCOUNT")
 
         # ── 8. Primary OB selection — overlap resolved, never rejected ──────────
         current_p = float(analysis.get("current_price") or 0) or float(confluence.get("entry", 0) or 0)
@@ -1996,6 +1993,39 @@ class MoshAIEngineV5:
         analysis["primary_bull_ob"] = primary_bull_ob
         analysis["primary_bear_ob"] = primary_bear_ob
 
+        # ── 8.5 Balanced confluence — 2-of-3 factors required (2026-08-14,
+        # Phase 3) ────────────────────────────────────────────────────────────
+        # HTF is deliberately excluded — it's already a separate hard veto
+        # (step 6). This is a QUALITY filter (is there real, aligned evidence
+        # behind this direction?), not a business-rule violation, so an
+        # insufficient score routes to WATCHLIST/WAIT the same way a
+        # below-threshold delta does — not a _hard_reject. effective_delta /
+        # the point system still drives confidence and ranking on top of this
+        # — this filter only answers "is there enough real evidence to even
+        # consider a trade," it doesn't replace scoring.
+        #
+        # NOTE: structure_bias can be the same input that decided `resolved`
+        # itself (step 5's tiebreak) AND count as the "structure" factor here
+        # — that overlap is expected (BOS/CHoCH legitimately informs both),
+        # but means passing 2/3 via {structure, X} is a lower bar than it
+        # looks when structure already drove direction. Worth watching in the
+        # verification results below.
+        _factor_sweep = (
+            (resolved == "BUY"  and has_bullish_sweep and sweep_quality_raw != "WEAK") or
+            (resolved == "SELL" and has_bearish_sweep and sweep_quality_raw != "WEAK")
+        )
+        _factor_structure = bool(structure_bias) and structure_bias == resolved
+        _factor_ob = (
+            (resolved == "BUY"  and bool(primary_bull_ob)) or
+            (resolved == "SELL" and bool(primary_bear_ob))
+        )
+        _confluence_count = sum([_factor_sweep, _factor_structure, _factor_ob])
+        analysis["confluence_factors"] = {
+            "sweep": _factor_sweep, "structure": _factor_structure, "ob": _factor_ob,
+            "count": _confluence_count,
+        }
+        _confluence_insufficient = _confluence_count < 2
+
         # ── 9. Commit decision ───────────────────────────────────────────────
         # WATCHLIST: direction resolved for diagnostics, recommendation = WAIT
         analysis["confluence"]["direction"] = resolved
@@ -2006,9 +2036,14 @@ class MoshAIEngineV5:
             analysis["no_trade_reason"] = analysis.get(
                 "watchlist_reason", "DELTA_BELOW_THRESHOLD"
             )
+        elif _confluence_insufficient:
+            analysis["recommendation"]  = "WAIT"
+            analysis["signal_type"]     = "WAIT"
+            analysis["signal_status"]   = "WATCHLIST"
+            analysis["no_trade_reason"] = f"CONFLUENCE_INSUFFICIENT_{_confluence_count}_OF_3"
         else:
-            # NOTE: a real HTF conflict (htf_bias != resolved, delta not strong
-            # enough) never reaches this point — step 6 above returns via
+            # NOTE: a real HTF or zone conflict (htf_bias/zone_bias != resolved)
+            # never reaches this point — steps 6/7 above return via
             # _hard_reject() immediately in that case.
             analysis["recommendation"] = resolved
             analysis["signal_type"]    = resolved
@@ -2263,20 +2298,12 @@ class MoshAIEngineV5:
         calib_rr = analysis.get("_calib_min_rr")
         min_rr = calib_rr if calib_rr is not None else self._get_min_rr()
         if rr < min_rr:
-            # ── SMART RR RECOVERY — attempt TP/SL optimisation before rejecting ──
-            analysis, levels, rr = self._smart_rr_recovery(
-                analysis, levels, entry, sl, tp1, rr, min_rr, rec, symbol, timeframe
-            )
-            sl_dist = abs(entry - float(levels.get("stop_loss") or sl))
-            tp1     = float(levels.get("tp1") or tp1)
-            tp_dist = abs(tp1 - entry)
-            rr      = round(tp_dist / sl_dist, 2) if sl_dist > 0 else 0
-            levels["risk_reward"]      = rr
-            analysis["risk_reward_ratio"] = rr
-            # Use recovery floor if recovery succeeded (may be lower than original min_rr)
-            effective_min_rr = analysis.get("_recovery_min_rr", min_rr)
-            if rr < effective_min_rr:
-                return self._hard_reject(analysis, f"RR_{rr:.2f}_BELOW_MIN_{effective_min_rr:.1f}")
+            # ── SMART RR RECOVERY — DISABLED FROM PRODUCTION (2026-08-14) ────
+            # No more TP/SL "optimisation" attempts or high-delta RR-floor
+            # exceptions before rejecting. Below the calibrated minimum RR is
+            # a direct hard reject, full stop. _smart_rr_recovery() is kept
+            # as a method for offline analysis/simulation only.
+            return self._hard_reject(analysis, f"RR_{rr:.2f}_BELOW_MIN_{min_rr:.1f}")
 
         # Rule 8: Distance filter — both are soft warnings only
         if tp_dist / entry < 0.003:
@@ -3074,6 +3101,47 @@ class MoshAIEngineV5:
                 if any(c.startswith(t) for t in tier):
                     return c
         return candidates[0]
+
+    def _classify_decision_layer(self, reason: str, recommendation: str) -> str:
+        """
+        Buckets the final outcome into one of 6 layers, for weekly monitoring
+        (Phase 4, 2026-08-14): is rejection mostly hard vetoes (healthy — the
+        system is doing its job) or mostly low quality (normal in a quiet
+        market)? Covers reasons from all three sources that can reject a
+        trade: _decision_finalizer (HTF/zone veto, confluence, watchlist
+        delta), _institutional_gate (risk integrity via _hard_reject), and
+        _output_safety_gate (its 7 "SAFETY_*" rules).
+        """
+        if recommendation in ("BUY", "SELL"):
+            return "passed_all"
+
+        r = (reason or "").upper()
+        if not r:
+            return "quality_below_threshold"
+
+        if ("HTF_CONFLICT" in r or "HTF_BEARISH_FORBIDS" in r or "HTF_BULLISH_FORBIDS" in r
+                or "CONFLICTS_WITH_1H" in r or "REQUIRES_HTF_ALIGNMENT" in r):
+            return "htf_veto"
+
+        if ("ZONE_CONFLICT" in r or "PREMIUM_ZONE" in r or "DISCOUNT_ZONE" in r
+                or "IN_PREMIUM_ZONE" in r or "IN_DISCOUNT_ZONE" in r):
+            return "zone_veto"
+
+        if r.startswith("CONFLUENCE_INSUFFICIENT"):
+            return "confluence_insufficient"
+
+        if (r.startswith("RR_") or "_RR_" in r or "ZERO_SL" in r
+                or "SL_ABOVE_ENTRY" in r or "SL_BELOW_ENTRY" in r
+                or "SL_NOT_BELOW_ENTRY" in r or "SL_NOT_ABOVE_ENTRY" in r
+                or "TP1_BELOW_ENTRY" in r or "TP1_ABOVE_ENTRY" in r
+                or "MISSING_ENTRY" in r or "INVALID_LEVELS" in r or "INVALID_STRUCTURE" in r
+                or "NO_LIQUIDITY_SWEEP" in r or "FAKE_SWEEP" in r or "NO_SWEEP_NO_STRUCTURE" in r):
+            return "risk_integrity"
+
+        if r.startswith("DELTA_") or "CONFIDENCE_TOO_LOW" in r:
+            return "quality_below_threshold"
+
+        return "quality_below_threshold"   # safe default for any reason not mapped above
 
     def _detect_smart_mode_signal(self, analysis: dict, symbol: str, timeframe: str) -> Optional[str]:
         """

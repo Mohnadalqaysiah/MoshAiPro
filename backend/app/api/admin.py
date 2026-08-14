@@ -1726,6 +1726,8 @@ async def system_diagnostic(
                 "decision":            final_status,
                 "rescued":             rescued,
                 "reason":              rej_reason or "N/A",
+                "decision_layer":      full.get("decision_layer", "?"),
+                "confluence_factors":  full.get("confluence_factors"),
                 "pre_rescue_decision": pre_rescue_decision,
                 "pre_rescue_reason":   pre_rescue_reason or "N/A",
                 "delta":               round(delta, 1),
@@ -1769,6 +1771,35 @@ async def system_diagnostic(
         "avg_rr":                    avg_rr,
         "required_delta_range":      "20-35",
         "required_rr_range":         "1.2-2.0",
+    }
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # Decision Layer Breakdown (2026-08-14, Phase 4) — weekly monitoring:
+    # is rejection mostly hard vetoes (risk_integrity/htf_veto/zone_veto —
+    # healthy, the system is doing its job) or mostly low quality
+    # (confluence_insufficient/quality_below_threshold — normal in a quiet
+    # market)? A sudden shift in this distribution is a better early signal
+    # than pass_rate alone.
+    # ─────────────────────────────────────────────────────────────────────────
+    layer_counts: dict = {}
+    for t in pipeline_traces:
+        if "error" in t:
+            continue
+        layer_counts[t.get("decision_layer", "?")] = layer_counts.get(t.get("decision_layer", "?"), 0) + 1
+    results["decision_layer_breakdown"] = {
+        "counts": layer_counts,
+        "distribution": {
+            k: f"{round(v / total_analyzed * 100, 1)}%" if total_analyzed else "0%"
+            for k, v in sorted(layer_counts.items(), key=lambda x: -x[1])
+        },
+        "legend": {
+            "risk_integrity":          "RR/SL/TP integrity violation — hard gate, always healthy to see some",
+            "htf_veto":                "conflicts with higher-timeframe trend — hard veto",
+            "zone_veto":               "wrong side of Premium/Discount zone — hard veto",
+            "confluence_insufficient": "direction resolved but <2 of {sweep, structure, OB} confirm it",
+            "quality_below_threshold": "score delta / confidence below the bar — plain quiet-market watchlist",
+            "passed_all":              "cleared every layer — live BUY/SELL",
+        },
     }
 
     # ─────────────────────────────────────────────────────────────────────────

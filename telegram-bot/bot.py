@@ -1135,9 +1135,13 @@ async def broadcast_new_signals(app: Application):
                 for sig in sigs:
                     market   = sig.get("market", "").upper()
                     sig_type = sig.get("signal_type", "BUY").upper()
+                    sig_tf   = sig.get("timeframe", "")
 
-                    # قفل الاتجاه للإشارات المبثوثة — مفتاح مشترك بين كل المستخدمين
-                    bc_key  = ("broadcast", market)
+                    # قفل الاتجاه للإشارات المبثوثة — مفتاح مشترك بين كل المستخدمين،
+                    # بس لكل (رمز + فريم) ككيان مستقل (Phase 5, 2026-08-14) — إشارة
+                    # 4h ما لازم تكتم إشارة 1h معاكسة لنفس الرمز والعكس، بما إنه
+                    # كل فريم صار قرار مستقل بالكامل بمحرك التحليل.
+                    bc_key  = ("broadcast", market, sig_tf)
                     bc_last = last_alert.get(bc_key)
                     if bc_last:
                         elapsed_min = (now_bc - bc_last["time"]).total_seconds() / 60
@@ -1247,93 +1251,123 @@ async def monitor_watchlists(app: Application):
             logger.info(f"🔍 دورة مراقبة — {len(merged)} مستخدم (من DB)")
             now = datetime.now(timezone.utc)
 
-            for uid_, (watchlist, tf, min_conf) in merged.items():
+            # Phase 5 (2026-08-14): كل رمز بمراقبة يُفحص على 3 فريمات مستقلة
+            # تماماً (15m/1h/4h) بدل فريم واحد مخزّن بتفضيلات المستخدم — كل
+            # فريم قرار كامل ومنفصل بمحرك التحليل (توسيع نطاق الفرص بدل
+            # تخفيف معيار أي فريم فردي). تفضيل الفريم المخزّن بقاعدة البيانات
+            # (`tf` بالسطر فوق) ما عاد يُستخدم لتحديد أي فريم نفحص — نفحص
+            # الثلاثة دايماً لكل مستخدم/رمز.
+            SCAN_TIMEFRAMES = "15m,1h,4h"
+
+            # ── تحليل موحّد لكل رمز فريد مرة وحدة بالدورة، مش مرة لكل مستخدم ──
+            # قبل هالتعديل: لو 5 مستخدمين عندهم XAUUSD بقائمتهم، كنا نطلب
+            # تحليلها 5 مرات منفصلة (×3 فريمات = 15 طلب لنفس الرمز!). محرك
+            # التحليل عنده كاش داخلي (TTL) بيلطّف الأثر جزئياً، بس مش ضمان —
+            # لو دورة الفحص طالت أكتر من الـ TTL أو تزاحمت الطلبات، ممكن نضغط
+            # على yfinance/Finnhub أكتر من اللازم بدون داعي حقيقي. الحل: نجمع
+            # كل الرموز الفريدة أولاً، نحللها مرة وحدة بالتوازي المحدود، وبعدين
+            # كل مستخدم بس بياخذ نتيجة رمزه من القاموس المشترك.
+            all_symbols = set()
+            for wl, _, _ in merged.values():
+                all_symbols |= wl
+
+            symbol_results: dict[str, dict] = {}
+            for symbol in all_symbols:
+                if not is_market_open(symbol):
+                    continue  # السوق مغلق — صمت تام بدون رسائل
+                try:
+                    async with aiohttp.ClientSession() as s:
+                        async with s.post(
+                            f"{API_URL}/api/v1/bot/analyze-multi-tf",
+                            params={"symbol": symbol, "timeframes": SCAN_TIMEFRAMES},
+                            headers=BOT_HEADERS,
+                            timeout=aiohttp.ClientTimeout(total=60),
+                        ) as r:
+                            res = await r.json() if r.status == 200 else {}
+                            symbol_results[symbol] = res.get("data", {})
+                except Exception as _e:
+                    logger.warning(f"analyze-multi-tf {symbol}: {_e}")
+                    symbol_results[symbol] = {}
+
+            logger.info(f"🔍 حُلّل {len(symbol_results)} رمز فريد (بدل {sum(len(wl) for wl,_,_ in merged.values())} طلب لو كل مستخدم لحاله)")
+
+            for uid_, (watchlist, _stored_tf_pref, min_conf) in merged.items():
                 for symbol in list(watchlist):
-                    if not is_market_open(symbol):
-                        continue  # السوق مغلق — صمت تام بدون رسائل
+                    tf_results = symbol_results.get(symbol) or {}
+                    if not tf_results:
+                        continue  # سوق مغلق أو فشل التحليل — تعامل معه فوق مرة وحدة
 
-                    try:
-                        async with aiohttp.ClientSession() as s:
-                            async with s.post(
-                                f"{API_URL}/api/v1/bot/analyze",
-                                params={"symbol":symbol,"timeframe":tf},
-                                headers=BOT_HEADERS,
-                                timeout=aiohttp.ClientTimeout(total=40),
-                            ) as r:
-                                res  = await r.json() if r.status == 200 else {}
-                                data = res.get("data", {})
-                    except Exception as _e:
-                        logger.warning(f"analyze {symbol}: {_e}")
-                        continue
-
-                    rec  = data.get("recommendation","WATCH")
-                    conf = get_confidence(data)
-                    if rec not in ("BUY","SELL") or conf < min_conf:
-                        continue
-
-                    key  = (uid_, symbol)
-                    last = last_alert.get(key)
-                    if last:
-                        elapsed_min = (now - last["time"]).total_seconds() / 60
-                        last_dir    = last["direction"]
-                        # نفس الاتجاه → كولداون عادي 60 دقيقة
-                        if last_dir == rec and elapsed_min < ALERT_COOLDOWN:
-                            continue
-                        # اتجاه معاكس → قفل 4 ساعات (منع التضارب)
-                        if last_dir != rec and elapsed_min < DIRECTION_LOCK_MIN:
-                            logger.debug(f"🔒 direction lock [{symbol}] {last_dir}→{rec} ({elapsed_min:.0f}m < {DIRECTION_LOCK_MIN}m)")
+                    for tf, data in tf_results.items():
+                        rec  = data.get("recommendation", "WATCH")
+                        conf = get_confidence(data)
+                        if rec not in ("BUY", "SELL") or conf < min_conf:
                             continue
 
-                    last_alert[key] = {"time": now, "direction": rec}
-                    emoji  = "🟢" if rec == "BUY" else "🔴"
-                    rec_ar = "شراء" if rec == "BUY" else "بيع"
-                    alert  = (
-                        f"🚨 *تنبيه مراقبة!*\n\n"
-                        f"{emoji} *{rec_ar}* — {MARKET_NAMES.get(symbol,symbol)}\n"
-                        f"📊 الثقة: *{conf:.1f}%*\n\n"
-                        f"{fmt_analysis(data, symbol, tf)}"
-                    )[:4000]
+                        # قفل الاتجاه لكل (مستخدم، رمز، فريم) ككيان مستقل —
+                        # إشارة 4h ما لازم تكتم إشارة 1h معاكسة لنفس الرمز
+                        key  = (uid_, symbol, tf)
+                        last = last_alert.get(key)
+                        if last:
+                            elapsed_min = (now - last["time"]).total_seconds() / 60
+                            last_dir    = last["direction"]
+                            # نفس الاتجاه → كولداون عادي 60 دقيقة
+                            if last_dir == rec and elapsed_min < ALERT_COOLDOWN:
+                                continue
+                            # اتجاه معاكس → قفل 4 ساعات (منع التضارب)
+                            if last_dir != rec and elapsed_min < DIRECTION_LOCK_MIN:
+                                logger.debug(f"🔒 direction lock [{symbol}/{tf}] {last_dir}→{rec} ({elapsed_min:.0f}m < {DIRECTION_LOCK_MIN}m)")
+                                continue
 
-                    try:
-                        await app.bot.send_message(
-                            chat_id=uid_, text=alert, parse_mode="Markdown",
-                            reply_markup=InlineKeyboardMarkup([[
-                                InlineKeyboardButton("🔄 تحديث", callback_data=f"an_{symbol}_{tf}"),
-                                InlineKeyboardButton("🏠 رئيسية", callback_data="m_back"),
-                            ]]),
-                        )
-                        logger.info(f"📨 تنبيه → {uid_} | {symbol} | {rec} | {conf:.1f}%")
+                        last_alert[key] = {"time": now, "direction": rec}
+                        emoji  = "🟢" if rec == "BUY" else "🔴"
+                        rec_ar = "شراء" if rec == "BUY" else "بيع"
+                        alert  = (
+                            f"🚨 *تنبيه مراقبة!*\n\n"
+                            f"{emoji} *{rec_ar}* — {MARKET_NAMES.get(symbol,symbol)} ({tf})\n"
+                            f"📊 الثقة: *{conf:.1f}%*\n\n"
+                            f"{fmt_analysis(data, symbol, tf)}"
+                        )[:4000]
 
-                        # ── حفظ الإشارة في DB لتتبع PnL تلقائياً ─────────────
                         try:
-                            levels = data.get("levels", {})
-                            _ez    = data.get("entry_zones") or []
-                            _tz    = data.get("take_profit_zones") or []
-                            _entry = levels.get("entry") or (_ez[0] if _ez else None)
-                            _sl    = levels.get("stop_loss") or data.get("stop_loss_zone")
-                            _tp1   = levels.get("tp1") or (_tz[0] if _tz else None)
-                            _tp2   = levels.get("tp2") or (_tz[1] if len(_tz) > 1 else _tp1)
-                            _rr    = data.get("risk_reward_ratio") or levels.get("risk_reward") or 0
-                            if _entry and _sl and _tp1:
-                                await _post("/api/v1/bot/save-alert-signal", params={
-                                    "telegram_id": str(uid_),
-                                    "symbol":      symbol,
-                                    "timeframe":   tf,
-                                    "signal_type": rec,
-                                    "entry":       _entry,
-                                    "sl":          _sl,
-                                    "tp1":         _tp1,
-                                    "tp2":         _tp2 or _tp1,
-                                    "confidence":  conf,
-                                    "rr":          _rr,
-                                })
-                        except Exception as _save_e:
-                            logger.warning(f"save-alert-signal: {_save_e}")
+                            await app.bot.send_message(
+                                chat_id=uid_, text=alert, parse_mode="Markdown",
+                                reply_markup=InlineKeyboardMarkup([[
+                                    InlineKeyboardButton("🔄 تحديث", callback_data=f"an_{symbol}_{tf}"),
+                                    InlineKeyboardButton("🏠 رئيسية", callback_data="m_back"),
+                                ]]),
+                            )
+                            logger.info(f"📨 تنبيه → {uid_} | {symbol}/{tf} | {rec} | {conf:.1f}%")
 
-                    except Exception as _e:
-                        logger.error(f"alert send {uid_}/{symbol}: {_e}")
+                            # ── حفظ الإشارة في DB لتتبع PnL تلقائياً ─────────────
+                            try:
+                                levels = data.get("levels", {})
+                                _ez    = data.get("entry_zones") or []
+                                _tz    = data.get("take_profit_zones") or []
+                                _entry = levels.get("entry") or (_ez[0] if _ez else None)
+                                _sl    = levels.get("stop_loss") or data.get("stop_loss_zone")
+                                _tp1   = levels.get("tp1") or (_tz[0] if _tz else None)
+                                _tp2   = levels.get("tp2") or (_tz[1] if len(_tz) > 1 else _tp1)
+                                _rr    = data.get("risk_reward_ratio") or levels.get("risk_reward") or 0
+                                if _entry and _sl and _tp1:
+                                    await _post("/api/v1/bot/save-alert-signal", params={
+                                        "telegram_id": str(uid_),
+                                        "symbol":      symbol,
+                                        "timeframe":   tf,
+                                        "signal_type": rec,
+                                        "entry":       _entry,
+                                        "sl":          _sl,
+                                        "tp1":         _tp1,
+                                        "tp2":         _tp2 or _tp1,
+                                        "confidence":  conf,
+                                        "rr":          _rr,
+                                    })
+                            except Exception as _save_e:
+                                logger.warning(f"save-alert-signal: {_save_e}")
 
-                    await asyncio.sleep(0.5)
+                        except Exception as _e:
+                            logger.error(f"alert send {uid_}/{symbol}/{tf}: {_e}")
+
+                        await asyncio.sleep(0.5)
 
         except Exception as e:
             logger.error(f"monitor_watchlists: {e}", exc_info=True)

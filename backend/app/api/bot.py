@@ -205,6 +205,32 @@ async def bot_analyze(
         raise HTTPException(500, str(e))
 
 
+@router.post("/analyze-multi-tf")
+async def bot_analyze_multi_tf(
+    symbol: str,
+    timeframes: str = "15m,1h,4h",
+    _: bool = Depends(verify_bot),
+):
+    """
+    Phase 5 (2026-08-14) — runs the 3-timeframe scan used by watchlist
+    monitoring (monitor_watchlists in telegram-bot/bot.py). Each timeframe
+    is a fully independent decision (analyze_market_multi_tf() does not
+    blend/average across timeframes).
+
+    No auto-save side effect here, unlike /analyze — the caller saves each
+    qualifying timeframe result separately via /save-alert-signal, since a
+    symbol can have multiple simultaneously-valid signals now (e.g. a real
+    1h BUY and a real 4h BUY at once), each tagged by its own timeframe.
+    """
+    tfs = [t.strip() for t in timeframes.split(",") if t.strip()]
+    try:
+        results = await mosh_ai_engine_v5.analyze_market_multi_tf(symbol=symbol, timeframes=tfs)
+        return {"success": True, "data": results}
+    except Exception as e:
+        logger.error(f"Bot analyze-multi-tf error: {e}")
+        raise HTTPException(500, str(e))
+
+
 @router.get("/user-status")
 def bot_user_status(
     telegram_id: str,
