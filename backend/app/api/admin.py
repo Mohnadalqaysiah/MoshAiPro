@@ -1668,6 +1668,7 @@ async def system_diagnostic(
     rejection_counts: dict = {}
     delta_samples   = []
     rr_samples      = []
+    _pre_rescue_cache: dict = {}   # sym -> (ict, htf_ict, ict_dec) — reused by step4's HTF stress test
 
     for sym in _DIAG_SYMBOLS:
         sym_data = step1.get(sym, {})
@@ -1682,55 +1683,57 @@ async def system_diagnostic(
             ict     = _ict.full_analysis(df, sym, _DIAG_TIMEFRAME)
             htf_ict = _ict.full_analysis(df_htf, sym, "4h") if df_htf is not None and len(df_htf) >= 30 else None
 
-            # Run calibration
-            ict = _engine._auto_calibrate_thresholds(ict, sym, _DIAG_TIMEFRAME)
+            # Run calibration + decision finalizer — PRE-RESCUE reference only,
+            # used for the delta/threshold breakdown below and by step4's HTF
+            # stress test. This is NOT what users actually receive — see
+            # `real_decision` below for that.
+            ict   = _engine._auto_calibrate_thresholds(ict, sym, _DIAG_TIMEFRAME)
             calib = ict.get("calibration_params", {})
-
-            # Run decision finalizer
             ict_dec = _engine._decision_finalizer(ict.copy(), sym, _DIAG_TIMEFRAME, htf_ict)
-            decision  = ict_dec.get("recommendation", "WAIT")
-            rej_reason = ict_dec.get("rejection_reason") or ict_dec.get("no_trade_reason", "")
+            _pre_rescue_cache[sym] = (ict, htf_ict, ict_dec)
+
+            pre_rescue_decision = ict_dec.get("recommendation", "WAIT")
+            pre_rescue_reason   = ict_dec.get("rejection_reason") or ict_dec.get("no_trade_reason", "")
 
             conf   = ict.get("confluence", {})
             bull_s = float(conf.get("bull_score", 0))
             bear_s = float(conf.get("bear_score", 0))
             delta  = abs(bull_s - bear_s)
             req_d  = calib.get("delta", 20)
+            min_rr = calib.get("min_rr", 1.4)
 
-            failed_stage = None
-            if decision == "WAIT" and rej_reason:
-                failed_stage = "decision_finalizer"
-
-            # If passed decision, try gate
-            gate_rej = None
-            rr_val   = None
-            min_rr   = calib.get("min_rr", 1.4)
-            if decision in ("BUY","SELL"):
-                ict_gate = _engine._institutional_gate(ict_dec.copy(), sym, _DIAG_TIMEFRAME, htf_ict)
-                gate_passed = ict_gate.get("institutional_gate_passed", False)
-                gate_rej    = ict_gate.get("rejection_reason")
-                rr_val      = float(ict_gate.get("risk_reward_ratio") or ict_gate.get("gate_rr") or 0)
-                if not gate_passed and gate_rej:
-                    failed_stage = "institutional_gate"
-                    decision     = "REJECTED"
-                    rej_reason   = gate_rej
+            # ── REAL decision — full analyze_market() pipeline, same path
+            # bot.py / strategy_checker actually use. Includes
+            # _smart_rescue_layer / _borderline_rescue_layer, which the old
+            # diagnostic (calling _decision_finalizer/_institutional_gate
+            # directly) skipped entirely — showing a decision users never
+            # actually saw. This was a real discrepancy: a symbol could show
+            # "REJECTED" here while analyze_market() rescued it back to a
+            # live BUY/SELL signal.
+            full = await _engine.analyze_market(symbol=sym, timeframe=_DIAG_TIMEFRAME, force_refresh=True)
+            decision   = full.get("recommendation", "WAIT")
+            rej_reason = full.get("rejection_reason") or full.get("no_trade_reason", "")
+            rescued    = bool(full.get("smart_rescued") or full.get("rescued_candidate"))
+            rr_val     = float((full.get("levels") or {}).get("risk_reward") or 0)
 
             rr_samples.append(rr_val or 0)
             delta_samples.append(delta)
 
-            final_status = "PASSED" if (decision in ("BUY","SELL") and not gate_rej) else "REJECTED"
+            final_status = "PASSED" if decision in ("BUY", "SELL") else "REJECTED"
             trace = {
-                "symbol":          sym,
-                "timeframe":       _DIAG_TIMEFRAME,
-                "decision":        final_status,
-                "failed_stage":    failed_stage,
-                "reason":          rej_reason or "N/A",
-                "delta":           round(delta, 1),
-                "required_delta":  req_d,
-                "rr":              round(rr_val, 2) if rr_val else None,
-                "min_rr":          round(min_rr, 2),
-                "market_state":    calib.get("market_state","?"),
-                "calibrated":      bool(ict.get("calibration_params")),
+                "symbol":              sym,
+                "timeframe":           _DIAG_TIMEFRAME,
+                "decision":            final_status,
+                "rescued":             rescued,
+                "reason":              rej_reason or "N/A",
+                "pre_rescue_decision": pre_rescue_decision,
+                "pre_rescue_reason":   pre_rescue_reason or "N/A",
+                "delta":               round(delta, 1),
+                "required_delta":      req_d,
+                "rr":                  round(rr_val, 2) if rr_val else None,
+                "min_rr":              round(min_rr, 2),
+                "market_state":        calib.get("market_state", "?"),
+                "calibrated":          bool(ict.get("calibration_params")),
             }
             pipeline_traces.append(trace)
 
@@ -1770,9 +1773,14 @@ async def system_diagnostic(
 
     # ─────────────────────────────────────────────────────────────────────────
     # STEP 4 — Threshold Stress Test (simulation only, -5 delta / -0.2 RR)
+    # Also stress-tests _DECISION_THRESHOLD_STRONG (the HTF-override
+    # threshold, default 40) separately, since HTF_CONFLICT_REJECTED is the
+    # most common rejection reason and the base delta/RR relaxation below
+    # doesn't touch it at all.
     # ─────────────────────────────────────────────────────────────────────────
     stress_passed = 0
     stress_details = []
+    _HTF_STRESS_DELTA = 10   # simulate _DECISION_THRESHOLD_STRONG lowered by this much
 
     for trace in pipeline_traces:
         if "error" in trace:
@@ -1780,7 +1788,58 @@ async def system_diagnostic(
         if trace["decision"] == "PASSED":
             stress_passed += 1
             continue
-        # would it pass with relaxed thresholds?
+
+        # ── HTF-override threshold stress (separate from delta/RR below) ────
+        # Pure local re-derivation — does NOT call _decision_finalizer() and
+        # does NOT write to _engine._DECISION_THRESHOLD_STRONG (or any other
+        # class-level constant) at all, mutable or otherwise. That constant
+        # lives on the shared mosh_ai_engine_v5 singleton: a real request
+        # (bot_analyze / monitor_watchlists) landing on the same worker
+        # process while this endpoint had temporarily lowered it would have
+        # seen the relaxed value and could pass an HTF conflict it shouldn't
+        # have. Instead we recompute just the two inputs step 6 of
+        # _decision_finalizer compares (score_delta magnitude, htf_bias vs.
+        # the already-rejected direction) from the cached pre-rescue data and
+        # do the same ">=" check ourselves, against a local variable only.
+        if str(trace["pre_rescue_reason"]).startswith("HTF_CONFLICT_REJECTED"):
+            sym = trace["symbol"]
+            cached = _pre_rescue_cache.get(sym)
+            if cached:
+                ict_c, htf_ict_c, ict_dec_c = cached
+
+                # resolved direction that HTF rejected — _hard_reject() stores
+                # it in _pre_reject_rec (set from `analysis["recommendation"]`
+                # right before the reject call in _decision_finalizer step 6)
+                resolved = ict_dec_c.get("_pre_reject_rec")
+
+                conf_c      = ict_c.get("confluence", {})
+                score_delta = abs(float(conf_c.get("bull_score", 0)) - float(conf_c.get("bear_score", 0)))
+
+                htf_trend = str(
+                    (htf_ict_c or {}).get("market_structure", {}).get("trend") or "RANGING"
+                ).upper()
+                htf_bias = "BUY" if htf_trend == "BULLISH" else ("SELL" if htf_trend == "BEARISH" else None)
+
+                current_strong = _engine._DECISION_THRESHOLD_STRONG   # read-only
+                relaxed_strong = current_strong - _HTF_STRESS_DELTA
+
+                would_pass_htf = bool(
+                    resolved and htf_bias and htf_bias != resolved
+                    and score_delta >= relaxed_strong
+                )
+                if would_pass_htf:
+                    stress_passed += 1
+                    stress_details.append({
+                        "symbol": sym,
+                        "reason": trace["reason"],
+                        "stress_type": "htf_threshold",
+                        "current_strong_threshold": current_strong,
+                        "relaxed_strong_threshold": relaxed_strong,
+                        "passes_on": "htf_threshold_relaxed",
+                    })
+                    continue
+
+        # would it pass with relaxed base delta/RR thresholds?
         relaxed_d  = max(trace["required_delta"] - 5, 15)
         relaxed_rr = max((trace["min_rr"] or 1.4) - 0.2, 1.0)
         would_pass_delta = trace["delta"] >= relaxed_d
@@ -1790,6 +1849,7 @@ async def system_diagnostic(
             stress_details.append({
                 "symbol": trace["symbol"],
                 "reason": trace["reason"],
+                "stress_type": "delta_rr",
                 "delta":  trace["delta"], "relaxed_delta": relaxed_d,
                 "rr":     trace["rr"],    "relaxed_rr":    relaxed_rr,
                 "passes_on": "delta" if would_pass_delta else "rr",

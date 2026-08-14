@@ -1915,13 +1915,19 @@ class MoshAIEngineV5:
             strong_override = abs(score_delta) >= self._DECISION_THRESHOLD_STRONG
             analysis["htf_conflict_warning"] = f"HTF={htf_bias} vs resolved={resolved}"
             if not strong_override:
-                analysis["htf_status"]          = "rejected"
-                analysis["htf_conflict_reject"] = True
                 logger.info(
                     f"HTF_DIRECTION_CONFLICT → REJECTED (delta not strong enough to override) "
                     f"[{symbol}/{timeframe}]: resolved={resolved} htf={htf_bias} "
                     f"delta={score_delta:+.1f} threshold={self._DECISION_THRESHOLD_STRONG}"
                 )
+                # Hard reject via the same path _institutional_gate uses — sets
+                # _pre_reject_rec/_pre_reject_levels/rejection_reason and clears
+                # levels, so downstream rescue layers see a real rejection
+                # instead of an empty rejection_reason they'd otherwise ignore.
+                # Early return: nothing after this point in the function can
+                # overwrite the WAIT decision.
+                analysis["recommendation"] = resolved  # _hard_reject logs this as the rejected rec
+                return self._hard_reject(analysis, "HTF_CONFLICT_REJECTED")
             else:
                 analysis["htf_status"] = "conflicting"
                 # Penalty applied in confidence calibration layer
@@ -1982,12 +1988,10 @@ class MoshAIEngineV5:
             analysis["no_trade_reason"] = analysis.get(
                 "watchlist_reason", "DELTA_BELOW_THRESHOLD"
             )
-        elif analysis.get("htf_conflict_reject"):
-            analysis["recommendation"]  = "WAIT"
-            analysis["signal_type"]     = "WAIT"
-            analysis["signal_status"]   = "REJECTED"
-            analysis["no_trade_reason"] = "HTF_CONFLICT_REJECTED"
         else:
+            # NOTE: a real HTF conflict (htf_bias != resolved, delta not strong
+            # enough) never reaches this point — step 6 above returns via
+            # _hard_reject() immediately in that case.
             analysis["recommendation"] = resolved
             analysis["signal_type"]    = resolved
             analysis["signal_status"]  = "PASS"   # tentative — gate may change to REJECT
@@ -2051,99 +2055,15 @@ class MoshAIEngineV5:
         "NAS100": 1.0, "US30": 2.0, "USOIL": 0.04, "BRENT": 0.04,
     }
 
-    def _institutional_gate(
-        self,
-        analysis: dict,
-        symbol: str,
-        timeframe: str,
-        htf_analysis: Optional[Dict] = None,
-    ) -> dict:
-        """
-        INSTITUTIONAL MODE Hard Rejection Gate (Rules 1-16).
-        ICT Engine is the SOLE source of direction and trade levels.
-        Any single check failure -> REJECT immediately, no exceptions.
-        """
-        rec = analysis.get("recommendation")
-        if rec not in ("BUY", "SELL"):
-            return analysis
-
-        levels  = analysis.get("levels", {})
-        entry   = float(levels.get("entry") or 0)
-        sl      = float(levels.get("stop_loss") or 0)
-        tp1_raw = float(levels.get("tp1") or 0)
-        def _auto_calibrate_thresholds(
-            self,
-            analysis: dict,
-            symbol: str,
-            timeframe: str,
-        ) -> dict:
-            """
-            EMERGENCY OVERRIDE: Freeze adaptive escalation, hardcode thresholds, min RR=1.0, disable winrate strictness.
-            """
-            # 1. Market state
-            market_mode    = analysis.get("market_mode", {})
-            struct         = analysis.get("market_structure", {})
-            raw_trend      = str(struct.get("trend", "RANGING")).upper()
-            raw_mode       = str(market_mode.get("mode", "")).upper()
-            if raw_mode in ("VOLATILE", "BREAKOUT"):
-                market_state = "VOLATILE"
-            elif raw_trend in ("BULLISH", "BEARISH") or raw_mode in ("TRENDING", "TREND"):
-                market_state = "TRENDING"
-            else:
-                market_state = "RANGING"
-
-            # 2. Hardcode delta thresholds by market state
-            if market_state == "RANGING":
-                required_delta = 10
-            elif market_state == "TRENDING":
-                required_delta = 12
-            elif market_state == "VOLATILE":
-                required_delta = 14
-            else:
-                required_delta = 12
-            state_delta_floor, state_delta_ceiling = (required_delta, required_delta)
-
-            # 3. Min RR always 1.0
-            min_rr = 1.0
-
-            # 4. Entry tolerance (keep normal)
-            entry_tolerance = 0.0030
-
-            # 5. Cooldown (use emergency override values)
-            cooldown_sec = self._COOLDOWN_SEC.get(timeframe, 900)
-
-            # 6. Sweep confirmation only for trending
-            require_sweep_confirmation = (market_state == "TRENDING")
-
-            # 7. Clamp (no effect, values are fixed)
-            calibration = {
-                "market_state": market_state,
-                "market_regime": "EMERGENCY_FIXED",
-                "volatility": "OVERRIDE",
-                "winrate": 0.0,
-                "delta": required_delta,
-                "min_rr": min_rr,
-                "entry_tolerance": round(entry_tolerance * 100, 3),
-                "entry_tolerance_raw": entry_tolerance,
-                "cooldown_sec": cooldown_sec,
-                "require_sweep_confirmation": require_sweep_confirmation,
-                "silence_hours": 0.0,
-                "silence_relaxed": False,
-                "reason": "EMERGENCY OVERRIDE: thresholds frozen, RR=1.0, no winrate strictness",
-                "emergency": {"active": True, "pass_rate": 0.0},
-            }
-            analysis["calibration_params"] = calibration
-            analysis["_calib_entry_tol"]   = entry_tolerance
-            analysis["_calib_min_rr"]      = min_rr
-            analysis["_calib_delta"]       = required_delta
-            analysis["_market_regime"]     = "EMERGENCY_FIXED"
-            analysis["_calib_cooldown"]    = cooldown_sec
-            analysis["_calib_req_sweep"]   = require_sweep_confirmation
-            return analysis
-
     # ═══════════════════════════════════════════════════════════════════════
     # INSTITUTIONAL GATE — Single authoritative validation (Rules 1-16)
     # ═══════════════════════════════════════════════════════════════════════
+    # NOTE (2026-08-14): removed a dead, broken first _institutional_gate()
+    # definition that used to live here — it was shadowed by the real one
+    # below (Python keeps only the last `def` with a given name in a class
+    # body) and its ~4-line body contained a stray nested duplicate of
+    # _auto_calibrate_thresholds() ("EMERGENCY OVERRIDE" variant) that could
+    # never execute either. Pure dead code; removing it changes no behavior.
 
     # Rule 5 — entry tolerance per timeframe
     _ENTRY_TOLERANCE = {
@@ -3314,8 +3234,16 @@ class MoshAIEngineV5:
 
         # ── Strategy 3: High-Delta Exception ─────────────────────────────────
         # Last resort — accept RR slightly below 1.0 for very strong signals
-        # delta >= 30: allow RR >= 0.80 (EV positive at 70%+ winrate)
-        # delta >= 25: allow RR >= 0.90
+        # STALE COMMENT vs ACTUAL CODE (found during 2026-08-14 HTF audit — not
+        # changed, flagging only per instructions):
+        #   this used to say "delta>=30: allow RR>=0.80" / "delta>=25: allow
+        #   RR>=0.90", but _RR_FLOOR_HIGH and _RR_HARD_FLOOR are BOTH 1.0
+        #   above (see line ~3126-3127), so the actual floor is 1.0 in both
+        #   cases today — meaningfully stricter than what this comment
+        #   describes. Whether that's intentional (someone tightened the
+        #   floor and forgot to update the comment) or a regression is
+        #   unclear from the code alone — flag for a product decision, not
+        #   changed here.
         if not recovered and eff_delta >= _DELTA_EXCEPTION:
             bos_list     = struct.get("bos_events", [])
             has_bos      = bool(bos_list)
@@ -3397,6 +3325,7 @@ class MoshAIEngineV5:
             "NO_LIQUIDITY_SWEEP",
             "NO_SWEEP_NO_STRUCTURE",
             "FAKE_SWEEP_NO_CONFIRMATION",
+            "HTF_CONFLICT_REJECTED",
         )
         for b in HARD_BLOCK:
             if reason.startswith(b):
@@ -3563,7 +3492,7 @@ class MoshAIEngineV5:
             "RR_",                       # RR_0.80_BELOW_MIN_1.5 etc.
             "INVALID_STRUCTURE",
             "FAKE_SWEEP_NO_CONFIRMATION", # confirmed fake — no rescue
-            # HTF_CONFLICT / HTF_DIRECTION_CONFLICT removed — now scoring penalties only
+            "HTF_CONFLICT_REJECTED",      # real gate again since 2026-08-14 — see step 6 of _decision_finalizer
         )
         for prefix in HARD_REJECT_PREFIXES:
             if reason.startswith(prefix):
