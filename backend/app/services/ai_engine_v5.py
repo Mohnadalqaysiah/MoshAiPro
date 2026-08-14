@@ -932,14 +932,19 @@ class MoshAIEngineV5:
             cooldown_hours = 2
         cooldown_sec = cooldown_hours * 3600
 
-        # ── 7. Fallback: silence > 6h → relax delta once ─────────────────────
+        # ── 7. Silence tracking — INFORMATIONAL ONLY (2026-08-14) ────────────
+        # Used to auto-lower required_delta after _CALIB_SILENCE_HOURS (3h) of
+        # no signal for this symbol/timeframe. Removed to match the Phase 1.3
+        # "tighten, never relax" decision: a quiet symbol isn't evidence the
+        # bar is miscalibrated — Phase 5's multi-timeframe scan is the
+        # sanctioned way to find more opportunity, not silently lowering any
+        # single timeframe's standard. silence_hours is still computed and
+        # reported (useful diagnostic signal), it just no longer touches
+        # required_delta.
         silence_key   = f"{symbol.upper()}_{timeframe}"
         last_issued   = self._last_signal_issued.get(silence_key, 0)
         silence_hours = (_t.time() - last_issued) / 3600 if last_issued > 0 else 0
-        silence_relaxed = False
-        if silence_hours >= self._CALIB_SILENCE_HOURS:
-            required_delta = max(required_delta - 5, self._CALIB_DELTA_MIN)
-            silence_relaxed = True
+        silence_relaxed = False   # kept as a field (always False now) so downstream/output shape is unchanged
 
         # ── 8. PERFORMANCE TIGHTENING MODE (2026-08-14) ──────────────────────
         # Activates when pass_rate < 50% over last 20 analyses for this

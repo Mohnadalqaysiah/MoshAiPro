@@ -2008,8 +2008,14 @@ async def system_diagnostic(
     if diagnosis == "MARKET SILENCE (VALID)":
         action_plan = [
             "No action needed — silence is genuine.",
-            "Auto-calibration silence fallback will relax delta by 5 after 6h of no signals.",
-            "Monitor: if silence continues > 12h on TRENDING symbols → investigate data feed.",
+            "Thresholds no longer auto-relax during silence (2026-08-14 policy: tighten "
+            "on poor performance, never relax just to manufacture a signal — see "
+            "PERFORMANCE_TIGHTENING in calibration_params).",
+            "This diagnostic samples 1h only — check other timeframes via "
+            "POST /api/v1/bot/analyze-multi-tf before concluding signals are absent; "
+            "a quiet 1h doesn't mean 15m/4h are quiet too.",
+            "Monitor: if silence continues > 12h on TRENDING symbols across ALL "
+            "timeframes → investigate data feed.",
         ]
     elif diagnosis == "SYSTEM OVER-FILTERING":
         if "Cooldown" in diagnosis_reason:
@@ -2028,8 +2034,12 @@ async def system_diagnostic(
         else:
             action_plan = [
                 f"Most rejected by: {most_common_rej}",
-                f"avg_delta={avg_delta} vs required — auto-calibration will relax after 6h silence.",
-                "Manual option: reduce _DECISION_THRESHOLD_RANGE from 25 → 22 in auto_calibrate.",
+                f"avg_delta={avg_delta} vs required — thresholds no longer auto-relax on "
+                "silence or low pass_rate (2026-08-14 policy: tighten, never relax).",
+                "Check other timeframes via POST /api/v1/bot/analyze-multi-tf before "
+                "concluding signals are absent — this diagnostic samples 1h only.",
+                "If genuinely over-filtered across all 3 timeframes for multiple days, "
+                "that's a manual product-policy review, not an auto-relax target.",
             ]
     else:
         action_plan = ["Investigate further — run diagnostic again in 30 minutes."]
