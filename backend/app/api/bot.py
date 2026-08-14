@@ -66,6 +66,45 @@ def _get_linked_user(telegram_id: str, db: Session) -> Optional[User]:
     ).first()
 
 
+# ── قاطع أمان: إيقاف مؤقت لزوج/اتجاه بعد خسائر متتالية ──────────────────────
+# HTF conflict حالياً "multiplier" مش gate صارم بمحرك التحليل (قرار مصمم
+# بقصد لعدم تفويت انعكاسات LTF مشروعة) — يعني ممكن يستمر يرسل نفس الاتجاه
+# ضد الترند الأعلى عدة مرات متتالية بسوق متذبذب. هاد القاطع طبقة حماية
+# مستقلة عن محرك القرار: يوقف حفظ إشارات جديدة لنفس (الزوج، الاتجاه) لفترة
+# تهدئة بعد عدد معيّن من SL_HIT متتالية، بغض النظر عن سبب الخسارة نفسه.
+_LOSS_STREAK_LIMIT      = 3   # عدد الخسائر المتتالية اللي تُفعّل القاطع
+_LOSS_STREAK_COOLDOWN_H = 6   # ساعات التهدئة قبل السماح بإشارة جديدة بنفس الاتجاه
+
+
+def _check_loss_streak_breaker(db: Session, symbol: str, signal_type: str) -> Optional[str]:
+    """يرجع سبب الرفض (str) لو القاطع مفعّل حالياً على هالزوج/الاتجاه، وإلا None."""
+    from app.models.signal import Signal, SignalStatus
+
+    recent = (
+        db.query(Signal)
+        .filter(Signal.market == symbol, Signal.signal_type == signal_type)
+        .order_by(Signal.created_at.desc())
+        .limit(_LOSS_STREAK_LIMIT)
+        .all()
+    )
+    if len(recent) < _LOSS_STREAK_LIMIT or any(s.status != SignalStatus.SL_HIT for s in recent):
+        return None
+
+    newest = recent[0].created_at
+    if newest and newest.tzinfo is None:
+        newest = newest.replace(tzinfo=timezone.utc)
+    hours_since = (datetime.now(timezone.utc) - newest).total_seconds() / 3600 if newest else 999
+    if hours_since >= _LOSS_STREAK_COOLDOWN_H:
+        return None
+
+    logger.warning(
+        f"⛔ Loss-streak breaker active: {symbol}/{signal_type} — "
+        f"{_LOSS_STREAK_LIMIT} consecutive SL_HIT, last {hours_since:.1f}h ago "
+        f"(cooldown {_LOSS_STREAK_COOLDOWN_H}h)"
+    )
+    return "loss_streak_cooldown"
+
+
 @router.post("/analyze")
 async def bot_analyze(
     symbol: str,
@@ -123,8 +162,9 @@ async def bot_analyze(
             
             if rec in ("BUY", "SELL") and entry and sl and tp1 \
                     and conf >= 40 and _rr_ok and not _rej and _cooldown_ok \
-                    and analysis.get("market_open", True) and _sd.is_market_open(symbol):
-                
+                    and analysis.get("market_open", True) and _sd.is_market_open(symbol) \
+                    and not _check_loss_streak_breaker(db, symbol, rec):
+
                 sig_type  = SignalType.BUY if rec == "BUY" else SignalType.SELL
                 tf_hours  = {"1m":2,"5m":4,"15m":8,"30m":12,"1h":24,"4h":72,"1d":168,"1w":336}
                 expires_h = tf_hours.get(timeframe, 24)
@@ -714,6 +754,10 @@ def bot_save_alert_signal(
     # لا نحفظ إشارة إذا السوق مغلق — السعر قد يكون قديماً
     if not _smart_data.is_market_open(symbol):
         return {"saved": False, "reason": "market_closed"}
+
+    loss_streak_reason = _check_loss_streak_breaker(db, symbol, signal_type)
+    if loss_streak_reason:
+        return {"saved": False, "reason": loss_streak_reason}
 
     tf_hours   = {"1m": 2, "5m": 4, "15m": 8, "30m": 12, "1h": 24, "4h": 72, "1d": 168}
     expires_at = datetime.now(timezone.utc) + timedelta(hours=tf_hours.get(timeframe, 24))
