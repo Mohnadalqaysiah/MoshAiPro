@@ -1902,20 +1902,37 @@ class MoshAIEngineV5:
                 # TRENDING: use structure as tiebreaker only if delta is borderline
                 resolved = structure_bias
 
-        # ── 6. HTF assessment — context flag + scoring penalty, NEVER rejection ──
-        # HTF conflict is a multiplier only. RR/SL are the only hard gates.
+        # ── 6. HTF assessment ─────────────────────────────────────────────────
+        # A clear HTF trend conflicting with the resolved LTF direction is now a
+        # real gate, not just a confidence penalty. Previously this only docked
+        # confidence (comment used to read "NEVER rejection"), which let BUY
+        # signals fire repeatedly against a bearish HTF trend and get stopped
+        # out over and over (e.g. XAUUSD, 2026-08-13 — ~20 consecutive BUY
+        # signals against HTF, almost all SL_HIT). Same override precedent as
+        # the structure-conflict check above (step 5): a genuinely strong local
+        # delta can still justify a real counter-trend reversal trade.
         if htf_bias and htf_bias != resolved:
+            strong_override = abs(score_delta) >= self._DECISION_THRESHOLD_STRONG
             analysis["htf_conflict_warning"] = f"HTF={htf_bias} vs resolved={resolved}"
-            analysis["htf_status"]           = "conflicting"
-            # Penalty applied in confidence calibration layer
-            analysis["_htf_conflict_penalty"] = (
-                20.0 if (not is_ranging and abs(score_delta) < self._DECISION_THRESHOLD_STRONG)
-                else 10.0
-            )
-            logger.info(
-                f"HTF_DIRECTION_CONFLICT → scoring penalty "
-                f"{analysis['_htf_conflict_penalty']:.0f} [{symbol}/{timeframe}]"
-            )
+            if not strong_override:
+                analysis["htf_status"]          = "rejected"
+                analysis["htf_conflict_reject"] = True
+                logger.info(
+                    f"HTF_DIRECTION_CONFLICT → REJECTED (delta not strong enough to override) "
+                    f"[{symbol}/{timeframe}]: resolved={resolved} htf={htf_bias} "
+                    f"delta={score_delta:+.1f} threshold={self._DECISION_THRESHOLD_STRONG}"
+                )
+            else:
+                analysis["htf_status"] = "conflicting"
+                # Penalty applied in confidence calibration layer
+                analysis["_htf_conflict_penalty"] = (
+                    20.0 if (not is_ranging and abs(score_delta) < self._DECISION_THRESHOLD_STRONG)
+                    else 10.0
+                )
+                logger.info(
+                    f"HTF_DIRECTION_CONFLICT → strong delta override, scoring penalty "
+                    f"{analysis['_htf_conflict_penalty']:.0f} [{symbol}/{timeframe}]"
+                )
         elif htf_bias and htf_bias == resolved:
             analysis["htf_status"] = "aligned"
         else:
@@ -1965,6 +1982,11 @@ class MoshAIEngineV5:
             analysis["no_trade_reason"] = analysis.get(
                 "watchlist_reason", "DELTA_BELOW_THRESHOLD"
             )
+        elif analysis.get("htf_conflict_reject"):
+            analysis["recommendation"]  = "WAIT"
+            analysis["signal_type"]     = "WAIT"
+            analysis["signal_status"]   = "REJECTED"
+            analysis["no_trade_reason"] = "HTF_CONFLICT_REJECTED"
         else:
             analysis["recommendation"] = resolved
             analysis["signal_type"]    = resolved
