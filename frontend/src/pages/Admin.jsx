@@ -2105,7 +2105,7 @@ function DiagnosticPanel() {
               <table className="w-full text-xs">
                 <thead>
                   <tr className="text-gray-500 border-b border-gray-700">
-                    {['رمز','نتيجة','مرحلة الرفض','السبب','Δ','Δ مطلوب','R/R','R/R min'].map(h => (
+                    {['رمز','نتيجة','decision_layer','السبب','Δ','Δ مطلوب','R/R','R/R min'].map(h => (
                       <th key={h} className="text-right pb-2 pr-3 font-medium">{h}</th>
                     ))}
                   </tr>
@@ -2115,7 +2115,7 @@ function DiagnosticPanel() {
                     <tr key={i} className="border-b border-gray-700/40">
                       <td className="py-2 pr-3 font-bold">{t.symbol}</td>
                       <td className={`py-2 pr-3 font-semibold ${t.decision === 'PASSED' ? 'text-green-400' : 'text-red-400'}`}>{t.decision || t.error}</td>
-                      <td className="py-2 pr-3 text-orange-400 text-xs">{t.failed_stage || '—'}</td>
+                      <td className="py-2 pr-3 text-orange-400 text-xs font-mono">{t.decision_layer || '—'}</td>
                       <td className="py-2 pr-3 text-gray-400 max-w-[200px] truncate" title={t.reason}>{t.reason || '—'}</td>
                       <td className={`py-2 pr-3 font-mono ${(t.delta||0) >= (t.required_delta||20) ? 'text-green-400' : 'text-red-400'}`}>{t.delta ?? '—'}</td>
                       <td className="py-2 pr-3 font-mono text-gray-400">{t.required_delta ?? '—'}</td>
@@ -2165,6 +2165,36 @@ function DiagnosticPanel() {
                   </div>
                 ))}
               </div>
+            </div>
+          </div>
+
+          {/* Decision Layer Breakdown (Phase 4, 2026-08-14) */}
+          <div className="bg-gray-800 border border-gray-700 rounded-2xl p-5">
+            <h2 className="font-semibold text-sm mb-1">Decision Layer Breakdown</h2>
+            <p className="text-gray-500 text-xs mb-4">أي طبقة حسمت القرار — رفض بقاعدة صارمة (صحي) مقابل نقص جودة (طبيعي بسوق هادئ)</p>
+            <div className="space-y-2 text-xs">
+              {Object.entries(data.decision_layer_breakdown?.distribution || {}).map(([layer, pct]) => {
+                const isHardVeto = ['risk_integrity', 'htf_veto', 'zone_veto'].includes(layer)
+                const isPassed = layer === 'passed_all'
+                const barColor = isPassed ? 'bg-green-500' : isHardVeto ? 'bg-red-500' : 'bg-yellow-500'
+                return (
+                  <div key={layer}>
+                    <div className="flex justify-between mb-1">
+                      <span className={`font-mono truncate max-w-[240px] ${isPassed ? 'text-green-400' : isHardVeto ? 'text-red-400' : 'text-yellow-400'}`}
+                            title={data.decision_layer_breakdown?.legend?.[layer]}>
+                        {layer} <span className="text-gray-500">({data.decision_layer_breakdown?.counts?.[layer] ?? 0})</span>
+                      </span>
+                      <span className="text-white font-semibold">{pct}</span>
+                    </div>
+                    <div className="h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                      <div className={`h-full ${barColor} rounded-full`} style={{width: pct}} />
+                    </div>
+                  </div>
+                )
+              })}
+              {!data.decision_layer_breakdown && (
+                <div className="text-gray-500">لا بيانات — أعد تشغيل التشخيص</div>
+              )}
             </div>
           </div>
 
