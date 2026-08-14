@@ -1660,6 +1660,24 @@ class MoshAIEngineV5:
     _DECISION_THRESHOLD_RANGE  = 30   # خُفّف من 35 → 30 لتحسين Pass Rate من 30% → ~50%
     _DECISION_THRESHOLD_STRONG = 40   # override HTF/zone conflicts if lead ≥40
 
+    # ── Rescue allowlist (2026-08-14 emergency fix) ─────────────────────────
+    # _smart_rescue_layer / _borderline_rescue_layer may ONLY ever consider
+    # rescuing a rejection whose reason starts with one of these prefixes —
+    # i.e. a plain "score was a bit under threshold" near-miss. Anything else
+    # (a hard business-rule rejection: RR/SL/TP integrity, HTF conflict,
+    # _output_safety_gate's SAFETY_* rules, ...) is refused unconditionally,
+    # regardless of how strong sweep/RR/delta look afterward.
+    #
+    # Flipped from a denylist (a short "never rescue" list, everything else
+    # allowed by default) after discovering _output_safety_gate's 7 hard
+    # rules (all producing "SAFETY_..." reasons) were never in that denylist
+    # and were being silently rescued back into live BUY/SELL signals —
+    # confirmed live via the diagnostic tool (ETHUSD: rejected as
+    # SAFETY_HTF_BEARISH_FORBIDS_BUY, rescued to a live BUY anyway). A
+    # denylist is only as safe as its last update; an allowlist stays safe by
+    # construction as new rejection reasons get added elsewhere later.
+    RESCUABLE_PREFIXES = ("DELTA_",)
+
     def _decision_finalizer(
         self,
         analysis: dict,
@@ -3313,24 +3331,19 @@ class MoshAIEngineV5:
           4. RR >= 1.1  (viable trade, checked from pre-reject levels)
           5. Not a confirmed fake sweep
 
-        HARD BLOCK (never rescued):
-          - NO_LIQUIDITY_SWEEP
-          - RR < 1.0
-          - STRONG_HTF_CONFLICT
+        ALLOWLIST (only these reasons may ever be considered — everything
+        else is a hard business-rule rejection and is never rescued):
+          - RESCUABLE_PREFIXES (currently: "DELTA_")
         """
-        reason = analysis.get("rejection_reason", "")
+        reason = analysis.get("rejection_reason") or analysis.get("no_trade_reason") or ""
 
-        # ── Hard blocks ───────────────────────────────────────────────────────
-        HARD_BLOCK = (
-            "NO_LIQUIDITY_SWEEP",
-            "NO_SWEEP_NO_STRUCTURE",
-            "FAKE_SWEEP_NO_CONFIRMATION",
-            "HTF_CONFLICT_REJECTED",
-        )
-        for b in HARD_BLOCK:
-            if reason.startswith(b):
-                logger.debug(f"SMART_RESCUE SKIP [{symbol}/{timeframe}]: hard block — {reason}")
-                return analysis
+        # ── Allowlist gate — default is "never rescue" ───────────────────────
+        if not any(reason.startswith(p) for p in self.RESCUABLE_PREFIXES):
+            logger.debug(
+                f"SMART_RESCUE SKIP [{symbol}/{timeframe}]: "
+                f"reason '{reason}' not in RESCUABLE_PREFIXES — hard rejection, never rescued"
+            )
+            return analysis
 
         # RR hard block — check from pre-reject levels OR current levels
         pre_levels = analysis.get("_pre_reject_levels") or analysis.get("levels") or {}
@@ -3475,30 +3488,24 @@ class MoshAIEngineV5:
           3) No HTF conflict
           4) RR >= 1.0 (viability — not the strict minimum)
 
-        HARD REJECTS that cannot be rescued (no exceptions):
-          NO_LIQUIDITY_SWEEP, RR_*, HTF_CONFLICT, HTF_DIRECTION_CONFLICT,
-          INVALID_STRUCTURE
+        ALLOWLIST (only these reasons may ever be considered — everything
+        else is a hard business-rule rejection and is never rescued, no
+        exceptions): RESCUABLE_PREFIXES (currently: "DELTA_")
 
         Rescued signal:
           - recommendation stays WAIT (never upgraded to BUY/SELL)
           - rescued_candidate = True → logged, tracked for re-evaluation
           - institutional_rejected cleared (not a hard failure)
         """
-        reason = analysis.get("rejection_reason", "")
+        reason = analysis.get("rejection_reason") or analysis.get("no_trade_reason") or ""
 
-        # ── Hard rejects — cannot be rescued ─────────────────────────────────
-        HARD_REJECT_PREFIXES = (
-            "NO_LIQUIDITY_SWEEP",
-            "RR_",                       # RR_0.80_BELOW_MIN_1.5 etc.
-            "INVALID_STRUCTURE",
-            "FAKE_SWEEP_NO_CONFIRMATION", # confirmed fake — no rescue
-            "HTF_CONFLICT_REJECTED",      # real gate again since 2026-08-14 — see step 6 of _decision_finalizer
-        )
-        for prefix in HARD_REJECT_PREFIXES:
-            if reason.startswith(prefix):
-                logger.debug(f"RESCUE SKIP [{symbol}/{timeframe}]: hard reject — {reason}")
-                return analysis
-        # FAKE_SWEEP_STALE and FAKE_SWEEP_WEAK are soft — eligible for rescue
+        # ── Allowlist gate — default is "never rescue" ───────────────────────
+        if not any(reason.startswith(p) for p in self.RESCUABLE_PREFIXES):
+            logger.debug(
+                f"RESCUE SKIP [{symbol}/{timeframe}]: "
+                f"reason '{reason}' not in RESCUABLE_PREFIXES — hard rejection, never rescued"
+            )
+            return analysis
 
         # ── Condition 1: Sweep exists (any quality including WEAK) ───────────
         sweep = analysis.get("liquidity_sweep", {})
