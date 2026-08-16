@@ -507,6 +507,18 @@ export default function Admin() {
     finally { setLogoUploading(false) }
   }
 
+  const deleteLogo = async () => {
+    if (!confirm('حذف شعار الموقع الحالي؟ سيعود الموقع للشعار الافتراضي.')) return
+    setLogoUploading(true); setLogoMsg(null)
+    try {
+      await saveSetting('site_logo_url', '')
+      setSettingEdits(s => ({ ...s, site_logo_url: '' }))
+      setSiteSettings(s => ({ ...s, site_logo_url: { ...(s.site_logo_url||{}), value: '' } }))
+      setLogoMsg({ type:'ok', text:'تم حذف الشعار' })
+    } catch (err) { setLogoMsg({ type:'err', text: err.response?.data?.detail || 'فشل الحذف' }) }
+    finally { setLogoUploading(false) }
+  }
+
   const sendEmail = async (e) => {
     e.preventDefault(); setEmailSending(true); setEmailMsg(null)
     try {
@@ -1919,6 +1931,10 @@ export default function Admin() {
                             onError={e => { e.target.style.display = 'none' }}
                           />
                           <span className="text-xs text-gray-400 font-mono truncate flex-1">{settingEdits['site_logo_url']}</span>
+                          <button onClick={deleteLogo} disabled={logoUploading}
+                            className="flex items-center gap-1 text-xs bg-red-900/30 hover:bg-red-800/40 disabled:opacity-50 text-red-300 border border-red-800/40 px-2.5 py-1.5 rounded-lg transition flex-shrink-0">
+                            <Trash2 size={12}/> حذف
+                          </button>
                         </div>
                       )}
 
@@ -2157,8 +2173,9 @@ export default function Admin() {
                   <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">حدود الاستخدام</h2>
                   <p className="text-xs text-gray-600">0 = غير محدود</p>
                   {[
-                    { key:'trial_chat_limit',       label:'محادثات التجريبي',   color:'gray' },
-                    { key:'trial_analysis_limit',   label:'تحليلات التجريبي',   color:'gray' },
+                    { key:'trial_chat_limit',        label:'محادثات التجريبي',        color:'gray' },
+                    { key:'trial_analysis_limit',     label:'تحليلات التجريبي',        color:'gray' },
+                    { key:'trial_signal_daily_limit', label:'إشارات مكشوفة يومياً (تجريبي)', color:'gray' },
                     { key:'weekly_chat_limit',      label:'محادثات الأسبوعي',   color:'blue' },
                     { key:'weekly_analysis_limit',  label:'تحليلات الأسبوعي',   color:'blue' },
                     { key:'monthly_chat_limit',     label:'محادثات الشهري',     color:'purple' },

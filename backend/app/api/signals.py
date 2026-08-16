@@ -255,10 +255,11 @@ async def get_latest_signals(
 
         full_access = _has_full_signal_access(user)
         free_limit  = _trial_signal_daily_limit(db)
+        unlimited   = free_limit <= 0   # 0 = غير محدود، بنفس اتفاقية باقي حدود لوحة الإدارة
 
         data = []
         for i, s in enumerate(signals):
-            unlocked = full_access or i < free_limit
+            unlocked = full_access or unlimited or i < free_limit
             item = {
                 "id":               s.id,
                 "symbol":           s.market,
