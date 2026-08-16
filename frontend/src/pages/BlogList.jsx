@@ -1,25 +1,28 @@
-import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useLang } from '../contexts/LangContext'
 import { BLOG_POSTS } from '../data/blogPosts'
 import { BookOpen, Clock, ChevronLeft, ChevronRight, Tag } from 'lucide-react'
+import useSEO from '../hooks/useSEO'
+import useBreadcrumbSchema from '../hooks/useBreadcrumbSchema'
 
 export default function BlogList() {
   const { lang } = useLang()
   const isAr = lang === 'ar'
   const ChevronBtn = isAr ? ChevronLeft : ChevronRight
 
-  useEffect(() => {
-    document.title = isAr
+  useSEO({
+    title: isAr
       ? 'مدونة Qaffel AI — تعلم تداول الذهب والفوركس بتقنية ICT/SMC'
-      : 'Qaffel AI Blog — Learn ICT/SMC Gold & Forex Trading'
-    const meta = document.querySelector('meta[name="description"]')
-    if (meta) meta.setAttribute('content',
-      isAr
-        ? 'مقالات تعليمية في تداول الذهب XAUUSD، الفوركس، والكريبتو بمنهجية ICT/SMC. Order Blocks، FVG، Smart Money Concepts — مشروحة بالعربي.'
-        : 'Educational articles on trading Gold XAUUSD, Forex, and Crypto using ICT/SMC methodology. Order Blocks, FVG, Smart Money Concepts explained.'
-    )
-  }, [isAr])
+      : 'Qaffel AI Blog — Learn ICT/SMC Gold & Forex Trading',
+    description: isAr
+      ? 'مقالات تعليمية في تداول الذهب XAUUSD، الفوركس، والكريبتو بمنهجية ICT/SMC. Order Blocks، FVG، Smart Money Concepts — مشروحة بالعربي.'
+      : 'Educational articles on trading Gold XAUUSD, Forex, and Crypto using ICT/SMC methodology. Order Blocks, FVG, Smart Money Concepts explained.',
+  })
+
+  useBreadcrumbSchema([
+    { name: isAr ? 'الرئيسية' : 'Home', path: '/' },
+    { name: isAr ? 'المدونة' : 'Blog', path: '/blog' },
+  ], isAr)
 
   const sorted = [...BLOG_POSTS].sort((a, b) => new Date(b.date) - new Date(a.date))
 

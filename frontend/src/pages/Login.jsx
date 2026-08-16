@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { TrendingUp, Mail, Lock, AlertCircle } from 'lucide-react'
+import { Mail, Lock, AlertCircle } from 'lucide-react'
 import useSEO from '../hooks/useSEO'
+import useBreadcrumbSchema from '../hooks/useBreadcrumbSchema'
 
 export default function Login() {
   useSEO({
@@ -10,6 +11,10 @@ export default function Login() {
     description: 'سجّل دخولك إلى Qaffel AI للوصول إلى إشارات التداول الذكية للذهب والبيتكوين والفوركس.',
     canonical: 'https://qaffel.com/login',
   })
+  useBreadcrumbSchema([
+    { name: 'الرئيسية', path: '/' },
+    { name: 'تسجيل الدخول', path: '/login' },
+  ])
   const { login } = useAuth()
   const navigate   = useNavigate()
   const [form, setForm]     = useState({ email: '', password: '' })
@@ -35,9 +40,7 @@ export default function Login() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-blue-600 mb-4">
-            <TrendingUp size={28} className="text-white" />
-          </div>
+          <img src="/brand/logo-icon-only.png" alt="Qaffel AI" className="w-14 h-14 mx-auto mb-4 rounded-2xl" />
           <h1 className="text-2xl font-bold text-white">Qaffel <span className="text-blue-400">AI</span></h1>
           <p className="text-gray-400 text-sm mt-1">منصة التداول الذكي بمدارس ICT/SMC</p>
         </div>

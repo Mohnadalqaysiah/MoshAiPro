@@ -610,7 +610,7 @@ export default function Admin() {
         <aside className="w-52 min-h-screen bg-gray-900 border-l border-gray-800 flex flex-col flex-shrink-0">
           <div className="p-4 border-b border-gray-800">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-xs font-bold">Q</div>
+              <img src="/brand/logo-icon-only.png" alt="Qaffel AI" className="w-8 h-8 rounded-lg" />
               <div>
                 <div className="text-sm font-semibold">لوحة الإدارة</div>
                 <div className="text-xs text-gray-400">Qaffel AI</div>

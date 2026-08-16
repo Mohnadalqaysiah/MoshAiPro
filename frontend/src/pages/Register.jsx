@@ -1,7 +1,9 @@
 import { useState, useMemo } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { TrendingUp, Mail, Lock, User, Phone, AlertCircle, CheckCircle, ShieldCheck, Gift } from 'lucide-react'
+import { Mail, Lock, User, Phone, AlertCircle, CheckCircle, ShieldCheck, Gift } from 'lucide-react'
+import useSEO from '../hooks/useSEO'
+import useBreadcrumbSchema from '../hooks/useBreadcrumbSchema'
 
 // Simple math captcha — generates client-side, no external API needed
 function useCaptcha() {
@@ -14,6 +16,15 @@ function useCaptcha() {
 }
 
 export default function Register() {
+  useSEO({
+    title: 'إنشاء حساب مجاني | Qaffel AI — ابدأ بـ 10 تحليلات مجانية',
+    description: 'أنشئ حسابك المجاني بـ Qaffel AI واحصل على 10 تحليلات و20 رسالة شات AI مجاناً — بدون بطاقة ائتمان. إشارات تداول ذكية للذهب والبيتكوين والفوركس.',
+    canonical: 'https://qaffel.com/register',
+  })
+  useBreadcrumbSchema([
+    { name: 'الرئيسية', path: '/' },
+    { name: 'إنشاء حساب', path: '/register' },
+  ])
   const { register } = useAuth()
   const navigate = useNavigate()
   const captcha = useCaptcha()
@@ -45,9 +56,7 @@ export default function Register() {
     <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4 py-10" dir="rtl">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-blue-600 mb-4">
-            <TrendingUp size={28} className="text-white" />
-          </div>
+          <img src="/brand/logo-icon-only.png" alt="Qaffel AI" className="w-14 h-14 mx-auto mb-4 rounded-2xl" />
           <h1 className="text-2xl font-bold text-white">Qaffel <span className="text-blue-400">AI</span></h1>
           <p className="text-gray-400 text-sm mt-1">ابدأ تجربتك المجانية</p>
         </div>

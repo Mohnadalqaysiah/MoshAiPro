@@ -3,10 +3,11 @@
  * (Pricing, About, Contact, Terms, Privacy, Vision)
  */
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
 import { LayoutDashboard, Menu, X, Star } from 'lucide-react'
+import { mirrorPath } from '../utils/langRoutes'
 
 // ── Social icons (inline SVG, no extra lib needed) ─────────────────────
 const IconInstagram = () => (
@@ -25,6 +26,17 @@ export default function PublicLayout({ children, bgClass = 'bg-[#070b14]' }) {
   const { lang, toggle, t } = useLang()
   const isAr = lang === 'ar'
   const [mobileOpen, setMobileOpen] = useState(false)
+  const location = useLocation()
+  const navigate  = useNavigate()
+
+  // لو الصفحة الحالية إلها نسخة إنجليزية حقيقية على /en/*، بدّل اللغة عبر
+  // التنقل لرابطها المكافئ (مو مجرد تبديل محلي) — عشان الرابط يعكس المحتوى فعلاً
+  const handleToggleLang = () => {
+    const target = isAr ? 'en' : 'ar'
+    const mirror = mirrorPath(location.pathname, target)
+    toggle()
+    if (mirror && mirror !== location.pathname) navigate(mirror)
+  }
 
   return (
     <div className={`min-h-screen ${bgClass} text-white`} dir={isAr ? 'rtl' : 'ltr'}>
@@ -33,9 +45,7 @@ export default function PublicLayout({ children, bgClass = 'bg-[#070b14]' }) {
       <header className="sticky top-0 z-50 bg-[#070b14]/80 backdrop-blur-xl border-b border-white/5">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2.5 group">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-bold text-base shadow-lg shadow-blue-500/30">
-              Q
-            </div>
+            <img src="/brand/logo-icon-only.png" alt="Qaffel AI" className="w-9 h-9 rounded-xl shadow-lg shadow-blue-500/30" />
             <span className="font-bold text-lg tracking-tight">
               Qaffel <span className="text-blue-400">AI</span>
             </span>
@@ -53,7 +63,7 @@ export default function PublicLayout({ children, bgClass = 'bg-[#070b14]' }) {
           </nav>
 
           <div className="flex items-center gap-2 shrink-0">
-            <button onClick={toggle}
+            <button onClick={handleToggleLang}
               className="text-xs border border-white/10 hover:border-blue-500/50 text-gray-400 hover:text-white px-3 py-1.5 rounded-lg transition-all font-medium">
               {isAr ? 'EN' : 'ع'}
             </button>
@@ -128,7 +138,7 @@ export default function PublicLayout({ children, bgClass = 'bg-[#070b14]' }) {
             {/* Brand */}
             <div className="col-span-2 md:col-span-1">
               <Link to="/" className="flex items-center gap-2.5 mb-4">
-                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-bold text-sm">Q</div>
+                <img src="/brand/logo-icon-only.png" alt="Qaffel AI" className="w-8 h-8 rounded-xl" />
                 <span className="font-bold text-sm">Qaffel AI</span>
               </Link>
               <p className="text-gray-600 text-xs leading-relaxed mb-4">

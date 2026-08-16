@@ -2,82 +2,186 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
         xmlns:xhtml="http://www.w3.org/1999/xhtml">
 
-  <!-- الصفحة الرئيسية -->
+  <!-- الصفحة الرئيسية (عربي) -->
   <url>
     <loc>https://qaffel.com/</loc>
-    <lastmod>2026-05-12</lastmod>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/" />
+    <lastmod>2026-08-16</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
 
-  <!-- الأسعار -->
+  <!-- الصفحة الرئيسية (English) -->
   <url>
-    <loc>https://qaffel.com/pricing</loc>
-    <lastmod>2026-05-12</lastmod>
+    <loc>https://qaffel.com/en</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/" />
+    <lastmod>2026-08-16</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
+  </url>
+
+  <!-- الأسعار (عربي) -->
+  <url>
+    <loc>https://qaffel.com/pricing</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/pricing" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/pricing" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/pricing" />
+    <lastmod>2026-08-16</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <!-- الأسعار (English) -->
+  <url>
+    <loc>https://qaffel.com/en/pricing</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/pricing" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/pricing" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/pricing" />
+    <lastmod>2026-08-16</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
   </url>
 
   <!-- التسجيل -->
   <url>
     <loc>https://qaffel.com/register</loc>
-    <lastmod>2026-05-12</lastmod>
+    <lastmod>2026-08-16</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
 
-  <!-- برنامج الإحالات -->
+  <!-- برنامج الإحالات (عربي) -->
   <url>
     <loc>https://qaffel.com/referral</loc>
-    <lastmod>2026-05-12</lastmod>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/referral" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/referral" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/referral" />
+    <lastmod>2026-08-16</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
 
-  <!-- المدونة — الصفحة الرئيسية -->
+  <!-- برنامج الإحالات (English) -->
+  <url>
+    <loc>https://qaffel.com/en/referral</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/referral" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/referral" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/referral" />
+    <lastmod>2026-08-16</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.65</priority>
+  </url>
+
+  <!-- المدونة — الصفحة الرئيسية (عربي) -->
   <url>
     <loc>https://qaffel.com/blog</loc>
-    <lastmod>2026-05-12</lastmod>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog" />
+    <lastmod>2026-08-16</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
 
-  <!-- مقالة: تداول الذهب بتقنية ICT -->
+  <!-- المدونة — الصفحة الرئيسية (English) -->
+  <url>
+    <loc>https://qaffel.com/en/blog</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog" />
+    <lastmod>2026-08-16</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.85</priority>
+  </url>
+
+  <!-- مقالة: تداول الذهب بتقنية ICT (عربي + English) -->
   <url>
     <loc>https://qaffel.com/blog/how-to-trade-gold-xauusd-ict</loc>
-    <lastmod>2026-05-12</lastmod>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/how-to-trade-gold-xauusd-ict" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/how-to-trade-gold-xauusd-ict" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/how-to-trade-gold-xauusd-ict" />
+    <lastmod>2026-08-16</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.85</priority>
   </url>
+  <url>
+    <loc>https://qaffel.com/en/blog/how-to-trade-gold-xauusd-ict</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/how-to-trade-gold-xauusd-ict" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/how-to-trade-gold-xauusd-ict" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/how-to-trade-gold-xauusd-ict" />
+    <lastmod>2026-08-16</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
 
-  <!-- مقالة: شرح Order Blocks -->
+  <!-- مقالة: شرح Order Blocks (عربي + English) -->
   <url>
     <loc>https://qaffel.com/blog/order-blocks-explained</loc>
-    <lastmod>2026-05-12</lastmod>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/order-blocks-explained" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/order-blocks-explained" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/order-blocks-explained" />
+    <lastmod>2026-08-16</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.85</priority>
   </url>
+  <url>
+    <loc>https://qaffel.com/en/blog/order-blocks-explained</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/order-blocks-explained" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/order-blocks-explained" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/order-blocks-explained" />
+    <lastmod>2026-08-16</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
 
-  <!-- مقالة: Smart Money Concepts -->
+  <!-- مقالة: Smart Money Concepts (عربي + English) -->
   <url>
     <loc>https://qaffel.com/blog/smart-money-concepts-smc-guide</loc>
-    <lastmod>2026-05-12</lastmod>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/smart-money-concepts-smc-guide" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/smart-money-concepts-smc-guide" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/smart-money-concepts-smc-guide" />
+    <lastmod>2026-08-16</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.85</priority>
   </url>
+  <url>
+    <loc>https://qaffel.com/en/blog/smart-money-concepts-smc-guide</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/smart-money-concepts-smc-guide" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/smart-money-concepts-smc-guide" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/smart-money-concepts-smc-guide" />
+    <lastmod>2026-08-16</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
 
-  <!-- مقالة: FVG Fair Value Gap -->
+  <!-- مقالة: FVG Fair Value Gap (عربي + English) -->
   <url>
     <loc>https://qaffel.com/blog/fvg-fair-value-gap-trading</loc>
-    <lastmod>2026-05-12</lastmod>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/fvg-fair-value-gap-trading" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/fvg-fair-value-gap-trading" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/fvg-fair-value-gap-trading" />
+    <lastmod>2026-08-16</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.85</priority>
   </url>
+  <url>
+    <loc>https://qaffel.com/en/blog/fvg-fair-value-gap-trading</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/fvg-fair-value-gap-trading" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/fvg-fair-value-gap-trading" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/fvg-fair-value-gap-trading" />
+    <lastmod>2026-08-16</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
 
-  <!-- من نحن -->
+  <!-- من نحن (عربي فقط — لا نسخة إنجليزية بعد) -->
   <url>
     <loc>https://qaffel.com/about</loc>
-    <lastmod>2026-05-12</lastmod>
+    <lastmod>2026-08-16</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -85,7 +189,7 @@
   <!-- رؤيتنا -->
   <url>
     <loc>https://qaffel.com/vision</loc>
-    <lastmod>2026-05-12</lastmod>
+    <lastmod>2026-08-16</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -93,7 +197,7 @@
   <!-- تواصل معنا -->
   <url>
     <loc>https://qaffel.com/contact</loc>
-    <lastmod>2026-05-12</lastmod>
+    <lastmod>2026-08-16</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -101,7 +205,7 @@
   <!-- تسجيل الدخول -->
   <url>
     <loc>https://qaffel.com/login</loc>
-    <lastmod>2026-05-12</lastmod>
+    <lastmod>2026-08-16</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
@@ -109,7 +213,7 @@
   <!-- سياسة الخصوصية -->
   <url>
     <loc>https://qaffel.com/privacy</loc>
-    <lastmod>2026-05-12</lastmod>
+    <lastmod>2026-08-16</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.4</priority>
   </url>
@@ -117,7 +221,7 @@
   <!-- الشروط والأحكام -->
   <url>
     <loc>https://qaffel.com/terms</loc>
-    <lastmod>2026-05-12</lastmod>
+    <lastmod>2026-08-16</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.4</priority>
   </url>

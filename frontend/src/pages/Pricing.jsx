@@ -6,9 +6,24 @@ import { useLang } from '../contexts/LangContext'
 import { Check, Zap, Star, Copy, CheckCircle, AlertCircle, Shield, Clock, ChevronDown, CreditCard, Loader2 } from 'lucide-react'
 import PublicLayout from '../components/PublicLayout'
 import useSEO from '../hooks/useSEO'
+import useBreadcrumbSchema from '../hooks/useBreadcrumbSchema'
+import useFAQSchema from '../hooks/useFAQSchema'
 import StripeInlineCheckout from '../components/StripeInlineCheckout'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
+const PRICING_FAQ_AR = [
+  { q: 'ما الفرق بين الباقة الأسبوعية والشهرية؟', a: 'المزايا نفسها بالباقتين (تحليل ICT/SMC كامل، شات AI غير محدود، تنبيهات Telegram، كل الأزواج). الباقة الشهرية توفّر 46% مقارنة بالأسبوعي وتضيف أولوية دعم وتقارير أسبوعية مفصّلة ووصول مبكر للمزايا الجديدة.' },
+  { q: 'هل الاشتراك يتجدد تلقائياً؟', a: 'لا. الاشتراك غير ملزم وينتهي تلقائياً في نهاية المدة (أسبوع أو شهر) بدون أي تجديد أو خصم إضافي — تقدر تشترك من جديد يدوياً وقتما تحب.' },
+  { q: 'ما طرق الدفع المتاحة؟', a: 'ندفع حالياً عبر USDT (شبكة TRC20) مباشرة، والتسعير بالدولار الأمريكي. التفعيل فوري بعد التحقق من التحويل.' },
+  { q: 'هل أقدر أرقّي من الباقة الأسبوعية للشهرية؟', a: 'نعم، تقدر تشترك بالباقة الشهرية في أي وقت حتى لو عندك اشتراك أسبوعي فعّال — الحساب نفسه يستمر بكل بياناتك وسجلّك.' },
+]
+const PRICING_FAQ_EN = [
+  { q: 'What is the difference between the weekly and monthly plan?', a: 'Both plans include the same features (full ICT/SMC analysis, unlimited AI chat, Telegram alerts, all pairs). The monthly plan saves 46% versus weekly and adds priority support, detailed weekly reports, and early access to new features.' },
+  { q: 'Does the subscription auto-renew?', a: 'No. Subscriptions are non-binding and expire automatically at the end of the period (week or month) with no renewal or extra charge — you can subscribe again manually whenever you like.' },
+  { q: 'What payment methods are available?', a: 'We currently accept USDT (TRC20 network) directly, priced in US dollars. Activation is instant once the transfer is verified.' },
+  { q: 'Can I upgrade from weekly to monthly?', a: 'Yes, you can subscribe to the monthly plan at any time even with an active weekly subscription — your account continues with all your data and history intact.' },
+]
 
 const T = {
   ar: {
@@ -129,14 +144,23 @@ const DEFAULT_PLANS = [
 ]
 
 export default function Pricing() {
-  useSEO({
-    title: 'أسعار الاشتراك | Qaffel AI — $7 أسبوعي أو $30 شهري',
-    description: 'اشترك في Qaffel AI بـ $7/أسبوع أو $30/شهر. احصل على إشارات تداول ICT/SMC غير محدودة للذهب والبيتكوين والفوركس مباشرة على Telegram.',
-    canonical: 'https://qaffel.com/pricing',
-  })
   const { user } = useAuth()
   const { lang } = useLang()
   const isAr = lang === 'ar'
+
+  useSEO({
+    title: isAr
+      ? 'أسعار الاشتراك | Qaffel AI — $7 أسبوعي أو $30 شهري'
+      : 'Pricing | Qaffel AI — $7/week or $30/month',
+    description: isAr
+      ? 'اشترك في Qaffel AI بـ $7/أسبوع أو $30/شهر. احصل على إشارات تداول ICT/SMC غير محدودة للذهب والبيتكوين والفوركس مباشرة على Telegram.'
+      : 'Subscribe to Qaffel AI for $7/week or $30/month. Get unlimited ICT/SMC trading signals for Gold, Bitcoin and Forex delivered straight to Telegram.',
+  })
+  useBreadcrumbSchema([
+    { name: isAr ? 'الرئيسية' : 'Home', path: isAr ? '/' : '/en' },
+    { name: isAr ? 'الأسعار' : 'Pricing', path: isAr ? '/pricing' : '/en/pricing' },
+  ])
+  useFAQSchema('ld-faq-pricing', isAr ? PRICING_FAQ_AR : PRICING_FAQ_EN)
   const t = T[lang] || T.ar
 
   const [selected, setSelected]   = useState('monthly')

@@ -193,9 +193,12 @@ export function LangProvider({ children }) {
     localStorage.setItem('qaffel_lang', next)
     return next
   })
+  // يفرض لغة عرض مباشرة بدون لمس التفضيل المحفوظ — يُستخدم فقط لمزامنة
+  // العرض مع رابط /en/* (مسارات SEO حقيقية)، لا يغيّر اختيار المستخدم الشخصي
+  const setLangDirect = (next) => setLang(next)
   const t = translations[lang]
   return (
-    <LangContext.Provider value={{ lang, toggle, t }}>
+    <LangContext.Provider value={{ lang, toggle, setLangDirect, t }}>
       {children}
     </LangContext.Provider>
   )

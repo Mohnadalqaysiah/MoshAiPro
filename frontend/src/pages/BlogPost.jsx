@@ -3,6 +3,9 @@ import { Link, useParams, Navigate } from 'react-router-dom'
 import { useLang } from '../contexts/LangContext'
 import { getPost, BLOG_POSTS } from '../data/blogPosts'
 import { Clock, ChevronLeft, ChevronRight, Tag, ArrowLeft, ArrowRight } from 'lucide-react'
+import useSEO from '../hooks/useSEO'
+import useArticleSchema from '../hooks/useArticleSchema'
+import useBreadcrumbSchema from '../hooks/useBreadcrumbSchema'
 
 // ── Render individual content block ─────────────────────────────────────────
 function ContentBlock({ item }) {
@@ -63,16 +66,20 @@ export default function BlogPost() {
 
   const post = getPost(slug)
 
+  useSEO({
+    title: post ? `${isAr ? post.titleAr : post.titleEn} | Qaffel AI Blog` : undefined,
+    description: post ? (isAr ? post.descAr : post.descEn) : undefined,
+  })
+  useArticleSchema(post, isAr, `/blog/${slug}`)
+  useBreadcrumbSchema(post ? [
+    { name: isAr ? 'الرئيسية' : 'Home', path: '/' },
+    { name: isAr ? 'المدونة' : 'Blog', path: '/blog' },
+    { name: isAr ? post.titleAr : post.titleEn, path: `/blog/${slug}` },
+  ] : null)
+
   useEffect(() => {
-    if (!post) return
-    const title = isAr ? post.titleAr : post.titleEn
-    const desc  = isAr ? post.descAr  : post.descEn
-    document.title = `${title} | Qaffel AI Blog`
-    const meta = document.querySelector('meta[name="description"]')
-    if (meta) meta.setAttribute('content', desc)
-    // Scroll to top on post load
     window.scrollTo(0, 0)
-  }, [post, isAr])
+  }, [post])
 
   if (!post) return <Navigate to="/blog" replace />
 

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Users, Brain, Globe, Shield, Award, TrendingUp, CheckCircle, Star } from 'lucide-react'
 import PublicLayout from '../components/PublicLayout'
 import useSEO from '../hooks/useSEO'
+import useBreadcrumbSchema from '../hooks/useBreadcrumbSchema'
 
 export default function About() {
   useSEO({
@@ -10,6 +11,10 @@ export default function About() {
     description: 'تعرّف على Qaffel AI — فريق من خبراء التداول والذكاء الاصطناعي يبني أفضل منصة إشارات ICT/SMC للمتداولين العرب.',
     canonical: 'https://qaffel.com/about',
   })
+  useBreadcrumbSchema([
+    { name: 'الرئيسية', path: '/' },
+    { name: 'من نحن', path: '/about' },
+  ])
   return (
     <PublicLayout>
 

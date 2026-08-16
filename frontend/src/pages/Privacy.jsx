@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import PublicLayout from '../components/PublicLayout'
 import useSEO from '../hooks/useSEO'
+import useBreadcrumbSchema from '../hooks/useBreadcrumbSchema'
 
 export default function Privacy() {
   useSEO({
@@ -8,6 +9,10 @@ export default function Privacy() {
     description: 'سياسة الخصوصية لمنصة Qaffel AI — كيف نجمع بياناتك ونحميها ونستخدمها.',
     canonical: 'https://qaffel.com/privacy',
   })
+  useBreadcrumbSchema([
+    { name: 'الرئيسية', path: '/' },
+    { name: 'سياسة الخصوصية', path: '/privacy' },
+  ])
   return (
     <PublicLayout>
       {/* Content */}

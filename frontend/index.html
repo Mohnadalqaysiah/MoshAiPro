@@ -19,9 +19,12 @@
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap" /></noscript>
 
     <!-- Favicon + PWA -->
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/brand/favicon-16x16.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/brand/favicon-32x32.png" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="shortcut icon" href="/favicon.svg" />
-    <link rel="apple-touch-icon" href="/favicon.svg" />
+    <link rel="shortcut icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/brand/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.json" />
 
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -111,7 +114,7 @@
         "url": "https://qaffel.com",
         "logo": {
           "@type": "ImageObject",
-          "url": "https://qaffel.com/favicon.svg"
+          "url": "https://qaffel.com/brand/logo-icon-only.png"
         },
         "sameAs": [
           "https://t.me/Qaffelbot",
@@ -123,6 +126,28 @@
           "availableLanguage": ["Arabic", "English"],
           "url": "https://t.me/Qaffelbot"
         }
+      }
+    }
+    </script>
+
+    <!-- Structured Data: Organization (مستقل عن SoftwareApplication.publisher —
+         هوية الشركة نفسها بغض النظر عن أي منتج/تطبيق) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "Qaffel AI",
+      "url": "https://qaffel.com",
+      "logo": "https://qaffel.com/brand/logo-icon-only.png",
+      "sameAs": [
+        "https://t.me/Qaffelbot",
+        "https://www.instagram.com/qaffel_ai/"
+      ],
+      "contactPoint": {
+        "@type": "ContactPoint",
+        "contactType": "customer support",
+        "availableLanguage": ["Arabic", "English"],
+        "url": "https://t.me/Qaffelbot"
       }
     }
     </script>

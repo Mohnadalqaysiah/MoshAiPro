@@ -50,7 +50,7 @@ export default function Navbar() {
           {siteSettings.site_logo_url ? (
             <img src={siteSettings.site_logo_url} alt="logo" className="h-8 w-auto object-contain" />
           ) : (
-            <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center font-bold text-white text-sm">Q</div>
+            <img src="/brand/logo-icon-only.png" alt="Qaffel AI" className="w-8 h-8 rounded-lg object-contain" />
           )}
           <span className="text-white font-bold text-base">{siteSettings.site_name || 'Qaffel AI'}</span>
         </Link>

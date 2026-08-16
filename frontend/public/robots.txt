@@ -10,5 +10,9 @@ Disallow: /markets
 Disallow: /profile
 Disallow: /affiliate
 Disallow: /admin
+Disallow: /market-overview
+Disallow: /backtesting
+Disallow: /journal
+Disallow: /strategies
 
 Sitemap: https://qaffel.com/sitemap.xml

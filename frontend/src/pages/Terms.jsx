@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import PublicLayout from '../components/PublicLayout'
 import useSEO from '../hooks/useSEO'
+import useBreadcrumbSchema from '../hooks/useBreadcrumbSchema'
 
 export default function Terms() {
   useSEO({
@@ -8,6 +9,10 @@ export default function Terms() {
     description: 'الشروط والأحكام لاستخدام منصة Qaffel AI لإشارات التداول بالذكاء الاصطناعي.',
     canonical: 'https://qaffel.com/terms',
   })
+  useBreadcrumbSchema([
+    { name: 'الرئيسية', path: '/' },
+    { name: 'الشروط والأحكام', path: '/terms' },
+  ])
   return (
     <PublicLayout>
       {/* Content */}

@@ -1,5 +1,5 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
-import { lazy, Suspense } from 'react'
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { lazy, Suspense, useEffect } from 'react'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { LangProvider, useLang } from './contexts/LangContext'
 import { ThemeProvider } from './contexts/ThemeContext'
@@ -63,12 +63,26 @@ function AdminRoute({ children }) {
   return children
 }
 
+// يزامن لغة العرض مع بادئة /en/* بالرابط — مسارات SEO حقيقية، مش
+// مجرد تفضيل محفوظ محلياً. لا يلمس اختيار المستخدم المحفوظ إلا وقت
+// الخروج من /en/* (يرجّعه للتفضيل الأصلي).
+function LangRouteSync() {
+  const location = useLocation()
+  const { setLangDirect } = useLang()
+  useEffect(() => {
+    const isEn = location.pathname === '/en' || location.pathname.startsWith('/en/')
+    setLangDirect(isEn ? 'en' : (localStorage.getItem('qaffel_lang') || 'ar'))
+  }, [location.pathname, setLangDirect])
+  return null
+}
+
 function AppRoutes() {
   const { user } = useAuth()
   const { lang } = useLang()
 
   return (
     <Suspense fallback={<PageLoader />}>
+      <LangRouteSync />
       <Routes>
         {/* Landing & Public Pages — accessible to all */}
         <Route path="/"                  element={<Landing />} />
@@ -84,6 +98,17 @@ function AppRoutes() {
         <Route path="/referral"          element={<ReferralProgram />} />
         <Route path="/blog"              element={<BlogList />} />
         <Route path="/blog/:slug"        element={<BlogPost />} />
+
+        {/* English mirrors — نفس الصفحات المذكورة فوق، وهي فعلياً bilingual،
+            بادئة /en تفرض عرض المحتوى الإنجليزي (LangRouteSync) بدل الاعتماد
+            على تفضيل محفوظ بالمتصفح، عشان قوقل يقدر يفهرس نسخة إنجليزية حقيقية.
+            باقي الصفحات العامة (about/contact/vision/terms/privacy) عربي فقط
+            بالمحتوى حالياً فما إلها مرآة /en بعد. */}
+        <Route path="/en"                element={<Landing />} />
+        <Route path="/en/pricing"        element={<Pricing />} />
+        <Route path="/en/referral"       element={<ReferralProgram />} />
+        <Route path="/en/blog"           element={<BlogList />} />
+        <Route path="/en/blog/:slug"     element={<BlogPost />} />
 
         {/* Admin */}
         <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />

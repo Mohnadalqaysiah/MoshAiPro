@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useLang } from '../contexts/LangContext'
 import { useAuth } from '../contexts/AuthContext'
 import useSEO from '../hooks/useSEO'
+import useBreadcrumbSchema from '../hooks/useBreadcrumbSchema'
+import { mirrorPath } from '../utils/langRoutes'
 import {
   Gift, Users, DollarSign, Star, ChevronRight, ChevronLeft,
   Share2, CheckCircle, Zap, TrendingUp, Shield, Copy, ArrowUpRight
@@ -182,18 +184,36 @@ const T = {
 }
 
 export default function ReferralProgram() {
-  useSEO({
-    title: 'برنامج الإحالات | Qaffel AI — اربح بدعوة أصدقائك',
-    description: 'انضم لبرنامج إحالات Qaffel AI واكسب عمولة على كل مشترك تدعوه. دخل سلبي مستمر من منصة إشارات التداول الذكية.',
-    canonical: 'https://qaffel.com/referral',
-  })
   const { lang, toggle } = useLang()
   const { user } = useAuth()
   const isAr = lang === 'ar'
+
+  useSEO({
+    title: isAr
+      ? 'برنامج الإحالات | Qaffel AI — اربح بدعوة أصدقائك'
+      : 'Referral Program | Qaffel AI — Earn by Inviting Friends',
+    description: isAr
+      ? 'انضم لبرنامج إحالات Qaffel AI واكسب عمولة على كل مشترك تدعوه. دخل سلبي مستمر من منصة إشارات التداول الذكية.'
+      : 'Join the Qaffel AI referral program and earn a commission on every subscriber you invite. Ongoing passive income from a smart trading signals platform.',
+  })
   const tx = T[isAr ? 'ar' : 'en']
   const ChevronCta = isAr ? ChevronLeft : ChevronRight
   const [openFaq, setOpenFaq] = useState(null)
+  const location = useLocation()
+  const navigate  = useNavigate()
   useReveal()
+
+  useBreadcrumbSchema([
+    { name: isAr ? 'الرئيسية' : 'Home', path: isAr ? '/' : '/en' },
+    { name: isAr ? 'الإحالات' : 'Referrals', path: isAr ? '/referral' : '/en/referral' },
+  ])
+
+  const handleToggleLang = () => {
+    const target = isAr ? 'en' : 'ar'
+    const mirror = mirrorPath(location.pathname, target)
+    toggle()
+    if (mirror && mirror !== location.pathname) navigate(mirror)
+  }
 
   return (
     <div className="min-h-screen bg-[#070b14] text-white overflow-x-hidden" dir={tx.dir}>
@@ -202,15 +222,13 @@ export default function ReferralProgram() {
       <header className="sticky top-0 z-50 bg-[#070b14]/80 backdrop-blur-xl border-b border-white/5">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2.5 group">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-bold text-base shadow-lg shadow-blue-500/30">
-              Q
-            </div>
+            <img src="/brand/logo-icon-only.png" alt="Qaffel AI" className="w-9 h-9 rounded-xl shadow-lg shadow-blue-500/30" />
             <span className="font-bold text-lg tracking-tight">
               Qaffel <span className="text-blue-400">AI</span>
             </span>
           </Link>
           <div className="flex items-center gap-2 shrink-0">
-            <button onClick={toggle}
+            <button onClick={handleToggleLang}
               className="text-xs border border-white/10 hover:border-blue-500/50 text-gray-400 hover:text-white px-3 py-1.5 rounded-lg transition-all font-medium">
               {isAr ? 'EN' : 'ع'}
             </button>

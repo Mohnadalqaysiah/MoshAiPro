@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { Target, Rocket, Globe, Users, Zap, Brain, TrendingUp, Star, ChevronLeft } from 'lucide-react'
 import PublicLayout from '../components/PublicLayout'
 import useSEO from '../hooks/useSEO'
+import useBreadcrumbSchema from '../hooks/useBreadcrumbSchema'
 
 export default function Vision() {
   useSEO({
@@ -9,6 +10,10 @@ export default function Vision() {
     description: 'رؤية Qaffel AI لجعل تحليل Smart Money Concepts متاحاً لكل متداول عربي بقوة الذكاء الاصطناعي.',
     canonical: 'https://qaffel.com/vision',
   })
+  useBreadcrumbSchema([
+    { name: 'الرئيسية', path: '/' },
+    { name: 'رؤيتنا', path: '/vision' },
+  ])
   return (
     <PublicLayout>
 

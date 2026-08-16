@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
+import { mirrorPath } from '../utils/langRoutes'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 import {
@@ -16,6 +17,7 @@ import DemoSection from '../components/DemoSection'
 import StrategyBuilderDemo from '../components/StrategyBuilderDemo'
 import AffiliateSection from '../components/AffiliateSection'
 import PublicPerformance from '../components/PublicPerformance'
+import useSEO from '../hooks/useSEO'
 
 // ── Scroll reveal hook ───────────────────────────────────────────────
 function useReveal() {
@@ -86,6 +88,24 @@ export default function Landing() {
   const { lang, toggle, t } = useLang()
   const isAr = lang === 'ar'
   const ChevronCta = isAr ? ChevronLeft : ChevronRight
+  const location = useLocation()
+  const navigate  = useNavigate()
+
+  const handleToggleLang = () => {
+    const target = isAr ? 'en' : 'ar'
+    const mirror = mirrorPath(location.pathname, target)
+    toggle()
+    if (mirror && mirror !== location.pathname) navigate(mirror)
+  }
+
+  useSEO({
+    title: isAr
+      ? 'Qaffel AI | منصة إشارات تداول ذكية — ذهب، بيتكوين، فوركس بالذكاء الاصطناعي'
+      : 'Qaffel AI | Smart Trading Signals — Gold, Bitcoin & Forex with AI',
+    description: isAr
+      ? 'Qaffel AI — منصة تداول ذكية تحلل الذهب (XAUUSD)، البيتكوين وأزواج الفوركس بتقنية ICT/SMC المؤسسية والذكاء الاصطناعي. احصل على إشارات دقيقة مباشرة على Telegram. ابدأ مجاناً بـ 10 تحليلات — بدون بطاقة ائتمان.'
+      : 'Qaffel AI — a smart trading platform analyzing Gold (XAUUSD), Bitcoin and Forex pairs with institutional ICT/SMC methodology and AI. Get accurate signals delivered straight to Telegram. Start free with 10 analyses — no credit card required.',
+  })
   const [mobileOpen, setMobileOpen] = useState(false)
   const [livePlans, setLivePlans] = useState({})
 
@@ -129,9 +149,7 @@ export default function Landing() {
       `}>
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2.5 group">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-bold text-base shadow-lg shadow-blue-500/30 group-hover:shadow-blue-500/50 transition-shadow">
-              Q
-            </div>
+            <img src="/brand/logo-icon-only.png" alt="Qaffel AI" className="w-9 h-9 rounded-xl shadow-lg shadow-blue-500/30 group-hover:shadow-blue-500/50 transition-shadow" />
             <span className="font-bold text-lg tracking-tight">
               Qaffel <span className="text-blue-400">AI</span>
             </span>
@@ -160,7 +178,7 @@ export default function Landing() {
 
           <div className="flex items-center gap-2 shrink-0">
             {/* Language toggle — always visible */}
-            <button onClick={toggle}
+            <button onClick={handleToggleLang}
               className="text-xs border border-white/10 hover:border-blue-500/50 text-gray-400 hover:text-white px-3 py-1.5 rounded-lg transition-all font-medium">
               {isAr ? 'EN' : 'ع'}
             </button>
@@ -650,7 +668,7 @@ export default function Landing() {
           <div className="grid grid-cols-2 md:grid-cols-5 gap-8 mb-10">
             <div className="col-span-2 md:col-span-1">
               <Link to="/" className="flex items-center gap-2.5 mb-4">
-                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-bold text-sm">Q</div>
+                <img src="/brand/logo-icon-only.png" alt="Qaffel AI" className="w-8 h-8 rounded-xl" />
                 <span className="font-bold text-sm">Qaffel AI</span>
               </Link>
               <p className="text-gray-600 text-xs leading-relaxed mb-4">
