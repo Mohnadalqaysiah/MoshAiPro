@@ -100,11 +100,11 @@ export default function Landing() {
 
   useSEO({
     title: isAr
-      ? 'Qaffel AI | منصة إشارات تداول ذكية — ذهب، بيتكوين، فوركس بالذكاء الاصطناعي'
-      : 'Qaffel AI | Smart Trading Signals — Gold, Bitcoin & Forex with AI',
+      ? 'Qaffel AI | إشارات تداول ذكية بالذكاء الاصطناعي'
+      : 'Qaffel AI | Smart AI Trading Signals',
     description: isAr
-      ? 'Qaffel AI — منصة تداول ذكية تحلل الذهب (XAUUSD)، البيتكوين وأزواج الفوركس بتقنية ICT/SMC المؤسسية والذكاء الاصطناعي. احصل على إشارات دقيقة مباشرة على Telegram. ابدأ مجاناً بـ 10 تحليلات — بدون بطاقة ائتمان.'
-      : 'Qaffel AI — a smart trading platform analyzing Gold (XAUUSD), Bitcoin and Forex pairs with institutional ICT/SMC methodology and AI. Get accurate signals delivered straight to Telegram. Start free with 10 analyses — no credit card required.',
+      ? 'منصة Qaffel AI تحلل الذهب والبيتكوين والفوركس بتقنية ICT/SMC والذكاء الاصطناعي. إشارات دقيقة على Telegram. ابدأ مجاناً بـ10 تحليلات.'
+      : 'Qaffel AI analyzes Gold, Bitcoin and Forex using ICT/SMC and AI. Accurate signals on Telegram. Start free with 10 analyses.',
   })
   const [mobileOpen, setMobileOpen] = useState(false)
   const [livePlans, setLivePlans] = useState({})

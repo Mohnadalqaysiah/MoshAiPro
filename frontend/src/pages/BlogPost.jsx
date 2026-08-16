@@ -67,8 +67,8 @@ export default function BlogPost() {
   const post = getPost(slug)
 
   useSEO({
-    title: post ? `${isAr ? post.titleAr : post.titleEn} | Qaffel AI Blog` : undefined,
-    description: post ? (isAr ? post.descAr : post.descEn) : undefined,
+    title: post ? (isAr ? post.metaTitleAr : post.metaTitleEn) : undefined,
+    description: post ? (isAr ? post.metaDescAr : post.metaDescEn) : undefined,
   })
   useArticleSchema(post, isAr, `/blog/${slug}`)
   useBreadcrumbSchema(post ? [

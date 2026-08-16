@@ -77,10 +77,10 @@ export default function Register() {
   useSEO({
     title: isAr
       ? 'إنشاء حساب مجاني | Qaffel AI — ابدأ بـ 10 تحليلات مجانية'
-      : 'Create Free Account | Qaffel AI — Start with 10 Free Analyses',
+      : 'Create Free Account | Qaffel AI',
     description: isAr
       ? 'أنشئ حسابك المجاني بـ Qaffel AI واحصل على 10 تحليلات و20 رسالة شات AI مجاناً — بدون بطاقة ائتمان. إشارات تداول ذكية للذهب والبيتكوين والفوركس.'
-      : 'Create your free Qaffel AI account and get 10 analyses and 20 AI chat messages free — no credit card required. Smart trading signals for Gold, Bitcoin and Forex.',
+      : 'Create your free Qaffel AI account: 10 analyses and 20 AI chat messages free, no credit card. Smart signals for Gold, Bitcoin and Forex.',
   })
   useBreadcrumbSchema([
     { name: isAr ? 'الرئيسية' : 'Home', path: isAr ? '/' : '/en' },

@@ -16,6 +16,11 @@ export const BLOG_POSTS = [
     titleEn:  'How to Trade Gold XAUUSD with ICT — Complete Beginner Guide',
     descAr:   'تعلّم كيف تحلل وتتداول الذهب XAUUSD باستخدام تقنية ICT (Inner Circle Trader): Order Blocks، Liquidity، Premium/Discount Zones. خطوات عملية مع أمثلة حقيقية.',
     descEn:   'Learn how to analyze and trade Gold XAUUSD using ICT (Inner Circle Trader) concepts: Order Blocks, Liquidity, Premium/Discount Zones. Practical steps with real examples.',
+    // نسخة مختصرة خصيصاً لـ <title>/meta description (تحت 60/160 حرف) — العنوان الكامل أعلاه يبقى كما هو للعرض بالصفحة (H1 وبطاقة القائمة)
+    metaTitleAr: 'كيف تتداول الذهب XAUUSD بتقنية ICT | Qaffel AI',
+    metaTitleEn: 'How to Trade Gold XAUUSD with ICT | Qaffel AI',
+    metaDescAr:  'تعلّم تحليل وتداول الذهب XAUUSD بتقنية ICT: Order Blocks، Liquidity، Premium/Discount Zones. خطوات عملية مع أمثلة حقيقية.',
+    metaDescEn:  'Learn to analyze and trade Gold XAUUSD using ICT: Order Blocks, Liquidity, Premium/Discount Zones. Practical steps with real examples.',
     contentAr: [
       { type: 'p',    text: 'الذهب (XAUUSD) هو أكثر الأسواق تداولاً بين المتداولين العرب، وذلك لتحركاته الكبيرة يومياً وحجم السيولة الهائل فيه. في هذا الدليل سنتعلم كيف نحلله بطريقة احترافية باستخدام تقنية ICT.' },
       { type: 'h2',   text: 'ما هي تقنية ICT وكيف تطبّق على الذهب؟' },
@@ -66,6 +71,10 @@ export const BLOG_POSTS = [
     titleEn:  'Order Blocks Explained — How to Find the Strongest Entry Zones',
     descAr:   'دليل شامل لفهم وتطبيق Order Blocks في تداول الفوركس والذهب والكريبتو. تعلّم كيف تميّز Order Block القوي من الضعيف وكيف تدخل الصفقة بدقة.',
     descEn:   'A complete guide to understanding and applying Order Blocks in Forex, Gold and Crypto trading. Learn how to distinguish strong OBs from weak ones and time your entries precisely.',
+    metaTitleAr: 'شرح Order Blocks — أقوى مناطق الدخول | Qaffel AI',
+    metaTitleEn: 'Order Blocks Explained | Qaffel AI',
+    metaDescAr:  'دليل شامل لفهم وتطبيق Order Blocks بتداول الفوركس والذهب والكريبتو. كيف تميّز Order Block القوي من الضعيف وتدخل بدقة.',
+    metaDescEn:  'A complete guide to Order Blocks in Forex, Gold and Crypto trading. Learn to spot strong OBs and time your entries precisely.',
     contentAr: [
       { type: 'p',    text: 'Order Block هو من أهم مفاهيم تحليل ICT/SMC، وهو ببساطة المنطقة التي اتخذت فيها المؤسسات الكبرى (البنوك، صناديق التحوط) قرارها بالشراء أو البيع. لهذا السبب عندما يعود السعر لهذه المناطق، كثيراً ما يرتد بقوة.' },
       { type: 'h2',   text: 'ما هو Order Block بالضبط؟' },
@@ -116,6 +125,10 @@ export const BLOG_POSTS = [
     titleEn:  'What is Smart Money Concepts (SMC) — Complete Arabic Trader Guide',
     descAr:   'شرح كامل لمنهجية Smart Money Concepts: من هو Smart Money، كيف يتلاعب بالسوق، وكيف تتبع أثره لتحقيق صفقات رابحة. المفاهيم الأساسية: Liquidity، OB، FVG، BOS، CHoCH.',
     descEn:   'Complete explanation of Smart Money Concepts: who is Smart Money, how they manipulate the market, and how to track their footprints. Core concepts: Liquidity, OB, FVG, BOS, CHoCH.',
+    metaTitleAr: 'ما هو Smart Money Concepts SMC | Qaffel AI',
+    metaTitleEn: 'What is Smart Money Concepts (SMC)? | Qaffel AI',
+    metaDescAr:  'شرح منهجية Smart Money Concepts: من هو Smart Money وكيف يتلاعب بالسوق. المفاهيم الأساسية: Liquidity، OB، FVG، BOS، CHoCH.',
+    metaDescEn:  'Smart Money Concepts explained: who Smart Money is and how they move the market. Core concepts: Liquidity, OB, FVG, BOS, CHoCH.',
     contentAr: [
       { type: 'p',    text: 'Smart Money Concepts أو SMC هي ثورة في عالم تحليل الأسواق المالية. بدلاً من الاعتماد على المؤشرات التقليدية كـ RSI وMACD التي تأتي متأخرة دائماً، تُعلّمك SMC كيف تقرأ السوق من منظور البنوك والمؤسسات الكبرى.' },
       { type: 'h2',   text: 'من هو Smart Money؟' },
@@ -163,6 +176,10 @@ export const BLOG_POSTS = [
     titleEn:  'FVG Fair Value Gap Explained — How to Trade It Profitably',
     descAr:   'شرح مبسّط وعملي لمفهوم FVG أو فجوة القيمة العادلة في تحليل ICT/SMC. كيف تجدها، متى تتداول عندها، وكيف تستخدمها مع Order Blocks لإعداد احترافي.',
     descEn:   'A simple, practical explanation of the FVG (Fair Value Gap) concept in ICT/SMC analysis. How to find it, when to trade it, and how to combine it with Order Blocks for professional setups.',
+    metaTitleAr: 'شرح FVG - فجوة القيمة العادلة | Qaffel AI',
+    metaTitleEn: 'FVG (Fair Value Gap) Explained | Qaffel AI',
+    metaDescAr:  'شرح مبسّط لمفهوم FVG (فجوة القيمة العادلة) بتحليل ICT/SMC. كيف تجدها، متى تتداول عندها، وكيف تدمجها مع Order Blocks.',
+    metaDescEn:  'A practical explanation of the FVG concept in ICT/SMC analysis. How to find it, when to trade it, and combine it with Order Blocks.',
     contentAr: [
       { type: 'p',    text: 'Fair Value Gap أو FVG هي واحدة من أكثر المفاهيم استخداماً في منهجية ICT، وتعتمد عليها Qaffel AI بشكل كبير في تحديد مناطق الدخول الاحترافية.' },
       { type: 'h2',   text: 'ما هو FVG بالضبط؟' },
