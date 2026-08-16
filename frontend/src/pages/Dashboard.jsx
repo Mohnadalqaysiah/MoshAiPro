@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import axios from 'axios'
-import { TrendingUp, TrendingDown, Activity, Zap, AlertCircle, RefreshCw, Send, ExternalLink, Copy, CheckCircle, X, ChevronDown, ChevronUp, BarChart2, User, LayoutDashboard, Share2, Wallet, Calculator } from 'lucide-react'
+import { TrendingUp, TrendingDown, Activity, Zap, AlertCircle, RefreshCw, Send, ExternalLink, Copy, CheckCircle, X, ChevronDown, ChevronUp, BarChart2, User, LayoutDashboard, Share2, Wallet, Calculator, Lock } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import useMarkets from '../hooks/useMarkets'
 import { useLang } from '../contexts/LangContext'
@@ -48,6 +48,7 @@ const T = {
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 export default function Dashboard() {
+  const navigate = useNavigate()
   const { user } = useAuth()
   const { markets } = useMarkets()
   const { lang } = useLang()
@@ -665,11 +666,12 @@ export default function Dashboard() {
                   const levels     = sig.levels || {}
                   const entryMin   = levels.entry_zone_min || sig.entry_zone_min
                   const entryMax   = levels.entry_zone_max || sig.entry_zone_max
-                  const entryExact = levels.entry || sig.entry_zones?.[0]
-                  const sl         = levels.stop_loss || sig.stop_loss_zone
-                  const tp1        = levels.tp1 || sig.take_profit_zones?.[0]
-                  const tp2        = levels.tp2 || sig.take_profit_zones?.[1]
-                  const rr         = sig.risk_reward || levels.risk_reward
+                  const entryExact = levels.entry || sig.entry_zones?.[0] || sig.entry_price
+                  const sl         = levels.stop_loss || sig.stop_loss_zone || sig.stop_loss
+                  const tp1        = levels.tp1 || sig.take_profit_zones?.[0] || sig.take_profit_1
+                  const tp2        = levels.tp2 || sig.take_profit_zones?.[1] || sig.take_profit_2
+                  const rr         = sig.risk_reward || levels.risk_reward || sig.risk_reward_ratio
+                  const locked     = !!sig.locked
                   const livePrice  = sig.current_price
                   const fmt = (v, d = 5) => v != null ? (typeof v === 'number' ? v.toFixed(d) : v) : null
 
@@ -687,7 +689,7 @@ export default function Dashboard() {
                   return (
                     <div key={sig.id || i}
                       className="flex gap-0 hover:bg-gray-700/20 transition-colors cursor-pointer"
-                      onClick={() => setQuickResult({ ...sig, market })}
+                      onClick={() => locked ? navigate('/pricing') : setQuickResult({ ...sig, market })}
                     >
                       <div className={`w-1 flex-shrink-0 ${accentBg} opacity-70`} />
                       <div className="flex-1 px-4 py-3">
@@ -709,7 +711,13 @@ export default function Dashboard() {
                             </div>
                           </div>
                         </div>
-                        {(entryMin || entryExact || sl || tp1) && (
+                        {locked ? (
+                          <div className="flex items-center gap-2 mt-2 text-xs">
+                            <Lock size={12} className="text-yellow-500 flex-shrink-0" />
+                            <span className="text-gray-500">تفاصيل الدخول وSL/TP مقفلة — </span>
+                            <span className="text-yellow-400 font-semibold hover:underline">اشترك لرؤية التفاصيل الكاملة</span>
+                          </div>
+                        ) : (entryMin || entryExact || sl || tp1) && (
                           <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
                             {(entryMin || entryExact) && (
                               <span className="text-xs">

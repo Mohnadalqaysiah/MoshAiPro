@@ -16,6 +16,7 @@ from app.models.strategy import (
     Strategy, StrategyGroup, StrategyCondition, StrategyTriggerEvent,
     StrategyStatus, GroupLogic,
 )
+from app.models.support_chat import SupportChatThread, SupportChatMessage, ChatThreadStatus
 
 __all__ = [
     "User", "UserRole", "PlanType",
@@ -29,4 +30,5 @@ __all__ = [
     "PriceAlert", "AlertDirection",
     "Strategy", "StrategyGroup", "StrategyCondition", "StrategyTriggerEvent",
     "StrategyStatus", "GroupLogic",
+    "SupportChatThread", "SupportChatMessage", "ChatThreadStatus",
 ]

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
-import { TrendingUp, TrendingDown, Zap, RefreshCw } from 'lucide-react'
+import { TrendingUp, TrendingDown, Zap, RefreshCw, Lock } from 'lucide-react'
 import axios from 'axios'
+import { Link } from 'react-router-dom'
 import { useLang } from '../contexts/LangContext'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -47,14 +48,14 @@ export default function BestOpportunityWidget() {
         return (
           ['BUY', 'SELL'].includes(rec) &&
           conf >= 55 && conf <= 95 &&
-          rr >= 1.3 &&
+          (s.locked || rr >= 1.3) &&
           age <= 12   // client-side age guard (backup)
         )
       })
 
       if (active.length === 0) { setBest(null); return }
 
-      // Sort by combined score: 60% conf + 40% RR (normalised, max RR 4)
+      // Sort by combined score: 60% conf + 40% RR (normalised, max RR 4; locked signals score on confidence only)
       const scored = active.map(s => ({
         ...s,
         _score: (
@@ -92,6 +93,7 @@ export default function BestOpportunityWidget() {
   const sym   = best?.symbol || best?.market || ''
   const tf    = best?.timeframe || '1h'
   const tier  = best?.signal_tier || ''
+  const locked = !!best?.locked
 
   // حدد عدد الخانات العشرية بناءً على حجم السعر
   const decimals = (v) => {
@@ -192,19 +194,29 @@ export default function BestOpportunityWidget() {
             </div>
 
             {/* Levels */}
-            <div className="grid grid-cols-4 gap-2 pt-1">
-              {[
-                { label: tx.entry, val: fmt(entry) },
-                { label: tx.sl,    val: fmt(sl)    },
-                { label: tx.tp,    val: fmt(tp1)   },
-                { label: tx.rr,    val: rr ? `${Number(rr).toFixed(2)}×` : '—' },
-              ].map(({ label, val }) => (
-                <div key={label} className="text-center best-opp-level-card rounded-lg py-2 px-1">
-                  <p className="text-xs opacity-50 mb-0.5">{label}</p>
-                  <p className="text-xs font-semibold font-mono tracking-tight truncate">{val}</p>
-                </div>
-              ))}
-            </div>
+            {locked ? (
+              <Link
+                to="/pricing"
+                className="flex items-center justify-center gap-2 pt-1 pb-1 text-xs font-semibold text-yellow-400 hover:text-yellow-300 border best-opp-level-card rounded-lg py-2.5"
+              >
+                <Lock size={13} />
+                {isAr ? 'اشترك لرؤية الدخول وSL/TP الكاملة' : 'Subscribe to unlock entry/SL/TP'}
+              </Link>
+            ) : (
+              <div className="grid grid-cols-4 gap-2 pt-1">
+                {[
+                  { label: tx.entry, val: fmt(entry) },
+                  { label: tx.sl,    val: fmt(sl)    },
+                  { label: tx.tp,    val: fmt(tp1)   },
+                  { label: tx.rr,    val: rr ? `${Number(rr).toFixed(2)}×` : '—' },
+                ].map(({ label, val }) => (
+                  <div key={label} className="text-center best-opp-level-card rounded-lg py-2 px-1">
+                    <p className="text-xs opacity-50 mb-0.5">{label}</p>
+                    <p className="text-xs font-semibold font-mono tracking-tight truncate">{val}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>

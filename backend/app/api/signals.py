@@ -4,6 +4,7 @@ Mosh AI Pro v5 - Signals API Routes
 
 import hashlib
 from datetime import datetime, timezone, timedelta
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -13,7 +14,8 @@ from app.database import get_db
 from app.services.ai_engine_v5 import mosh_ai_engine_v5
 from app.models import Signal, AnalysisLog
 from app.models.signal import Signal, SignalType, SignalStatus, SignalQuality
-from app.models.user import User, PlanType
+from app.models.user import User, PlanType, UserRole
+from app.models.site_settings import SiteSettings
 from app.services.auth_service import get_current_user, check_subscription, deduct_trial
 
 
@@ -45,6 +47,26 @@ def _calc_lot_size(account_balance: float, risk_percent: float,
         return None
 
 router = APIRouter()
+
+
+def _trial_signal_daily_limit(db: Session) -> int:
+    """عدد الإشارات الكاملة (غير مموّهة) المسموحة يومياً لمستخدمي التجربة —
+    قابل للتعديل من لوحة الإدارة (SiteSettings)، مطابق لنمط trial_analysis_limit."""
+    row = db.query(SiteSettings).filter(SiteSettings.key == "trial_signal_daily_limit").first()
+    try:
+        return int(row.value) if row and row.value else 3
+    except Exception:
+        return 3
+
+
+def _has_full_signal_access(user: Optional[User]) -> bool:
+    """أدمن أو مشترك فعلي (أسبوعي/شهري) يشوف كل تفاصيل كل الإشارات دايماً،
+    بدون حد يومي ولا تمويه."""
+    if not user:
+        return False
+    if user.role == UserRole.ADMIN:
+        return True
+    return user.plan in (PlanType.WEEKLY, PlanType.MONTHLY)
 
 
 @router.post("/analyze")
@@ -206,10 +228,16 @@ async def analyze_market(
 async def get_latest_signals(
     limit: int = 10,
     hours: int = 12,   # only return signals created within this window
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Get latest ACTIVE/PENDING signals within the last `hours` window.
+
+    الوصول الكامل (كل التفاصيل) للأدمن والمشتركين (أسبوعي/شهري) فقط —
+    مستخدم التجربة يشوف أول N إشارة (الأحدث، قابلة للتعديل من الإعدادات)
+    كاملة التفاصيل، والباقي يظهر كبطاقة "مموّهة" (رمز/اتجاه/ثقة بس، بدون
+    دخول/وقف/هدف) خلف قفل اشتراك — مو حجب كامل، تحفيز اشتراك حقيقي.
     """
     try:
         from datetime import timedelta
@@ -225,29 +253,47 @@ async def get_latest_signals(
             .all()
         )
 
-        return {
-            "success": True,
-            "count": len(signals),
-            "data": [
-                {
-                    "id":               s.id,
-                    "symbol":           s.market,
-                    "market":           s.market,
-                    "timeframe":        s.timeframe,
-                    "recommendation":   s.signal_type.value if hasattr(s.signal_type, 'value') else s.signal_type,
-                    "signal_type":      s.signal_type.value if hasattr(s.signal_type, 'value') else s.signal_type,
+        full_access = _has_full_signal_access(user)
+        free_limit  = _trial_signal_daily_limit(db)
+
+        data = []
+        for i, s in enumerate(signals):
+            unlocked = full_access or i < free_limit
+            item = {
+                "id":               s.id,
+                "symbol":           s.market,
+                "market":           s.market,
+                "timeframe":        s.timeframe,
+                "recommendation":   s.signal_type.value if hasattr(s.signal_type, 'value') else s.signal_type,
+                "signal_type":      s.signal_type.value if hasattr(s.signal_type, 'value') else s.signal_type,
+                "status":           s.status.value if hasattr(s.status, 'value') else s.status,
+                "ai_confidence":    s.ai_confidence,
+                "ai_confidence_score": s.ai_confidence,
+                "created_at":       s.created_at.isoformat(),
+                "locked":           not unlocked,
+            }
+            if unlocked:
+                item.update({
                     "entry_price":      s.entry_price,
                     "stop_loss":        s.stop_loss,
                     "take_profit_1":    s.take_profit_1,
                     "take_profit_2":    s.take_profit_2,
                     "risk_reward_ratio": s.risk_reward_ratio,
-                    "status":           s.status.value if hasattr(s.status, 'value') else s.status,
-                    "ai_confidence":    s.ai_confidence,
-                    "ai_confidence_score": s.ai_confidence,
-                    "created_at":       s.created_at.isoformat()
-                }
-                for s in signals
-            ]
+                })
+            else:
+                item.update({
+                    "entry_price": None, "stop_loss": None,
+                    "take_profit_1": None, "take_profit_2": None,
+                    "risk_reward_ratio": None,
+                })
+            data.append(item)
+
+        return {
+            "success": True,
+            "count": len(data),
+            "full_access": full_access,
+            "free_limit": free_limit,
+            "data": data,
         }
 
     except Exception as e:

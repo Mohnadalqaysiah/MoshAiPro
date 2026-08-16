@@ -39,6 +39,7 @@ const MarketOverview = lazy(() => import('./pages/MarketOverview'))
 const Backtesting    = lazy(() => import('./pages/Backtesting'))
 const TradeJournal   = lazy(() => import('./pages/TradeJournal'))
 const ChatBot        = lazy(() => import('./components/ChatBot'))
+const SupportChatWidget = lazy(() => import('./components/SupportChatWidget'))
 
 const PageLoader = () => (
   <div className="min-h-screen bg-gray-950 flex items-center justify-center">
@@ -114,6 +115,7 @@ function AppRoutes() {
                 </Routes>
               </main>
               <ChatBot />
+              <SupportChatWidget />
             </div>
           </ProtectedRoute>
         } />

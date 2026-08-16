@@ -31,6 +31,10 @@ router = APIRouter()
 
 # ─── Schemas ──────────────────────────────────────────────────────────────────
 
+class RoleUpdateIn(BaseModel):
+    role: str   # "admin" | "user"
+
+
 class UserUpdateIn(BaseModel):
     plan:       Optional[str] = None
     is_active:  Optional[bool] = None
@@ -140,7 +144,13 @@ def list_users(
         info["dup_ip_count"] = dup_counts.get(u.registration_ip, 1) if u.registration_ip else 0
         infos.append(info)
 
-    return {"total": total, "users": infos}
+    now = datetime.now(timezone.utc)
+    online_count = db.query(User).filter(
+        User.last_seen_at.isnot(None),
+        User.last_seen_at > now - timedelta(seconds=_ONLINE_WINDOW_SEC),
+    ).count()
+
+    return {"total": total, "users": infos, "online_count": online_count}
 
 
 @router.get("/users/{user_id}")
@@ -192,6 +202,50 @@ def update_user(
 
     db.commit()
     logger.info(f"👤 Admin updated user {user_id}: plan={data.plan}, active={data.is_active}")
+    return {"success": True, "user": _user_info(user)}
+
+
+# ─── Team (Admin/Manager access) ───────────────────────────────────────────────
+
+@router.get("/team")
+def list_team(
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """كل حسابات الإدارة الحالية — لقسم 'الفريق' بلوحة الإدارة."""
+    admins = db.query(User).filter(User.role == UserRole.ADMIN).order_by(User.created_at.asc()).all()
+    return {"admins": [_user_info(u) for u in admins]}
+
+
+@router.post("/users/{user_id}/set-role")
+def set_user_role(
+    user_id: int,
+    data: RoleUpdateIn,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """ترقية مستخدم لأدمن أو إلغاء صلاحياته — صلاحية موحّدة (لا مستويات حالياً)."""
+    try:
+        new_role = UserRole(data.role)
+    except ValueError:
+        raise HTTPException(400, f"دور غير صحيح: {data.role}")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(404, "المستخدم غير موجود")
+
+    if new_role == UserRole.USER:
+        if user.id == admin.id:
+            raise HTTPException(400, "لا يمكنك إلغاء صلاحياتك الخاصة")
+        remaining_admins = db.query(User).filter(
+            User.role == UserRole.ADMIN, User.id != user_id
+        ).count()
+        if user.role == UserRole.ADMIN and remaining_admins == 0:
+            raise HTTPException(400, "لا يمكن إزالة آخر حساب أدمن بالمنصة")
+
+    user.role = new_role
+    db.commit()
+    logger.info(f"🔑 Admin {admin.email} set role of {user.email} → {new_role.value}")
     return {"success": True, "user": _user_info(user)}
 
 
@@ -1022,6 +1076,18 @@ def set_signal_outcome(
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
+_ONLINE_WINDOW_SEC = 300   # نفس نافذة "متصل الآن" بكل مكان بالإدارة — 5 دقائق
+
+
+def _is_online(u: User, now: datetime) -> bool:
+    if not u.last_seen_at:
+        return False
+    last_seen = u.last_seen_at
+    if last_seen.tzinfo is None:
+        last_seen = last_seen.replace(tzinfo=timezone.utc)
+    return (now - last_seen).total_seconds() < _ONLINE_WINDOW_SEC
+
+
 def _user_info(u: User) -> dict:
     now = datetime.now(timezone.utc)
     days_left = None
@@ -1050,6 +1116,7 @@ def _user_info(u: User) -> dict:
         "subscription_ends_at": u.subscription_ends_at.isoformat() if u.subscription_ends_at else None,
         "created_at":    u.created_at.isoformat() if u.created_at else None,
         "last_seen_at":  u.last_seen_at.isoformat() if u.last_seen_at else None,
+        "is_online":     _is_online(u, now),
     }
 
 

@@ -7,7 +7,8 @@ import {
   Search, Plus, Trash2, ToggleLeft, ToggleRight, TrendingUp,
   DollarSign, Activity, RefreshCw, Calendar,
   X, ExternalLink, Shield, AlertTriangle, Settings, Mail, Upload, Signal, Send,
-  FileText, TrendingUp as TrendUp, Bell, Sparkles
+  FileText, TrendingUp as TrendUp, Bell, Sparkles,
+  ShieldCheck, UserCog, MessageCircle, UserMinus
 } from 'lucide-react'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -224,6 +225,12 @@ export default function Admin() {
   const [tab, setTab]         = useState('stats')
   const [stats, setStats]     = useState(null)
   const [users, setUsers]     = useState([])
+  const [onlineCount, setOnlineCount] = useState(0)
+  const [team, setTeam]           = useState([])
+  const [teamLoading, setTeamLoading] = useState(false)
+  const [teamSearch, setTeamSearch]   = useState('')
+  const [teamSearchResults, setTeamSearchResults] = useState([])
+  const [teamSearching, setTeamSearching] = useState(false)
   const [payments, setPayments] = useState([])
   const [markets, setMarkets] = useState([])
   const [search, setSearch]   = useState('')
@@ -303,6 +310,16 @@ export default function Admin() {
   const [outcomeForm, setOutcomeForm] = useState({})
   const [openOutcome, setOpenOutcome] = useState(null)
 
+  // Support chat state
+  const [supportThreads, setSupportThreads]   = useState([])
+  const [supportLoading, setSupportLoading]   = useState(false)
+  const [supportUnread,  setSupportUnread]    = useState(0)
+  const [activeThreadId, setActiveThreadId]   = useState(null)
+  const [activeThreadInfo, setActiveThreadInfo] = useState(null)
+  const [activeThreadMsgs, setActiveThreadMsgs] = useState([])
+  const [supportReply,  setSupportReply]      = useState('')
+  const [supportSending, setSupportSending]   = useState(false)
+
   // "show more" limits
   const [usersLimit,    setUsersLimit]    = useState(10)
   const [paymentsLimit, setPaymentsLimit] = useState(10)
@@ -323,7 +340,40 @@ export default function Admin() {
     if (tab === 'affiliate') loadAffStats()
     if (tab === 'signals')   loadAdminSignals()
     if (tab === 'messages')  loadUsers()  // للحصول على قائمة المستخدمين للاختيار
+    if (tab === 'team')      loadTeam()
+    if (tab === 'support')   loadSupportThreads()
   }, [tab])
+
+  // تحديث دوري لحالة "متصل الآن" وقت عرض تبويب المستخدمين
+  useEffect(() => {
+    if (tab !== 'users') return
+    const id = setInterval(loadUsers, 30000)
+    return () => clearInterval(id)
+  }, [tab, search])
+
+  // عداد رسائل الدعم غير المقروءة — يعمل دائماً (بادج بالقائمة الجانبية)
+  useEffect(() => {
+    const load = async () => {
+      try { const r = await axios.get(`${API}/api/v1/support/admin/unread-count`); setSupportUnread(r.data.unread || 0) } catch (e) {}
+    }
+    load()
+    const id = setInterval(load, 20000)
+    return () => clearInterval(id)
+  }, [])
+
+  // تحديث دوري لقائمة المحادثات وقت فتح تبويب الدعم
+  useEffect(() => {
+    if (tab !== 'support') return
+    const id = setInterval(loadSupportThreads, 10000)
+    return () => clearInterval(id)
+  }, [tab])
+
+  // تحديث دوري لرسائل المحادثة المفتوحة
+  useEffect(() => {
+    if (tab !== 'support' || !activeThreadId) return
+    const id = setInterval(() => openSupportThread(activeThreadId, true), 4000)
+    return () => clearInterval(id)
+  }, [tab, activeThreadId])
 
   const loadStats    = async () => { const r = await axios.get(`${API}/api/v1/admin/stats`); setStats(r.data) }
   const loadAffStats = async (q = '') => {
@@ -334,7 +384,70 @@ export default function Admin() {
     } catch (e) {}
     finally { setAffLoading(false) }
   }
-  const loadUsers    = async () => { setLoading(true); const r = await axios.get(`${API}/api/v1/admin/users?search=${search}&limit=200`); setUsers(r.data.users); setLoading(false) }
+  const loadUsers    = async () => { setLoading(true); const r = await axios.get(`${API}/api/v1/admin/users?search=${search}&limit=200`); setUsers(r.data.users); setOnlineCount(r.data.online_count || 0); setLoading(false) }
+  const loadTeam     = async () => { setTeamLoading(true); try { const r = await axios.get(`${API}/api/v1/admin/team`); setTeam(r.data.admins) } catch (e) {} finally { setTeamLoading(false) } }
+  const searchForPromotion = async () => {
+    if (!teamSearch.trim()) { setTeamSearchResults([]); return }
+    setTeamSearching(true)
+    try {
+      const r = await axios.get(`${API}/api/v1/admin/users?search=${encodeURIComponent(teamSearch)}&limit=10`)
+      setTeamSearchResults(r.data.users.filter(u => u.role !== 'admin'))
+    } catch (e) {} finally { setTeamSearching(false) }
+  }
+  const setUserRole = async (userId, role) => {
+    if (role === 'user' && !confirm('إلغاء صلاحيات الأدمن لهذا الحساب؟')) return
+    try {
+      await axios.post(`${API}/api/v1/admin/users/${userId}/set-role`, { role })
+      await loadTeam()
+      setTeamSearchResults(prev => prev.filter(u => u.id !== userId))
+      if (users.length) loadUsers()
+    } catch (e) {
+      alert('خطأ: ' + (e.response?.data?.detail || e.message))
+    }
+  }
+  const loadSupportThreads = async () => {
+    setSupportLoading(true)
+    try {
+      const r = await axios.get(`${API}/api/v1/support/admin/threads`)
+      setSupportThreads(r.data.threads || [])
+    } catch (e) {} finally { setSupportLoading(false) }
+  }
+  const openSupportThread = async (threadId, silent = false) => {
+    if (!silent) setActiveThreadId(threadId)
+    try {
+      const r = await axios.get(`${API}/api/v1/support/admin/threads/${threadId}/messages`)
+      setActiveThreadInfo(r.data.thread)
+      setActiveThreadMsgs(prev => {
+        if (silent && prev.length) {
+          const existingIds = new Set(prev.map(m => m.id))
+          const merged = [...prev, ...r.data.messages.filter(m => !existingIds.has(m.id))]
+          return merged
+        }
+        return r.data.messages
+      })
+      if (!silent) loadSupportThreads()
+    } catch (e) {}
+  }
+  const sendSupportReply = async () => {
+    if (!supportReply.trim() || !activeThreadId) return
+    setSupportSending(true)
+    try {
+      await axios.post(`${API}/api/v1/support/admin/threads/${activeThreadId}/messages`, { body: supportReply.trim() })
+      setSupportReply('')
+      await openSupportThread(activeThreadId, true)
+      loadSupportThreads()
+    } catch (e) {
+      alert('خطأ بالإرسال: ' + (e.response?.data?.detail || e.message))
+    } finally { setSupportSending(false) }
+  }
+  const setThreadStatus = async (threadId, status) => {
+    try {
+      await axios.put(`${API}/api/v1/support/admin/threads/${threadId}/status`, { status })
+      loadSupportThreads()
+      if (activeThreadId === threadId) openSupportThread(threadId, true)
+    } catch (e) {}
+  }
+
   const loadPayments = async (status='all') => { setLoading(true); const r = await axios.get(`${API}/api/v1/admin/payments?status_filter=${status}&limit=100`); setPayments(r.data.payments); setLoading(false) }
   const loadMarkets  = async () => { setLoading(true); const r = await axios.get(`${API}/api/v1/admin/markets`); setMarkets(r.data); setLoading(false) }
   const loadSettings = async () => {
@@ -457,6 +570,8 @@ export default function Admin() {
   const TABS = [
     { key:'stats',      icon:Activity,      label:'إحصائيات' },
     { key:'users',      icon:Users,         label:'المستخدمون' },
+    { key:'team',       icon:UserCog,       label:'الفريق' },
+    { key:'support',    icon:MessageCircle, label:'الدعم' },
     { key:'payments',   icon:CreditCard,    label:'المدفوعات' },
     { key:'markets',    icon:BarChart2,     label:'الأسواق' },
     { key:'signals',    icon:TrendingUp,    label:'الإشارات' },
@@ -495,6 +610,9 @@ export default function Admin() {
               <button key={t.key} onClick={() => setTab(t.key)}
                 className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${tab===t.key?'bg-blue-600 text-white':'text-gray-400 hover:text-white hover:bg-gray-800'}`}>
                 <t.icon size={16}/>{t.label}
+                {t.key === 'support' && supportUnread > 0 && (
+                  <span className="mr-auto bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">{supportUnread}</span>
+                )}
               </button>
             ))}
             <button onClick={() => navigate('/strategies')}
@@ -553,7 +671,14 @@ export default function Admin() {
           {tab === 'users' && (
             <div>
               <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-                <h1 className="text-xl font-bold">المستخدمون <span className="text-sm text-gray-500 font-normal">({filteredUsers.length})</span></h1>
+                <h1 className="text-xl font-bold">
+                  المستخدمون <span className="text-sm text-gray-500 font-normal">({filteredUsers.length})</span>
+                  {onlineCount > 0 && (
+                    <span className="mr-3 inline-flex items-center gap-1.5 text-xs bg-green-900/30 text-green-400 border border-green-700/40 px-2 py-1 rounded-full align-middle">
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" /> {onlineCount} متصل الآن
+                    </span>
+                  )}
+                </h1>
                 <div className="flex items-center gap-2 flex-wrap">
                   {/* Plan filter */}
                   <div className="flex gap-1">
@@ -626,7 +751,11 @@ export default function Admin() {
                       <tr key={u.id} className="hover:bg-gray-900/50 cursor-pointer" onClick={() => setSelectedUser(u)}>
                         <td className="py-2 px-3 text-gray-500 text-xs font-mono select-all" title="User ID">#{u.id}</td>
                         <td className="py-2.5 px-3">
-                          <div className="font-medium text-white text-sm">{u.full_name || '—'}</div>
+                          <div className="font-medium text-white text-sm flex items-center gap-1.5">
+                            {u.full_name || '—'}
+                            {u.is_online && <span className="w-1.5 h-1.5 rounded-full bg-green-400" title="متصل الآن" />}
+                            {u.role === 'admin' && <ShieldCheck size={11} className="text-blue-400" title="أدمن" />}
+                          </div>
                           <div className="text-xs text-gray-500 font-mono">{u.email}</div>
                         </td>
                         <td className="py-2.5 px-3"><PlanBadge plan={u.plan}/></td>
@@ -670,6 +799,172 @@ export default function Admin() {
                 </table>
                 {filteredUsers.length === 0 && !loading && <p className="text-center text-gray-500 py-8">لا يوجد مستخدمون</p>}
                 <ShowMore total={filteredUsers.length} limit={usersLimit} onMore={() => setUsersLimit(l => l + 10)} />
+              </div>
+            </div>
+          )}
+
+          {/* ── Team (Admins) ── */}
+          {tab === 'team' && (
+            <div>
+              <h1 className="text-xl font-bold mb-1">الفريق</h1>
+              <p className="text-sm text-gray-500 mb-5">حسابات الإدارة الحالية — صلاحية موحّدة (كل أدمن يملك تحكم كامل بالمنصة)</p>
+
+              {/* Add new admin */}
+              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 mb-6">
+                <h2 className="font-semibold text-sm mb-3 flex items-center gap-2"><Plus size={14} className="text-blue-400"/> إضافة أدمن جديد</h2>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="relative flex-1 max-w-md">
+                    <Search size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+                    <input value={teamSearch}
+                      onChange={e => setTeamSearch(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && searchForPromotion()}
+                      placeholder="بحث بالإيميل أو الاسم..."
+                      className="bg-gray-800 border border-gray-700 rounded-lg pr-8 pl-3 py-2 text-sm text-white w-full focus:outline-none focus:ring-1 focus:ring-blue-500" dir="ltr"/>
+                  </div>
+                  <button onClick={searchForPromotion} disabled={teamSearching}
+                    className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs px-4 py-2 rounded-lg">
+                    {teamSearching ? '...' : 'بحث'}
+                  </button>
+                </div>
+                {teamSearchResults.length > 0 && (
+                  <div className="space-y-1.5">
+                    {teamSearchResults.map(u => (
+                      <div key={u.id} className="flex items-center justify-between bg-gray-800/60 border border-gray-700/50 rounded-lg px-3 py-2">
+                        <div>
+                          <div className="text-sm text-white">{u.full_name || '—'}</div>
+                          <div className="text-xs text-gray-500 font-mono">{u.email}</div>
+                        </div>
+                        <button onClick={() => setUserRole(u.id, 'admin')}
+                          className="flex items-center gap-1 text-xs bg-blue-900/40 hover:bg-blue-800/50 text-blue-300 border border-blue-700/40 px-3 py-1.5 rounded-lg transition">
+                          <ShieldCheck size={12}/> ترقية لأدمن
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {teamSearch && !teamSearching && teamSearchResults.length === 0 && (
+                  <p className="text-xs text-gray-500">لا نتائج (أو الحساب أدمن أصلاً)</p>
+                )}
+              </div>
+
+              {/* Current admins */}
+              <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
+                <div className="px-5 py-3 border-b border-gray-800">
+                  <h2 className="font-semibold text-sm">حسابات الأدمن الحالية ({team.length})</h2>
+                </div>
+                <div className="divide-y divide-gray-800/60">
+                  {teamLoading && <p className="text-center text-gray-500 py-6 text-sm">جاري التحميل...</p>}
+                  {!teamLoading && team.map(u => (
+                    <div key={u.id} className="flex items-center justify-between px-5 py-3">
+                      <div className="flex items-center gap-2">
+                        <ShieldCheck size={15} className="text-blue-400"/>
+                        <div>
+                          <div className="text-sm text-white flex items-center gap-1.5">
+                            {u.full_name || '—'}
+                            {u.is_online && <span className="w-1.5 h-1.5 rounded-full bg-green-400" title="متصل الآن"/>}
+                            {u.id === user?.id && <span className="text-[10px] text-gray-500">(أنت)</span>}
+                          </div>
+                          <div className="text-xs text-gray-500 font-mono">{u.email}</div>
+                        </div>
+                      </div>
+                      <button onClick={() => setUserRole(u.id, 'user')}
+                        disabled={u.id === user?.id}
+                        className="flex items-center gap-1 text-xs bg-red-900/30 hover:bg-red-800/40 disabled:opacity-30 disabled:cursor-not-allowed text-red-300 border border-red-800/40 px-3 py-1.5 rounded-lg transition">
+                        <UserMinus size={12}/> إلغاء الصلاحية
+                      </button>
+                    </div>
+                  ))}
+                  {!teamLoading && team.length === 0 && <p className="text-center text-gray-500 py-6 text-sm">لا يوجد</p>}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Support Chat ── */}
+          {tab === 'support' && (
+            <div>
+              <h1 className="text-xl font-bold mb-1">الدعم — الشات الفوري</h1>
+              <p className="text-sm text-gray-500 mb-5">محادثات المستخدمين المباشرة مع الإدارة</p>
+
+              <div className="flex gap-4 h-[70vh]">
+                {/* Threads list */}
+                <div className="w-72 flex-shrink-0 bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden flex flex-col">
+                  <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
+                    <h2 className="font-semibold text-sm">المحادثات ({supportThreads.length})</h2>
+                    {supportLoading && <RefreshCw size={12} className="animate-spin text-gray-500"/>}
+                  </div>
+                  <div className="flex-1 overflow-y-auto divide-y divide-gray-800/60">
+                    {supportThreads.map(t => (
+                      <button key={t.id} onClick={() => openSupportThread(t.id)}
+                        className={`w-full text-right px-4 py-3 transition-colors ${activeThreadId===t.id?'bg-blue-950/40':'hover:bg-gray-800/50'}`}>
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <span className="text-sm text-white truncate">{t.user_name || t.user_email || `#${t.user_id}`}</span>
+                          {t.unread_for_admin > 0 && (
+                            <span className="bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 flex-shrink-0">{t.unread_for_admin}</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500 truncate">{t.last_message_preview || '—'}</p>
+                        <div className="flex items-center gap-1.5 mt-1">
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded ${t.status==='open' ? 'bg-green-900/40 text-green-400' : 'bg-gray-800 text-gray-500'}`}>{t.status==='open'?'مفتوحة':'مغلقة'}</span>
+                        </div>
+                      </button>
+                    ))}
+                    {!supportLoading && supportThreads.length === 0 && (
+                      <p className="text-center text-gray-500 py-8 text-sm">لا توجد محادثات بعد</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Active thread */}
+                <div className="flex-1 bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden flex flex-col">
+                  {!activeThreadId ? (
+                    <div className="flex-1 flex items-center justify-center text-gray-500 text-sm">
+                      <MessageCircle size={20} className="ml-2"/> اختر محادثة من القائمة
+                    </div>
+                  ) : (
+                    <>
+                      <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
+                        <div>
+                          <div className="text-sm font-semibold text-white">{activeThreadInfo?.user_name || activeThreadInfo?.user_email || `#${activeThreadId}`}</div>
+                          <div className="text-xs text-gray-500 font-mono">{activeThreadInfo?.user_email}</div>
+                        </div>
+                        <button
+                          onClick={() => setThreadStatus(activeThreadId, activeThreadInfo?.status === 'open' ? 'closed' : 'open')}
+                          className="text-xs px-3 py-1.5 rounded-lg border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 transition">
+                          {activeThreadInfo?.status === 'open' ? 'إغلاق المحادثة' : 'إعادة فتح'}
+                        </button>
+                      </div>
+                      <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
+                        {activeThreadMsgs.map(m => (
+                          <div key={m.id} className={`flex ${m.sender_role==='admin' ? 'justify-start' : 'justify-end'}`}>
+                            <div className={`max-w-[75%] rounded-xl px-3 py-2 text-sm ${m.sender_role==='admin' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-100'}`}>
+                              {m.body}
+                              <div className={`text-[10px] mt-1 ${m.sender_role==='admin' ? 'text-blue-200' : 'text-gray-500'}`}>
+                                {m.created_at ? new Date(m.created_at).toLocaleTimeString('ar', { hour:'2-digit', minute:'2-digit' }) : ''}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                        {activeThreadMsgs.length === 0 && (
+                          <p className="text-center text-gray-500 text-sm py-8">لا رسائل بعد</p>
+                        )}
+                      </div>
+                      <div className="p-3 border-t border-gray-800 flex items-center gap-2">
+                        <input
+                          value={supportReply}
+                          onChange={e => setSupportReply(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && !supportSending && sendSupportReply()}
+                          placeholder="اكتب ردك..."
+                          className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                        <button onClick={sendSupportReply} disabled={supportSending || !supportReply.trim()}
+                          className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white p-2.5 rounded-lg">
+                          <Send size={15}/>
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           )}
