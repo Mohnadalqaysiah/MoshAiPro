@@ -99,16 +99,21 @@ function AppRoutes() {
         <Route path="/blog"              element={<BlogList />} />
         <Route path="/blog/:slug"        element={<BlogPost />} />
 
-        {/* English mirrors — نفس الصفحات المذكورة فوق، وهي فعلياً bilingual،
+        {/* English mirrors — نفس الصفحات المذكورة فوق، كلها bilingual الآن.
             بادئة /en تفرض عرض المحتوى الإنجليزي (LangRouteSync) بدل الاعتماد
-            على تفضيل محفوظ بالمتصفح، عشان قوقل يقدر يفهرس نسخة إنجليزية حقيقية.
-            باقي الصفحات العامة (about/contact/vision/terms/privacy) عربي فقط
-            بالمحتوى حالياً فما إلها مرآة /en بعد. */}
+            على تفضيل محفوظ بالمتصفح، عشان قوقل يقدر يفهرس نسخة إنجليزية حقيقية. */}
         <Route path="/en"                element={<Landing />} />
         <Route path="/en/pricing"        element={<Pricing />} />
         <Route path="/en/referral"       element={<ReferralProgram />} />
         <Route path="/en/blog"           element={<BlogList />} />
         <Route path="/en/blog/:slug"     element={<BlogPost />} />
+        <Route path="/en/about"          element={<About />} />
+        <Route path="/en/vision"         element={<Vision />} />
+        <Route path="/en/contact"        element={<Contact />} />
+        <Route path="/en/terms"          element={<Terms />} />
+        <Route path="/en/privacy"        element={<Privacy />} />
+        <Route path="/en/login"          element={user ? <Navigate to="/dashboard" /> : <Login />} />
+        <Route path="/en/register"       element={user ? <Navigate to="/dashboard" /> : <Register />} />
 
         {/* Admin */}
         <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />

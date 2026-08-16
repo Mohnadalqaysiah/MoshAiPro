@@ -1,7 +1,9 @@
 // المسارات العامة اللي إلها فعلاً محتوى إنجليزي حقيقي (bilingual) — نفّس هوي
-// اللي بيصير عليه /en/* حقيقياً. باقي الصفحات العامة (about/contact/terms/...)
-// محتواها عربي فقط حالياً، فما منولّد لها رابط /en وهمي.
-export const EN_MIRRORED_PREFIXES = ['/pricing', '/referral', '/blog']
+// اللي بيصير عليه /en/* حقيقياً.
+export const EN_MIRRORED_PREFIXES = [
+  '/pricing', '/referral', '/blog',
+  '/about', '/vision', '/contact', '/terms', '/privacy', '/login', '/register',
+]
 
 // pathname -> { isEn, bare, isMirrored }
 // bare = نفس المسار بدون بادئة /en (يعني النسخة العربية المكافئة)

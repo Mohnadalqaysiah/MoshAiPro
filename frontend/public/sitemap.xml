@@ -46,12 +46,26 @@
     <priority>0.85</priority>
   </url>
 
-  <!-- التسجيل -->
+  <!-- التسجيل (عربي) -->
   <url>
     <loc>https://qaffel.com/register</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/register" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/register" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/register" />
     <lastmod>2026-08-16</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
+  </url>
+
+  <!-- التسجيل (English) -->
+  <url>
+    <loc>https://qaffel.com/en/register</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/register" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/register" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/register" />
+    <lastmod>2026-08-16</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.75</priority>
   </url>
 
   <!-- برنامج الإحالات (عربي) -->
@@ -178,52 +192,136 @@
     <priority>0.8</priority>
   </url>
 
-  <!-- من نحن (عربي فقط — لا نسخة إنجليزية بعد) -->
+  <!-- من نحن (عربي) -->
   <url>
     <loc>https://qaffel.com/about</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/about" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/about" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/about" />
     <lastmod>2026-08-16</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
 
-  <!-- رؤيتنا -->
+  <!-- من نحن (English) -->
+  <url>
+    <loc>https://qaffel.com/en/about</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/about" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/about" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/about" />
+    <lastmod>2026-08-16</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.65</priority>
+  </url>
+
+  <!-- رؤيتنا (عربي) -->
   <url>
     <loc>https://qaffel.com/vision</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/vision" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/vision" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/vision" />
     <lastmod>2026-08-16</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
 
-  <!-- تواصل معنا -->
+  <!-- رؤيتنا (English) -->
+  <url>
+    <loc>https://qaffel.com/en/vision</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/vision" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/vision" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/vision" />
+    <lastmod>2026-08-16</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.55</priority>
+  </url>
+
+  <!-- تواصل معنا (عربي) -->
   <url>
     <loc>https://qaffel.com/contact</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/contact" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/contact" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/contact" />
     <lastmod>2026-08-16</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
 
-  <!-- تسجيل الدخول -->
+  <!-- تواصل معنا (English) -->
+  <url>
+    <loc>https://qaffel.com/en/contact</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/contact" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/contact" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/contact" />
+    <lastmod>2026-08-16</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.55</priority>
+  </url>
+
+  <!-- تسجيل الدخول (عربي) -->
   <url>
     <loc>https://qaffel.com/login</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/login" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/login" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/login" />
     <lastmod>2026-08-16</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
   </url>
 
-  <!-- سياسة الخصوصية -->
+  <!-- تسجيل الدخول (English) -->
+  <url>
+    <loc>https://qaffel.com/en/login</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/login" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/login" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/login" />
+    <lastmod>2026-08-16</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.45</priority>
+  </url>
+
+  <!-- سياسة الخصوصية (عربي) -->
   <url>
     <loc>https://qaffel.com/privacy</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/privacy" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/privacy" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/privacy" />
     <lastmod>2026-08-16</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.4</priority>
   </url>
 
-  <!-- الشروط والأحكام -->
+  <!-- سياسة الخصوصية (English) -->
+  <url>
+    <loc>https://qaffel.com/en/privacy</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/privacy" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/privacy" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/privacy" />
+    <lastmod>2026-08-16</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.35</priority>
+  </url>
+
+  <!-- الشروط والأحكام (عربي) -->
   <url>
     <loc>https://qaffel.com/terms</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/terms" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/terms" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/terms" />
     <lastmod>2026-08-16</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.4</priority>
+  </url>
+
+  <!-- الشروط والأحكام (English) -->
+  <url>
+    <loc>https://qaffel.com/en/terms</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/terms" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/terms" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/terms" />
+    <lastmod>2026-08-16</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.35</priority>
   </url>
 
 </urlset>
