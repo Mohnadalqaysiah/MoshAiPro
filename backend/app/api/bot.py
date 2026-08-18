@@ -116,14 +116,25 @@ def _check_loss_streak_breaker(db: Session, symbol: str, signal_type: str) -> Op
 # XAUUSD SELL/4h قرارين مستقلين تماماً بمحرك التحليل — لازم يبقوا مسموحين
 # بنفس الوقت. بس صفقتين SELL/1h معاً على نفس الرمز ممنوعة.
 def _has_active_signal(db: Session, symbol: str, signal_type: str, timeframe: str) -> bool:
-    """True لو فيه صفقة نشطة أصلاً بنفس (الرمز، الاتجاه، الفريم)."""
+    """True لو فيه صفقة نشطة أصلاً بنفس (الرمز، الاتجاه، الفريم).
+
+    (2026-08-18, hotfix) status=ACTIVE لحاله مش كافي — الانتقال لـEXPIRED
+    كسول تماماً (بيصير بس لما نفس المستخدم يفتح /signals/history، انظر
+    signals.py:331)، فمعظم الصفوف الـACTIVE بقاعدة البيانات فعلياً منتهية
+    الصلاحية من زمان وما حد صفّاها. لازم نتحقق من expires_at بنفسنا هون،
+    وإلا الفحص يصير يمنع كل إشارة جديدة تقريباً بسبب صفوف قديمة عالقة —
+    اكتُشف مباشرة بعد نشر أول نسخة من هالدالة (78 صف ACTIVE لـBTCUSD/1h/SELL
+    لحالها، أغلبها قديم)."""
+    from datetime import datetime, timezone
     from app.models.signal import Signal, SignalStatus
 
+    now = datetime.now(timezone.utc)
     return db.query(Signal).filter(
         Signal.market      == symbol,
         Signal.signal_type == signal_type,
         Signal.timeframe   == timeframe,
         Signal.status      == SignalStatus.ACTIVE,
+        (Signal.expires_at.is_(None)) | (Signal.expires_at > now),
     ).first() is not None
 
 
