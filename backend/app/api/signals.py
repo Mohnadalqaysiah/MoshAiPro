@@ -17,6 +17,7 @@ from app.models.signal import Signal, SignalType, SignalStatus, SignalQuality
 from app.models.user import User, PlanType, UserRole
 from app.models.site_settings import SiteSettings
 from app.services.auth_service import get_current_user, check_subscription, deduct_trial
+from app.api.bot import _check_loss_streak_breaker, _has_active_signal
 
 
 def _calc_lot_size(account_balance: float, risk_percent: float,
@@ -179,14 +180,21 @@ async def analyze_market(
                     f"{symbol}-{timeframe}-{rec}-{round(float(entry), 4)}".encode()
                 ).hexdigest()
                 existing   = db.query(Signal).filter(Signal.signal_hash == sig_hash).first()
-                active_dup = db.query(Signal).filter(
-                    Signal.market      == symbol,
-                    Signal.timeframe   == timeframe,
-                    Signal.signal_type == sig_type,
-                    Signal.status      == SignalStatus.ACTIVE,
-                ).first()
+                active_dup = _has_active_signal(db, symbol, sig_type, timeframe)
 
-                if not existing and not active_dup:
+                # ── Loss-streak breaker (2026-08-18) ─────────────────────────
+                # كان مربوطاً فقط بمسارات bot.py (bot_analyze / save-alert-signal)
+                # — هاد المسار (تحليل من الموقع مباشرة) كان يتجاوزه بالكامل،
+                # وهو الأعلى حجماً لرمز شعبي زي XAUUSD. نفس الدالة والمنطق تماماً.
+                loss_streak_reason = _check_loss_streak_breaker(db, symbol, rec)
+                if loss_streak_reason:
+                    analysis["loss_streak_blocked"] = True
+                    analysis["rejection_reason"]    = loss_streak_reason.upper()
+                    logger.warning(
+                        f"⛔ Signal save blocked by loss-streak breaker: "
+                        f"{symbol}/{timeframe} {rec} — {loss_streak_reason}"
+                    )
+                elif not existing and not active_dup:
                     new_sig = Signal(
                         user_id           = user.id,
                         market            = symbol,

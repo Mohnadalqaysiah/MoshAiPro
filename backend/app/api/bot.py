@@ -105,6 +105,28 @@ def _check_loss_streak_breaker(db: Session, symbol: str, signal_type: str) -> Op
     return "loss_streak_cooldown"
 
 
+# ── قاطع أمان: منع تكديس صفقات نشطة متعددة بنفس (رمز، اتجاه، فريم) ──────────
+# سبب حادثة XAUUSD SELL بتاريخ 17-18/8: /save-alert-signal كانت تمنع بس
+# تكرار نفس المستخدم لنفس السعر بالضبط — فسمحت بفتح 3 صفقات SELL نشطة
+# بنفس الوقت على XAUUSD/1h خلال أقل من ساعة، قبل ما أي وحدة منهم تتحدد،
+# فـ_check_loss_streak_breaker (اللي بيعتمد على SL_HIT مسجّل فعلياً) ما
+# كان عنده معلومة كافية ليمنع.
+#
+# الفريم جزء من المفتاح عمداً (Phase 5, 2026-08-14): XAUUSD SELL/1h و
+# XAUUSD SELL/4h قرارين مستقلين تماماً بمحرك التحليل — لازم يبقوا مسموحين
+# بنفس الوقت. بس صفقتين SELL/1h معاً على نفس الرمز ممنوعة.
+def _has_active_signal(db: Session, symbol: str, signal_type: str, timeframe: str) -> bool:
+    """True لو فيه صفقة نشطة أصلاً بنفس (الرمز، الاتجاه، الفريم)."""
+    from app.models.signal import Signal, SignalStatus
+
+    return db.query(Signal).filter(
+        Signal.market      == symbol,
+        Signal.signal_type == signal_type,
+        Signal.timeframe   == timeframe,
+        Signal.status      == SignalStatus.ACTIVE,
+    ).first() is not None
+
+
 @router.post("/analyze")
 async def bot_analyze(
     symbol: str,
@@ -163,18 +185,19 @@ async def bot_analyze(
             if rec in ("BUY", "SELL") and entry and sl and tp1 \
                     and conf >= 40 and _rr_ok and not _rej and _cooldown_ok \
                     and analysis.get("market_open", True) and _sd.is_market_open(symbol) \
-                    and not _check_loss_streak_breaker(db, symbol, rec):
+                    and not _check_loss_streak_breaker(db, symbol, rec) \
+                    and not _has_active_signal(db, symbol, rec, timeframe):
 
                 sig_type  = SignalType.BUY if rec == "BUY" else SignalType.SELL
                 tf_hours  = {"1m":2,"5m":4,"15m":8,"30m":12,"1h":24,"4h":72,"1d":168,"1w":336}
                 expires_h = tf_hours.get(timeframe, 24)
                 expires_at = datetime.now(timezone.utc) + timedelta(hours=expires_h)
-                
+
                 sig_hash = hashlib.md5(
                     f"{symbol}-{timeframe}-{rec}-{round(float(entry), 4)}".encode()
                 ).hexdigest()
                 existing = db.query(Signal).filter(Signal.signal_hash == sig_hash).first()
-                
+
                 if not existing:
                     new_signal = Signal(
                         market             = symbol,
@@ -784,6 +807,9 @@ def bot_save_alert_signal(
     loss_streak_reason = _check_loss_streak_breaker(db, symbol, signal_type)
     if loss_streak_reason:
         return {"saved": False, "reason": loss_streak_reason}
+
+    if _has_active_signal(db, symbol, signal_type, timeframe):
+        return {"saved": False, "reason": "duplicate active position, waiting for resolution"}
 
     tf_hours   = {"1m": 2, "5m": 4, "15m": 8, "30m": 12, "1h": 24, "4h": 72, "1d": 168}
     expires_at = datetime.now(timezone.utc) + timedelta(hours=tf_hours.get(timeframe, 24))

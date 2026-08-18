@@ -1793,11 +1793,12 @@ class MoshAIEngineV5:
                 self._DECISION_THRESHOLD_RANGE  if is_ranging
                 else self._DECISION_THRESHOLD_TREND
             )
-            # Gold needs slightly lower decision threshold because XAUUSD
-            # often generates valid setups with smaller directional delta.
-            if symbol.upper() == "XAUUSD":
-                threshold = max(15.0, threshold - 5.0)
-                analysis["xau_threshold_adjusted"] = threshold
+            # (2026-08-18) Removed the XAUUSD-only threshold - 5 discount.
+            # It was one of two confirmed XAUUSD-only leniency mechanisms
+            # behind the 17-18/8 XAUUSD SELL loss streak — gold needed a
+            # smaller score_delta (15-25) to pass than every other symbol
+            # including XAGUSD (18-30), for no reason tied to that specific
+            # incident's root cause. Same threshold for every symbol now.
 
         # ── 3. Sweep assessment — scoring factor, not hard gate ──────────────
         # Sweep presence/quality ADJUSTS score_delta, it does NOT reject alone.
@@ -2541,22 +2542,27 @@ class MoshAIEngineV5:
             return _block(f"CONFIDENCE_TOO_LOW_{conf:.0f}pct")
 
         # ── Rule 6: XAUUSD Special Filter ────────────────────────────────────
+        # (2026-08-18) Removed the ("1h","4h","1d")-only carve-out that let
+        # 15m/30m XAUUSD trades skip HTF alignment and the zone check, and
+        # accept a lower 1.0 RR floor instead of 1.3. That exemption predated
+        # Phase 5 (2026-08-14), which made 15m an actively-scanned timeframe
+        # every monitoring cycle — turning an occasional exception into a
+        # continuously-exercised one, and was one of two confirmed
+        # XAUUSD-only leniency mechanisms behind the 17-18/8 XAUUSD SELL
+        # loss streak. Now enforced uniformly across all timeframes, matching
+        # this rule's own docstring ("Requires ALL: HTF alignment + valid
+        # zone + RR ≥ 1.3").
         if sym_upper == "XAUUSD":
-            # Require HTF alignment for swing signals only.
-            # Allow shorter-term XAUUSD scalp setups to pass without strict HTF alignment.
             htf_aligned = analysis.get("gate_htf_aligned", False)
-            if timeframe in ("1h", "4h", "1d") and not htf_aligned:
+            if not htf_aligned:
                 return _block("XAUUSD_REQUIRES_HTF_ALIGNMENT")
 
-            # Require valid zone for swings; ignore premium/discount hard block on scalps.
-            if timeframe in ("1h", "4h", "1d"):
-                if rec == "BUY" and "PREMIUM" in pd_raw:
-                    return _block("XAUUSD_BUY_IN_PREMIUM_ZONE")
-                if rec == "SELL" and "DISCOUNT" in pd_raw:
-                    return _block("XAUUSD_SELL_IN_DISCOUNT_ZONE")
+            if rec == "BUY" and "PREMIUM" in pd_raw:
+                return _block("XAUUSD_BUY_IN_PREMIUM_ZONE")
+            if rec == "SELL" and "DISCOUNT" in pd_raw:
+                return _block("XAUUSD_SELL_IN_DISCOUNT_ZONE")
 
-            # Require minimum RR
-            min_xau_rr = 1.3 if timeframe in ("1h", "4h", "1d") else 1.0
+            min_xau_rr = 1.3
             if rr > 0 and rr < min_xau_rr:
                 return _block(f"XAUUSD_RR_{rr:.2f}_BELOW_{min_xau_rr}")
 
