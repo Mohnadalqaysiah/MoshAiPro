@@ -55,7 +55,7 @@ export default function SpaceremitCheckout({
   }, [publicKey, isAr])
 
   return (
-    <form id="spaceremit-form">
+    <form id="spaceremit-form" onSubmit={(e) => e.preventDefault()}>
       <input type="hidden" name="amount" defaultValue={amount} />
       <input type="hidden" name="currency" defaultValue={currency} />
       <input type="hidden" name="fullname" defaultValue={buyerName || ''} />
@@ -64,7 +64,10 @@ export default function SpaceremitCheckout({
       <input type="hidden" name="notes" defaultValue={notes || ''} />
 
       <div className="sp-one-type-select mb-4">
-        <input type="radio" name="sp-pay-type-radio" value="local-methods-pay" id="sp_local_methods_radio" defaultChecked className="hidden" />
+        <label className="flex items-center gap-2 text-sm text-gray-300 mb-2 cursor-pointer">
+          <input type="radio" name="sp-pay-type-radio" value="local-methods-pay" id="sp_local_methods_radio" defaultChecked />
+          {isAr ? 'طرق دفع محلية' : 'Local payment methods'}
+        </label>
         <div id="spaceremit-local-methods-pay" />
       </div>
 
