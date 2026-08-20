@@ -103,6 +103,12 @@ class Settings(BaseSettings):
     STRIPE_SUCCESS_URL: str = "https://qaffel.com/dashboard?stripe=success"
     STRIPE_CANCEL_URL: str = "https://qaffel.com/pricing?stripe=cancel"
 
+    # ----- Spaceremit -----
+    SPACEREMIT_PUBLIC_KEY: str = ""
+    SPACEREMIT_SECRET_KEY: str = ""
+    SPACEREMIT_TEST_PUBLIC_KEY: str = ""
+    SPACEREMIT_TEST_SECRET_KEY: str = ""
+
     class Config:
         env_file = ".env"
         case_sensitive = True

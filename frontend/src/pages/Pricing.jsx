@@ -9,6 +9,7 @@ import useSEO from '../hooks/useSEO'
 import useBreadcrumbSchema from '../hooks/useBreadcrumbSchema'
 import useFAQSchema from '../hooks/useFAQSchema'
 import StripeInlineCheckout from '../components/StripeInlineCheckout'
+import SpaceremitCheckout from '../components/SpaceremitCheckout'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -56,6 +57,9 @@ const T = {
     stripeInstant: 'تفعيل فوري تلقائي — بدون مغادرة الصفحة',
     secureBadge: 'دفع آمن ومشفّر بالكامل — مدعوم من Stripe',
     cardLoading: 'جاري تجهيز نموذج الدفع...',
+    spaceremitTitle: 'طرق دفع محلية',
+    spaceremitToggle: 'الدفع عبر Spaceremit بدلاً من ذلك',
+    spaceremitInstant: 'تفعيل فوري تلقائي بعد تأكيد الدفع',
     doneTitle: 'تم استلام طلبك!',
     doneDesc: 'سيتم التحقق من الدفع وتفعيل حسابك خلال 30 دقيقة. ستصلك رسالة تأكيد.',
     doneTitleCard: 'تم تفعيل اشتراكك!',
@@ -97,6 +101,9 @@ const T = {
     stripeInstant: 'Instant automatic activation — no page redirect',
     secureBadge: 'Fully secure & encrypted — powered by Stripe',
     cardLoading: 'Preparing payment form...',
+    spaceremitTitle: 'Local payment methods',
+    spaceremitToggle: 'Pay via Spaceremit instead',
+    spaceremitInstant: 'Instant automatic activation once payment is confirmed',
     doneTitle: 'Request Received!',
     doneDesc: 'Payment will be verified and your account activated within 30 minutes.',
     doneTitleCard: 'Subscription Activated!',
@@ -173,8 +180,12 @@ export default function Pricing() {
   const [WALLET, setWallet]       = useState('')
   const [PLANS, setPlans]         = useState(DEFAULT_PLANS)
   const [cardPaymentEnabled, setCardPaymentEnabled] = useState(false)
+  const [spaceremitEnabled, setSpaceremitEnabled]     = useState(false)
+  const [spaceremitPublicKey, setSpaceremitPublicKey] = useState('')
   const [showCrypto, setShowCrypto] = useState(false)
+  const [showSpaceremit, setShowSpaceremit] = useState(false)
   const [paidVia, setPaidVia]     = useState('usdt')
+  const hasPrimaryMethod = cardPaymentEnabled || spaceremitEnabled
 
   // Stripe Elements — نموذج بطاقة مدمج داخل الصفحة
   const [clientSecret, setClientSecret]         = useState('')
@@ -186,6 +197,8 @@ export default function Pricing() {
       .then(r => {
         if (r.data.wallet) setWallet(r.data.wallet)
         setCardPaymentEnabled(!!r.data.card_payment_enabled)
+        setSpaceremitEnabled(!!r.data.spaceremit_enabled)
+        setSpaceremitPublicKey(r.data.spaceremit_public_key || '')
         if (r.data.plans) {
           setPlans(DEFAULT_PLANS.map(p => {
             const api = r.data.plans[p.key]
@@ -256,6 +269,20 @@ export default function Pricing() {
       } catch { /* استمر بالاستطلاع */ }
     }
     setStep('done')
+  }
+
+  const onSpaceremitSuccess = async (spaceremitCode) => {
+    setPaidVia('card')
+    setStep('activating')
+    try {
+      await axios.post(`${API}/api/v1/subscription/spaceremit/verify`, {
+        plan: selected, spaceremit_code: spaceremitCode,
+      })
+      setStep('done')
+    } catch (err) {
+      setError(err.response?.data?.detail || (isAr ? 'تعذّر تأكيد الدفع، حاول مرة أخرى' : 'Could not confirm payment, please try again'))
+      setStep('pay')
+    }
   }
 
   const plan = PLANS.find(p => p.key === selected)
@@ -427,20 +454,58 @@ export default function Pricing() {
                   </div>
 
                   <p className="text-xs text-gray-600 text-center mb-6">{t.stripeInstant}</p>
-
-                  <button
-                    onClick={() => setShowCrypto(s => !s)}
-                    className="w-full flex items-center justify-center gap-1.5 text-xs text-gray-500 hover:text-gray-300 py-2 mb-2 transition"
-                  >
-                    {t.cryptoToggle}
-                    <ChevronDown size={13} className={`transition-transform ${showCrypto ? 'rotate-180' : ''}`} />
-                  </button>
                 </>
               )}
 
-              {/* Crypto (USDT) — secondary, collapsed by default when card payment is available */}
-              {(showCrypto || !cardPaymentEnabled) && (
-                <div className={cardPaymentEnabled ? 'pt-2 border-t border-gray-800' : ''}>
+              {/* Spaceremit — local payment methods, alternative/secondary to Stripe */}
+              {spaceremitEnabled && (
+                <>
+                  {cardPaymentEnabled && (
+                    <button
+                      onClick={() => setShowSpaceremit(s => !s)}
+                      className="w-full flex items-center justify-center gap-1.5 text-xs text-gray-500 hover:text-gray-300 py-2 mb-2 transition"
+                    >
+                      {t.spaceremitToggle}
+                      <ChevronDown size={13} className={`transition-transform ${showSpaceremit ? 'rotate-180' : ''}`} />
+                    </button>
+                  )}
+                  {(showSpaceremit || !cardPaymentEnabled) && (
+                    <div className={cardPaymentEnabled ? 'pt-4 border-t border-gray-800 mb-3' : 'mb-3'}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <CreditCard size={15} className="text-indigo-400" />
+                        <span className="text-sm font-semibold text-gray-200">{t.spaceremitTitle}</span>
+                      </div>
+                      <div className="bg-gray-800/60 border border-gray-700/50 rounded-xl p-4 mb-2">
+                        <SpaceremitCheckout
+                          publicKey={spaceremitPublicKey}
+                          amount={plan?.price}
+                          buyerName={user?.full_name || user?.name || ''}
+                          buyerEmail={user?.email || ''}
+                          notes={`plan=${selected}`}
+                          onSuccess={onSpaceremitSuccess}
+                          onError={(msg) => setError(msg)}
+                          isAr={isAr}
+                        />
+                      </div>
+                      <p className="text-xs text-gray-600 text-center mb-3">{t.spaceremitInstant}</p>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {hasPrimaryMethod && (
+                <button
+                  onClick={() => setShowCrypto(s => !s)}
+                  className="w-full flex items-center justify-center gap-1.5 text-xs text-gray-500 hover:text-gray-300 py-2 mb-2 transition"
+                >
+                  {t.cryptoToggle}
+                  <ChevronDown size={13} className={`transition-transform ${showCrypto ? 'rotate-180' : ''}`} />
+                </button>
+              )}
+
+              {/* Crypto (USDT) — secondary, collapsed by default when a primary method is available */}
+              {(showCrypto || !hasPrimaryMethod) && (
+                <div className={hasPrimaryMethod ? 'pt-2 border-t border-gray-800' : ''}>
                   {/* Wallet */}
                   <div className="bg-gray-800/80 border border-gray-700/50 rounded-xl p-4 mb-6 mt-4">
                     <p className="text-xs text-gray-400 mb-2">{t.sendToLabel}</p>
@@ -492,7 +557,7 @@ export default function Pricing() {
                 </div>
               )}
 
-              {!showCrypto && cardPaymentEnabled && (
+              {!showCrypto && hasPrimaryMethod && (
                 <button
                   onClick={() => setStep('plan')}
                   className="w-full border border-gray-700 text-gray-400 hover:text-white hover:border-gray-600 py-3 rounded-xl text-sm transition"

@@ -9,6 +9,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from loguru import logger
+import requests
 import stripe
 
 from app.database import get_db
@@ -58,6 +59,11 @@ class PaymentIn(BaseModel):
 
 class StripeCheckoutIn(BaseModel):
     plan: str    # weekly | monthly
+
+
+class SpaceremitVerifyIn(BaseModel):
+    plan:            str    # weekly | monthly
+    spaceremit_code: str    # SP_payment_code returned by the client-side widget
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -128,6 +134,26 @@ def _stripe_config(db: Session) -> dict:
     }
 
 
+SPACEREMIT_API_URL      = "https://spaceremit.com/api/v2/payment_info/"
+SPACEREMIT_ACCEPTED_TAGS = {"A", "B", "D", "E"}  # Completed / Pending / Holding / Needs Review — funds committed
+
+
+def _spaceremit_config(db: Session) -> dict:
+    test_mode = _setting(db, "spaceremit_test_mode", "false").strip().lower() == "true"
+    return {
+        "enabled":    _setting(db, "spaceremit_enabled", "false").strip().lower() == "true",
+        "test_mode":  test_mode,
+        "public_key": _setting(
+            db, "spaceremit_test_public_key" if test_mode else "spaceremit_public_key",
+            settings.SPACEREMIT_TEST_PUBLIC_KEY if test_mode else settings.SPACEREMIT_PUBLIC_KEY,
+        ),
+        "secret_key": _setting(
+            db, "spaceremit_test_secret_key" if test_mode else "spaceremit_secret_key",
+            settings.SPACEREMIT_TEST_SECRET_KEY if test_mode else settings.SPACEREMIT_SECRET_KEY,
+        ),
+    }
+
+
 # ─── Endpoints ────────────────────────────────────────────────────────────────
 
 @router.get("/plans")
@@ -136,6 +162,8 @@ def get_plans(db: Session = Depends(get_db)):
     wallet = db_settings.get("usdt_wallet") or USDT_WALLET
     plans  = _resolve_plans(db)
     stripe_cfg = _stripe_config(db)
+    spaceremit_cfg = _spaceremit_config(db)
+    spaceremit_ready = spaceremit_cfg["enabled"] and bool(spaceremit_cfg["secret_key"]) and bool(spaceremit_cfg["public_key"])
 
     return {
         "plans": plans,
@@ -143,6 +171,8 @@ def get_plans(db: Session = Depends(get_db)):
         "network": USDT_NETWORK,
         "note": "أرسل المبلغ بالضبط بالـ USDT ثم أدخل رقم المعاملة (TxID) للتحقق",
         "card_payment_enabled": stripe_cfg["enabled"] and bool(stripe_cfg["secret_key"]),
+        "spaceremit_enabled": spaceremit_ready,
+        "spaceremit_public_key": spaceremit_cfg["public_key"] if spaceremit_ready else "",
     }
 
 
@@ -375,6 +405,91 @@ def _finalize_stripe_payment(
             f"🆔 Payment ID: {payment.id}"
         )
         background_tasks.add_task(notify_admin_telegram, _msg)
+
+
+@router.post("/spaceremit/verify")
+def verify_spaceremit_payment(
+    data: SpaceremitVerifyIn,
+    background_tasks: BackgroundTasks,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """يُستدعى من الفرونت‌إند بعد SP_SUCCESSFUL_PAYMENT(code) — لا نثق بالكود القادم
+    من العميل مباشرة، نتحقق منه من طرف السيرفر عبر payment_info قبل تفعيل الاشتراك."""
+    if data.plan not in PLANS:
+        raise HTTPException(400, "باقة غير صحيحة")
+
+    cfg = _spaceremit_config(db)
+    if not cfg["enabled"] or not cfg["secret_key"]:
+        raise HTTPException(500, "الدفع عبر Spaceremit غير متاح حالياً")
+
+    try:
+        resp = requests.post(
+            SPACEREMIT_API_URL,
+            json={"private_key": cfg["secret_key"], "payment_id": data.spaceremit_code},
+            timeout=15,
+        )
+        payload = resp.json()
+    except Exception as e:
+        logger.error(f"❌ Spaceremit verify request error: {e}")
+        raise HTTPException(502, "تعذّر التحقق من الدفع، حاول لاحقاً")
+
+    if payload.get("response_status") != "success":
+        raise HTTPException(400, payload.get("message") or "فشل التحقق من الدفع")
+
+    info       = payload.get("data") or {}
+    tx_id      = info.get("id")
+    status_tag = info.get("status_tag")
+    accepted_tags = SPACEREMIT_ACCEPTED_TAGS | ({"T"} if cfg["test_mode"] else set())
+
+    if not tx_id or status_tag not in accepted_tags:
+        raise HTTPException(400, "لم يتم تأكيد الدفع بعد")
+
+    plan_info = _resolve_plans(db)[data.plan]
+
+    if info.get("currency") != "USD":
+        raise HTTPException(400, "عملة غير متطابقة")
+    try:
+        paid_amount = float(info.get("total_amount", 0))
+    except (TypeError, ValueError):
+        paid_amount = 0.0
+    if paid_amount + 0.01 < plan_info["price_usd"]:
+        raise HTTPException(400, "المبلغ المدفوع غير مطابق للباقة")
+
+    existing = db.query(Payment).filter(Payment.tx_id == tx_id).first()
+    if existing:
+        return {"success": True, "message": "تم التفعيل مسبقاً", "payment_id": existing.id}
+
+    payment = Payment(
+        user_id     = user.id,
+        plan        = PaymentPlan(data.plan),
+        amount_usd  = plan_info["price_usd"],
+        network     = "spaceremit",
+        provider    = "spaceremit",
+        tx_id       = tx_id,
+        status      = PaymentStatus.APPROVED,
+        admin_note  = f"spaceremit status_tag={status_tag}",
+    )
+    db.add(payment)
+    db.flush()
+
+    activate_subscription_payment(db, payment, background_tasks)
+    db.commit()
+
+    logger.info(f"💳 Spaceremit payment verified: user={user.email} plan={data.plan} tx={tx_id}")
+    from app.services.admin_notify import notify_admin_telegram
+    _plan_name = {"weekly": "أسبوعية", "monthly": "شهرية"}.get(data.plan, data.plan)
+    _msg = (
+        f"💳 <b>دفعة Spaceremit جديدة (مفعّلة تلقائياً)!</b>\n"
+        f"━━━━━━━━━━━━━━━\n"
+        f"📧 المستخدم: <code>{user.email}</code>\n"
+        f"📦 الباقة: {_plan_name}\n"
+        f"💰 المبلغ: ${plan_info['price_usd']}\n"
+        f"🆔 Payment ID: {payment.id}"
+    )
+    background_tasks.add_task(notify_admin_telegram, _msg)
+
+    return {"success": True, "payment_id": payment.id}
 
 
 @router.get("/payments")
