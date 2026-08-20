@@ -481,7 +481,7 @@ export default function Pricing() {
                           amount={plan?.price}
                           buyerName={user?.full_name || user?.name || ''}
                           buyerEmail={user?.email || ''}
-                          notes={`plan=${selected}`}
+                          notes={`uid=${user?.id};plan=${selected}`}
                           onSuccess={onSpaceremitSuccess}
                           onError={(msg) => setError(msg)}
                           isAr={isAr}

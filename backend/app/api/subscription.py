@@ -407,6 +407,84 @@ def _finalize_stripe_payment(
         background_tasks.add_task(notify_admin_telegram, _msg)
 
 
+def _fetch_spaceremit_payment_info(secret_key: str, payment_id: str) -> dict:
+    """POST إلى payment_info مع الـprivate key — يُستخدم لكل من /verify والـwebhook
+    كي لا نثق أبداً بأي بيانات دفع قادمة من العميل أو من جسم الـwebhook مباشرة."""
+    resp = requests.post(
+        SPACEREMIT_API_URL,
+        json={"private_key": secret_key, "payment_id": payment_id},
+        timeout=15,
+    )
+    return resp.json()
+
+
+def _finalize_spaceremit_payment(
+    db: Session, background_tasks: BackgroundTasks,
+    user_id: int, plan_key: str, info: dict,
+) -> Payment:
+    """منطق تفعيل مشترك بين /spaceremit/verify (يستدعيه الفرونت) والـwebhook
+    (يستدعيه Spaceremit من طرف السيرفر) — idempotent على tx_id لأن كلاهما
+    قد يصلا لنفس الدفعة."""
+    tx_id = info["id"]
+
+    existing = db.query(Payment).filter(Payment.tx_id == tx_id).first()
+    if existing:
+        return existing
+
+    plan_info = _resolve_plans(db)[plan_key]
+    payment = Payment(
+        user_id     = user_id,
+        plan        = PaymentPlan(plan_key),
+        amount_usd  = plan_info["price_usd"],
+        network     = "spaceremit",
+        provider    = "spaceremit",
+        tx_id       = tx_id,
+        status      = PaymentStatus.APPROVED,
+        admin_note  = f"spaceremit status_tag={info.get('status_tag')}",
+    )
+    db.add(payment)
+    db.flush()
+
+    user = activate_subscription_payment(db, payment, background_tasks)
+    db.commit()
+
+    if user:
+        logger.info(f"💳 Spaceremit payment finalized: user={user.email} plan={plan_key} tx={tx_id}")
+        from app.services.admin_notify import notify_admin_telegram
+        _plan_name = {"weekly": "أسبوعية", "monthly": "شهرية"}.get(plan_key, plan_key)
+        _msg = (
+            f"💳 <b>دفعة Spaceremit جديدة (مفعّلة تلقائياً)!</b>\n"
+            f"━━━━━━━━━━━━━━━\n"
+            f"📧 المستخدم: <code>{user.email}</code>\n"
+            f"📦 الباقة: {_plan_name}\n"
+            f"💰 المبلغ: ${plan_info['price_usd']}\n"
+            f"🆔 Payment ID: {payment.id}"
+        )
+        background_tasks.add_task(notify_admin_telegram, _msg)
+
+    return payment
+
+
+def _validate_spaceremit_info(info: dict, plan_key: str, cfg: dict, db: Session) -> Optional[str]:
+    """يرجّع رسالة الخطأ لو الدفعة غير صالحة للتفعيل، أو None لو صالحة."""
+    tx_id      = info.get("id")
+    status_tag = info.get("status_tag")
+    accepted_tags = SPACEREMIT_ACCEPTED_TAGS | ({"T"} if cfg["test_mode"] else set())
+
+    if not tx_id or status_tag not in accepted_tags:
+        return "لم يتم تأكيد الدفع بعد"
+    if info.get("currency") != "USD":
+        return "عملة غير متطابقة"
+    try:
+        paid_amount = float(info.get("total_amount", 0))
+    except (TypeError, ValueError):
+        paid_amount = 0.0
+    plan_info = _resolve_plans(db)[plan_key]
+    if paid_amount + 0.01 < plan_info["price_usd"]:
+        return "المبلغ المدفوع غير مطابق للباقة"
+    return None
+
+
 @router.post("/spaceremit/verify")
 def verify_spaceremit_payment(
     data: SpaceremitVerifyIn,
@@ -415,7 +493,8 @@ def verify_spaceremit_payment(
     db: Session = Depends(get_db),
 ):
     """يُستدعى من الفرونت‌إند بعد SP_SUCCESSFUL_PAYMENT(code) — لا نثق بالكود القادم
-    من العميل مباشرة، نتحقق منه من طرف السيرفر عبر payment_info قبل تفعيل الاشتراك."""
+    من العميل مباشرة، نتحقق منه من طرف السيرفر عبر payment_info قبل تفعيل الاشتراك.
+    هذا هو مسار التفعيل الأساسي والفوري؛ الـwebhook بالأسفل شبكة أمان إضافية."""
     if data.plan not in PLANS:
         raise HTTPException(400, "باقة غير صحيحة")
 
@@ -424,12 +503,7 @@ def verify_spaceremit_payment(
         raise HTTPException(500, "الدفع عبر Spaceremit غير متاح حالياً")
 
     try:
-        resp = requests.post(
-            SPACEREMIT_API_URL,
-            json={"private_key": cfg["secret_key"], "payment_id": data.spaceremit_code},
-            timeout=15,
-        )
-        payload = resp.json()
+        payload = _fetch_spaceremit_payment_info(cfg["secret_key"], data.spaceremit_code)
     except Exception as e:
         logger.error(f"❌ Spaceremit verify request error: {e}")
         raise HTTPException(502, "تعذّر التحقق من الدفع، حاول لاحقاً")
@@ -437,59 +511,67 @@ def verify_spaceremit_payment(
     if payload.get("response_status") != "success":
         raise HTTPException(400, payload.get("message") or "فشل التحقق من الدفع")
 
-    info       = payload.get("data") or {}
-    tx_id      = info.get("id")
-    status_tag = info.get("status_tag")
-    accepted_tags = SPACEREMIT_ACCEPTED_TAGS | ({"T"} if cfg["test_mode"] else set())
+    info = payload.get("data") or {}
+    err  = _validate_spaceremit_info(info, data.plan, cfg, db)
+    if err:
+        raise HTTPException(400, err)
 
-    if not tx_id or status_tag not in accepted_tags:
-        raise HTTPException(400, "لم يتم تأكيد الدفع بعد")
-
-    plan_info = _resolve_plans(db)[data.plan]
-
-    if info.get("currency") != "USD":
-        raise HTTPException(400, "عملة غير متطابقة")
-    try:
-        paid_amount = float(info.get("total_amount", 0))
-    except (TypeError, ValueError):
-        paid_amount = 0.0
-    if paid_amount + 0.01 < plan_info["price_usd"]:
-        raise HTTPException(400, "المبلغ المدفوع غير مطابق للباقة")
-
-    existing = db.query(Payment).filter(Payment.tx_id == tx_id).first()
-    if existing:
-        return {"success": True, "message": "تم التفعيل مسبقاً", "payment_id": existing.id}
-
-    payment = Payment(
-        user_id     = user.id,
-        plan        = PaymentPlan(data.plan),
-        amount_usd  = plan_info["price_usd"],
-        network     = "spaceremit",
-        provider    = "spaceremit",
-        tx_id       = tx_id,
-        status      = PaymentStatus.APPROVED,
-        admin_note  = f"spaceremit status_tag={status_tag}",
-    )
-    db.add(payment)
-    db.flush()
-
-    activate_subscription_payment(db, payment, background_tasks)
-    db.commit()
-
-    logger.info(f"💳 Spaceremit payment verified: user={user.email} plan={data.plan} tx={tx_id}")
-    from app.services.admin_notify import notify_admin_telegram
-    _plan_name = {"weekly": "أسبوعية", "monthly": "شهرية"}.get(data.plan, data.plan)
-    _msg = (
-        f"💳 <b>دفعة Spaceremit جديدة (مفعّلة تلقائياً)!</b>\n"
-        f"━━━━━━━━━━━━━━━\n"
-        f"📧 المستخدم: <code>{user.email}</code>\n"
-        f"📦 الباقة: {_plan_name}\n"
-        f"💰 المبلغ: ${plan_info['price_usd']}\n"
-        f"🆔 Payment ID: {payment.id}"
-    )
-    background_tasks.add_task(notify_admin_telegram, _msg)
-
+    payment = _finalize_spaceremit_payment(db, background_tasks, user.id, data.plan, info)
     return {"success": True, "payment_id": payment.id}
+
+
+@router.post("/spaceremit/webhook")
+async def spaceremit_webhook(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    """عنوان الـcallback الذي يُدخَل بلوحة Spaceremit (Websites And Keys).
+    شبكة أمان إضافية فقط — التفعيل الفعلي يتم عادة عبر /spaceremit/verify فور
+    نجاح الدفع بالفرونت. لا نثق بجسم الطلب القادم من الشبكة مباشرة: نعيد
+    الاستعلام عن الدفعة بمفتاحنا السري قبل أي تفعيل. الرد دائماً 200 لتفادي
+    إعادة محاولات Spaceremit اللانهائية على حالات نتجاهلها عمداً."""
+    try:
+        body = await request.json()
+    except Exception:
+        return {"received": True}
+
+    payment_id = ((body.get("data") or {}).get("id")) or body.get("id") or body.get("payment_id")
+    if not payment_id:
+        return {"received": True}
+
+    cfg = _spaceremit_config(db)
+    if not cfg["secret_key"]:
+        return {"received": True}
+
+    try:
+        payload = _fetch_spaceremit_payment_info(cfg["secret_key"], payment_id)
+    except Exception as e:
+        logger.error(f"❌ Spaceremit webhook verify error: {e}")
+        return {"received": True}
+
+    if payload.get("response_status") != "success":
+        return {"received": True}
+
+    info  = payload.get("data") or {}
+    notes = info.get("notes") or ""
+    fields = dict(part.split("=", 1) for part in notes.split(";") if "=" in part)
+    user_id_raw = fields.get("uid")
+    plan_key    = fields.get("plan")
+
+    if not user_id_raw or plan_key not in PLANS:
+        logger.warning(f"⚠️ Spaceremit webhook: could not resolve user/plan from notes={notes!r}")
+        return {"received": True}
+
+    if _validate_spaceremit_info(info, plan_key, cfg, db):
+        return {"received": True}
+
+    try:
+        _finalize_spaceremit_payment(db, background_tasks, int(user_id_raw), plan_key, info)
+    except Exception as e:
+        logger.error(f"❌ Spaceremit webhook finalize error: {e}")
+
+    return {"received": True}
 
 
 @router.get("/payments")
