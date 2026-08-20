@@ -23,7 +23,7 @@ function loadSpaceremitScript() {
 }
 
 export default function SpaceremitCheckout({
-  publicKey, amount, currency = 'USD', buyerName, buyerEmail, buyerPhone, notes,
+  publicKey, amount, currency = 'USD', buyerName, buyerEmail, notes,
   onSuccess, onError, isAr,
 }) {
   const [ready, setReady] = useState(false)
@@ -61,7 +61,7 @@ export default function SpaceremitCheckout({
       <input type="hidden" name="currency" defaultValue={currency} />
       <input type="hidden" name="fullname" defaultValue={buyerName || ''} />
       <input type="hidden" name="email" defaultValue={buyerEmail || ''} />
-      <input type="hidden" name="phone" defaultValue={buyerPhone || ''} />
+      <input type="hidden" name="phone" defaultValue="" />
       <input type="hidden" name="notes" defaultValue={notes || ''} />
 
       <div className="sp-one-type-select mb-4">
