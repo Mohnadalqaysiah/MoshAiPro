@@ -60,6 +60,9 @@ const T = {
     spaceremitTitle: 'طرق دفع محلية',
     spaceremitToggle: 'الدفع عبر Spaceremit بدلاً من ذلك',
     spaceremitInstant: 'تفعيل فوري تلقائي بعد تأكيد الدفع',
+    spaceremitPhoneLabel: 'رقم الجوال',
+    spaceremitPhonePlaceholder: '+963...',
+    spaceremitPhoneNote: 'مطلوب لعرض طرق الدفع المحلية المتاحة',
     doneTitle: 'تم استلام طلبك!',
     doneDesc: 'سيتم التحقق من الدفع وتفعيل حسابك خلال 30 دقيقة. ستصلك رسالة تأكيد.',
     doneTitleCard: 'تم تفعيل اشتراكك!',
@@ -104,6 +107,9 @@ const T = {
     spaceremitTitle: 'Local payment methods',
     spaceremitToggle: 'Pay via Spaceremit instead',
     spaceremitInstant: 'Instant automatic activation once payment is confirmed',
+    spaceremitPhoneLabel: 'Phone number',
+    spaceremitPhonePlaceholder: '+963...',
+    spaceremitPhoneNote: 'Required to show the local payment methods available to you',
     doneTitle: 'Request Received!',
     doneDesc: 'Payment will be verified and your account activated within 30 minutes.',
     doneTitleCard: 'Subscription Activated!',
@@ -184,6 +190,7 @@ export default function Pricing() {
   const [spaceremitPublicKey, setSpaceremitPublicKey] = useState('')
   const [showCrypto, setShowCrypto] = useState(false)
   const [showSpaceremit, setShowSpaceremit] = useState(false)
+  const [spaceremitPhone, setSpaceremitPhone] = useState('')
   const [paidVia, setPaidVia]     = useState('usdt')
   const hasPrimaryMethod = cardPaymentEnabled || spaceremitEnabled
 
@@ -216,6 +223,10 @@ export default function Pricing() {
       })
       .catch(() => setWallet('TVh8P92EEjr732frVRpxg1iE4GsfZpLM6E'))
   }, [])
+
+  useEffect(() => {
+    if (user?.phone_number && !spaceremitPhone) setSpaceremitPhone(user.phone_number)
+  }, [user])
 
   const copyWallet = () => {
     navigator.clipboard.writeText(WALLET)
@@ -476,16 +487,33 @@ export default function Pricing() {
                         <span className="text-sm font-semibold text-gray-200">{t.spaceremitTitle}</span>
                       </div>
                       <div className="bg-gray-800/60 border border-gray-700/50 rounded-xl p-4 mb-2">
-                        <SpaceremitCheckout
-                          publicKey={spaceremitPublicKey}
-                          amount={plan?.price}
-                          buyerName={user?.full_name || user?.name || ''}
-                          buyerEmail={user?.email || ''}
-                          notes={`uid=${user?.id};plan=${selected}`}
-                          onSuccess={onSpaceremitSuccess}
-                          onError={(msg) => setError(msg)}
-                          isAr={isAr}
-                        />
+                        <div className="mb-4">
+                          <label className="block text-sm text-gray-300 font-medium mb-1.5">{t.spaceremitPhoneLabel}</label>
+                          <input
+                            type="tel"
+                            value={spaceremitPhone}
+                            onChange={e => setSpaceremitPhone(e.target.value)}
+                            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono transition"
+                            placeholder={t.spaceremitPhonePlaceholder}
+                            dir="ltr"
+                          />
+                          <p className="text-xs text-gray-500 mt-1.5">{t.spaceremitPhoneNote}</p>
+                        </div>
+
+                        {spaceremitPhone.trim() && (
+                          <SpaceremitCheckout
+                            key={spaceremitPhone.trim()}
+                            publicKey={spaceremitPublicKey}
+                            amount={plan?.price}
+                            buyerName={user?.full_name || user?.name || ''}
+                            buyerEmail={user?.email || ''}
+                            buyerPhone={spaceremitPhone.trim()}
+                            notes={`uid=${user?.id};plan=${selected}`}
+                            onSuccess={onSpaceremitSuccess}
+                            onError={(msg) => setError(msg)}
+                            isAr={isAr}
+                          />
+                        )}
                       </div>
                       <p className="text-xs text-gray-600 text-center mb-3">{t.spaceremitInstant}</p>
                     </div>
