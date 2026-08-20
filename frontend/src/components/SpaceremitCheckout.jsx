@@ -38,8 +38,7 @@ export default function SpaceremitCheckout({
     window.SP_SELECT_RADIO_NAME = 'sp-pay-type-radio'
     window.LOCAL_METHODS_BOX_STATUS  = true
     window.LOCAL_METHODS_PARENT_ID   = '#spaceremit-local-methods-pay'
-    window.CARD_BOX_STATUS      = true
-    window.CARD_BOX_PARENT_ID   = '#spaceremit-card-pay'
+    window.CARD_BOX_STATUS      = false  // معطّل حالياً من Spaceremit — طرق الدفع المحلية فقط
     window.SP_FORM_AUTO_SUBMIT_WHEN_GET_CODE = true
 
     window.SP_SUCCESSFUL_PAYMENT = (code) => onSuccessRef.current?.(code)
@@ -64,20 +63,9 @@ export default function SpaceremitCheckout({
       <input type="hidden" name="phone" defaultValue="" />
       <input type="hidden" name="notes" defaultValue={notes || ''} />
 
-      <div className="sp-one-type-select mb-3">
-        <label className="flex items-center gap-2 text-sm text-gray-300 mb-2 cursor-pointer">
-          <input type="radio" name="sp-pay-type-radio" value="local-methods-pay" id="sp_local_methods_radio" defaultChecked />
-          {isAr ? 'طرق دفع محلية' : 'Local payment methods'}
-        </label>
-        <div id="spaceremit-local-methods-pay" />
-      </div>
-
       <div className="sp-one-type-select mb-4">
-        <label className="flex items-center gap-2 text-sm text-gray-300 mb-2 cursor-pointer">
-          <input type="radio" name="sp-pay-type-radio" value="card-pay" id="sp_card_radio" />
-          {isAr ? 'الدفع بالبطاقة' : 'Card payment'}
-        </label>
-        <div id="spaceremit-card-pay" />
+        <input type="radio" name="sp-pay-type-radio" value="local-methods-pay" id="sp_local_methods_radio" defaultChecked className="hidden" />
+        <div id="spaceremit-local-methods-pay" />
       </div>
 
       <button
