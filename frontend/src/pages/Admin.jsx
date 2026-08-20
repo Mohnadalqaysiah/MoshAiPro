@@ -250,6 +250,8 @@ export default function Admin() {
   const [showBotToken, setShowBotToken] = useState(false)
   const [showStripeSecret, setShowStripeSecret] = useState(false)
   const [showStripeWebhook, setShowStripeWebhook] = useState(false)
+  const [showSpaceremitSecret, setShowSpaceremitSecret] = useState(false)
+  const [showSpaceremitTestSecret, setShowSpaceremitTestSecret] = useState(false)
 
   const [adminProfile, setAdminProfile] = useState({ current_password:'', new_email:'', new_password:'' })
   const [adminProfileSaving, setAdminProfileSaving] = useState(false)
@@ -1909,6 +1911,135 @@ export default function Admin() {
                           </button>
                         </div>
                         {siteSettings['stripe_webhook_secret']?.value && (
+                          <p className="mt-2 text-xs text-green-400 flex items-center gap-1"><CheckCircle size={11}/> مخزَّن في قاعدة البيانات · يُستخدم حالياً</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* ── Spaceremit (sensitive) ───────────────────────────── */}
+                    <div className="bg-gray-900 border border-orange-900/40 rounded-xl p-4 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <label className="block text-sm text-gray-300 font-medium">تفعيل الدفع عبر Spaceremit</label>
+                          <p className="text-xs text-gray-500">يُظهر/يُخفي خيار Spaceremit (طرق دفع محلية) بصفحة الأسعار</p>
+                        </div>
+                        <button
+                          onClick={() => saveSetting('spaceremit_enabled', (siteSettings['spaceremit_enabled']?.value ?? 'false') === 'true' ? 'false' : 'true')}
+                          disabled={settingSaving === 'spaceremit_enabled'}
+                          className={`w-11 h-6 rounded-full flex items-center px-0.5 transition-colors flex-shrink-0 ${
+                            (siteSettings['spaceremit_enabled']?.value ?? 'false') === 'true'
+                              ? 'bg-green-600 justify-end'
+                              : 'bg-gray-700 justify-start'
+                          }`}
+                        >
+                          <span className="w-5 h-5 rounded-full bg-white" />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <label className="block text-sm text-gray-300 font-medium">وضع الاختبار (Test Mode)</label>
+                          <p className="text-xs text-gray-500">يستخدم مفاتيح الاختبار بالأسفل ويقبل حالة "Test payment" كتفعيل</p>
+                        </div>
+                        <button
+                          onClick={() => saveSetting('spaceremit_test_mode', (siteSettings['spaceremit_test_mode']?.value ?? 'false') === 'true' ? 'false' : 'true')}
+                          disabled={settingSaving === 'spaceremit_test_mode'}
+                          className={`w-11 h-6 rounded-full flex items-center px-0.5 transition-colors flex-shrink-0 ${
+                            (siteSettings['spaceremit_test_mode']?.value ?? 'false') === 'true'
+                              ? 'bg-green-600 justify-end'
+                              : 'bg-gray-700 justify-start'
+                          }`}
+                        >
+                          <span className="w-5 h-5 rounded-full bg-white" />
+                        </button>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm text-gray-300 font-medium mb-1">Spaceremit Public Key</label>
+                        <p className="text-xs text-gray-500 mb-2">من Spaceremit Dashboard → Websites And Keys</p>
+                        <div className="flex gap-2">
+                          <input type="text"
+                            value={settingEdits['spaceremit_public_key'] ?? ''}
+                            onChange={e => setSettingEdits(s => ({...s, spaceremit_public_key: e.target.value}))}
+                            placeholder="pkUSWNYV..."
+                            className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:ring-1 focus:ring-orange-500"
+                            dir="ltr" />
+                          <button disabled={settingSaving === 'spaceremit_public_key'} onClick={() => saveSetting('spaceremit_public_key')}
+                            className="flex items-center gap-1 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition">
+                            {settingSaving === 'spaceremit_public_key' ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle size={13}/>} حفظ
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm text-gray-300 font-medium mb-1">Spaceremit Secret Key</label>
+                        <p className="text-xs text-gray-500 mb-2">من Spaceremit Dashboard → Websites And Keys · يُخزَّن في قاعدة البيانات ويُلغي قيمة .env</p>
+                        <div className="flex gap-2">
+                          <div className="relative flex-1">
+                            <input
+                              type={showSpaceremitSecret ? 'text' : 'password'}
+                              value={settingEdits['spaceremit_secret_key'] ?? ''}
+                              onChange={e => setSettingEdits(s => ({...s, spaceremit_secret_key: e.target.value}))}
+                              placeholder="Secret Key"
+                              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:ring-1 focus:ring-orange-500 pr-10"
+                              dir="ltr"
+                            />
+                            <button type="button" onClick={() => setShowSpaceremitSecret(v => !v)}
+                              className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200 text-xs px-1">
+                              {showSpaceremitSecret ? '🙈' : '👁'}
+                            </button>
+                          </div>
+                          <button disabled={settingSaving === 'spaceremit_secret_key'} onClick={() => saveSetting('spaceremit_secret_key')}
+                            className="flex items-center gap-1 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition">
+                            {settingSaving === 'spaceremit_secret_key' ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle size={13}/>} حفظ
+                          </button>
+                        </div>
+                        {siteSettings['spaceremit_secret_key']?.value && (
+                          <p className="mt-2 text-xs text-green-400 flex items-center gap-1"><CheckCircle size={11}/> مخزَّن في قاعدة البيانات · يُستخدم حالياً</p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-sm text-gray-300 font-medium mb-1">Spaceremit Test Public Key</label>
+                        <p className="text-xs text-gray-500 mb-2">يُستخدم فقط عند تفعيل وضع الاختبار بالأعلى</p>
+                        <div className="flex gap-2">
+                          <input type="text"
+                            value={settingEdits['spaceremit_test_public_key'] ?? ''}
+                            onChange={e => setSettingEdits(s => ({...s, spaceremit_test_public_key: e.target.value}))}
+                            placeholder="pkTEST..."
+                            className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:ring-1 focus:ring-orange-500"
+                            dir="ltr" />
+                          <button disabled={settingSaving === 'spaceremit_test_public_key'} onClick={() => saveSetting('spaceremit_test_public_key')}
+                            className="flex items-center gap-1 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition">
+                            {settingSaving === 'spaceremit_test_public_key' ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle size={13}/>} حفظ
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm text-gray-300 font-medium mb-1">Spaceremit Test Secret Key</label>
+                        <p className="text-xs text-gray-500 mb-2">يُستخدم فقط عند تفعيل وضع الاختبار بالأعلى</p>
+                        <div className="flex gap-2">
+                          <div className="relative flex-1">
+                            <input
+                              type={showSpaceremitTestSecret ? 'text' : 'password'}
+                              value={settingEdits['spaceremit_test_secret_key'] ?? ''}
+                              onChange={e => setSettingEdits(s => ({...s, spaceremit_test_secret_key: e.target.value}))}
+                              placeholder="Test Secret Key"
+                              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:ring-1 focus:ring-orange-500 pr-10"
+                              dir="ltr"
+                            />
+                            <button type="button" onClick={() => setShowSpaceremitTestSecret(v => !v)}
+                              className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200 text-xs px-1">
+                              {showSpaceremitTestSecret ? '🙈' : '👁'}
+                            </button>
+                          </div>
+                          <button disabled={settingSaving === 'spaceremit_test_secret_key'} onClick={() => saveSetting('spaceremit_test_secret_key')}
+                            className="flex items-center gap-1 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition">
+                            {settingSaving === 'spaceremit_test_secret_key' ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle size={13}/>} حفظ
+                          </button>
+                        </div>
+                        {siteSettings['spaceremit_test_secret_key']?.value && (
                           <p className="mt-2 text-xs text-green-400 flex items-center gap-1"><CheckCircle size={11}/> مخزَّن في قاعدة البيانات · يُستخدم حالياً</p>
                         )}
                       </div>
