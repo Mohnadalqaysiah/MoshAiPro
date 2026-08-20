@@ -39,6 +39,7 @@ export default function SpaceremitCheckout({
     window.LOCAL_METHODS_BOX_STATUS  = true
     window.LOCAL_METHODS_PARENT_ID   = '#spaceremit-local-methods-pay'
     window.CARD_BOX_STATUS      = false  // معطّل حالياً من Spaceremit — طرق الدفع المحلية فقط
+    window.CARD_BOX_PARENT_ID   = '#spaceremit-card-pay'  // لازم يضل معرَّف حتى لو الكارد معطّل — السكربت بيرجع له بغض النظر عن الحالة
     window.SP_FORM_AUTO_SUBMIT_WHEN_GET_CODE = true
 
     window.SP_SUCCESSFUL_PAYMENT = (code) => onSuccessRef.current?.(code)
@@ -70,6 +71,9 @@ export default function SpaceremitCheckout({
         </label>
         <div id="spaceremit-local-methods-pay" />
       </div>
+
+      {/* الكارد معطّل من طرف Spaceremit — بلا radio ولا label، بس الحاوية لازم تضل موجودة */}
+      <div id="spaceremit-card-pay" className="hidden" />
 
       <button
         type="submit"
