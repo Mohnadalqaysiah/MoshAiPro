@@ -57,6 +57,7 @@ export default function Dashboard() {
   const [signals, setSignals]       = useState([])
   const [signalHistory, setSignalHistory] = useState([])
   const [analyzing, setAnalyzing]   = useState(null)
+  const [quickCat, setQuickCat]     = useState(() => localStorage.getItem('mosh_quick_cat') || '')
   const [error, setError]           = useState(null)
   const [limitReached, setLimitReached] = useState(false)
   const [tgLink, setTgLink]         = useState('')
@@ -381,7 +382,7 @@ export default function Dashboard() {
                   ) : (
                     <p className="text-xs text-gray-500 text-center py-1">أدخل الرصيد والمخاطرة لحساب اللوت</p>
                   )}
-                  <p className="text-[10px] text-gray-600 text-center">* تقديري — يختلف حسب الوسيط والرافعة المالية</p>
+                  <p className="text-[10px] text-gray-400 text-center">* تقديري — يختلف حسب الوسيط والرافعة المالية</p>
                 </div>
               )}
             </div>
@@ -469,7 +470,7 @@ export default function Dashboard() {
       )}
 
       {/* ── Tab Bar ── */}
-      <div className="sticky top-0 z-10 -mx-4 px-3 py-2.5 bg-[#070b14]/98 backdrop-blur-md border-b border-white/6 mb-5">
+      <div className="sticky top-0 z-10 -mx-4 px-3 py-2.5 bg-gray-900/95 backdrop-blur-md border-b border-gray-700/60 mb-5">
         <div className="flex gap-1.5">
           {TABS.map(tab => {
             const isActive = activeTab === tab.id
@@ -483,7 +484,7 @@ export default function Dashboard() {
                 className={`relative flex-1 flex flex-col items-center justify-center gap-1 py-2.5 px-1 rounded-xl transition-all duration-200 active:scale-95 border ${
                   isActive
                     ? 'bg-blue-600/15 border-blue-500/35 scale-[1.02]'
-                    : 'bg-transparent border-transparent hover:bg-white/4 hover:border-white/8'
+                    : 'bg-transparent border-transparent hover:bg-blue-500/5 hover:border-blue-400/20'
                 }`}
               >
                 {/* bottom glow accent */}
@@ -494,14 +495,14 @@ export default function Dashboard() {
 
                 {/* icon */}
                 <span className={`transition-all duration-200 ${
-                  isActive ? 'text-blue-400 scale-110' : 'text-gray-600'
+                  isActive ? 'text-blue-400 scale-110' : 'text-gray-400'
                 }`}>
                   {tab.icon}
                 </span>
 
                 {/* label — always visible */}
                 <span className={`text-[10px] font-semibold leading-none transition-colors duration-200 ${
-                  isActive ? 'text-blue-300' : 'text-gray-600'
+                  isActive ? 'text-blue-300' : 'text-gray-400'
                 }`}>
                   {isAr ? tab.labelAr : tab.labelEn}
                 </span>
@@ -575,7 +576,7 @@ export default function Dashboard() {
         </div>
 
         <div className="p-4">
-          {/* تجميع الأسواق حسب الفئة */}
+          {/* تجميع الأسواق حسب الفئة — فلترة بـdropdown بدل عرض كل الأزواج مرة وحدة */}
           {(() => {
             const cats = {}
             markets.forEach(m => {
@@ -592,11 +593,33 @@ export default function Dashboard() {
               gulf:    { label: '🕌 أسواق خليجية', color: 'from-emerald-600/20 to-emerald-700/10 border-emerald-700/40 hover:border-emerald-500/60 text-emerald-300', ring: 'ring-emerald-500/40' },
               other:   { label: 'أخرى',     color: 'from-gray-600/20 to-gray-700/10 border-gray-700/40 hover:border-gray-500/60 text-gray-300', ring: 'ring-gray-500/40' },
             }
-            return Object.entries(cats).map(([cat, items]) => {
-              const meta = catMeta[cat] || catMeta.other
-              return (
+            const catKeys = Object.keys(cats)
+            const activeCat = catKeys.includes(quickCat) ? quickCat : (catKeys[0] || '')
+            const setCat = (c) => { setQuickCat(c); localStorage.setItem('mosh_quick_cat', c) }
+
+            return (
+              <>
+                {/* اختيار الفئة — dropdown بدل عرض كل الفئات دفعة وحدة */}
+                <div className="flex items-center gap-2 mb-4">
+                  <select
+                    value={activeCat}
+                    onChange={e => setCat(e.target.value)}
+                    className="bg-gray-900 border border-gray-700 text-white text-sm rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[160px]"
+                  >
+                    {catKeys.map(cat => {
+                      const meta = catMeta[cat] || catMeta.other
+                      return <option key={cat} value={cat}>{meta.label} ({cats[cat].length})</option>
+                    })}
+                  </select>
+                  <span className="text-xs text-gray-500">{cats[activeCat]?.length || 0} زوج</span>
+                </div>
+
+                {activeCat && cats[activeCat] && (() => {
+                  const cat = activeCat
+                  const items = cats[cat]
+                  const meta = catMeta[cat] || catMeta.other
+                  return (
                 <div key={cat} className="mb-4 last:mb-0">
-                  <p className="text-xs text-gray-500 mb-2 font-medium uppercase tracking-wider">{meta.label}</p>
                   <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 gap-2">
                     {items.map(m => {
                       const isAnalyzing = analyzing === m.symbol
@@ -631,8 +654,10 @@ export default function Dashboard() {
                     })}
                   </div>
                 </div>
-              )
-            })
+                  )
+                })()}
+              </>
+            )
           })()}
         </div>
       </div>
@@ -708,7 +733,7 @@ export default function Dashboard() {
                           <div className="flex items-center gap-2.5">
                             <span className="text-white font-bold text-sm tracking-wide">{market}</span>
                             <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${recBadge}`}>{recLabel}</span>
-                            {sig.from_cache && <span className="text-xs text-gray-600 bg-gray-700/50 px-1.5 py-0.5 rounded">كاش</span>}
+                            {sig.from_cache && <span className="text-xs text-gray-400 bg-gray-700/50 px-1.5 py-0.5 rounded">كاش</span>}
                           </div>
                           <div className="flex items-center gap-3">
                             {rr != null && (
@@ -856,7 +881,7 @@ export default function Dashboard() {
               </button>
             )}
             {historyLimit > 10 && signalHistory.length <= historyLimit && (
-              <p className="py-3 text-center text-xs text-gray-600 border-t border-gray-700/40">
+              <p className="py-3 text-center text-xs text-gray-400 border-t border-gray-700/40">
                 {isAr ? `تم عرض جميع السجلات (${signalHistory.length})` : `All ${signalHistory.length} records shown`}
               </p>
             )}
