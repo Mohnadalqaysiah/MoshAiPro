@@ -502,6 +502,23 @@ def relink_telegram(
     }
 
 
+@router.post("/unlink-telegram")
+def unlink_telegram(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """يفك ربط Telegram الحالي بدون توليد رابط تفعيل جديد — المستخدم
+    يقرر لاحقاً إذا بدّه يربط من جديد، عكس /relink-telegram اللي بيولّد
+    رابط فوراً."""
+    user.telegram_id = None
+    user.telegram_username = None
+    user.telegram_link_token = None
+    db.commit()
+
+    logger.info(f"🔌 Telegram unlinked: {user.email}")
+    return {"success": True, "message": "تم فك ربط Telegram"}
+
+
 @router.post("/bot-verify")
 def bot_verify_link(data: BotVerifyIn, db: Session = Depends(get_db)):
     """

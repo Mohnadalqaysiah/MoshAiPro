@@ -49,7 +49,7 @@ const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 export default function Dashboard() {
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, refreshUser } = useAuth()
   const { markets } = useMarkets()
   const { lang } = useLang()
   const tx = T[lang] || T.ar
@@ -65,6 +65,7 @@ export default function Dashboard() {
   const [tgLoading, setTgLoading]   = useState(false)
   const [relinking, setRelinking]   = useState(false)
   const [relinkDone, setRelinkDone] = useState(false)
+  const [unlinking, setUnlinking]   = useState(false)
   const [quickResult, setQuickResult] = useState(null)   // modal result
   const [historyLimit,    setHistoryLimit]    = useState(10)
   const [signalsLimit,    setSignalsLimit]    = useState(10)
@@ -159,6 +160,16 @@ export default function Dashboard() {
       setRelinkDone(true)
       if (link) window.open(link, '_blank', 'noreferrer')
     } catch { /* ignore */ } finally { setRelinking(false) }
+  }
+
+  const unlinkTelegram = async () => {
+    if (!window.confirm('متأكد إنك بدك تفك ربط Telegram؟ رح توقف تنبيهات وإشارات البوت لحد ما تربط من جديد.')) return
+    setUnlinking(true)
+    try {
+      await axios.post(`${API}/api/v1/auth/unlink-telegram`)
+      setTgLink('')
+      await refreshUser()
+    } catch { /* ignore */ } finally { setUnlinking(false) }
   }
 
   const getSignalColor = (rec) => {
@@ -905,14 +916,24 @@ export default function Dashboard() {
                     <p className="text-xs text-gray-400 mt-0.5">إذا تغيّر البوت أو انقطع الربط، أعد التفعيل</p>
                   </div>
                 </div>
-                <button
-                  onClick={relinkTelegram}
-                  disabled={relinking}
-                  className="flex items-center gap-2 text-xs bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition"
-                >
-                  {relinking ? <RefreshCw size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-                  إعادة ربط @{tgBot}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={relinkTelegram}
+                    disabled={relinking || unlinking}
+                    className="flex items-center gap-2 text-xs bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition"
+                  >
+                    {relinking ? <RefreshCw size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+                    إعادة ربط @{tgBot}
+                  </button>
+                  <button
+                    onClick={unlinkTelegram}
+                    disabled={relinking || unlinking}
+                    className="flex items-center gap-2 text-xs bg-red-950/60 hover:bg-red-900/60 border border-red-800/60 disabled:opacity-50 text-red-300 px-4 py-2 rounded-lg transition"
+                  >
+                    {unlinking ? <RefreshCw size={13} className="animate-spin" /> : <X size={13} />}
+                    فك الربط
+                  </button>
+                </div>
               </div>
             </div>
           )}
