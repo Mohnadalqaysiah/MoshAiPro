@@ -284,7 +284,7 @@ export default function TradeJournal() {
 
       {/* Filter */}
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs text-gray-600">{isAr ? 'فلتر:' : 'Filter:'}</span>
+        <span className="text-xs text-gray-400">{isAr ? 'فلتر:' : 'Filter:'}</span>
         {['', 'OPEN', 'WIN', 'LOSS', 'BE'].map(f => (
           <button
             key={f}
@@ -298,7 +298,7 @@ export default function TradeJournal() {
             {f === '' ? (isAr ? 'الكل' : 'All') : (RESULT_CFG[f]?.[isAr ? 'labelAr' : 'labelEn'] || f)}
           </button>
         ))}
-        <button onClick={fetchData} disabled={loading} className="ms-auto p-1.5 text-gray-600 hover:text-white transition-colors">
+        <button onClick={fetchData} disabled={loading} className="ms-auto p-1.5 text-gray-400 hover:text-white transition-colors">
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
         </button>
       </div>
@@ -306,7 +306,7 @@ export default function TradeJournal() {
       {/* Entries List */}
       <div className="bg-gray-800/50 border border-gray-700/40 rounded-2xl overflow-hidden">
         {entries.length === 0 ? (
-          <div className="py-16 text-center text-gray-600 text-sm">
+          <div className="py-16 text-center text-gray-400 text-sm">
             {isAr ? 'لا توجد صفقات بعد. أضف أولى صفقاتك!' : 'No trades yet. Add your first trade!'}
           </div>
         ) : (
@@ -349,7 +349,7 @@ export default function TradeJournal() {
                     </span>
 
                     {/* Expand */}
-                    {isExp ? <ChevronUp size={14} className="text-gray-600 flex-shrink-0" /> : <ChevronDown size={14} className="text-gray-600 flex-shrink-0" />}
+                    {isExp ? <ChevronUp size={14} className="text-gray-400 flex-shrink-0" /> : <ChevronDown size={14} className="text-gray-400 flex-shrink-0" />}
                   </div>
 
                   {/* Expanded details */}
@@ -365,7 +365,7 @@ export default function TradeJournal() {
                           { l: isAr ? 'فريم' : 'TF',      v: e.timeframe   },
                         ].filter(x => x.v != null).map(x => (
                           <div key={x.l} className="bg-gray-800/60 rounded-lg px-2.5 py-2">
-                            <div className="text-gray-600 mb-0.5">{x.l}</div>
+                            <div className="text-gray-400 mb-0.5">{x.l}</div>
                             <div className="text-white font-mono font-semibold">{x.v}</div>
                           </div>
                         ))}

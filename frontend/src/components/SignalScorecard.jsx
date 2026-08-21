@@ -112,10 +112,10 @@ export default function SignalScorecard() {
                   <span className="text-white text-xs font-mono font-semibold w-16">{row.market}</span>
                   {row.win_rate != null
                     ? <WinBar pct={row.win_rate} />
-                    : <span className="text-xs text-gray-600 flex-1">لا توجد نتائج بعد</span>}
+                    : <span className="text-xs text-gray-400 flex-1">لا توجد نتائج بعد</span>}
                   <div className="flex items-center gap-1 text-xs w-16 justify-end">
                     <span className="text-green-400">{row.wins}W</span>
-                    <span className="text-gray-600">/</span>
+                    <span className="text-gray-400">/</span>
                     <span className="text-red-400">{row.losses}L</span>
                   </div>
                 </div>
@@ -125,7 +125,7 @@ export default function SignalScorecard() {
             <p className="text-center text-gray-500 text-sm py-2">لا توجد إشارات مكتملة بعد</p>
           )}
 
-          <p className="text-center text-gray-600 text-xs">
+          <p className="text-center text-gray-400 text-xs">
             * يحتسب فقط الإشارات التي أُغلقت (TP/SL)
           </p>
         </div>

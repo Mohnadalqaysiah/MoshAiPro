@@ -232,7 +232,7 @@ export default function Signals() {
                     <span className="text-blue-300 font-mono font-semibold">
                       {fmtPrice(result.current_price, symbol)}
                       {result.price_fetched_at && (
-                        <span className="text-gray-600 text-xs mr-1">
+                        <span className="text-gray-400 text-xs mr-1">
                           ({new Date(result.price_fetched_at).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })})
                         </span>
                       )}
@@ -280,7 +280,7 @@ export default function Signals() {
                       </div>
                     )}
                     {!nearestBSL && !nearestSSL && !nearestBull && !nearestBear && (
-                      <p className="text-gray-600 text-xs">— لا توجد مناطق محددة حالياً —</p>
+                      <p className="text-gray-400 text-xs">— لا توجد مناطق محددة حالياً —</p>
                     )}
                   </div>
                 </>
@@ -360,7 +360,7 @@ export default function Signals() {
                     )}
                     {result.account_balance && (
                       <div className="flex justify-between text-xs">
-                        <span className="text-gray-600">{tx.balanceRisk}</span>
+                        <span className="text-gray-400">{tx.balanceRisk}</span>
                         <span className="text-gray-500">${result.account_balance} · {result.risk_percent}%</span>
                       </div>
                     )}
@@ -478,7 +478,7 @@ export default function Signals() {
                     </span>
                   </div>
                 ) : (
-                  <p className="text-gray-600 text-xs">— لا يوجد OB صاعد قريب</p>
+                  <p className="text-gray-400 text-xs">— لا يوجد OB صاعد قريب</p>
                 )}
                 {nearestBear ? (
                   <div className="flex justify-between items-center">
@@ -490,7 +490,7 @@ export default function Signals() {
                     </span>
                   </div>
                 ) : (
-                  <p className="text-gray-600 text-xs">— لا يوجد OB هابط قريب</p>
+                  <p className="text-gray-400 text-xs">— لا يوجد OB هابط قريب</p>
                 )}
 
                 {/* OB in zone indicator */}

@@ -135,7 +135,7 @@ export default function AchievementBadges() {
         {/* Earned badges */}
         {earned.length > 0 && (
           <div>
-            <p className="text-[10px] text-gray-600 uppercase tracking-wider font-bold mb-2">
+            <p className="text-[10px] text-gray-400 uppercase tracking-wider font-bold mb-2">
               {isAr ? 'مكتسبة' : 'Earned'}
             </p>
             <div className="grid grid-cols-2 gap-2">
@@ -184,7 +184,7 @@ export default function AchievementBadges() {
                       <Icon size={16} />
                     </div>
                     <div className="min-w-0">
-                      <div className="text-xs font-bold text-gray-600 leading-tight">
+                      <div className="text-xs font-bold text-gray-400 leading-tight">
                         {isAr ? b.titleAr : b.titleEn}
                       </div>
                       <div className="text-[10px] text-gray-700 leading-tight mt-0.5">
@@ -199,7 +199,7 @@ export default function AchievementBadges() {
         )}
 
         {earned.length === 0 && (
-          <div className="text-center py-6 text-gray-600 text-sm">
+          <div className="text-center py-6 text-gray-400 text-sm">
             {isAr ? 'ابدأ بتحليل سوق لتكسب أول إنجاز! 🚀' : 'Analyze a market to earn your first badge! 🚀'}
           </div>
         )}

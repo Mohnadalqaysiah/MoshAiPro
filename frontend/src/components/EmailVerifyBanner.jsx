@@ -73,7 +73,7 @@ export default function EmailVerifyBanner() {
         <button
           onClick={resend}
           disabled={cooldown > 0}
-          className="text-yellow-400 hover:text-yellow-300 disabled:text-gray-600 text-xs underline"
+          className="text-yellow-400 hover:text-yellow-300 disabled:text-gray-400 text-xs underline"
         >
           {cooldown > 0 ? `إعادة الإرسال (${cooldown})` : 'إعادة إرسال الرمز'}
         </button>

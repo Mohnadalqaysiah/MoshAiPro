@@ -87,9 +87,9 @@ export default function StrategyBuilderDemo({ isAr = true }) {
                           : 'bg-gray-900/50 border-gray-700/50 text-gray-400 hover:border-gray-600'
                       }`}
                     >
-                      {on ? <CheckCircle2 size={16} className="text-indigo-400 flex-shrink-0" /> : <Circle size={16} className="text-gray-600 flex-shrink-0" />}
+                      {on ? <CheckCircle2 size={16} className="text-indigo-400 flex-shrink-0" /> : <Circle size={16} className="text-gray-400 flex-shrink-0" />}
                       <span className="flex-1">{isAr ? c.labelAr : c.labelEn}</span>
-                      <span className={`text-xs font-mono ${on ? 'text-indigo-300' : 'text-gray-600'}`}>+{c.weight}</span>
+                      <span className={`text-xs font-mono ${on ? 'text-indigo-300' : 'text-gray-400'}`}>+{c.weight}</span>
                     </button>
                   )
                 })}
@@ -107,13 +107,13 @@ export default function StrategyBuilderDemo({ isAr = true }) {
                 />
                 <div className="absolute top-0 bottom-0 w-px bg-white/40" style={{ left: `${MIN_SCORE}%` }} />
               </div>
-              <p className="text-xs text-gray-600 mt-2">
+              <p className="text-xs text-gray-400 mt-2">
                 {isAr ? `الحد الأدنى للتفعيل: ${MIN_SCORE}%` : `Activation threshold: ${MIN_SCORE}%`}
               </p>
             </div>
 
-            <p className="text-xs text-gray-600 mt-3 flex items-center gap-1.5">
-              <Sparkles size={11} className="text-gray-600" />
+            <p className="text-xs text-gray-400 mt-3 flex items-center gap-1.5">
+              <Sparkles size={11} className="text-gray-400" />
               {isAr
                 ? 'معاينة توضيحية بأوزان تعليمية — النسخة الحقيقية تحلل بيانات السوق الفعلية لحظياً.'
                 : 'Illustrative preview with sample weights — the real tool analyzes live market data.'}

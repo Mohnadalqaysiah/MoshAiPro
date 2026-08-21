@@ -11,7 +11,7 @@ const DIR_CONFIG = {
 }
 
 function WinBar({ wr }) {
-  if (wr == null) return <span className="text-gray-600 text-xs">—</span>
+  if (wr == null) return <span className="text-gray-400 text-xs">—</span>
   const color = wr >= 65 ? 'bg-green-500' : wr >= 50 ? 'bg-yellow-500' : 'bg-red-500'
   return (
     <div className="flex items-center gap-1.5">
@@ -64,7 +64,7 @@ function MarketCard({ m }) {
       </div>
 
       {m.wins_30d + m.losses_30d > 0 && (
-        <p className="text-xs text-gray-600 text-center">
+        <p className="text-xs text-gray-400 text-center">
           {m.wins_30d}✓ {m.losses_30d}✗
         </p>
       )}

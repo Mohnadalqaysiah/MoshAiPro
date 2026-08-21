@@ -468,7 +468,7 @@ export default function ReferralProgram() {
       </section>
 
       {/* ── Footer ────────────────────────────────────────────────────── */}
-      <footer className="border-t border-white/5 py-8 text-center text-sm text-gray-600">
+      <footer className="border-t border-white/5 py-8 text-center text-sm text-gray-400">
         <p>© 2025 Qaffel AI — <Link to="/" className="hover:text-gray-400 transition-colors">{isAr ? 'الصفحة الرئيسية' : 'Home'}</Link></p>
       </footer>
     </div>

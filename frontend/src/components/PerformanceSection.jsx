@@ -272,7 +272,7 @@ export default function PerformanceSection() {
             </button>
           )}
           {tradesLimit > 10 && allRecentTrades.length <= tradesLimit && (
-            <p className="py-3 text-center text-xs text-gray-600 border-t border-gray-700/40">
+            <p className="py-3 text-center text-xs text-gray-400 border-t border-gray-700/40">
               {isAr ? `تم عرض جميع الصفقات (${allRecentTrades.length})` : `All trades shown (${allRecentTrades.length})`}
             </p>
           )}

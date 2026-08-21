@@ -185,13 +185,13 @@ export default function Profile() {
           <div>
             <label className="block text-sm text-gray-400 mb-1.5">{isAr ? 'البريد الإلكتروني' : 'Email'}</label>
             <div className="relative">
-              <Mail size={14} className={`absolute ${isAr ? 'right' : 'left'}-3 top-1/2 -translate-y-1/2 text-gray-600`} />
+              <Mail size={14} className={`absolute ${isAr ? 'right' : 'left'}-3 top-1/2 -translate-y-1/2 text-gray-400`} />
               <input type="email" value={user?.email} disabled
                 className={`w-full bg-gray-900/50 border border-gray-700 rounded-lg ${isAr ? 'pr-9 pl-4' : 'pl-9 pr-4'} py-2.5 text-gray-500 text-sm cursor-not-allowed`} />
             </div>
           </div>
           <div>
-            <label className="block text-sm text-gray-400 mb-1.5">{isAr ? 'رقم الهاتف' : 'Phone'} <span className="text-gray-600 text-xs">({isAr ? 'اختياري' : 'optional'})</span></label>
+            <label className="block text-sm text-gray-400 mb-1.5">{isAr ? 'رقم الهاتف' : 'Phone'} <span className="text-gray-400 text-xs">({isAr ? 'اختياري' : 'optional'})</span></label>
             <input type="tel" value={profile.phone_number}
               onChange={e => setProfile(p => ({...p, phone_number: e.target.value}))}
               className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -303,7 +303,7 @@ export default function Profile() {
           <div>
             <label className="block text-sm text-gray-400 mb-2">
               {isAr ? 'الأزواج للمراقبة' : 'Markets to Watch'}
-              <span className="text-gray-600 mr-1 text-xs">({prefs.notify_watchlist.length} {isAr ? 'مختار' : 'selected'})</span>
+              <span className="text-gray-400 mr-1 text-xs">({prefs.notify_watchlist.length} {isAr ? 'مختار' : 'selected'})</span>
             </label>
             <div className="flex flex-wrap gap-2">
               {markets.map(m => (
@@ -323,7 +323,7 @@ export default function Profile() {
           <div>
             <label className="block text-sm text-gray-400 mb-2">
               {isAr ? 'الفريمات الزمنية' : 'Timeframes'}
-              <span className="text-gray-600 text-xs mr-1">
+              <span className="text-gray-400 text-xs mr-1">
                 ({prefs.notify_timeframes.includes('all')
                   ? (isAr ? 'الكل' : 'All')
                   : prefs.notify_timeframes.join(' · ')})
@@ -356,7 +356,7 @@ export default function Profile() {
           <div>
             <label className="block text-sm text-gray-400 mb-2">
               {isAr ? 'الحد الأدنى للثقة' : 'Min Confidence'}
-              <span className="text-gray-600 text-xs mr-1">
+              <span className="text-gray-400 text-xs mr-1">
                 ({prefs.notify_min_confidence === 0
                   ? (isAr ? 'أي نسبة' : 'Any')
                   : `${prefs.notify_min_confidence}%+`})

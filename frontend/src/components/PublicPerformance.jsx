@@ -286,7 +286,7 @@ export default function PublicPerformance({ isAr = true }) {
                   <div className={`text-2xl font-black ${s.color}`}>
                     <AnimCount value={s.value} suffix={s.suffix} />
                   </div>
-                  <div className="text-xs text-gray-600 mt-0.5">{s.label}</div>
+                  <div className="text-xs text-gray-400 mt-0.5">{s.label}</div>
                 </div>
               ))}
             </div>
@@ -345,7 +345,7 @@ export default function PublicPerformance({ isAr = true }) {
           </div>
 
           {displayTrades.length === 0 && (
-            <div className="text-center py-12 text-gray-600">
+            <div className="text-center py-12 text-gray-400">
               {ar ? 'لا توجد صفقات مغلقة بعد' : 'No closed trades yet'}
             </div>
           )}
@@ -353,7 +353,7 @@ export default function PublicPerformance({ isAr = true }) {
 
         {/* Disclaimer + CTA */}
         <div className="mt-10 text-center reveal">
-          <p className="text-gray-600 text-xs mb-6">
+          <p className="text-gray-400 text-xs mb-6">
             {ar
               ? '* النقاط محسوبة على أساس نقطة = 0.01$ حركة سعرية · النتائج السابقة لا تضمن المستقبل'
               : '* Points based on 1pt = $0.01 price move · Past performance does not guarantee future results'}

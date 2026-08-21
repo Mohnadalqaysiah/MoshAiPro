@@ -73,7 +73,7 @@ export default function ConfluenceModal({ symbol, onClose }) {
                 {isAr ? '— تحليل متعدد الفريمات' : '— Multi-TF Confluence'}
               </span>
             </h3>
-            <p className="text-xs text-gray-600 mt-0.5">
+            <p className="text-xs text-gray-400 mt-0.5">
               {isAr ? '4 فريمات مرجّحة · كلما ارتفع الفريم زاد وزنه' : '4 weighted timeframes · higher TF = more weight'}
             </p>
           </div>
@@ -164,7 +164,7 @@ export default function ConfluenceModal({ symbol, onClose }) {
                       {/* TF label */}
                       <div className="w-16 flex-shrink-0">
                         <div className="text-xs font-bold text-white">{TF_META[tf]?.[isAr ? 'ar' : 'en']}</div>
-                        <div className="text-[10px] text-gray-600">w={TF_META[tf].weight}</div>
+                        <div className="text-[10px] text-gray-400">w={TF_META[tf].weight}</div>
                       </div>
 
                       {/* Conf bar */}

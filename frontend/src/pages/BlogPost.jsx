@@ -119,11 +119,11 @@ export default function BlogPost() {
           <span className="text-xs bg-blue-500/15 text-blue-300 border border-blue-500/20 px-3 py-1 rounded-full font-medium">
             {cat}
           </span>
-          <span className="text-xs text-gray-600 flex items-center gap-1">
+          <span className="text-xs text-gray-400 flex items-center gap-1">
             <Clock size={11} />
             {post.readTime} {isAr ? 'دقائق قراءة' : 'min read'}
           </span>
-          <span className="text-xs text-gray-600">
+          <span className="text-xs text-gray-400">
             {new Date(post.date).toLocaleDateString(isAr ? 'ar-SA' : 'en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
           </span>
         </div>
@@ -183,7 +183,7 @@ export default function BlogPost() {
               {related.map(rp => (
                 <Link key={rp.slug} to={`/blog/${rp.slug}`}
                   className="group flex flex-col border border-white/8 hover:border-blue-500/30 rounded-xl p-5 transition-all hover:-translate-y-0.5">
-                  <span className="text-xs text-gray-600 mb-2 flex items-center gap-1">
+                  <span className="text-xs text-gray-400 mb-2 flex items-center gap-1">
                     <Clock size={10} /> {rp.readTime} {isAr ? 'دقائق' : 'min'}
                   </span>
                   <span className="font-bold text-sm text-gray-200 group-hover:text-blue-300 transition-colors line-clamp-2">

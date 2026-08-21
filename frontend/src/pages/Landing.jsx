@@ -293,7 +293,7 @@ export default function Landing() {
               <ArrowUpRight size={16} />
             </Link>
           </div>
-          <p className="text-gray-600 text-sm mt-5">{t.hero.note}</p>
+          <p className="text-gray-400 text-sm mt-5">{t.hero.note}</p>
 
           {/* Trust badges */}
           <div className="flex items-center justify-center gap-6 mt-10 flex-wrap">
@@ -578,7 +578,7 @@ export default function Landing() {
           </div>
 
           {/* Footer note */}
-          <p className="text-center text-gray-600 text-xs mt-8">
+          <p className="text-center text-gray-400 text-xs mt-8">
             {isAr ? '✓ لا توجد رسوم خفية · ✓ إلغاء في أي وقت · ✓ دفع آمن بـ USDT' : '✓ No hidden fees · ✓ Cancel anytime · ✓ Secure USDT payment'}
           </p>
         </div>
@@ -671,18 +671,18 @@ export default function Landing() {
                 <img src="/brand/logo-icon-only.png" alt="Qaffel AI" className="w-8 h-8 rounded-xl" />
                 <span className="font-bold text-sm">Qaffel AI</span>
               </Link>
-              <p className="text-gray-600 text-xs leading-relaxed mb-4">
+              <p className="text-gray-400 text-xs leading-relaxed mb-4">
                 {isAr
                   ? 'منصة تداول ذكية مدعومة بالذكاء الاصطناعي وتحليل ICT/SMC المؤسسي.'
                   : 'Smart trading platform powered by AI and institutional ICT/SMC analysis.'}
               </p>
               <div className="flex items-center gap-3">
                 <a href="https://www.instagram.com/qaffel_ai/" target="_blank" rel="noreferrer"
-                  className="text-gray-600 hover:text-pink-400 transition-colors" aria-label="Instagram">
+                  className="text-gray-400 hover:text-pink-400 transition-colors" aria-label="Instagram">
                   <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>
                 </a>
                 <a href="https://t.me/Qaffelbot" target="_blank" rel="noreferrer"
-                  className="text-gray-600 hover:text-blue-400 transition-colors" aria-label="Telegram">
+                  className="text-gray-400 hover:text-blue-400 transition-colors" aria-label="Telegram">
                   <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248l-1.97 9.289c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.932z"/></svg>
                 </a>
               </div>
@@ -713,8 +713,8 @@ export default function Landing() {
                   {col.links.map((l, j) => (
                     <li key={j}>
                       {l.href
-                        ? <a href={l.href} target="_blank" rel="noreferrer" className="text-xs text-gray-600 hover:text-blue-400 transition-colors">{l.label}</a>
-                        : <Link to={l.to} className="text-xs text-gray-600 hover:text-blue-400 transition-colors">{l.label}</Link>
+                        ? <a href={l.href} target="_blank" rel="noreferrer" className="text-xs text-gray-400 hover:text-blue-400 transition-colors">{l.label}</a>
+                        : <Link to={l.to} className="text-xs text-gray-400 hover:text-blue-400 transition-colors">{l.label}</Link>
                       }
                     </li>
                   ))}

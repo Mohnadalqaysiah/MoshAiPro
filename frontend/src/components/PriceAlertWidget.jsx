@@ -127,7 +127,7 @@ export default function PriceAlertWidget() {
                   </div>
                   <button
                     onClick={() => remove(a.id)}
-                    className="text-gray-600 hover:text-red-400 transition-colors p-1"
+                    className="text-gray-400 hover:text-red-400 transition-colors p-1"
                   >
                     <Trash2 size={13} />
                   </button>

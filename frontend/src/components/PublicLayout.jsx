@@ -141,7 +141,7 @@ export default function PublicLayout({ children, bgClass = 'bg-[#070b14]' }) {
                 <img src="/brand/logo-icon-only.png" alt="Qaffel AI" className="w-8 h-8 rounded-xl" />
                 <span className="font-bold text-sm">Qaffel AI</span>
               </Link>
-              <p className="text-gray-600 text-xs leading-relaxed mb-4">
+              <p className="text-gray-400 text-xs leading-relaxed mb-4">
                 {isAr
                   ? 'منصة تداول ذكية مدعومة بالذكاء الاصطناعي وتحليل ICT/SMC المؤسسي.'
                   : 'Smart trading platform powered by AI and institutional ICT/SMC analysis.'}
@@ -149,11 +149,11 @@ export default function PublicLayout({ children, bgClass = 'bg-[#070b14]' }) {
               {/* Social Media */}
               <div className="flex items-center gap-3">
                 <a href="https://www.instagram.com/qaffel_ai/" target="_blank" rel="noreferrer"
-                  className="text-gray-600 hover:text-pink-400 transition-colors" aria-label="Instagram">
+                  className="text-gray-400 hover:text-pink-400 transition-colors" aria-label="Instagram">
                   <IconInstagram />
                 </a>
                 <a href="https://t.me/Qaffelbot" target="_blank" rel="noreferrer"
-                  className="text-gray-600 hover:text-blue-400 transition-colors" aria-label="Telegram Bot">
+                  className="text-gray-400 hover:text-blue-400 transition-colors" aria-label="Telegram Bot">
                   <IconTelegram />
                 </a>
               </div>
@@ -187,8 +187,8 @@ export default function PublicLayout({ children, bgClass = 'bg-[#070b14]' }) {
                   {col.links.map((l, j) => (
                     <li key={j}>
                       {l.href
-                        ? <a href={l.href} target="_blank" rel="noreferrer" className="text-xs text-gray-600 hover:text-blue-400 transition-colors">{l.label}</a>
-                        : <Link to={l.to} className="text-xs text-gray-600 hover:text-blue-400 transition-colors">{l.label}</Link>
+                        ? <a href={l.href} target="_blank" rel="noreferrer" className="text-xs text-gray-400 hover:text-blue-400 transition-colors">{l.label}</a>
+                        : <Link to={l.to} className="text-xs text-gray-400 hover:text-blue-400 transition-colors">{l.label}</Link>
                       }
                     </li>
                   ))}

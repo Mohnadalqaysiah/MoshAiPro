@@ -176,7 +176,7 @@ export default function Backtesting() {
                       <p className="text-lg font-bold text-white font-mono">{row.timeframe}</p>
                       <p className="text-xs text-gray-500 my-1">{row.wins + row.losses} إشارة</p>
                       <WinRateBadge wr={row.win_rate}/>
-                      <p className="text-xs text-gray-600 mt-1">{row.wins}✓ {row.losses}✗</p>
+                      <p className="text-xs text-gray-400 mt-1">{row.wins}✓ {row.losses}✗</p>
                     </div>
                   ))}
                 </div>

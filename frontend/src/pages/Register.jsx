@@ -195,7 +195,7 @@ export default function Register() {
 
             {/* Phone (optional) */}
             <div>
-              <label className="block text-sm text-gray-400 mb-1.5">{tx.phone} <span className="text-gray-600 text-xs">{tx.optional}</span></label>
+              <label className="block text-sm text-gray-400 mb-1.5">{tx.phone} <span className="text-gray-400 text-xs">{tx.optional}</span></label>
               <div className="relative">
                 <Phone size={16} className={`absolute top-1/2 -translate-y-1/2 text-gray-500 ${iconSide}`} />
                 <input type="tel" value={form.phone}
@@ -207,7 +207,7 @@ export default function Register() {
 
             {/* Password */}
             <div>
-              <label className="block text-sm text-gray-400 mb-1.5">{tx.password} <span className="text-gray-600 text-xs">{tx.passwordHint}</span></label>
+              <label className="block text-sm text-gray-400 mb-1.5">{tx.password} <span className="text-gray-400 text-xs">{tx.passwordHint}</span></label>
               <div className="relative">
                 <Lock size={16} className={`absolute top-1/2 -translate-y-1/2 text-gray-500 ${iconSide}`} />
                 <input type="password" required minLength={8} value={form.password}

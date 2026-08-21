@@ -208,7 +208,7 @@ export default function Vision() {
               </span>
             ))}
           </div>
-          <p className="text-gray-600 text-xs mt-6">
+          <p className="text-gray-400 text-xs mt-6">
             {tx.keywords}
           </p>
         </div>

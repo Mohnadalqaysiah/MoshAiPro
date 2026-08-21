@@ -125,7 +125,7 @@ export default function RedemptionWidget() {
                       className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition ${
                         tier.can_redeem
                           ? 'bg-yellow-600 hover:bg-yellow-500 text-white'
-                          : 'bg-gray-800 text-gray-600 cursor-not-allowed'
+                          : 'bg-gray-800 text-gray-400 cursor-not-allowed'
                       }`}>
                       {redeeming === tier.id ? '...' : tier.can_redeem ? 'استبدل' : `ناقص ${tier.points_needed}`}
                     </button>
@@ -135,7 +135,7 @@ export default function RedemptionWidget() {
             </div>
           )}
 
-          <p className="text-xs text-gray-600 text-center pt-1">
+          <p className="text-xs text-gray-400 text-center pt-1">
             اجمع نقاطاً بدعوة أصدقاء للمنصة
           </p>
         </div>

@@ -41,12 +41,12 @@ function PipelineStep({ icon: Icon, label, sublabel, color, active, done, delay 
       }`}>
         {done
           ? <CheckCircle size={20} className="text-green-400" />
-          : <Icon size={20} className={active ? `text-${color}-400` : 'text-gray-600'} />
+          : <Icon size={20} className={active ? `text-${color}-400` : 'text-gray-400'} />
         }
       </div>
       <div className="text-center">
-        <p className={`text-xs font-bold transition-colors ${done ? 'text-green-400' : active ? `text-${color}-300` : 'text-gray-600'}`}>{label}</p>
-        <p className="text-xs text-gray-600 mt-0.5">{sublabel}</p>
+        <p className={`text-xs font-bold transition-colors ${done ? 'text-green-400' : active ? `text-${color}-300` : 'text-gray-400'}`}>{label}</p>
+        <p className="text-xs text-gray-400 mt-0.5">{sublabel}</p>
       </div>
     </div>
   )
@@ -234,7 +234,7 @@ export default function DemoSection({ isAr = true }) {
                 <div key={i} className={`glass border border-${s.color}-500/15 rounded-xl p-3 text-center`}>
                   <div className={`text-${s.color}-400 flex justify-center mb-1`}>{s.icon}</div>
                   <div className="text-white font-black text-lg">{s.value}</div>
-                  <div className="text-gray-600 text-xs">{s.label}</div>
+                  <div className="text-gray-400 text-xs">{s.label}</div>
                 </div>
               ))}
             </div>
@@ -271,7 +271,7 @@ export default function DemoSection({ isAr = true }) {
                       <span className="text-gray-400 text-xs">XAUUSD / 1H</span>
                       <span className="text-xs bg-gray-700/50 text-gray-400 px-2 py-0.5 rounded">Live</span>
                     </div>
-                    <div className={`text-2xl font-black mt-0.5 transition-all duration-700 ${phase >= 4 ? 'text-green-400' : 'text-gray-600'}`}>
+                    <div className={`text-2xl font-black mt-0.5 transition-all duration-700 ${phase >= 4 ? 'text-green-400' : 'text-gray-400'}`}>
                       {phase >= 4 ? (isAr ? '▲ شراء' : '▲ BUY') : '• • •'}
                     </div>
                   </div>
@@ -313,11 +313,11 @@ export default function DemoSection({ isAr = true }) {
                     <div className="grid grid-cols-2 gap-3 pt-2 border-t border-white/5">
                       <div className="glass border border-white/8 rounded-xl px-3 py-2 text-center">
                         <div className="text-blue-400 font-black text-base">2.14x</div>
-                        <div className="text-gray-600 text-xs">Risk/Reward</div>
+                        <div className="text-gray-400 text-xs">Risk/Reward</div>
                       </div>
                       <div className="glass border border-white/8 rounded-xl px-3 py-2 text-center">
                         <div className="text-yellow-400 font-black text-base">0.23</div>
-                        <div className="text-gray-600 text-xs">{isAr ? 'حجم اللوت' : 'Lot Size'}</div>
+                        <div className="text-gray-400 text-xs">{isAr ? 'حجم اللوت' : 'Lot Size'}</div>
                       </div>
                     </div>
                   )}
@@ -358,7 +358,7 @@ export default function DemoSection({ isAr = true }) {
 
                   {/* Waiting state */}
                   {phase < 4 && (
-                    <div className="py-6 flex flex-col items-center gap-3 text-gray-600">
+                    <div className="py-6 flex flex-col items-center gap-3 text-gray-400">
                       <div className="flex gap-1">
                         {[0,1,2].map(i => (
                           <div key={i} className="w-2 h-2 rounded-full bg-gray-700 animate-bounce" style={{ animationDelay: `${i*150}ms` }} />
@@ -427,7 +427,7 @@ export default function DemoSection({ isAr = true }) {
 
                 {/* Input bar */}
                 <div className="border-t border-white/5 px-4 py-3 flex gap-2">
-                  <div className="flex-1 glass border border-white/8 rounded-xl px-3 py-2 text-xs text-gray-600">
+                  <div className="flex-1 glass border border-white/8 rounded-xl px-3 py-2 text-xs text-gray-400">
                     {isAr ? 'اسأل عن أي زوج أو إطار زمني...' : 'Ask about any pair or timeframe...'}
                   </div>
                   <button className="w-8 h-8 rounded-xl bg-blue-600/30 border border-blue-500/30 flex items-center justify-center text-blue-400">

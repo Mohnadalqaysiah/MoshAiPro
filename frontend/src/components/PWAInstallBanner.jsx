@@ -94,7 +94,7 @@ export default function PWAInstallBanner() {
                   {s.icon}
                 </div>
                 <span className="text-sm text-gray-200">{s.text}</span>
-                <span className="mr-auto text-xs text-gray-600 font-mono">{i + 1}</span>
+                <span className="mr-auto text-xs text-gray-400 font-mono">{i + 1}</span>
               </div>
             ))}
           </div>

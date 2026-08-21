@@ -121,12 +121,12 @@ export default function SessionsClock() {
                       {isAr ? s.labelAr : s.labelEn}
                     </span>
                     <span className={`text-[10px] px-1.5 py-0.5 rounded-full border font-bold ${
-                      open ? c.badge : 'bg-gray-800/40 text-gray-600 border-gray-700/40'
+                      open ? c.badge : 'bg-gray-800/40 text-gray-400 border-gray-700/40'
                     }`}>
                       {open ? (isAr ? 'مفتوح' : 'OPEN') : (isAr ? 'مغلق' : 'CLOSED')}
                     </span>
                   </div>
-                  <div className="text-[11px] text-gray-600">
+                  <div className="text-[11px] text-gray-400">
                     {String(s.openUTC).padStart(2,'0')}:00 – {String(s.closeUTC).padStart(2,'0')}:00 UTC
                     &nbsp;·&nbsp;{isAr ? s.marketsAr : s.marketsEn}
                   </div>
@@ -138,7 +138,7 @@ export default function SessionsClock() {
                 </div>
 
                 {/* Countdown */}
-                <span className={`text-xs font-medium flex-shrink-0 ${open ? c.text : 'text-gray-600'}`}>
+                <span className={`text-xs font-medium flex-shrink-0 ${open ? c.text : 'text-gray-400'}`}>
                   {countLabel}
                 </span>
               </div>
@@ -148,7 +148,7 @@ export default function SessionsClock() {
       </div>
 
       {/* Best time tip */}
-      <div className="px-5 py-3 border-t border-white/5 text-[11px] text-gray-600 flex items-center gap-2">
+      <div className="px-5 py-3 border-t border-white/5 text-[11px] text-gray-400 flex items-center gap-2">
         <Clock size={11} className="text-indigo-400/60" />
         {isAr
           ? 'أفضل وقت للذهب: تداخل لندن + نيويورك (16:00–19:00 AST)'

@@ -120,7 +120,7 @@ function MarketPickerStep({ isAr, selected, onToggle }) {
       </div>
 
       {selected.length === 0 && (
-        <p className="text-center text-xs text-gray-600 mt-3">
+        <p className="text-center text-xs text-gray-400 mt-3">
           {isAr ? 'اختر سوقاً واحداً على الأقل' : 'Select at least one market'}
         </p>
       )}
@@ -273,7 +273,7 @@ export default function OnboardingTour() {
               {isAr ? 'السابق' : 'Back'}
             </button>
 
-            <button onClick={dismiss} className="text-xs text-gray-600 hover:text-gray-400 transition-colors">
+            <button onClick={dismiss} className="text-xs text-gray-400 hover:text-gray-400 transition-colors">
               {isAr ? 'تخطي' : 'Skip'}
             </button>
 

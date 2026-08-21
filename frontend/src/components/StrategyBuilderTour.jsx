@@ -122,7 +122,7 @@ export default function StrategyBuilderTour({ isPaid, forceOpen, onForceClose })
               className="flex items-center gap-1 text-sm text-gray-500 hover:text-white disabled:opacity-30 transition-colors">
               <ChevronRight size={16} /> السابق
             </button>
-            <button onClick={dismiss} className="text-xs text-gray-600 hover:text-gray-400 transition-colors">تخطي</button>
+            <button onClick={dismiss} className="text-xs text-gray-400 hover:text-gray-400 transition-colors">تخطي</button>
             <button onClick={next}
               className={`flex items-center gap-1.5 text-sm font-semibold px-4 py-1.5 rounded-lg transition-all ${
                 isLast

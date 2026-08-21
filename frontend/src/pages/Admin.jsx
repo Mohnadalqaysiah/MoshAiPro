@@ -777,7 +777,7 @@ export default function Admin() {
                           {u.plan==='trial' ? `${u.trial_analyses_left}/${u.trial_chat_left}` : `${u.days_left??'—'}ي`}
                         </td>
                         <td className="py-2.5 px-3 text-xs">
-                          {u.telegram_id ? <span className="text-blue-400">✓ مرتبط</span> : <span className="text-gray-600">—</span>}
+                          {u.telegram_id ? <span className="text-blue-400">✓ مرتبط</span> : <span className="text-gray-400">—</span>}
                         </td>
                         <td className="py-2.5 px-3 text-xs font-mono">
                           {u.registration_ip ? (
@@ -787,7 +787,7 @@ export default function Admin() {
                               )}
                               {u.registration_ip}
                             </span>
-                          ) : <span className="text-gray-600">—</span>}
+                          ) : <span className="text-gray-400">—</span>}
                         </td>
                         <td className="py-2.5 px-3 text-xs text-gray-500">{u.created_at?.slice(0,10)||'—'}</td>
                         <td className="py-2.5 px-3" onClick={e => e.stopPropagation()}>
@@ -1008,7 +1008,7 @@ export default function Admin() {
                           {p.plan==='weekly'?'أسبوعي':'شهري'} · <span className="text-green-400 font-bold">${p.amount_usd} USDT</span> · {p.network}
                         </div>
                         <div className="text-xs font-mono text-blue-400 mt-1 break-all">{p.tx_id}</div>
-                        <div className="text-xs text-gray-600 mt-1">{p.created_at?.slice(0,16)}</div>
+                        <div className="text-xs text-gray-400 mt-1">{p.created_at?.slice(0,16)}</div>
                         {p.admin_note && <div className="text-xs text-yellow-400 mt-1">ملاحظة: {p.admin_note}</div>}
                       </div>
                       <div className="flex flex-col items-end gap-2 flex-shrink-0">
@@ -1083,7 +1083,7 @@ export default function Admin() {
                   <div key={m.symbol} className="flex items-center justify-between bg-gray-900 border border-gray-800 rounded-xl px-4 py-3">
                     <div className="flex items-center gap-3">
                       <button onClick={() => toggleMarket(m.symbol)}>
-                        {m.is_active ? <ToggleRight size={22} className="text-green-400"/> : <ToggleLeft size={22} className="text-gray-600"/>}
+                        {m.is_active ? <ToggleRight size={22} className="text-green-400"/> : <ToggleLeft size={22} className="text-gray-400"/>}
                       </button>
                       <div>
                         <div className="font-mono font-semibold text-white text-sm">{m.symbol}</div>
@@ -1093,7 +1093,7 @@ export default function Admin() {
                     <div className="flex items-center gap-2">
                       {m.is_premium && <span className="text-xs bg-purple-900/50 text-purple-300 px-2 py-0.5 rounded-full">مدفوع</span>}
                       {!m.is_active && <span className="text-xs bg-red-900/30 text-red-400 px-2 py-0.5 rounded-full">مغلق</span>}
-                      <button onClick={() => deleteMarket(m.symbol)} className="text-gray-600 hover:text-red-400"><Trash2 size={14}/></button>
+                      <button onClick={() => deleteMarket(m.symbol)} className="text-gray-400 hover:text-red-400"><Trash2 size={14}/></button>
                     </div>
                   </div>
                 ))}
@@ -1275,7 +1275,7 @@ export default function Admin() {
                         </button>
                       ))}
                     </div>
-                    <p className="text-xs text-gray-600 mt-1.5">اضغط على القالب لتعبئة الحقول — يمكنك التعديل بعدها</p>
+                    <p className="text-xs text-gray-400 mt-1.5">اضغط على القالب لتعبئة الحقول — يمكنك التعديل بعدها</p>
                   </div>
                 )
               })()}
@@ -1615,7 +1615,7 @@ export default function Admin() {
               )}
 
               {!reportData && !reportLoading && (
-                <div className="text-center py-12 text-gray-600">
+                <div className="text-center py-12 text-gray-400">
                   <FileText size={40} className="mx-auto mb-3 opacity-30"/>
                   <p>اختر الفترة الزمنية ثم اضغط "معاينة التقرير"</p>
                 </div>
@@ -2129,7 +2129,7 @@ export default function Admin() {
                   <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-2">
                     <DollarSign size={13}/> الباقات والأسعار
                   </h2>
-                  <p className="text-xs text-gray-600">اتركها فارغة لاستخدام القيم الافتراضية · التغييرات تظهر فوراً في صفحات الأسعار</p>
+                  <p className="text-xs text-gray-400">اتركها فارغة لاستخدام القيم الافتراضية · التغييرات تظهر فوراً في صفحات الأسعار</p>
                   {[
                     { key: 'weekly',  label: 'الأسبوعية', color: 'blue',   defaultPrice: '7',  defaultDays: '7'  },
                     { key: 'monthly', label: 'الشهرية',   color: 'purple', defaultPrice: '30', defaultDays: '30' },
@@ -2137,7 +2137,7 @@ export default function Admin() {
                     <div key={key} className={`bg-gray-900 border border-${color}-900/40 rounded-xl p-4 space-y-3`}>
                       <div className="flex items-center justify-between">
                         <h3 className={`text-xs font-bold text-${color}-400 uppercase tracking-wider`}>{label}</h3>
-                        <span className="text-xs text-gray-600">الافتراضي: ${defaultPrice} / {defaultDays} يوم</span>
+                        <span className="text-xs text-gray-400">الافتراضي: ${defaultPrice} / {defaultDays} يوم</span>
                       </div>
 
                       {/* Price + Days */}
@@ -2288,7 +2288,7 @@ export default function Admin() {
                     </div>
                   </div>
 
-                  <p className="text-xs text-gray-600">* تأخذ التغييرات مفعولها على الاشتراكات الجديدة فقط</p>
+                  <p className="text-xs text-gray-400">* تأخذ التغييرات مفعولها على الاشتراكات الجديدة فقط</p>
 
                   {/* ── Redemption Tiers ── */}
                   <div className="mt-6">
@@ -2302,7 +2302,7 @@ export default function Admin() {
               {settingsSubTab === 'limits' && (
                 <div className="max-w-md space-y-3">
                   <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">حدود الاستخدام</h2>
-                  <p className="text-xs text-gray-600">0 = غير محدود</p>
+                  <p className="text-xs text-gray-400">0 = غير محدود</p>
                   {[
                     { key:'trial_chat_limit',        label:'محادثات التجريبي',        color:'gray' },
                     { key:'trial_analysis_limit',     label:'تحليلات التجريبي',        color:'gray' },
@@ -2475,7 +2475,7 @@ function DiagnosticPanel() {
         <div className="bg-gray-800 border border-gray-700 rounded-2xl p-10 text-center">
           <RefreshCw size={28} className="animate-spin text-blue-400 mx-auto mb-3" />
           <p className="text-gray-400 text-sm">يحلل {10} رموز عبر كامل الـ pipeline...</p>
-          <p className="text-gray-600 text-xs mt-1">قد يستغرق 15-30 ثانية</p>
+          <p className="text-gray-400 text-xs mt-1">قد يستغرق 15-30 ثانية</p>
         </div>
       )}
 
@@ -2527,7 +2527,7 @@ function DiagnosticPanel() {
                           <td className="py-2 pr-3 text-gray-400">{s.volatility}</td>
                           <td className="py-2 pr-3 text-green-400">{s.bos_bull}</td>
                           <td className="py-2 pr-3 text-red-400">{s.bos_bear}</td>
-                          <td className={`py-2 pr-3 ${s.sweep_detected > 0 ? 'text-yellow-400' : 'text-gray-600'}`}>{s.sweep_detected}</td>
+                          <td className={`py-2 pr-3 ${s.sweep_detected > 0 ? 'text-yellow-400' : 'text-gray-400'}`}>{s.sweep_detected}</td>
                           <td className={`py-2 pr-3 ${s.breakout_attempts >= 3 ? 'text-orange-400' : 'text-gray-500'}`}>{s.breakout_attempts}</td>
                           <td className="py-2 pr-3 text-gray-400">{s.atr_pct}%</td>
                         </>
@@ -2711,7 +2711,7 @@ function DiagnosticPanel() {
           </div>
 
           {/* Meta */}
-          <div className="text-xs text-gray-600 text-left">
+          <div className="text-xs text-gray-400 text-left">
             Generated: {data.diagnostic_meta?.generated_at} | {data.diagnostic_meta?.elapsed_ms}ms
           </div>
         </div>

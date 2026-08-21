@@ -89,7 +89,7 @@ export default function EconomicCalendar() {
             {isAr ? 'أخبار هذا الأسبوع — بتوقيت الرياض (AST)' : 'This week\'s events — Riyadh time (AST)'}
           </p>
         </div>
-        <div className="ms-auto flex items-center gap-1.5 text-xs text-gray-600">
+        <div className="ms-auto flex items-center gap-1.5 text-xs text-gray-400">
           <Clock size={11} />
           {isAr ? 'UTC+3' : 'UTC+3'}
         </div>
@@ -143,7 +143,7 @@ export default function EconomicCalendar() {
                             {fmtUTC(ev.utcH, ev.utcM)}
                           </span>
                           <span>{ev.currency}</span>
-                          <span className="text-gray-600 truncate">
+                          <span className="text-gray-400 truncate">
                             {isAr ? ev.affectAr : ev.affectEn}
                           </span>
                         </div>
@@ -161,7 +161,7 @@ export default function EconomicCalendar() {
       </div>
 
       {/* Footer note */}
-      <div className="px-5 py-3 border-t border-white/5 flex items-center gap-2 text-[11px] text-gray-600">
+      <div className="px-5 py-3 border-t border-white/5 flex items-center gap-2 text-[11px] text-gray-400">
         <TrendingUp size={11} className="text-red-400/60" />
         {isAr
           ? 'الأخبار عالية التأثير ⚫ — أغلق صفقاتك أو ضيّق الوقف قبل الإعلان'

@@ -74,7 +74,7 @@ export default function BlogList() {
                   <span className="text-xs bg-blue-500/15 text-blue-300 border border-blue-500/20 px-3 py-1 rounded-full font-medium">
                     {cat}
                   </span>
-                  <span className="text-xs text-gray-600 flex items-center gap-1">
+                  <span className="text-xs text-gray-400 flex items-center gap-1">
                     <Clock size={11} />
                     {post.readTime} {isAr ? 'دقائق' : 'min read'}
                   </span>
@@ -93,7 +93,7 @@ export default function BlogList() {
                 {/* Tags */}
                 <div className="flex flex-wrap gap-1.5 mb-4">
                   {post.tags.slice(0, 3).map(tag => (
-                    <span key={tag} className="inline-flex items-center gap-1 text-xs text-gray-600 border border-white/6 px-2 py-0.5 rounded-lg">
+                    <span key={tag} className="inline-flex items-center gap-1 text-xs text-gray-400 border border-white/6 px-2 py-0.5 rounded-lg">
                       <Tag size={9} />
                       {tag}
                     </span>
@@ -102,7 +102,7 @@ export default function BlogList() {
 
                 {/* Footer */}
                 <div className="flex items-center justify-between pt-4 border-t border-white/5">
-                  <span className="text-xs text-gray-600">
+                  <span className="text-xs text-gray-400">
                     {new Date(post.date).toLocaleDateString(isAr ? 'ar-SA' : 'en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
                   </span>
                   <span className="text-xs text-blue-400 flex items-center gap-1 group-hover:gap-2 transition-all">

@@ -118,7 +118,7 @@ export default function AffiliateSection({ isAr = true }) {
                 <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
                   <div className="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full" style={{ width: '33%' }} />
                 </div>
-                <p className="text-xs text-gray-600 mt-1.5">{isAr ? '0 / 25 إحالة للمرحلة التالية' : '0 / 25 referrals to next tier'}</p>
+                <p className="text-xs text-gray-400 mt-1.5">{isAr ? '0 / 25 إحالة للمرحلة التالية' : '0 / 25 referrals to next tier'}</p>
               </div>
               {/* Tier 2 */}
               <div className="relative rounded-xl border border-yellow-500/40 bg-yellow-500/5 p-4">
@@ -207,7 +207,7 @@ export default function AffiliateSection({ isAr = true }) {
             {isAr ? 'ابدأ الربح الآن' : 'Start Earning Now'}
             <ChevronCta size={18} className="group-hover:translate-x-0.5 transition-transform" />
           </Link>
-          <p className="text-gray-600 text-xs mt-3">
+          <p className="text-gray-400 text-xs mt-3">
             {isAr ? 'مجاني — لا رسوم على الانضمام' : 'Free — no joining fees'}
           </p>
         </div>

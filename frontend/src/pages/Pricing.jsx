@@ -453,7 +453,7 @@ export default function Pricing() {
                     )}
                   </div>
 
-                  <p className="text-xs text-gray-600 text-center mb-6">{t.stripeInstant}</p>
+                  <p className="text-xs text-gray-400 text-center mb-6">{t.stripeInstant}</p>
                 </>
               )}
 
@@ -487,7 +487,7 @@ export default function Pricing() {
                           isAr={isAr}
                         />
                       </div>
-                      <p className="text-xs text-gray-600 text-center mb-3">{t.spaceremitInstant}</p>
+                      <p className="text-xs text-gray-400 text-center mb-3">{t.spaceremitInstant}</p>
                     </div>
                   )}
                 </>

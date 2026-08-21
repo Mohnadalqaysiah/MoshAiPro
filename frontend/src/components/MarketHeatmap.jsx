@@ -105,7 +105,7 @@ export default function MarketHeatmap({ onAnalyzeResult }) {
         <div className="flex items-center gap-2">
           {/* Mini bull/bear bar */}
           {total > 0 && (
-            <div className="hidden sm:flex items-center gap-1 text-[10px] text-gray-600">
+            <div className="hidden sm:flex items-center gap-1 text-[10px] text-gray-400">
               <span className="text-green-400 font-bold">{buys}</span>
               <div className="w-16 h-1.5 bg-gray-800 rounded-full overflow-hidden flex">
                 <div className="bg-green-500 h-full" style={{ width: `${(buys / total) * 100}%` }} />
@@ -128,7 +128,7 @@ export default function MarketHeatmap({ onAnalyzeResult }) {
       <div className="p-4 space-y-4">
         {Object.entries(grouped).map(([cat, items]) => (
           <div key={cat}>
-            <p className="text-[10px] text-gray-600 uppercase tracking-wider font-bold mb-2">
+            <p className="text-[10px] text-gray-400 uppercase tracking-wider font-bold mb-2">
               {CAT_LABEL[cat]?.[isAr ? 'ar' : 'en'] || cat}
             </p>
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
@@ -158,7 +158,7 @@ export default function MarketHeatmap({ onAnalyzeResult }) {
                           {isAr ? c.labelAr : c.labelEn}
                         </div>
                         {conf > 0 && (
-                          <div className="text-[9px] text-gray-600 mt-0.5">{Math.round(conf)}%</div>
+                          <div className="text-[9px] text-gray-400 mt-0.5">{Math.round(conf)}%</div>
                         )}
                       </>
                     )}
@@ -179,7 +179,7 @@ export default function MarketHeatmap({ onAnalyzeResult }) {
       </div>
 
       {/* Legend */}
-      <div className="px-5 py-3 border-t border-white/5 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-600">
+      <div className="px-5 py-3 border-t border-white/5 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-400">
         <span className="flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded bg-green-500/50 inline-block" />
           {isAr ? 'شراء قوي (≥75%)' : 'Strong BUY (≥75%)'}

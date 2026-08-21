@@ -245,7 +245,7 @@ export default function ReferralWidget() {
                   : <><Copy size={12} /> نسخ</>}
               </button>
             </div>
-            <p className="text-xs text-gray-600 mt-1.5">كود الإحالة: <span className="text-gray-400 font-mono">{referral_code}</span></p>
+            <p className="text-xs text-gray-400 mt-1.5">كود الإحالة: <span className="text-gray-400 font-mono">{referral_code}</span></p>
           </div>
 
           {/* زر الاستبدال */}
