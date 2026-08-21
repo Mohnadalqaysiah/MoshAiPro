@@ -1164,6 +1164,7 @@ def _signal_info(s: Signal) -> dict:
         "user_id":       s.user_id,
         "user_email":    user_email,
         "market":        s.market,
+        "timeframe":     s.timeframe,
         "signal_type":   s.signal_type.value if hasattr(s.signal_type, 'value') else s.signal_type,
         "status":        s.status.value if hasattr(s.status, 'value') else s.status,
         "entry_price":   s.entry_price,
@@ -1175,6 +1176,7 @@ def _signal_info(s: Signal) -> dict:
         "ai_confidence": s.ai_confidence,
         "created_at":    s.created_at.isoformat() if s.created_at else None,
         "exit_executed": s.exit_executed.isoformat() if s.exit_executed else None,
+        "expires_at":    s.expires_at.isoformat() if s.expires_at else None,
     }
 
 
