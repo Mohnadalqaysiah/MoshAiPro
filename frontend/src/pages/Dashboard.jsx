@@ -17,6 +17,7 @@ import MarketHeatmap from '../components/MarketHeatmap'
 import ConfluenceModal from '../components/ConfluenceModal'
 import AchievementBadges from '../components/AchievementBadges'
 import PWAInstallBanner from '../components/PWAInstallBanner'
+import DashboardAnnouncement from '../components/DashboardAnnouncement'
 
 const T = {
   ar: {
@@ -430,6 +431,8 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-0" dir={isAr ? 'rtl' : 'ltr'}>
+      <DashboardAnnouncement />
+
       {/* ── Page Header ── */}
       <div className="flex items-center justify-between pb-4">
         <div>

@@ -2047,6 +2047,77 @@ export default function Admin() {
                   </div>
 
                   <div className="space-y-4">
+                    {/* ── Dashboard Announcement ───────────────────────────── */}
+                    <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <label className="block text-sm text-gray-300 font-medium">إعلان لوحة التحكم</label>
+                          <p className="text-xs text-gray-500">شريط مميّز أعلى الداشبورد — للإعلان عن مزايا جديدة</p>
+                        </div>
+                        <button
+                          onClick={() => saveSetting('dashboard_announcement_enabled', (siteSettings['dashboard_announcement_enabled']?.value ?? 'false') === 'true' ? 'false' : 'true')}
+                          disabled={settingSaving === 'dashboard_announcement_enabled'}
+                          className={`w-11 h-6 rounded-full flex items-center px-0.5 transition-colors flex-shrink-0 ${
+                            (siteSettings['dashboard_announcement_enabled']?.value ?? 'false') === 'true'
+                              ? 'bg-green-600 justify-end'
+                              : 'bg-gray-700 justify-start'
+                          }`}
+                        >
+                          <span className="w-5 h-5 rounded-full bg-white" />
+                        </button>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm text-gray-300 font-medium mb-1">نص الإعلان</label>
+                        <div className="flex gap-2">
+                          <textarea rows={2}
+                            value={settingEdits['dashboard_announcement_text'] ?? ''}
+                            onChange={e => setSettingEdits(s => ({...s, dashboard_announcement_text: e.target.value}))}
+                            placeholder="🎉 ميزة جديدة: تحليل متعدد الفريمات صار متاح الآن!"
+                            className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white resize-y focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            dir="rtl" />
+                          <button disabled={settingSaving === 'dashboard_announcement_text'} onClick={() => saveSetting('dashboard_announcement_text')}
+                            className="self-start flex items-center gap-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition">
+                            {settingSaving === 'dashboard_announcement_text' ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle size={13}/>} حفظ
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-sm text-gray-300 font-medium mb-1">رابط (اختياري)</label>
+                          <div className="flex gap-2">
+                            <input type="text"
+                              value={settingEdits['dashboard_announcement_link'] ?? ''}
+                              onChange={e => setSettingEdits(s => ({...s, dashboard_announcement_link: e.target.value}))}
+                              placeholder="/strategies"
+                              className="flex-1 min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              dir="ltr" />
+                            <button disabled={settingSaving === 'dashboard_announcement_link'} onClick={() => saveSetting('dashboard_announcement_link')}
+                              className="flex-shrink-0 flex items-center gap-1 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white text-sm px-3 py-2 rounded-lg transition">
+                              {settingSaving === 'dashboard_announcement_link' ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle size={13}/>}
+                            </button>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm text-gray-300 font-medium mb-1">نص الزر</label>
+                          <div className="flex gap-2">
+                            <input type="text"
+                              value={settingEdits['dashboard_announcement_link_label'] ?? ''}
+                              onChange={e => setSettingEdits(s => ({...s, dashboard_announcement_link_label: e.target.value}))}
+                              placeholder="جرّبها الآن"
+                              className="flex-1 min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              dir="rtl" />
+                            <button disabled={settingSaving === 'dashboard_announcement_link_label'} onClick={() => saveSetting('dashboard_announcement_link_label')}
+                              className="flex-shrink-0 flex items-center gap-1 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white text-sm px-3 py-2 rounded-lg transition">
+                              {settingSaving === 'dashboard_announcement_link_label' ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle size={13}/>}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-500">الرابط اختياري — لو تركته فاضي، الشريط بيظهر بلا زر. المستخدم يقدر يسكّره، وبيرجع يظهر تلقائياً لو غيّرت النص.</p>
+                    </div>
+
                     {/* Logo Upload */}
                     <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
                       <label className="block text-sm text-gray-300 font-medium mb-1">شعار الموقع</label>
