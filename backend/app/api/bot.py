@@ -114,9 +114,17 @@ def _check_loss_streak_breaker(db: Session, symbol: str, signal_type: str) -> Op
 #
 # الفريم جزء من المفتاح عمداً (Phase 5, 2026-08-14): XAUUSD SELL/1h و
 # XAUUSD SELL/4h قرارين مستقلين تماماً بمحرك التحليل — لازم يبقوا مسموحين
-# بنفس الوقت. بس صفقتين SELL/1h معاً على نفس الرمز ممنوعة.
-def _has_active_signal(db: Session, symbol: str, signal_type: str, timeframe: str) -> bool:
-    """True لو فيه صفقة نشطة أصلاً بنفس (الرمز، الاتجاه، الفريم).
+# بنفس الوقت. بس صفقتين معاً (بأي اتجاه) على نفس (الرمز، الفريم) ممنوعة.
+#
+# (2026-08-21) الاتجاه (signal_type) اتشال من شرط الفلترة عمداً — لكشف
+# تحقق حي (انظر تحليل XAGUSD/15m لـ18-20/8) إنه ما كان في أي منع بين
+# BUY وSELL معاكسين على نفس (رمز، فريم)، رغم إنهم كانوا يُعاملوا كمفتاحين
+# منفصلين بالكامل. عرض BUY وSELL بنفس الوقت على نفس (رمز، فريم) تناقض
+# منطقي يضرّ بمصداقية المنصة، وأي انعكاس حقيقي بيتحل لحاله بسرعة عبر
+# الـSL نفسه — فما في خسارة فرصة، بس تأخير لحد ما القديمة تتحسم.
+def _has_active_signal(db: Session, symbol: str, timeframe: str) -> bool:
+    """True لو فيه صفقة نشطة أصلاً بنفس (الرمز، الفريم) — بغض النظر عن
+    اتجاهها (BUY أو SELL على حد سواء يمنعون).
 
     (2026-08-18, hotfix) status=ACTIVE لحاله مش كافي — الانتقال لـEXPIRED
     كسول تماماً (بيصير بس لما نفس المستخدم يفتح /signals/history، انظر
@@ -131,7 +139,6 @@ def _has_active_signal(db: Session, symbol: str, signal_type: str, timeframe: st
     now = datetime.now(timezone.utc)
     return db.query(Signal).filter(
         Signal.market      == symbol,
-        Signal.signal_type == signal_type,
         Signal.timeframe   == timeframe,
         Signal.status      == SignalStatus.ACTIVE,
         (Signal.expires_at.is_(None)) | (Signal.expires_at > now),
@@ -197,7 +204,7 @@ async def bot_analyze(
                     and conf >= 40 and _rr_ok and not _rej and _cooldown_ok \
                     and analysis.get("market_open", True) and _sd.is_market_open(symbol) \
                     and not _check_loss_streak_breaker(db, symbol, rec) \
-                    and not _has_active_signal(db, symbol, rec, timeframe):
+                    and not _has_active_signal(db, symbol, timeframe):
 
                 sig_type  = SignalType.BUY if rec == "BUY" else SignalType.SELL
                 tf_hours  = {"1m":2,"5m":4,"15m":8,"30m":12,"1h":24,"4h":72,"1d":168,"1w":336}
@@ -819,7 +826,7 @@ def bot_save_alert_signal(
     if loss_streak_reason:
         return {"saved": False, "reason": loss_streak_reason}
 
-    if _has_active_signal(db, symbol, signal_type, timeframe):
+    if _has_active_signal(db, symbol, timeframe):
         return {"saved": False, "reason": "duplicate active position, waiting for resolution"}
 
     tf_hours   = {"1m": 2, "5m": 4, "15m": 8, "30m": 12, "1h": 24, "4h": 72, "1d": 168}

@@ -180,7 +180,7 @@ async def analyze_market(
                     f"{symbol}-{timeframe}-{rec}-{round(float(entry), 4)}".encode()
                 ).hexdigest()
                 existing   = db.query(Signal).filter(Signal.signal_hash == sig_hash).first()
-                active_dup = _has_active_signal(db, symbol, sig_type, timeframe)
+                active_dup = _has_active_signal(db, symbol, timeframe)
 
                 # ── Loss-streak breaker (2026-08-18) ─────────────────────────
                 # كان مربوطاً فقط بمسارات bot.py (bot_analyze / save-alert-signal)
