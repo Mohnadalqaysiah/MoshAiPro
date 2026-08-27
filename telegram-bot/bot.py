@@ -489,6 +489,31 @@ def fmt_new_signal(s: dict) -> str:
     return msg
 
 
+def fmt_new_signal_masked(s: dict) -> str:
+    """نسخة مموّهة لمستخدمي التجربة بعد استهلاك حصتهم اليومية المجانية —
+    تؤكد وجود إشارة (الاتجاه + الثقة) بدون تفاصيل الدخول/SL/TP القابلة للتداول
+    فعلياً. القرار المنتجي: نكمل نبعت إشعار حتى لو ما عندهم اشتراك فعّال،
+    عشان "بنواصل إرسال الإشارات بحال وجدت" — بس التفاصيل مقفلة."""
+    stype  = s.get("signal_type", "BUY")
+    emoji  = "🟢" if stype == "BUY" else "🔴"
+    rec_ar = "شراء" if stype == "BUY" else "بيع"
+    mname  = MARKET_NAMES.get(s.get("market", ""), s.get("market", ""))
+    conf   = get_confidence(s)
+    tf     = TF_LABELS.get(s.get("timeframe", ""), s.get("timeframe", ""))
+
+    return (
+        f"🚨 *إشارة جديدة │ Qaffel AI*\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"{emoji} *{rec_ar}*  ─  {mname}\n"
+        f"📊 ثقة: *{conf:.0f}%*   ⏱ {tf}\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🔒 استهلكت حصتك المجانية اليوم — تفاصيل الدخول/الوقف/الأهداف مقفلة\n"
+        f"💳 اشترك لرؤية التفاصيل الكاملة لهذه الإشارة وكل الإشارات القادمة\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"⚠️ _للمعلومات فقط، ليس توصية استثمارية._"
+    )
+
+
 def fmt_outcome(o: dict) -> str:
     status  = o["status"]
     market  = o["market"]
@@ -1126,8 +1151,13 @@ async def broadcast_new_signals(app: Application):
                     user_wl[tid_str] = set(s.upper() for s in u.get("watchlist", []))
 
                 # المستخدمون بدون watchlist يستلمون كل الإشارات (لم يضبطوا تفضيلاتهم بعد)
-                subs_data = await _get("/api/v1/bot/active-subscribers")
-                all_subs  = [str(s["telegram_id"]) for s in subs_data.get("subscribers", [])]
+                # full_access: أدمن/مشترك فعلي — full لدايماً. الباقي (تجربة نشطة أو
+                # منتهية) يستمرون بالاستلام لكن بنسخة مموّهة بعد حصتهم اليومية
+                # المجانية (2026-08-21 — قرار: لا نقطع الإشعارات نهائياً عن التجربة
+                # المنتهية، القفل يكون على التفاصيل فقط).
+                subs_data      = await _get("/api/v1/bot/active-subscribers")
+                full_access_of = {str(s["telegram_id"]): bool(s.get("full_access")) for s in subs_data.get("subscribers", [])}
+                all_subs       = list(full_access_of.keys())
 
                 logger.info(f"📡 {len(sigs)} إشارة جديدة → {len(all_subs)} مشترك ({len(user_wl)} لديهم watchlist)")
 
@@ -1155,10 +1185,14 @@ async def broadcast_new_signals(app: Application):
                             continue
                     last_alert[bc_key] = {"time": now_bc, "direction": sig_type}
 
-                    msg = fmt_new_signal(sig)
-                    kb  = InlineKeyboardMarkup([[
+                    msg_full   = fmt_new_signal(sig)
+                    msg_masked = fmt_new_signal_masked(sig)
+                    kb_full    = InlineKeyboardMarkup([[
                         InlineKeyboardButton("📊 تحليل هذا الزوج", callback_data=f"sym_{sig['market']}"),
                         InlineKeyboardButton("📡 كل الإشارات",     callback_data="m_signals"),
+                    ]])
+                    kb_masked  = InlineKeyboardMarkup([[
+                        InlineKeyboardButton("💳 اشترك الآن", url=f"{FRONTEND_URL}/pricing"),
                     ]])
                     sent = 0
                     for tid in all_subs:
@@ -1166,6 +1200,18 @@ async def broadcast_new_signals(app: Application):
                         # مستخدم بـ watchlist → يستلم فقط أزواجه
                         if tid in user_wl and market not in user_wl[tid]:
                             continue
+
+                        # full_access (أدمن/مشترك فعلي) → دايماً كاملة، بدون استهلاك حصة.
+                        # غيرهم (تجربة نشطة أو منتهية) → نستهلك من حصتهم اليومية
+                        # المجانية عبر الباكيند؛ لو خلصت الحصة يستلمون النسخة المموّهة
+                        # بدل ما ينقطع عنهم البث بالكامل.
+                        unlocked = full_access_of.get(tid, False)
+                        if not unlocked:
+                            consume  = await _post("/api/v1/bot/consume-signal-notification", json={"telegram_id": tid})
+                            unlocked = bool(consume.get("unlocked"))
+
+                        msg = msg_full if unlocked else msg_masked
+                        kb  = kb_full  if unlocked else kb_masked
                         try:
                             await app.bot.send_message(
                                 chat_id=int(tid), text=msg,
@@ -1238,13 +1284,13 @@ async def monitor_watchlists(app: Application):
             # ── 2. مراقبة الأزواج
             # المصدر الوحيد للـ Watchlist هو DB — لا merge مع الذاكرة المحلية
             db_users = (await _get("/api/v1/bot/all-watchlists")).get("users", [])
-            merged: dict[int, tuple[set, str, int]] = {}
+            merged: dict[int, tuple[set, str, int, bool]] = {}
             for u in db_users:
                 try:
                     tid = int(u["telegram_id"])
                     wl  = set(s.upper() for s in u.get("watchlist", [])) & _VALID_SYMBOLS
                     if wl:
-                        merged[tid] = (wl, u.get("timeframe","1h"), u.get("min_confidence",65))
+                        merged[tid] = (wl, u.get("timeframe","1h"), u.get("min_confidence",65), bool(u.get("full_access")))
                 except Exception:
                     pass
 
@@ -1268,7 +1314,7 @@ async def monitor_watchlists(app: Application):
             # كل الرموز الفريدة أولاً، نحللها مرة وحدة بالتوازي المحدود، وبعدين
             # كل مستخدم بس بياخذ نتيجة رمزه من القاموس المشترك.
             all_symbols = set()
-            for wl, _, _ in merged.values():
+            for wl, _, _, _ in merged.values():
                 all_symbols |= wl
 
             symbol_results: dict[str, dict] = {}
@@ -1289,9 +1335,9 @@ async def monitor_watchlists(app: Application):
                     logger.warning(f"analyze-multi-tf {symbol}: {_e}")
                     symbol_results[symbol] = {}
 
-            logger.info(f"🔍 حُلّل {len(symbol_results)} رمز فريد (بدل {sum(len(wl) for wl,_,_ in merged.values())} طلب لو كل مستخدم لحاله)")
+            logger.info(f"🔍 حُلّل {len(symbol_results)} رمز فريد (بدل {sum(len(wl) for wl,_,_,_ in merged.values())} طلب لو كل مستخدم لحاله)")
 
-            for uid_, (watchlist, _stored_tf_pref, min_conf) in merged.items():
+            for uid_, (watchlist, _stored_tf_pref, min_conf, full_access) in merged.items():
                 for symbol in list(watchlist):
                     tf_results = symbol_results.get(symbol) or {}
                     if not tf_results:
@@ -1321,22 +1367,44 @@ async def monitor_watchlists(app: Application):
                         last_alert[key] = {"time": now, "direction": rec}
                         emoji  = "🟢" if rec == "BUY" else "🔴"
                         rec_ar = "شراء" if rec == "BUY" else "بيع"
-                        alert  = (
-                            f"🚨 *تنبيه مراقبة!*\n\n"
-                            f"{emoji} *{rec_ar}* — {MARKET_NAMES.get(symbol,symbol)} ({tf})\n"
-                            f"📊 الثقة: *{conf:.1f}%*\n\n"
-                            f"{fmt_analysis(data, symbol, tf)}"
-                        )[:4000]
+
+                        # full_access (أدمن/مشترك فعلي) → دايماً كاملة. غيرهم (تجربة
+                        # نشطة أو منتهية) → نستهلك من حصتهم اليومية المجانية؛ لو
+                        # خلصت، تنبيه مموّه بدل قطع المراقبة الشخصية بالكامل عنهم.
+                        unlocked = full_access
+                        if not unlocked:
+                            consume  = await _post("/api/v1/bot/consume-signal-notification", json={"telegram_id": str(uid_)})
+                            unlocked = bool(consume.get("unlocked"))
+
+                        if unlocked:
+                            alert = (
+                                f"🚨 *تنبيه مراقبة!*\n\n"
+                                f"{emoji} *{rec_ar}* — {MARKET_NAMES.get(symbol,symbol)} ({tf})\n"
+                                f"📊 الثقة: *{conf:.1f}%*\n\n"
+                                f"{fmt_analysis(data, symbol, tf)}"
+                            )[:4000]
+                            kb = InlineKeyboardMarkup([[
+                                InlineKeyboardButton("🔄 تحديث", callback_data=f"an_{symbol}_{tf}"),
+                                InlineKeyboardButton("🏠 رئيسية", callback_data="m_back"),
+                            ]])
+                        else:
+                            alert = (
+                                f"🚨 *تنبيه مراقبة!*\n\n"
+                                f"{emoji} *{rec_ar}* — {MARKET_NAMES.get(symbol,symbol)} ({tf})\n"
+                                f"📊 الثقة: *{conf:.1f}%*\n\n"
+                                f"🔒 استهلكت حصتك المجانية اليوم — تفاصيل الدخول/الوقف/الأهداف مقفلة\n"
+                                f"💳 اشترك لرؤية التفاصيل الكاملة"
+                            )
+                            kb = InlineKeyboardMarkup([[
+                                InlineKeyboardButton("💳 اشترك الآن", url=f"{FRONTEND_URL}/pricing"),
+                            ]])
 
                         try:
                             await app.bot.send_message(
                                 chat_id=uid_, text=alert, parse_mode="Markdown",
-                                reply_markup=InlineKeyboardMarkup([[
-                                    InlineKeyboardButton("🔄 تحديث", callback_data=f"an_{symbol}_{tf}"),
-                                    InlineKeyboardButton("🏠 رئيسية", callback_data="m_back"),
-                                ]]),
+                                reply_markup=kb,
                             )
-                            logger.info(f"📨 تنبيه → {uid_} | {symbol}/{tf} | {rec} | {conf:.1f}%")
+                            logger.info(f"📨 تنبيه → {uid_} | {symbol}/{tf} | {rec} | {conf:.1f}% | unlocked={unlocked}")
 
                             # ── حفظ الإشارة في DB لتتبع PnL تلقائياً ─────────────
                             try:

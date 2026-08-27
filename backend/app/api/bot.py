@@ -9,7 +9,7 @@ from typing import Optional
 from loguru import logger
 
 from app.database import get_db
-from app.models.user import User, PlanType
+from app.models.user import User, PlanType, UserRole
 from app.models.signal import Signal, SignalStatus, SignalType
 from app.models.site_settings import SiteSettings
 from app.services.ai_engine_v5 import mosh_ai_engine_v5
@@ -496,28 +496,32 @@ def bot_all_watchlists(
     _: bool = Depends(verify_bot),
     db: Session = Depends(get_db),
 ):
-    """كل المستخدمين الذين لديهم قائمة مراقبة مفعّلة — يستخدمها البوت للإشعارات"""
-    from app.services.auth_service import check_subscription
+    """كل المستخدمين الذين لديهم قائمة مراقبة مفعّلة — يستخدمها البوت للإشعارات.
+
+    (2026-08-21) كان في تحقق كامل عبر check_subscription هون بيستبعد أي
+    مستخدم انتهت تجربته بالكامل — يعني قطع تنبيهات المراقبة الشخصية نهائياً
+    عنهم، بعكس القرار المنتجي (نواصل الإرسال، القفل على التفاصيل فقط —
+    full_access بيوصل نفس هالمعلومة للبوت زي /active-subscribers). الاستبعاد
+    الوحيد المتبقي هو تحقق البريد (is_verified) — هاد حاجز هوية حقيقي، مش
+    علاقة بالاشتراك."""
     users = db.query(User).filter(
         User.telegram_id != None,
         User.notifications_enabled == True,
         User.is_active == True,
         User.plan != PlanType.BANNED,
+        User.is_verified == True,
     ).all()
     result = []
     for u in users:
         wl = u.notify_watchlist or []
         if not wl:
             continue
-        # ── تحقق من صلاحية الاشتراك — لا تنبيهات لمن انتهت تجربته ──────
-        status = check_subscription(u, db)
-        if not status["allowed"]:
-            continue
         result.append({
             "telegram_id":    u.telegram_id,
             "watchlist":      wl,
             "timeframe":      u.notify_timeframe      or "1h",
             "min_confidence": u.notify_min_confidence or 65,
+            "full_access":    _bot_has_full_signal_access(u),
         })
     return {"users": result, "count": len(result)}
 
@@ -676,31 +680,75 @@ def bot_mark_result_broadcast(
     return {"success": True}
 
 
+def _bot_has_full_signal_access(u: User) -> bool:
+    """أدمن أو مشترك فعلي (أسبوعي/شهري) يشوف كل تفاصيل كل الإشارات دايماً —
+    نفس تعريف _has_full_signal_access بـ signals.py، مكرّر هون لأن bot.py
+    وsignals.py مسارين مستقلين وما بدنا استيراد دائري."""
+    return u.role == UserRole.ADMIN or u.plan in (PlanType.WEEKLY, PlanType.MONTHLY)
+
+
 @router.get("/active-subscribers")
 def bot_active_subscribers(
     _: bool = Depends(verify_bot),
     db: Session = Depends(get_db),
 ):
-    """كل المشتركين النشطين الذين لديهم telegram_id"""
-    from datetime import datetime, timezone
-    now = datetime.now(timezone.utc)
+    """كل المشتركين اللي عندهم telegram_id، نشطين وغير محظورين — بما فيهم
+    التجربة المنتهية (2026-08-21): القرار المنتجي هو الاستمرار ببث الإشارات
+    لهم، بس بنسخة ممموّهة (بدون تفاصيل الدخول/SL/TP) بعد استهلاك حصتهم
+    اليومية المجانية — نفس مبدأ /signals/latest بالموقع، مش قطع الإشعارات
+    نهائياً. full_access بيحدّد للبوت هل يرسل النسخة الكاملة دايماً بلا حاجة
+    لاستهلاك أي حصة."""
     users = db.query(User).filter(
         User.telegram_id != None,
         User.is_active == True,
         User.plan != PlanType.BANNED,
     ).all()
 
-    result = []
-    for u in users:
-        if u.plan in [PlanType.WEEKLY, PlanType.MONTHLY]:
-            if not u.subscription_ends_at or u.subscription_ends_at < now:
-                continue
-        elif u.plan == PlanType.TRIAL:
-            if u.trial_ends_at and u.trial_ends_at < now:
-                continue
-        result.append({"telegram_id": u.telegram_id})
+    result = [
+        {"telegram_id": u.telegram_id, "full_access": _bot_has_full_signal_access(u)}
+        for u in users
+    ]
 
     return {"subscribers": result, "count": len(result)}
+
+
+@router.post("/consume-signal-notification")
+def bot_consume_signal_notification(
+    telegram_id: str = Body(..., embed=True),
+    _: bool = Depends(verify_bot),
+    db: Session = Depends(get_db),
+):
+    """يُستدعى مرة لكل (مستخدم بلا full_access، إشارة مبثوثة) — يقرر هل
+    يستلم النسخة الكاملة (ويستهلك من حصته اليومية) أو الممموّهة. الحد
+    اليومي من نفس مفتاح SiteSettings المستخدم بـ/signals/latest
+    (trial_signal_daily_limit)، 0 = غير محدود."""
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    if not user:
+        return {"unlocked": False}
+
+    if _bot_has_full_signal_access(user):
+        return {"unlocked": True}
+
+    row = db.query(SiteSettings).filter(SiteSettings.key == "trial_signal_daily_limit").first()
+    try:
+        free_limit = int(row.value) if row and row.value else 3
+    except Exception:
+        free_limit = 3
+    if free_limit <= 0:
+        return {"unlocked": True}
+
+    now = datetime.now(timezone.utc)
+    if not user.signal_notif_seen_date or user.signal_notif_seen_date.date() != now.date():
+        user.signal_notif_seen_today = 0
+        user.signal_notif_seen_date  = now
+
+    if user.signal_notif_seen_today >= free_limit:
+        return {"unlocked": False}
+
+    user.signal_notif_seen_today += 1
+    user.signal_notif_seen_date   = now
+    db.commit()
+    return {"unlocked": True, "remaining": free_limit - user.signal_notif_seen_today}
 
 
 @router.get("/user-stats")

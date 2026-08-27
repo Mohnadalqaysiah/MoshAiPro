@@ -76,6 +76,12 @@ class User(Base):
     notify_timeframes     = Column(JSON,    default=list)   # ["1h","4h"] or ["all"]
     notify_min_confidence = Column(Integer, default=65)
 
+    # Telegram broadcast masking (2026-08-21) — نفس مبدأ trial_signal_daily_limit
+    # المطبّق على قائمة الموقع (/signals/latest)، بس هون لبث Telegram اللحظي:
+    # عدّاد إشعارات كاملة (غير مموّهة) استلمها المستخدم اليوم عبر البوت.
+    signal_notif_seen_today = Column(Integer, default=0)
+    signal_notif_seen_date  = Column(DateTime(timezone=True), nullable=True)
+
     # Affiliate
     affiliate_code    = Column(String(8), unique=True, nullable=True, index=True)
     referred_by_code  = Column(String(8), nullable=True, index=True)
