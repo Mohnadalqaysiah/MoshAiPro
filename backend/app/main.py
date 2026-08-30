@@ -161,10 +161,16 @@ async def lifespan(app: FastAPI):
     strategy_task = asyncio.create_task(strategy_checker())
     logger.success("✅ Strategy checker started")
 
+    # بدء ماسح الأسواق الدوري (يغذّي البث العام بغض النظر عن قوائم المراقبة الشخصية)
+    from app.services.market_scanner import market_scanner
+    scanner_task = asyncio.create_task(market_scanner())
+    logger.success("✅ Market scanner started")
+
     yield
 
     alert_task.cancel()
     strategy_task.cancel()
+    scanner_task.cancel()
 
     # Shutdown
     logger.info("👋 Shutting down Mosh AI Pro v5...")

@@ -150,16 +150,21 @@ async def bot_analyze(
     symbol: str,
     timeframe: str = "1h",
     telegram_id: str = "",
+    system_user_id: Optional[int] = None,
     _: bool = Depends(verify_bot),
     db: Session = Depends(get_db),
 ):
     """
     تحليل من البوت - يتحقق أن المستخدم مرتبط وله اشتراك نشط
-    telegram_id: اختياري، إذا أُرسل يتحقق من الاشتراك
-    
+    telegram_id: اختياري، إذا أُرسل يتحقق من الاشتراك ويُخصم كريدت التجربة
+    system_user_id: اختياري — للاستدعاء الداخلي من مهام خلفية (مثل
+        market_scanner.py) بلا مستخدم Telegram حقيقي. لا فحص اشتراك ولا
+        خصم كريدت، الإشارة المحفوظة تُنسَب لهذا الحساب فقط لغرض FK.
+
     ✅ الآن يحفظ الإشارات تلقائياً في DB إذا استوفت الشروط!
     """
     # إذا أُرسل telegram_id → تحقق من الاشتراك
+    signal_user_id: Optional[int] = system_user_id
     if telegram_id:
         user = _get_linked_user(telegram_id, db)
         if not user:
@@ -174,6 +179,8 @@ async def bot_analyze(
         if user.plan == PlanType.TRIAL and user.trial_analyses_left > 0:
             from app.services.auth_service import deduct_trial
             deduct_trial(user, db, kind="analysis")
+
+        signal_user_id = user.id
 
     try:
         analysis = await mosh_ai_engine_v5.analyze_market(symbol=symbol, timeframe=timeframe, force_refresh=False)
@@ -204,7 +211,8 @@ async def bot_analyze(
                     and conf >= 40 and _rr_ok and not _rej and _cooldown_ok \
                     and analysis.get("market_open", True) and _sd.is_market_open(symbol) \
                     and not _check_loss_streak_breaker(db, symbol, rec) \
-                    and not _has_active_signal(db, symbol, timeframe):
+                    and not _has_active_signal(db, symbol, timeframe) \
+                    and signal_user_id is not None:
 
                 sig_type  = SignalType.BUY if rec == "BUY" else SignalType.SELL
                 tf_hours  = {"1m":2,"5m":4,"15m":8,"30m":12,"1h":24,"4h":72,"1d":168,"1w":336}
@@ -218,6 +226,7 @@ async def bot_analyze(
 
                 if not existing:
                     new_signal = Signal(
+                        user_id            = signal_user_id,
                         market             = symbol,
                         timeframe          = timeframe,
                         signal_type        = sig_type,
@@ -236,7 +245,7 @@ async def bot_analyze(
                     )
                     db.add(new_signal)
                     db.commit()
-                    logger.info(f"💾 Signal saved: {symbol}/{timeframe} {rec} @ {conf:.0f}% confidence")
+                    logger.info(f"💾 Signal saved: {symbol}/{timeframe} {rec} @ {conf:.0f}% confidence (user_id={signal_user_id})")
         except Exception as _se:
             logger.warning(f"Signal save error in bot_analyze: {_se}")
         
