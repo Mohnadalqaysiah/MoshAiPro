@@ -20,11 +20,15 @@ BOT_HEADERS  = {"X-Bot-Secret": BOT_SECRET}
 
 # ─── Market catalogue ─────────────────────────────────────────────────────────
 CATEGORIES: dict[str, dict] = {
-    "metals":      {"label": "🥇 معادن",   "symbols": ["XAUUSD", "XAGUSD"]},
-    "crypto":      {"label": "₿ كريبتو",  "symbols": ["BTCUSD", "ETHUSD", "BNBUSD"]},
-    "forex":       {"label": "💱 فوركس",   "symbols": ["EURUSD", "GBPUSD", "USDJPY", "USDCHF", "AUDUSD", "USDCAD"]},
+    "metals":      {"label": "🥇 معادن",   "symbols": ["XAUUSD", "XAGUSD", "COPPER", "XPTUSD"]},
+    "crypto":      {"label": "₿ كريبتو",  "symbols": ["BTCUSD", "ETHUSD", "BNBUSD", "SOLUSD", "XRPUSD", "ADAUSD", "DOGEUSD"]},
+    "forex":       {"label": "💱 فوركس",   "symbols": [
+        "EURUSD", "GBPUSD", "USDJPY", "USDCHF", "AUDUSD", "USDCAD", "NZDUSD",
+        "EURGBP", "EURJPY", "GBPJPY", "DXY",
+    ]},
     "commodities": {"label": "🛢 سلع",    "symbols": ["USOIL", "NATGAS"]},
     "indices":     {"label": "📈 مؤشرات", "symbols": ["NAS100", "US30", "SP500"]},
+    "stocks":      {"label": "📈 أسهم أمريكية", "symbols": ["AMD", "NFLX"]},
     "gulf":        {"label": "🕌 أسواق خليجية", "symbols": [
         "ARAMCO", "RAJHI", "SABIC", "STC", "SNB", "MAADEN", "ALMARAI", "BAHRI", "ALINMA",
         "EMAAR", "EMIRATESNBD", "DIB", "FAB", "ADNOCDIST", "QNBK",
@@ -32,12 +36,16 @@ CATEGORIES: dict[str, dict] = {
 }
 
 MARKET_NAMES: dict[str, str] = {
-    "XAUUSD":"🥇 الذهب",    "XAGUSD":"🥈 الفضة",
+    "XAUUSD":"🥇 الذهب",    "XAGUSD":"🥈 الفضة", "COPPER":"🟤 النحاس", "XPTUSD":"⚪ البلاتين",
     "BTCUSD":"₿ بيتكوين",  "ETHUSD":"Ξ إيثيريوم", "BNBUSD":"🔷 BNB",
+    "SOLUSD":"◎ سولانا",   "XRPUSD":"✕ ريبل",     "ADAUSD":"🔵 كاردانو", "DOGEUSD":"🐕 دوجكوين",
     "EURUSD":"💶 EUR/USD",  "GBPUSD":"💷 GBP/USD",
     "USDJPY":"💴 USD/JPY",  "USDCHF":"🇨🇭 USD/CHF", "AUDUSD":"🦘 AUD/USD", "USDCAD":"🍁 USD/CAD",
+    "NZDUSD":"🥝 NZD/USD",  "EURGBP":"💶 EUR/GBP",  "EURJPY":"💶 EUR/JPY", "GBPJPY":"💷 GBP/JPY",
+    "DXY":   "💵 مؤشر الدولار",
     "USOIL": "🛢 نفط",     "NATGAS":"🔥 غاز",
     "NAS100":"📈 ناسداك",  "US30":  "📊 داو",       "SP500": "📉 S&P500",
+    "AMD":   "🖥 AMD",      "NFLX":  "🎬 نتفليكس",
     "ARAMCO":"🇸🇦 أرامكو", "RAJHI":"🇸🇦 الراجحي", "SABIC":"🇸🇦 سابك", "STC":"🇸🇦 إس تي سي",
     "SNB":"🇸🇦 الأهلي",    "MAADEN":"🇸🇦 معادن",  "ALMARAI":"🇸🇦 المراعي",
     "BAHRI":"🇸🇦 البحري",  "ALINMA":"🇸🇦 الإنماء",

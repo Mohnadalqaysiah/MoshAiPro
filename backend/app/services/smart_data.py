@@ -51,6 +51,19 @@ YFINANCE_MAP = {
     "NATGAS":  "NG=F",      # Natural Gas
     "USDINDEX":"DX-Y.NYB",  # US Dollar Index
     "DXY":     "DX-Y.NYB",
+    # أزواج فوركس متقاطعة (2026-08-30) — نفس نمط EURUSD/GBPUSD أعلاه
+    "EURGBP":  "EURGBP=X",
+    "EURJPY":  "EURJPY=X",
+    "GBPJPY":  "GBPJPY=X",
+    # كريبتو إضافي (2026-08-30) — نفس نمط BTC-USD/ETH-USD أعلاه
+    "BNBUSD":  "BNB-USD",
+    "SOLUSD":  "SOL-USD",
+    "XRPUSD":  "XRP-USD",
+    "ADAUSD":  "ADA-USD",
+    "DOGEUSD": "DOGE-USD",
+    # معادن إضافية (2026-08-30) — عقود آجلة، نفس نمط XAUUSD/XAGUSD أعلاه
+    "COPPER":  "HG=F",      # Copper Futures
+    "XPTUSD":  "PL=F",      # Platinum Futures
     # أسهم أمريكية شائعة — yfinance يستخدمها مباشرة
     "AAPL":  "AAPL",  "TSLA": "TSLA",  "MSFT": "MSFT",
     "NVDA":  "NVDA",  "AMZN": "AMZN",  "GOOGL":"GOOGL",
