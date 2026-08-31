@@ -400,11 +400,72 @@ class TradingChatAgent:
             "NATGAS": [
                 "غاز", "الغاز", "gas", "natgas", "natural gas", "غاز طبيعي",
             ],
+            # ── فوركس/معادن/كريبتو إضافي (2026-08-31) ────────────────────────
+            "AUDUSD": ["استرالي", "الأسترالي", "الدولار الأسترالي", "aud", "audusd"],
+            "USDCAD": ["كندي", "الكندي", "الدولار الكندي", "cad", "usdcad"],
+            "NZDUSD": ["نيوزلندي", "النيوزلندي", "الدولار النيوزلندي", "nzd", "nzdusd"],
+            "EURGBP": ["يورو جنيه", "eurgbp"],
+            "EURJPY": ["يورو ين", "eurjpy"],
+            "GBPJPY": ["جنيه ين", "gbpjpy"],
+            "DXY": ["مؤشر الدولار", "دولار إندكس", "دولار اندكس", "dxy"],
+            "COPPER": ["نحاس", "النحاس", "copper"],
+            "XPTUSD": ["بلاتين", "البلاتين", "platinum", "xptusd"],
+            "BNBUSD": ["بينانس", "binance coin", "bnb", "bnbusd"],
+            "SOLUSD": ["سولانا", "solana", "sol", "solusd"],
+            "XRPUSD": ["ريبل", "ripple", "xrp", "xrpusd"],
+            "ADAUSD": ["كاردانو", "cardano", "ada", "adausd"],
+            "DOGEUSD": ["دوجكوين", "دوج كوين", "dogecoin", "doge", "dogeusd"],
+            "NFLX": ["نتفليكس", "netflix", "nflx"],
+            # ── أسواق خليجية (2026-08-31) ─────────────────────────────────────
+            "ARAMCO": ["ارامكو", "أرامكو", "aramco"],
+            "RAJHI": ["الراجحي", "راجحي", "مصرف الراجحي", "بنك الراجحي", "rajhi"],
+            "SABIC": ["سابك", "sabic"],
+            "STC": ["اس تي سي", "إس تي سي", "الاتصالات السعودية", "stc"],
+            "SNB": ["الاهلي", "الأهلي", "البنك الاهلي", "البنك الأهلي", "snb"],
+            "MAADEN": ["معادن", "شركة معادن", "maaden"],
+            "ALMARAI": ["المراعي", "مراعي", "almarai"],
+            "BAHRI": ["البحري", "بحري", "bahri"],
+            "ALINMA": ["الانماء", "الإنماء", "انماء", "إنماء", "مصرف الانماء", "alinma"],
+            "TASI": ["تاسي", "المؤشر العام", "مؤشر تاسي", "tasi"],
+            "EMAAR": ["اعمار", "إعمار", "emaar"],
+            "EMIRATESNBD": ["الامارات دبي الوطني", "الإمارات دبي الوطني", "emirates nbd"],
+            "DIB": ["دبي الاسلامي", "دبي الإسلامي", "بنك دبي الاسلامي", "dib"],
+            "DFMGI": ["مؤشر دبي المالي", "سوق دبي المالي", "dfm", "dfmgi"],
+            "FAB": ["ابوظبي الاول", "أبوظبي الأول", "بنك ابوظبي الاول", "fab"],
+            "ADNOCDIST": ["ادنوك", "أدنوك", "ادنوك للتوزيع", "adnoc"],
+            "QNBK": ["قطر الوطني", "بنك قطر الوطني", "qnb", "qnbk"],
         }
         symbol_explicit = False  # هل ذُكر الرمز صراحةً في الرسالة الحالية؟
 
+        # (2026-08-31) مطابقة على مستوى الكلمة الكاملة للأسماء المفردة —
+        # مطابقة substring خام كانت تخلط رموز قصيرة زي "ين" (USDJPY) جوا
+        # كلمات تانية بالكامل تحتويها حرفياً (مثلاً "بلاتين" ⊃ "ين")، فيرجع
+        # الرمز الغلط بصمت. العبارات المكوّنة من أكتر من كلمة (فيها مسافة)
+        # بتضل matching كـsubstring لأنها مميّزة بما يكفي. وبما إن حروف
+        # الجر العربية (و ف ب ك ل) بتلتصق بالكلمة اللي بعدها بدون مسافة
+        # ("بالذهب" = ب + الذهب)، منولّد أشكال الكلمة بعد إزالة البادئة
+        # قبل المقارنة، مع معالجة خاصة لإدغام "ل" + "ال" → "لل".
+        _PROCLITICS = ["و", "ف", "ب", "ك", "ل"]
+        msg_words = set(msg.split())
+
+        def _stripped_forms(word: str) -> set:
+            forms = {word}
+            for p in _PROCLITICS:
+                if word.startswith(p) and len(word) > len(p):
+                    forms.add(word[len(p):])
+            if word.startswith("لل") and len(word) > 2:
+                forms.add("ال" + word[2:])
+            return forms
+
+        msg_word_forms = set()
+        for w in msg_words:
+            msg_word_forms |= _stripped_forms(w)
+
+        def _alias_matches(word: str) -> bool:
+            return (word in msg) if " " in word else (word in msg_word_forms)
+
         for sym, words in aliases.items():
-            if any(w in msg for w in words):
+            if any(_alias_matches(w) for w in words):
                 symbol = sym
                 symbol_explicit = True
                 break
