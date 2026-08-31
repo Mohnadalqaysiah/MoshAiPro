@@ -2492,11 +2492,12 @@ function DiagnosticPanel() {
   const [data, setData]       = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
+  const [tf, setTf]           = useState('1h')
 
   const run = async () => {
     setLoading(true); setError(null); setData(null)
     try {
-      const res = await axios.get(`${API}/api/v1/admin/diagnostic`)
+      const res = await axios.get(`${API}/api/v1/admin/diagnostic`, { params: { timeframe: tf } })
       setData(res.data)
     } catch(e) {
       setError(e.response?.data?.detail || e.message)
@@ -2529,11 +2530,23 @@ function DiagnosticPanel() {
           </h1>
           <p className="text-gray-500 text-sm mt-1">تحليل كامل للـ pipeline — يكتشف سبب غياب الإشارات</p>
         </div>
-        <button onClick={run} disabled={loading}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition">
-          {loading ? <RefreshCw size={15} className="animate-spin" /> : <Activity size={15} />}
-          {loading ? 'جاري التشخيص...' : 'تشغيل التشخيص'}
-        </button>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center bg-gray-800 border border-gray-700 rounded-xl p-1">
+            {['15m', '1h', '4h'].map(t => (
+              <button key={t} onClick={() => setTf(t)} disabled={loading}
+                className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition ${
+                  tf === t ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-200'
+                }`}>
+                {t}
+              </button>
+            ))}
+          </div>
+          <button onClick={run} disabled={loading}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white px-5 py-2.5 rounded-xl font-semibold text-sm transition">
+            {loading ? <RefreshCw size={15} className="animate-spin" /> : <Activity size={15} />}
+            {loading ? 'جاري التشخيص...' : 'تشغيل التشخيص'}
+          </button>
+        </div>
       </div>
 
       {error && (

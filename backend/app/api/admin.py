@@ -1633,17 +1633,24 @@ _DIAG_SYMBOLS = [
     "EURUSD", "GBPUSD", "USDJPY",
     "NAS100", "US30", "USOIL",
 ]
-_DIAG_TIMEFRAME = "1h"
+_DIAG_TIMEFRAMES = ("15m", "1h", "4h")
+_DIAG_TIMEFRAME = "1h"  # default
 
 
 @router.get("/diagnostic")
 async def system_diagnostic(
+    timeframe: str = "1h",
     admin: User = Depends(get_admin_user),
 ):
     """
     Full System Diagnostic Mode.
     Steps 1-8: market state, pipeline trace, rejection analysis,
     threshold stress test, cooldown check, calibration status, diagnosis, plan.
+
+    `timeframe` selects which of the 3 timeframes analyze_market() actually
+    runs (15m/1h/4h) — previously hardcoded to 1h only, which made it
+    impossible to rule out "quiet on 1h but active on 15m/4h" without a
+    separate manual API call.
     """
     import time as _t
     import asyncio
@@ -1651,6 +1658,11 @@ async def system_diagnostic(
     from app.services.ai_engine_v5 import mosh_ai_engine_v5 as _engine
     from app.services.ict_engine import ict_engine as _ict
     from app.services.smart_data import smart_data as _sd
+
+    if timeframe not in _DIAG_TIMEFRAMES:
+        raise HTTPException(400, f"timeframe must be one of {_DIAG_TIMEFRAMES}")
+    _DIAG_TIMEFRAME = timeframe
+    _DIAG_HTF_TIMEFRAME = "4h" if _DIAG_TIMEFRAME in ("15m", "30m", "1h") else "1d"
 
     started = _t.time()
     results = {}
@@ -1745,12 +1757,12 @@ async def system_diagnostic(
             continue
         try:
             df = await _sd.get_ohlcv(sym, _DIAG_TIMEFRAME, bars=150)
-            df_htf = await _sd.get_ohlcv(sym, "4h", bars=100)
+            df_htf = await _sd.get_ohlcv(sym, _DIAG_HTF_TIMEFRAME, bars=100)
             if df is None or len(df) < 30:
                 continue
 
             ict     = _ict.full_analysis(df, sym, _DIAG_TIMEFRAME)
-            htf_ict = _ict.full_analysis(df_htf, sym, "4h") if df_htf is not None and len(df_htf) >= 30 else None
+            htf_ict = _ict.full_analysis(df_htf, sym, _DIAG_HTF_TIMEFRAME) if df_htf is not None and len(df_htf) >= 30 else None
 
             # Run calibration + decision finalizer — PRE-RESCUE reference only,
             # used for the delta/threshold breakdown below and by step4's HTF
@@ -2073,6 +2085,7 @@ async def system_diagnostic(
     # STEP 8 — Action Plan
     # ─────────────────────────────────────────────────────────────────────────
     action_plan = []
+    _other_tfs = [t for t in _DIAG_TIMEFRAMES if t != _DIAG_TIMEFRAME]
 
     if diagnosis == "MARKET SILENCE (VALID)":
         action_plan = [
@@ -2080,9 +2093,9 @@ async def system_diagnostic(
             "Thresholds no longer auto-relax during silence (2026-08-14 policy: tighten "
             "on poor performance, never relax just to manufacture a signal — see "
             "PERFORMANCE_TIGHTENING in calibration_params).",
-            "This diagnostic samples 1h only — check other timeframes via "
-            "POST /api/v1/bot/analyze-multi-tf before concluding signals are absent; "
-            "a quiet 1h doesn't mean 15m/4h are quiet too.",
+            f"This diagnostic ran on {_DIAG_TIMEFRAME} only — re-run with "
+            f"?timeframe={_other_tfs[0]} or ?timeframe={_other_tfs[1]} before concluding "
+            f"signals are absent; a quiet {_DIAG_TIMEFRAME} doesn't mean the others are quiet too.",
             "Monitor: if silence continues > 12h on TRENDING symbols across ALL "
             "timeframes → investigate data feed.",
         ]
@@ -2105,8 +2118,9 @@ async def system_diagnostic(
                 f"Most rejected by: {most_common_rej}",
                 f"avg_delta={avg_delta} vs required — thresholds no longer auto-relax on "
                 "silence or low pass_rate (2026-08-14 policy: tighten, never relax).",
-                "Check other timeframes via POST /api/v1/bot/analyze-multi-tf before "
-                "concluding signals are absent — this diagnostic samples 1h only.",
+                f"This diagnostic ran on {_DIAG_TIMEFRAME} only — re-run with "
+                f"?timeframe={_other_tfs[0]} or ?timeframe={_other_tfs[1]} before "
+                "concluding signals are genuinely absent.",
                 "If genuinely over-filtered across all 3 timeframes for multiple days, "
                 "that's a manual product-policy review, not an auto-relax target.",
             ]
