@@ -1206,11 +1206,19 @@ async def broadcast_new_signals(app: Application):
                     kb_masked  = InlineKeyboardMarkup([[
                         InlineKeyboardButton("💳 اشترك الآن", url=f"{FRONTEND_URL}/pricing"),
                     ]])
+                    # (2026-08-31) إشارات المراقبة الشخصية (monitor_watchlists)
+                    # محفوظة بـuser_id صاحبها، وهو أصلاً استلم تنبيه شخصي عنها
+                    # لحاله. نستثنيه هون عشان ما توصله نفس الفرصة مرتين —
+                    # تنبيه شخصي + بث عام لنفس الصفقة بالضبط.
+                    owner_tid = str(sig.get("owner_telegram_id") or "")
+
                     sent = 0
                     for tid in all_subs:
                         # مستخدم بدون watchlist → يستلم كل شيء
                         # مستخدم بـ watchlist → يستلم فقط أزواجه
                         if tid in user_wl and market not in user_wl[tid]:
+                            continue
+                        if owner_tid and tid == owner_tid:
                             continue
 
                         # full_access (أدمن/مشترك فعلي) → دايماً كاملة، بدون استهلاك حصة.
@@ -1307,7 +1315,6 @@ async def monitor_watchlists(app: Application):
                     pass
 
             logger.info(f"🔍 دورة مراقبة — {len(merged)} مستخدم (من DB)")
-            now = datetime.now(timezone.utc)
 
             # Phase 5 (2026-08-14): كل رمز بمراقبة يُفحص على 3 فريمات مستقلة
             # تماماً (15m/1h/4h) بدل فريم واحد مخزّن بتفضيلات المستخدم — كل
@@ -1361,22 +1368,49 @@ async def monitor_watchlists(app: Application):
                         if rec not in ("BUY", "SELL") or conf < min_conf:
                             continue
 
-                        # قفل الاتجاه لكل (مستخدم، رمز، فريم) ككيان مستقل —
-                        # إشارة 4h ما لازم تكتم إشارة 1h معاكسة لنفس الرمز
-                        key  = (uid_, symbol, tf)
-                        last = last_alert.get(key)
-                        if last:
-                            elapsed_min = (now - last["time"]).total_seconds() / 60
-                            last_dir    = last["direction"]
-                            # نفس الاتجاه → كولداون عادي 60 دقيقة
-                            if last_dir == rec and elapsed_min < ALERT_COOLDOWN:
-                                continue
-                            # اتجاه معاكس → قفل 4 ساعات (منع التضارب)
-                            if last_dir != rec and elapsed_min < DIRECTION_LOCK_MIN:
-                                logger.debug(f"🔒 direction lock [{symbol}/{tf}] {last_dir}→{rec} ({elapsed_min:.0f}m < {DIRECTION_LOCK_MIN}m)")
-                                continue
+                        # (2026-08-31) بدل القفل الزمني الثابت (كان يعيد نفس
+                        # التنبيه كل 30 دقيقة طول ما الصفقة قايمة، حتى لو
+                        # ما تغيّر فيها شي): نحاول حفظ الإشارة بقاعدة
+                        # البيانات أولاً. save-alert-signal يتحقق الآن على
+                        # مستوى المستخدم: هل عند هالمستخدم بالذات صفقة نشطة
+                        # لسا صالحة (ما انقفلت SL/TP ولا انتهت) بنفس
+                        # الرمز/الفريم؟ لو نعم، نتخطى — تنبيه واحد لكل صفقة
+                        # حقيقية طول ما هي مفتوحة، مو تكرار زمني. لما تُغلق
+                        # أو تنتهي، أول فحص بعدها بيقدر يبعت تنبيه جديد —
+                        # بما فيه انعكاس الاتجاه، بدون حاجة لقفل ساعتين منفصل.
+                        levels = data.get("levels", {})
+                        _ez    = data.get("entry_zones") or []
+                        _tz    = data.get("take_profit_zones") or []
+                        _entry = levels.get("entry") or (_ez[0] if _ez else None)
+                        _sl    = levels.get("stop_loss") or data.get("stop_loss_zone")
+                        _tp1   = levels.get("tp1") or (_tz[0] if _tz else None)
+                        _tp2   = levels.get("tp2") or (_tz[1] if len(_tz) > 1 else _tp1)
+                        _rr    = data.get("risk_reward_ratio") or levels.get("risk_reward") or 0
 
-                        last_alert[key] = {"time": now, "direction": rec}
+                        if not (_entry and _sl and _tp1):
+                            continue  # ما فيه مستويات كاملة — ما نقدر نتحقق أو نتتبّع الصفقة
+
+                        try:
+                            save_res = await _post("/api/v1/bot/save-alert-signal", params={
+                                "telegram_id": str(uid_),
+                                "symbol":      symbol,
+                                "timeframe":   tf,
+                                "signal_type": rec,
+                                "entry":       _entry,
+                                "sl":          _sl,
+                                "tp1":         _tp1,
+                                "tp2":         _tp2 or _tp1,
+                                "confidence":  conf,
+                                "rr":          _rr,
+                            })
+                        except Exception as _save_e:
+                            logger.warning(f"save-alert-signal: {_save_e}")
+                            continue
+
+                        if not save_res.get("saved"):
+                            logger.debug(f"🔕 watch alert skip [{uid_}/{symbol}/{tf}] {save_res.get('reason')}")
+                            continue
+
                         emoji  = "🟢" if rec == "BUY" else "🔴"
                         rec_ar = "شراء" if rec == "BUY" else "بيع"
 
@@ -1417,33 +1451,6 @@ async def monitor_watchlists(app: Application):
                                 reply_markup=kb,
                             )
                             logger.info(f"📨 تنبيه → {uid_} | {symbol}/{tf} | {rec} | {conf:.1f}% | unlocked={unlocked}")
-
-                            # ── حفظ الإشارة في DB لتتبع PnL تلقائياً ─────────────
-                            try:
-                                levels = data.get("levels", {})
-                                _ez    = data.get("entry_zones") or []
-                                _tz    = data.get("take_profit_zones") or []
-                                _entry = levels.get("entry") or (_ez[0] if _ez else None)
-                                _sl    = levels.get("stop_loss") or data.get("stop_loss_zone")
-                                _tp1   = levels.get("tp1") or (_tz[0] if _tz else None)
-                                _tp2   = levels.get("tp2") or (_tz[1] if len(_tz) > 1 else _tp1)
-                                _rr    = data.get("risk_reward_ratio") or levels.get("risk_reward") or 0
-                                if _entry and _sl and _tp1:
-                                    await _post("/api/v1/bot/save-alert-signal", params={
-                                        "telegram_id": str(uid_),
-                                        "symbol":      symbol,
-                                        "timeframe":   tf,
-                                        "signal_type": rec,
-                                        "entry":       _entry,
-                                        "sl":          _sl,
-                                        "tp1":         _tp1,
-                                        "tp2":         _tp2 or _tp1,
-                                        "confidence":  conf,
-                                        "rr":          _rr,
-                                    })
-                            except Exception as _save_e:
-                                logger.warning(f"save-alert-signal: {_save_e}")
-
                         except Exception as _e:
                             logger.error(f"alert send {uid_}/{symbol}/{tf}: {_e}")
 

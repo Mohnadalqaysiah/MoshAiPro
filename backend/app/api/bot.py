@@ -145,6 +145,24 @@ def _has_active_signal(db: Session, symbol: str, timeframe: str) -> bool:
     ).first() is not None
 
 
+def _user_has_active_signal(db: Session, user_id: int, symbol: str, timeframe: str) -> bool:
+    """مثل _has_active_signal، بس مفلترة على مستخدم واحد بالذات — تُستخدم
+    حصراً لتنبيهات المراقبة الشخصية (save-alert-signal). الفرق مقصود:
+    _has_active_signal (عامة) تمنع تضارب BUY/SELL على مستوى السوق كله
+    لضبط تتبّع الأداء، بينما هاي تجيب "هل هالمستخدم بالذات لسا عنده
+    صفقة صالحة بنفس الرمز/الفريم؟" — لو نعم، ما نكرر تنبيهه لنفس
+    الفرصة طول ما هي مفتوحة (بدل الاعتماد على مؤقّت زمني ثابت، انظر
+    2026-08-31 تعليق بـmonitor_watchlists بالبوت)."""
+    now = datetime.now(timezone.utc)
+    return db.query(Signal).filter(
+        Signal.user_id      == user_id,
+        Signal.market       == symbol,
+        Signal.timeframe    == timeframe,
+        Signal.status       == SignalStatus.ACTIVE,
+        (Signal.expires_at.is_(None)) | (Signal.expires_at > now),
+    ).first() is not None
+
+
 @router.post("/analyze")
 async def bot_analyze(
     symbol: str,
@@ -628,6 +646,15 @@ def bot_new_signals(
                 logger.info(f"⏭️  Signal #{s.id} [{s.market}/{s.timeframe}] skipped — age {age_min:.0f}min > {max_age}min")
                 continue
 
+        # (2026-08-31) إشارات المراقبة الشخصية (save-alert-signal) محفوظة
+        # بـuser_id المستخدم الحقيقي، وبتوصله أصلاً كـ"تنبيه مراقبة" منفصل
+        # (monitor_watchlists). نجيب تلغرام آيدي صاحبها هون عشان نستثنيه من
+        # هالبث العام لنفس الإشارة — تجنّباً لتكرار نفس الفرصة عليه مرتين.
+        owner_tid = None
+        if s.user_id:
+            owner = db.query(User.telegram_id).filter(User.id == s.user_id).first()
+            owner_tid = owner[0] if owner else None
+
         result.append({
             "id":             s.id,
             "market":         s.market,
@@ -642,6 +669,7 @@ def bot_new_signals(
             "wyckoff_phase":  s.wyckoff_phase,
             "premium_discount": s.premium_discount,
             "news_context":   s.notes,
+            "owner_telegram_id": owner_tid,
         })
 
     # إزالة التكرار: إشارة واحدة فقط لكل (رمز + إطار + اتجاه)
@@ -885,7 +913,7 @@ def bot_save_alert_signal(
     if loss_streak_reason:
         return {"saved": False, "reason": loss_streak_reason}
 
-    if _has_active_signal(db, symbol, timeframe):
+    if _user_has_active_signal(db, user.id, symbol, timeframe):
         return {"saved": False, "reason": "duplicate active position, waiting for resolution"}
 
     tf_hours   = {"1m": 2, "5m": 4, "15m": 8, "30m": 12, "1h": 24, "4h": 72, "1d": 168}
