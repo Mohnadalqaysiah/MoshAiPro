@@ -323,6 +323,14 @@ export default function Dashboard() {
               </div>
             )}
 
+            {/* News context — advisory only, never part of the decision */}
+            {result.news_context && (
+              <div className="bg-blue-900/20 border border-blue-800/40 rounded-xl px-3 py-2.5 text-xs text-blue-300 leading-relaxed flex items-start gap-2">
+                <span className="flex-shrink-0">📰</span>
+                <span>{result.news_context}</span>
+              </div>
+            )}
+
             {/* ── Position Size Calculator ──────────────────────────── */}
             <div className="border border-gray-700/60 rounded-xl overflow-hidden">
               <button
@@ -712,6 +720,7 @@ export default function Dashboard() {
                   const rr         = sig.risk_reward || levels.risk_reward || sig.risk_reward_ratio
                   const locked     = !!sig.locked
                   const livePrice  = sig.current_price
+                  const newsContext = sig.news_context
                   const fmt = (v, d = 5) => v != null ? (typeof v === 'number' ? v.toFixed(d) : v) : null
 
                   const isBuy  = rec === 'BUY'
@@ -770,6 +779,12 @@ export default function Dashboard() {
                             {livePrice != null && (
                               <span className="text-xs"><span className="text-gray-500">السعر </span><span className="text-blue-300 font-mono">{fmt(livePrice, market === 'BTCUSD' ? 2 : 4)}</span></span>
                             )}
+                          </div>
+                        )}
+                        {!locked && newsContext && (
+                          <div className="flex items-start gap-1.5 mt-2 text-xs text-blue-300">
+                            <span className="flex-shrink-0">📰</span>
+                            <span className="leading-relaxed">{newsContext}</span>
                           </div>
                         )}
                       </div>

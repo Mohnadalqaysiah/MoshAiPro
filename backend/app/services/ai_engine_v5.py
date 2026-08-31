@@ -310,6 +310,20 @@ class MoshAIEngineV5:
                         )
                         self._record_signal_issued(symbol, timeframe)
 
+                        # ── MARKET CONTEXT — optional news/sentiment summary ──
+                        # Advisory only, same contract as the Gemini summary
+                        # above: text only, never touches recommendation/
+                        # levels/confidence. Only called for signals that
+                        # already passed every gate, so API usage tracks what
+                        # users actually see. Never blocks the analysis.
+                        try:
+                            from app.services.news_context import get_news_context
+                            news_summary = await get_news_context(symbol)
+                            if news_summary:
+                                analysis["news_context"] = news_summary
+                        except Exception as _news_e:
+                            logger.warning(f"   News context failed (non-blocking): {_news_e}")
+
             # ── SMART RESCUE LAYER — DISABLED FROM PRODUCTION (2026-08-14) ──────
             # Architectural shift: strict veto rules (HTF/zone/risk-integrity)
             # must never be overridable, no matter how the rescue conditions

@@ -492,6 +492,10 @@ def fmt_new_signal(s: dict) -> str:
     if phase: msg += f"📐 Wyckoff: `{phase}`\n"
     if zone:  msg += f"💹 Zone:    `{zone}`\n"
 
+    news_ctx = s.get("news_context")
+    if news_ctx:
+        msg += f"📰 سياق السوق: _{news_ctx}_\n"
+
     msg += "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
     msg += "⚠️ _للمعلومات فقط، ليس توصية استثمارية._"
     return msg

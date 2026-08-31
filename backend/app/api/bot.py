@@ -242,6 +242,7 @@ async def bot_analyze(
                         status             = SignalStatus.ACTIVE,
                         expires_at         = expires_at,
                         broadcast_sent     = False,
+                        notes              = analysis.get("news_context"),  # سياق إخباري استشاري فقط
                     )
                     db.add(new_signal)
                     db.commit()
@@ -640,6 +641,7 @@ def bot_new_signals(
             "risk_reward_ratio": s.risk_reward_ratio,
             "wyckoff_phase":  s.wyckoff_phase,
             "premium_discount": s.premium_discount,
+            "news_context":   s.notes,
         })
 
     # إزالة التكرار: إشارة واحدة فقط لكل (رمز + إطار + اتجاه)

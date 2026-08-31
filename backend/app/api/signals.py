@@ -288,6 +288,7 @@ async def get_latest_signals(
                     "take_profit_1":    s.take_profit_1,
                     "take_profit_2":    s.take_profit_2,
                     "risk_reward_ratio": s.risk_reward_ratio,
+                    "news_context":     s.notes,
                 })
             else:
                 item.update({
