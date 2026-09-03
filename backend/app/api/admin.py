@@ -19,6 +19,7 @@ from app.models.market_config import MarketConfig
 from app.models.site_settings import SiteSettings
 from app.models.affiliate import Affiliate, AffiliateReferral, TIER1_RATE, TIER2_RATE, TIER2_THRESHOLD
 from app.models.signal import Signal, SignalStatus
+from app.services.decision_grouping import group_unique_decisions as _group_unique_decisions
 from app.services.auth_service import get_admin_user, hash_password, verify_password
 from app.services.smart_data import smart_data as _smart_data
 from app.services.subscription_service import activate_subscription_payment
@@ -1188,68 +1189,10 @@ class ReportSendIn(BaseModel):
     include_expired: bool = True  # يشمل المستخدمين منتهي الاشتراك
 
 
-# (2026-09-03) نفس القرار (نفس السوق+النوع+الفريم+سعر الدخول) بينحفظ
-# كصف منفصل بجدول signals لكل مستخدم استلمه (كل مستخدم عنده صفقة/مركز
-# مستقل بحسابه — هذا صحيح وضروري لتاريخه الشخصي، ولا يُمس هون إطلاقاً).
-# لكن أي تقرير مجمّع (winrate، عدد الصفقات، مجموع النقاط) لازم يُحسب على
-# مستوى "القرار الفريد"، مو الصف الخام — وإلا قرار واحد بُثّ لـ5
-# مستخدمين يُحتسب 5 مرات بدل مرة، فيضخّم/يشوّه كل رقم مجمّع.
-#
-# معيار التجميع: نفس (السوق، الفريم، نوع الإشارة، سعر الدخول بالضبط) —
-# monitor_watchlists يحلل كل رمز مرة وحدة بالدورة ويُعيد استخدام نفس
-# الـdata dict (وبالتالي نفس entry_price بالضبط) لكل مستخدم بنفس الدورة
-# (انظر symbol_results بـtelegram-bot/bot.py) — فالتطابق الحرفي موثوق.
-# نافذة زمنية ±2 دقيقة تفصل بين تكرارات نفس السعر بأوقات بعيدة فعلاً
-# (نادر، بس ممكن يرجع السعر لنفس المستوى بالضبط بعد ساعات).
-_DECISION_GROUP_WINDOW_MIN = 2
-
-
-def _group_unique_decisions(signals: list) -> list[dict]:
-    """يُجمّع صفوف Signal (بيانات خام، لا تُعدَّل) إلى "قرارات فريدة".
-
-    يُعيد قائمة dicts: كل عنصر = قرار واحد، فيه:
-      status, points (تمثيلية — من أول صف بالمجموعة), market, timeframe,
-      signal_type, entry_price, exit_executed, user_count (كم صف/مستخدم
-      بهالمجموعة), status_conflict (True لو صفوف المجموعة مختلفة بالنتيجة
-      — حالة شاذة تستاهل تحقيق منفصل، بنحسبها هون بس نُبلّغ عنها).
-    """
-    buckets: dict[tuple, list] = {}
-    for s in signals:
-        stype = s.signal_type.value if hasattr(s.signal_type, "value") else s.signal_type
-        key = (s.market, s.timeframe, stype, round(float(s.entry_price or 0), 5))
-        buckets.setdefault(key, []).append(s)
-
-    groups: list[dict] = []
-    for key, rows in buckets.items():
-        rows.sort(key=lambda r: r.created_at or datetime.min.replace(tzinfo=timezone.utc))
-        cluster: list = []
-        for r in rows:
-            if cluster:
-                gap_min = abs(((r.created_at or cluster[-1].created_at) - cluster[-1].created_at).total_seconds()) / 60
-                if gap_min > _DECISION_GROUP_WINDOW_MIN:
-                    groups.append(_finalize_decision_group(cluster))
-                    cluster = []
-            cluster.append(r)
-        if cluster:
-            groups.append(_finalize_decision_group(cluster))
-
-    return groups
-
-
-def _finalize_decision_group(rows: list) -> dict:
-    statuses = [r.status.value if hasattr(r.status, "value") else r.status for r in rows]
-    rep = rows[0]
-    return {
-        "market":         rep.market,
-        "timeframe":      rep.timeframe,
-        "signal_type":    rep.signal_type.value if hasattr(rep.signal_type, "value") else rep.signal_type,
-        "entry_price":    rep.entry_price,
-        "status":         max(set(statuses), key=statuses.count),   # الأغلبية (عادةً كلهم متطابقين)
-        "status_conflict": len(set(statuses)) > 1,
-        "points":         rep.points_earned or 0,
-        "exit_executed":  rep.exit_executed,
-        "user_count":     len(rows),
-    }
+# (2026-09-03) منطق تجميع "القرار الفريد" انتقل لملف مشترك
+# app/services/decision_grouping.py (مستورد فوق) — يُستخدم هون (تقارير
+# الأداء) وبـai_engine_v5.py (winrate الحقيقي لمعايرة العتبات) عشان ما
+# ينحرفوا عن بعض. راجع الملف المشترك للشرح الكامل.
 
 
 def _build_performance_report(signals: list, days: int) -> tuple[str, str]:

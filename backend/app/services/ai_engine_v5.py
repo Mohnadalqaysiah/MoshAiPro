@@ -3774,17 +3774,25 @@ class MoshAIEngineV5:
         return self._perf["wins"] / total if total > 0 else 0.55
 
     def load_performance_from_db(self, db_session) -> None:
+        """(2026-09-03) محسوبة الآن على مستوى "القرار الفريد"
+        (decision_grouping.group_unique_decisions)، مو الصف الخام —
+        نفس القرار المُبث لعدة مستخدمين كان يُحتسب مرة لكل مستخدم،
+        فيضخّم winrate المُستخدم فعلياً بمعايرة العتبات الحية
+        (_get_min_rr وغيرها). راجع app/services/decision_grouping.py."""
         try:
             from app.models.signal import Signal, SignalStatus
-            wins   = db_session.query(Signal).filter(
-                Signal.status.in_([SignalStatus.TP1_HIT, SignalStatus.TP2_HIT])
-            ).count()
-            losses = db_session.query(Signal).filter(
-                Signal.status == SignalStatus.SL_HIT
-            ).count()
+            from app.services.decision_grouping import group_unique_decisions
+
+            closed = db_session.query(Signal).filter(
+                Signal.status.in_([SignalStatus.TP1_HIT, SignalStatus.TP2_HIT, SignalStatus.SL_HIT])
+            ).all()
+            decisions = group_unique_decisions(closed)
+            wins   = sum(1 for d in decisions if d["status"] in ("TP1_HIT", "TP2_HIT"))
+            losses = sum(1 for d in decisions if d["status"] == "SL_HIT")
             self._perf = {"wins": wins, "losses": losses}
             logger.info(
-                f"Performance loaded: {wins}W/{losses}L "
+                f"Performance loaded: {wins}W/{losses}L unique decisions "
+                f"(من {len(closed)} صف خام) "
                 f"winrate={self.get_winrate():.0%} "
                 f"min_rr={self._get_min_rr()}"
             )

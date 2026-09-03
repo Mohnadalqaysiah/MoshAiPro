@@ -388,6 +388,16 @@ async def bot_check_outcomes(
     # يجب استخدام نفس مصدر السعر (TV OANDA Spot) للمقارنة الصحيحة
     _SPOT_SYMBOLS = {"XAUUSD", "XAGUSD"}
 
+    # (2026-09-03) نفس القرار (سوق+فريم+نوع+سعر دخول) بينحفظ كصف Signal
+    # منفصل لكل مستخدم استلمه — كلهم بيوصلوا لنفس new_status بنفس هالدورة
+    # بالضبط (نفس entry/sl/tp، ونفس السعر الحالي المفحوص). بدون هالـset،
+    # update_performance() كان بيتصل مرة لكل صف/مستخدم بدل مرة لكل قرار
+    # فعلي، فيضخّم winrate المحرك المُستخدم لمعايرة العتبات الحية. راجع
+    # app/services/decision_grouping.py للمنطق الكامل المشترك مع تقارير
+    # الأداء (نفس المعيار، هون بدل تشغيل تجميع كامل بكل استدعاء).
+    from app.services.decision_grouping import decision_key
+    _perf_counted_this_cycle: set = set()
+
     triggered = []
     for sig in active:
         try:
@@ -406,7 +416,15 @@ async def bot_check_outcomes(
                         price = float(tv_p)
                     else:
                         # fallback: theoretical carry
-                        from app.services.ai_engine_v5 import mosh_ai_engine_v5
+                        # (2026-09-03) كان في import محلي لـmosh_ai_engine_v5 هون —
+                        # بايثون بيعتبر أي اسم مستورد جوا الدالة "محلي" لكل الدالة
+                        # كلها (مش بس الفرع هذا)، فبيحجب النسخة العامة المستوردة
+                        # فوق (سطر 15) طول الدالة. أي استدعاء لـmosh_ai_engine_v5
+                        # قبل ما هالسطر يتنفذ فعلياً بنفس الاستدعاء (زي
+                        # update_performance تحت) كان يطلع UnboundLocalError —
+                        # مكتوم بصمت بالـexcept العام، فمنعت تسجيل winrate الحي
+                        # ونتيجة الصفقة (triggered.append) بالكامل لأي إشارة
+                        # تُعالَج قبل أول استخدام فعلي لهالفرع بنفس الدورة.
                         price_raw, _ = mosh_ai_engine_v5._fetch_spot_price(market_upper)
                         price = float(price_raw) if price_raw > 0 else None
                 except Exception:
@@ -449,13 +467,17 @@ async def bot_check_outcomes(
                 sig.exit_executed           = datetime.now(timezone.utc)
                 db.commit()
 
-                # تحديث performance tracker في المحرك (Task 6)
-                perf_result = "WIN" if new_status in (SignalStatus.TP1_HIT, SignalStatus.TP2_HIT) else "LOSS"
-                mosh_ai_engine_v5.update_performance(perf_result)
-                logger.info(
-                    f"Performance updated: {perf_result} | "
-                    f"winrate={mosh_ai_engine_v5.get_winrate():.0%}"
-                )
+                # تحديث performance tracker في المحرك (Task 6) — مرة وحدة
+                # لكل قرار فريد، مو لكل صف/مستخدم (انظر التعليق فوق الحلقة)
+                dkey = decision_key(sig.market, sig.timeframe, sig.signal_type, sig.entry_price)
+                if dkey not in _perf_counted_this_cycle:
+                    _perf_counted_this_cycle.add(dkey)
+                    perf_result = "WIN" if new_status in (SignalStatus.TP1_HIT, SignalStatus.TP2_HIT) else "LOSS"
+                    mosh_ai_engine_v5.update_performance(perf_result)
+                    logger.info(
+                        f"Performance updated: {perf_result} | "
+                        f"winrate={mosh_ai_engine_v5.get_winrate():.0%}"
+                    )
 
                 payload = {
                     "signal_id":    sig.id,
