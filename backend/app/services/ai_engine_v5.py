@@ -840,6 +840,16 @@ class MoshAIEngineV5:
     _CALIB_SILENCE_HOURS  = 3        # was 6 — trigger silence relaxation after 3h not 6h
     _WINRATE_THRESHOLD    = 0.68     # don't raise thresholds if winrate already high
 
+    # (2026-09-03) قرار طارئ — إيقاف اعتماد أي رقم winrate تاريخي (خام أو
+    # حتى المصحح بالتجميع) بمعايرة العتبات، لحد ما ندقق حجم مشكلة التحديد
+    # اليدوي غير الموثوق (~42.6% من الصفوف اليدوية القديمة غير مؤكدة فعلياً
+    # مقابل OHLC حقيقي — راجع verify_tp_hits.py بالمحادثة). قيمة محافظة
+    # ثابتة (0.50) بدل رقم غير موثوق — تقع عمداً بين عتبتي 40%/68% فما
+    # بتفعّل فرع "التساهل" ولا فرع "العقوبة" بـ_auto_calibrate_thresholds،
+    # يعني حياد حقيقي مو تفاؤل ولا تشاؤم. ألغِ هالسطر (خليه None) بعد ما
+    # تُحسم موثوقية winrate المُصحح (get_winrate بعد استبعاد اليدوي بالكامل).
+    _WINRATE_OVERRIDE: Optional[float] = 0.50
+
     def _auto_calibrate_thresholds(
         self,
         analysis: dict,
@@ -3770,30 +3780,49 @@ class MoshAIEngineV5:
         elif result == "LOSS": self._perf["losses"] += 1
 
     def get_winrate(self) -> float:
+        # (2026-09-03) override طارئ — راجع تعليق _WINRATE_OVERRIDE أعلى
+        # الكلاس. بيتجاوز أي رقم محسوب (خام أو مُصحح) طول ما هو مضبوط.
+        if self._WINRATE_OVERRIDE is not None:
+            return self._WINRATE_OVERRIDE
         total = self._perf["wins"] + self._perf["losses"]
         return self._perf["wins"] / total if total > 0 else 0.55
 
     def load_performance_from_db(self, db_session) -> None:
-        """(2026-09-03) محسوبة الآن على مستوى "القرار الفريد"
-        (decision_grouping.group_unique_decisions)، مو الصف الخام —
-        نفس القرار المُبث لعدة مستخدمين كان يُحتسب مرة لكل مستخدم،
-        فيضخّم winrate المُستخدم فعلياً بمعايرة العتبات الحية
-        (_get_min_rr وغيرها). راجع app/services/decision_grouping.py."""
+        """(2026-09-03) محسوبة على مستوى "القرار الفريد"
+        (decision_grouping.group_unique_decisions)، مو الصف الخام — نفس
+        القرار المُبث لعدة مستخدمين كان يُحتسب مرة لكل مستخدم. بالإضافة،
+        تُستبعد كل الصفوف اليدوية (current_price IS NULL — تحديد عبر لوحة
+        الأدمن، PATCH /admin/signals/{id}/outcome) بالكامل، بغض النظر عن
+        التاريخ: تحقق حقيقي مقابل OHLC تاريخي لقى ~42.6% من التحديد اليدوي
+        القديم غير مؤكد فعلياً بالسعر (راجع verify_tp_hits.py بالمحادثة).
+        فقط الصفوف التلقائية (check_outcomes، يضبط current_price دائماً
+        بالسعر الحقيقي المجلوب وقت الفحص) تُحتسب هون. راجع
+        app/services/decision_grouping.py للمنطق المشترك.
+
+        (get_winrate() نفسها متجاوَزة حالياً بـ_WINRATE_OVERRIDE — هالرقم
+        المُصحح هون بيتحسب ويُسجَّل باللوج للمراجعة، بس ما يُستخدم فعلياً
+        بمعايرة العتبات لحد ما يُرفع الـoverride صراحة.)"""
         try:
             from app.models.signal import Signal, SignalStatus
             from app.services.decision_grouping import group_unique_decisions
 
             closed = db_session.query(Signal).filter(
-                Signal.status.in_([SignalStatus.TP1_HIT, SignalStatus.TP2_HIT, SignalStatus.SL_HIT])
+                Signal.status.in_([SignalStatus.TP1_HIT, SignalStatus.TP2_HIT, SignalStatus.SL_HIT]),
+                Signal.current_price.isnot(None),   # استبعاد التحديد اليدوي غير الموثوق بالكامل
             ).all()
             decisions = group_unique_decisions(closed)
             wins   = sum(1 for d in decisions if d["status"] in ("TP1_HIT", "TP2_HIT"))
             losses = sum(1 for d in decisions if d["status"] == "SL_HIT")
             self._perf = {"wins": wins, "losses": losses}
+            real_wr = wins / (wins + losses) if (wins + losses) > 0 else 0.0
+            override_note = (
+                f" [get_winrate() override=({self._WINRATE_OVERRIDE:.0%})]"
+                if self._WINRATE_OVERRIDE is not None else ""
+            )
             logger.info(
-                f"Performance loaded: {wins}W/{losses}L unique decisions "
-                f"(من {len(closed)} صف خام) "
-                f"winrate={self.get_winrate():.0%} "
+                f"Performance loaded: {wins}W/{losses}L unique decisions من صفوف تلقائية فقط "
+                f"(من {len(closed)} صف بعد استبعاد اليدوي) "
+                f"real_winrate={real_wr:.0%}{override_note} "
                 f"min_rr={self._get_min_rr()}"
             )
         except Exception as e:

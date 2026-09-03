@@ -947,7 +947,13 @@ def send_telegram_message(
 
 class SignalOutcomeIn(BaseModel):
     status: str  # "TP1_HIT", "TP2_HIT", "SL_HIT", "EXPIRED"
-    closed_price: Optional[float] = None  # optional, auto-derived from TP/SL if not given
+    # (2026-09-03) كان اختياري ("auto-derived from TP/SL if not given") —
+    # هذا بالضبط سبب المشكلة: يسمح بتسجيل TP_HIT/SL_HIT بدون أي سعر حقيقي
+    # مرفق، بس مستوى TP/SL النظري نفسه. تحقق حقيقي مقابل OHLC تاريخي على
+    # صفوف قديمة لقى نسبة كبيرة (~42.6%) من التحديد اليدوي غير مؤكدة فعلياً
+    # بالسعر. صار إجباري لـTP1_HIT/TP2_HIT/SL_HIT تحديداً (endpoint نفسه
+    # يرفض الطلب بدونه) — انظر set_signal_outcome.
+    closed_price: Optional[float] = None
 
 
 def _calc_points(market: str, price_diff: float) -> float:
@@ -1011,7 +1017,21 @@ def set_signal_outcome(
     admin: User = Depends(get_admin_user),
     db: Session = Depends(get_db),
 ):
-    """تحديد نتيجة إشارة (TP1/TP2/SL/EXPIRED)"""
+    """تحديد نتيجة إشارة (TP1/TP2/SL/EXPIRED) — يدوي، من لوحة الأدمن.
+
+    (2026-09-03) صار يتطلب closed_price إجباري لـTP1_HIT/TP2_HIT/SL_HIT
+    (مو EXPIRED — ما بتدّعي وصول أي مستوى أصلاً)، ويتحقق إنه يطابق فعلاً
+    الادعاء (السعر وصل المستوى المُسجَّل، مو أي رقم). هذا رد مباشر على
+    تحقيق حقيقي: نسبة كبيرة من الصفوف اليدوية القديمة (بدون سعر مرفق،
+    كانت تستخدم مستوى TP/SL النظري نفسه كـ"سعر إغلاق" تلقائياً) لم تكن
+    مؤكدة فعلياً مقابل بيانات السوق التاريخية.
+
+    current_price متروك عمداً NULL هون (لا يُضبط أبداً بهالمسار) — هو
+    الفارق الوحيد الموثوق بالكود بين إشارة تحققت تلقائياً عبر
+    check_outcomes (يضبطه دائماً بالسعر الحقيقي المجلوب) وإشارة حُدّدت
+    يدوياً هون. get_winrate()/load_performance_from_db() يعتمدون على
+    current_price IS NOT NULL لاستبعاد كل التحديد اليدوي من حساب الأداء
+    المُستخدم لمعايرة العتبات — حتى لو صار موثّق بسعر حقيقي هلق."""
     signal = db.query(Signal).filter(Signal.id == signal_id).first()
     if not signal:
         raise HTTPException(404, "الإشارة غير موجودة")
@@ -1026,27 +1046,45 @@ def set_signal_outcome(
     tp2   = signal.take_profit_2
     is_buy = (signal.signal_type.value if hasattr(signal.signal_type, 'value') else signal.signal_type) == "BUY"
 
+    if data.status in ("TP1_HIT", "TP2_HIT", "SL_HIT") and not data.closed_price:
+        raise HTTPException(
+            400,
+            "closed_price إجباري لـ TP1_HIT/TP2_HIT/SL_HIT — رفق السعر الحقيقي "
+            "اللي وصلته الصفقة فعلاً (مو تخمين)، ما بينحسب تلقائياً من مستوى الهدف بعد اليوم."
+        )
+
+    # (2026-09-03) تحقق التطابق: السعر المرفق لازم يكون وصل فعلاً للمستوى
+    # المُدّعى — تسامح صغير (0.05%) لفروق تنفيذ طبيعية، مش لفتح ثغرة.
+    _TOL = 0.0005
     if data.status == "TP1_HIT":
-        exit_price = data.closed_price or tp1
-        diff = abs(tp1 - entry)
-        # For BUY: tp1 > entry so positive; for SELL: entry > tp1 so positive too
-        pts = _calc_points(signal.market, diff)
-        if not is_buy:
-            diff = abs(entry - tp1)
-            pts = _calc_points(signal.market, diff)
-        points = pts
+        ok = (data.closed_price >= tp1 * (1 - _TOL)) if is_buy else (data.closed_price <= tp1 * (1 + _TOL))
+        if not ok:
+            raise HTTPException(400, f"closed_price={data.closed_price} لم يصل فعلياً لهدف TP1={tp1} — تحقق من السعر")
+    elif data.status == "TP2_HIT":
+        ok = (data.closed_price >= tp2 * (1 - _TOL)) if is_buy else (data.closed_price <= tp2 * (1 + _TOL))
+        if not ok:
+            raise HTTPException(400, f"closed_price={data.closed_price} لم يصل فعلياً لهدف TP2={tp2} — تحقق من السعر")
+    elif data.status == "SL_HIT":
+        ok = (data.closed_price <= sl * (1 + _TOL)) if is_buy else (data.closed_price >= sl * (1 - _TOL))
+        if not ok:
+            raise HTTPException(400, f"closed_price={data.closed_price} لم يصل فعلياً لمستوى SL={sl} — تحقق من السعر")
+
+    if data.status == "TP1_HIT":
+        exit_price = data.closed_price
+        diff = abs(tp1 - entry) if is_buy else abs(entry - tp1)
+        points = _calc_points(signal.market, diff)
 
     elif data.status == "TP2_HIT":
-        exit_price = data.closed_price or tp2
+        exit_price = data.closed_price
         diff = abs(tp2 - entry)
         points = _calc_points(signal.market, diff)
 
     elif data.status == "SL_HIT":
-        exit_price = data.closed_price or sl
+        exit_price = data.closed_price
         diff = abs(entry - sl)
         points = -_calc_points(signal.market, diff)
 
-    else:  # EXPIRED
+    else:  # EXPIRED — لا يدّعي وصول أي مستوى، السعر يبقى اختياري
         exit_price = data.closed_price or entry
         points = 0.0
 
@@ -1068,10 +1106,11 @@ def set_signal_outcome(
     signal.profit_loss              = round(points, 2)
     signal.profit_loss_percentage   = pnl_pct
     signal.exit_executed            = datetime.now(timezone.utc)
+    # current_price عمداً غير مُضبوط هون — راجع تعليق أعلى الدالة
 
     db.commit()
     db.refresh(signal)
-    logger.info(f"Signal {signal_id} outcome: {data.status}, points={points:.2f}, pnl%={pnl_pct:.3f}%")
+    logger.info(f"Signal {signal_id} outcome (manual): {data.status}, closed_price={data.closed_price}, points={points:.2f}, pnl%={pnl_pct:.3f}%")
     return {"success": True, "signal": _signal_info(signal)}
 
 
