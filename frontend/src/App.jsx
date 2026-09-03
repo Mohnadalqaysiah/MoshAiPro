@@ -3,14 +3,21 @@ import { lazy, Suspense, useEffect } from 'react'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { LangProvider, useLang } from './contexts/LangContext'
 import { ThemeProvider } from './contexts/ThemeContext'
-import OnboardingTour from './components/OnboardingTour'
 import './App.css'
 
-// Eagerly load only the most critical shared components
-import Navbar             from './components/Navbar'
-import TrialBanner        from './components/TrialBanner'
-import TelegramLinkBanner from './components/TelegramLinkBanner'
-import EmailVerifyBanner  from './components/EmailVerifyBanner'
+// (2026-09-04) كانوا مستوردين eagerly ("أهم المكونات المشتركة") — لكن
+// كلهم يُعرَضون حصراً جوا ProtectedRoute (شجرة /* المحمية بالأسفل)، يعني
+// أي زائر لصفحة عامة (/, /sa, /ae, /pricing...) يحمّل كودهم بدون أي
+// استخدام فعلي — بالضبط "JavaScript غير مستخدَم" اللي رصده Lighthouse
+// بـchunk الدخول الرئيسي. ProtectedRoute أصلاً بتعرض حالة تحميل خاصة فيها
+// (auth loading check) قبل ما توصل لهالمكونات، وSuspense فوق بالـRoutes
+// كله جاهز أصلاً — تحويلهم lazy ما بيضيف أي وميض جديد، بس بيشيلهم من
+// حزمة الصفحات العامة.
+const Navbar             = lazy(() => import('./components/Navbar'))
+const TrialBanner        = lazy(() => import('./components/TrialBanner'))
+const TelegramLinkBanner = lazy(() => import('./components/TelegramLinkBanner'))
+const EmailVerifyBanner  = lazy(() => import('./components/EmailVerifyBanner'))
+const OnboardingTour     = lazy(() => import('./components/OnboardingTour'))
 
 // Lazy-load all pages — each becomes its own JS chunk
 const Landing        = lazy(() => import('./pages/Landing'))

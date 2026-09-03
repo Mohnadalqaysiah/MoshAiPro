@@ -18,6 +18,15 @@ function deferCSSPlugin() {
 
 export default defineConfig({
   plugins: [react(), deferCSSPlugin()],
+  // (2026-09-04) lucide-react يحمل تعليق @license مكرر بكل أيقونة مستوردة
+  // (105 نسخة متطابقة بـvendor-icons chunk وحده — ~18KB، طابق تماماً
+  // "Minify JavaScript" الذي رصده Lighthouse). esbuild يحافظ على تعليقات
+  // legal افتراضياً حتى بالبناء المُصغّر. 'eof' يبقي نسخة واحدة فقط
+  // بآخر الملف (يحافظ على شرط ترخيص ISC بذكر الإشعار) بدل حذفه بالكامل
+  // ('none') — يشيل 104 من الـ105 تكرار، تقريباً نفس التوفير بأمان قانوني أكبر.
+  esbuild: {
+    legalComments: 'eof',
+  },
   server: {
     host: '0.0.0.0',
     port: 3000,
