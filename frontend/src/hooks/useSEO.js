@@ -18,7 +18,7 @@ function setOrRemoveAlternate(hreflang, href) {
   }
 }
 
-export default function useSEO({ title, description, canonical }) {
+export default function useSEO({ title, description, canonical, extraHreflang }) {
   useEffect(() => {
     if (title) document.title = title
 
@@ -53,5 +53,16 @@ export default function useSEO({ title, description, canonical }) {
       setOrRemoveAlternate('en', null)
       setOrRemoveAlternate('x-default', null)
     }
-  }, [title, description, canonical])
+
+    // hreflang إقليمي إضافي (مثل ar-SA/ar-AE لصفحات هبوط دولة محددة) —
+    // لا يتعارض مع الـar/en/x-default فوق، بيضيف إشارة جغرافية أدق.
+    if (extraHreflang) {
+      extraHreflang.forEach(({ hreflang, href }) => setOrRemoveAlternate(hreflang, href))
+    }
+    return () => {
+      if (extraHreflang) {
+        extraHreflang.forEach(({ hreflang }) => setOrRemoveAlternate(hreflang, null))
+      }
+    }
+  }, [title, description, canonical, extraHreflang])
 }

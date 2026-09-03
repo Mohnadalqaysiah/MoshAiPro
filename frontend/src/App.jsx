@@ -22,6 +22,8 @@ const Privacy        = lazy(() => import('./pages/Privacy'))
 const Contact        = lazy(() => import('./pages/Contact'))
 const About          = lazy(() => import('./pages/About'))
 const Vision         = lazy(() => import('./pages/Vision'))
+const SaudiLanding   = lazy(() => import('./pages/SaudiLanding'))
+const UAELanding     = lazy(() => import('./pages/UAELanding'))
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
 const ReferralProgram = lazy(() => import('./pages/ReferralProgram'))
 const BlogList        = lazy(() => import('./pages/BlogList'))
@@ -98,6 +100,8 @@ function AppRoutes() {
         <Route path="/referral"          element={<ReferralProgram />} />
         <Route path="/blog"              element={<BlogList />} />
         <Route path="/blog/:slug"        element={<BlogPost />} />
+        <Route path="/sa"                element={<SaudiLanding />} />
+        <Route path="/ae"                element={<UAELanding />} />
 
         {/* English mirrors — نفس الصفحات المذكورة فوق، كلها bilingual الآن.
             بادئة /en تفرض عرض المحتوى الإنجليزي (LangRouteSync) بدل الاعتماد

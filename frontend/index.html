@@ -131,7 +131,10 @@
     </script>
 
     <!-- Structured Data: Organization (مستقل عن SoftwareApplication.publisher —
-         هوية الشركة نفسها بغض النظر عن أي منتج/تطبيق) -->
+         هوية الشركة نفسها بغض النظر عن أي منتج/تطبيق)
+         areaServed أُضيفت 2026-09-04 — نطاق جغرافي صريح يذكر السعودية
+         والإمارات (أولوية استهداف Search Console الحالية) ضمن نطاق أوسع،
+         مو حصراً عليهم فقط — المنصة تخدم كل الناطقين بالعربية عالمياً. -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -142,6 +145,14 @@
       "sameAs": [
         "https://t.me/Qaffelbot",
         "https://www.instagram.com/qaffel_ai/"
+      ],
+      "areaServed": [
+        { "@type": "Country", "name": "Saudi Arabia", "alternateName": "المملكة العربية السعودية" },
+        { "@type": "Country", "name": "United Arab Emirates", "alternateName": "الإمارات العربية المتحدة" },
+        { "@type": "Country", "name": "Qatar", "alternateName": "قطر" },
+        { "@type": "Country", "name": "Kuwait", "alternateName": "الكويت" },
+        { "@type": "Country", "name": "Bahrain", "alternateName": "البحرين" },
+        { "@type": "Country", "name": "Egypt", "alternateName": "مصر" }
       ],
       "contactPoint": {
         "@type": "ContactPoint",
