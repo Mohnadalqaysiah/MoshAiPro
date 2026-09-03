@@ -12,6 +12,7 @@ from app.models.market_config import MarketConfig
 from app.models.signal import Signal, SignalStatus
 from app.services.auth_service import get_current_user
 from app.services.smart_data import smart_data
+from app.services.decision_grouping import verified_unique_decisions
 
 settings = get_settings()
 router = APIRouter()
@@ -119,17 +120,19 @@ def market_overview(
     )
 
     # Win-rate آخر 30 يوم لكل رمز
-    perf_sigs = db.query(Signal).filter(
+    # (2026-09-03) نفس إصلاح signals.py — راجع app/services/decision_grouping.py
+    perf_sigs_raw = db.query(Signal).filter(
         Signal.status.in_(closed),
         Signal.created_at >= since_30d,
     ).all()
+    perf_decisions = verified_unique_decisions(perf_sigs_raw)
 
     perf: dict = {}
-    for s in perf_sigs:
-        m = s.market or "?"
+    for d in perf_decisions:
+        m = d["market"] or "?"
         if m not in perf:
             perf[m] = {"wins": 0, "losses": 0}
-        if s.status in (SignalStatus.TP1_HIT, SignalStatus.TP2_HIT):
+        if d["status"] in ("TP1_HIT", "TP2_HIT"):
             perf[m]["wins"] += 1
         else:
             perf[m]["losses"] += 1

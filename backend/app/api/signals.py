@@ -18,6 +18,7 @@ from app.models.user import User, PlanType, UserRole
 from app.models.site_settings import SiteSettings
 from app.services.auth_service import get_current_user, check_subscription, deduct_trial
 from app.api.bot import _check_loss_streak_breaker, _has_active_signal
+from app.services.decision_grouping import verified_unique_decisions
 
 
 def _calc_lot_size(account_balance: float, risk_percent: float,
@@ -379,25 +380,33 @@ async def get_signal_performance(
             .all()
         )
 
+    # (2026-09-03) كل بلوك تحت كان يحسب مباشرة على صفوف Signal الخام —
+    # نفس القرار المُبث لعدة مستخدمين (كل واحد له صف مستقل بحسابه، صحيح
+    # وضروري لتاريخه الشخصي) كان يُحتسب مرة لكل مستخدم بدل مرة، فيضخّم كل
+    # رقم هون. verified_unique_decisions() تستبعد التحديد اليدوي غير
+    # الموثوق (current_price IS NULL) وتُجمّع الباقي لقرارات فريدة — راجع
+    # app/services/decision_grouping.py. النتيجة قائمة dicts (status/
+    # signal_type كنص، points بدل points_earned).
+
     # ── Current week ──
     week_start = datetime.combine(
         today - timedelta(days=today.weekday()), dt_time(0, 0, 0)
     ).replace(tzinfo=timezone.utc)
     week_end = week_start + timedelta(days=7)
 
-    week_signals = _signals_in_range(week_start, week_end)
-    wins   = [s for s in week_signals if (s.points_earned or 0) > 0]
-    losses = [s for s in week_signals if (s.points_earned or 0) < 0]
-    total_points = sum(s.points_earned or 0 for s in week_signals)
-    win_points   = sum(s.points_earned or 0 for s in wins)
-    loss_points  = sum(s.points_earned or 0 for s in losses)
+    week_decisions = verified_unique_decisions(_signals_in_range(week_start, week_end))
+    wins   = [d for d in week_decisions if d["points"] > 0]
+    losses = [d for d in week_decisions if d["points"] < 0]
+    total_points = sum(d["points"] for d in week_decisions)
+    win_points   = sum(d["points"] for d in wins)
+    loss_points  = sum(d["points"] for d in losses)
 
     current_week = {
         "week_label":    f"الأسبوع {iso_week} / {iso_year}",
         "total_points":  round(total_points, 2),
         "win_points":    round(win_points, 2),
         "loss_points":   round(loss_points, 2),
-        "total_trades":  len(week_signals),
+        "total_trades":  len(week_decisions),
         "wins":          len(wins),
         "losses":        len(losses),
     }
@@ -408,25 +417,25 @@ async def get_signal_performance(
         day = today - timedelta(days=i)
         day_start = datetime.combine(day, dt_time(0, 0, 0)).replace(tzinfo=timezone.utc)
         day_end   = day_start + timedelta(days=1)
-        day_sigs  = _signals_in_range(day_start, day_end)
-        day_wins  = [s for s in day_sigs if (s.points_earned or 0) > 0]
-        day_losses= [s for s in day_sigs if (s.points_earned or 0) < 0]
+        day_decisions = verified_unique_decisions(_signals_in_range(day_start, day_end))
+        day_wins  = [d for d in day_decisions if d["points"] > 0]
+        day_losses= [d for d in day_decisions if d["points"] < 0]
         trades_detail = [
             {
-                "id":     s.id,
-                "market": s.market,
-                "type":   s.signal_type.value if hasattr(s.signal_type, 'value') else s.signal_type,
-                "status": s.status.value if hasattr(s.status, 'value') else s.status,
-                "points": round(s.points_earned or 0, 2),
-                "entry":  s.entry_price,
-                "exit":   s.exit_executed.isoformat() if s.exit_executed else None,
+                "id":     d["id"],
+                "market": d["market"],
+                "type":   d["signal_type"],
+                "status": d["status"],
+                "points": round(d["points"], 2),
+                "entry":  d["entry_price"],
+                "exit":   d["exit_executed"].isoformat() if d["exit_executed"] else None,
             }
-            for s in day_sigs
+            for d in day_decisions
         ]
         daily_stats.append({
             "date":          day.isoformat(),
-            "points":        round(sum(s.points_earned or 0 for s in day_sigs), 2),
-            "trades":        len(day_sigs),
+            "points":        round(sum(d["points"] for d in day_decisions), 2),
+            "trades":        len(day_decisions),
             "wins":          len(day_wins),
             "losses":        len(day_losses),
             "trades_detail": trades_detail,
@@ -437,17 +446,17 @@ async def get_signal_performance(
     for w in range(7, -1, -1):
         wk_start = week_start - timedelta(weeks=w)
         wk_end   = wk_start + timedelta(days=7)
-        wk_sigs  = _signals_in_range(wk_start, wk_end)
-        wk_wins  = [s for s in wk_sigs if (s.points_earned or 0) > 0]
-        wk_losses= [s for s in wk_sigs if (s.points_earned or 0) < 0]
-        wk_pts   = sum(s.points_earned or 0 for s in wk_sigs)
+        wk_decisions = verified_unique_decisions(_signals_in_range(wk_start, wk_end))
+        wk_wins  = [d for d in wk_decisions if d["points"] > 0]
+        wk_losses= [d for d in wk_decisions if d["points"] < 0]
+        wk_pts   = sum(d["points"] for d in wk_decisions)
         wk_iso   = wk_start.isocalendar()
         weekly_stats.append({
             "week":          f"W{wk_iso[1]}/{wk_iso[0]}",
             "total_points":  round(wk_pts, 2),
-            "win_points":    round(sum(s.points_earned or 0 for s in wk_wins), 2),
-            "loss_points":   round(sum(s.points_earned or 0 for s in wk_losses), 2),
-            "total_trades":  len(wk_sigs),
+            "win_points":    round(sum(d["points"] for d in wk_wins), 2),
+            "loss_points":   round(sum(d["points"] for d in wk_losses), 2),
+            "total_trades":  len(wk_decisions),
             "wins":          len(wk_wins),
             "losses":        len(wk_losses),
         })
@@ -475,62 +484,63 @@ def get_public_results(db: Session = Depends(get_db)):
 
     closed_statuses = [SignalStatus.TP1_HIT, SignalStatus.TP2_HIT, SignalStatus.SL_HIT]
 
-    # ── Last 12 closed trades (most recent first) ──
-    recent = (
+    # (2026-09-03) نفس إصلاح get_signal_performance فوق — راجع تعليقها.
+    # "آخر 12 صفقة" هون تحديداً: بدون تجميع كانت ممكن تعرض نفس القرار
+    # 5 مرات متتالية (مرة لكل مستخدم استلمه) بصفحة عامة للزوار — نجيب
+    # مجموعة خام أكبر (آخر 150) عشان يضل عندنا 12 قرار فريد فعلي بعد
+    # التجميع، مو بس آخر 12 صف خام.
+    recent_raw = (
         db.query(Signal)
         .filter(Signal.status.in_(closed_statuses))
         .order_by(Signal.exit_executed.desc())
-        .limit(12)
+        .limit(150)
         .all()
     )
+    recent_decisions = verified_unique_decisions(recent_raw)
+    recent_decisions.sort(key=lambda d: d["exit_executed"] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
 
     trades = []
-    for s in recent:
-        status_val = s.status.value if hasattr(s.status, "value") else str(s.status)
-        type_val   = s.signal_type.value if hasattr(s.signal_type, "value") else str(s.signal_type)
-        pts        = round(s.points_earned or 0, 1)
-        is_win     = pts > 0
+    for d in recent_decisions[:12]:
+        pts    = round(d["points"], 1)
         trades.append({
-            "market":   s.market or "—",
-            "type":     type_val,
-            "result":   status_val,
+            "market":   d["market"] or "—",
+            "type":     d["signal_type"],
+            "result":   d["status"],
             "points":   pts,
-            "win":      is_win,
-            "closed_at": s.exit_executed.strftime("%Y-%m-%d") if s.exit_executed else None,
+            "win":      pts > 0,
+            "closed_at": d["exit_executed"].strftime("%Y-%m-%d") if d["exit_executed"] else None,
         })
 
     # ── Week stats ──
-    week_sigs = (
-        db.query(Signal)
-        .filter(
+    week_decisions = verified_unique_decisions(
+        db.query(Signal).filter(
             Signal.status.in_(closed_statuses),
             Signal.exit_executed >= week_start,
-        )
-        .all()
+        ).all()
     )
-    wins   = [s for s in week_sigs if (s.points_earned or 0) > 0]
-    losses = [s for s in week_sigs if (s.points_earned or 0) < 0]
-    total_pts   = round(sum(s.points_earned or 0 for s in week_sigs), 1)
-    win_rate    = round(len(wins) / len(week_sigs) * 100) if week_sigs else 0
-    best_trade  = max((s.points_earned or 0 for s in wins), default=0)
+    wins   = [d for d in week_decisions if d["points"] > 0]
+    losses = [d for d in week_decisions if d["points"] < 0]
+    total_pts   = round(sum(d["points"] for d in week_decisions), 1)
+    win_rate    = round(len(wins) / len(week_decisions) * 100) if week_decisions else 0
+    best_trade  = max((d["points"] for d in wins), default=0)
 
     # ── All-time totals ──
-    all_closed = db.query(Signal).filter(Signal.status.in_(closed_statuses)).all()
-    all_wins   = [s for s in all_closed if (s.points_earned or 0) > 0]
-    all_rate   = round(len(all_wins) / len(all_closed) * 100) if all_closed else 0
+    all_decisions = verified_unique_decisions(db.query(Signal).filter(Signal.status.in_(closed_statuses)).all())
+    all_wins      = [d for d in all_decisions if d["points"] > 0]
+    all_rate      = round(len(all_wins) / len(all_decisions) * 100) if all_decisions else 0
 
     return {
         "trades": trades,
         "week": {
             "wins":       len(wins),
             "losses":     len(losses),
-            "total":      len(week_sigs),
+            "total":      len(week_decisions),
             "points":     total_pts,
             "win_rate":   win_rate,
             "best_trade": round(best_trade, 1),
         },
         "all_time": {
-            "total":    len(all_closed),
+            "total":    len(all_decisions),
             "wins":     len(all_wins),
             "win_rate": all_rate,
         },
@@ -544,23 +554,34 @@ def signals_scorecard(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
-    """لوحة أداء الإشارات — نسبة الفوز لكل رمز"""
+    """لوحة أداء الإشارات — نسبة الفوز لكل رمز
+
+    (2026-09-03) wins/losses (نسبة الفوز — الرقم الحساس) محسوبة على
+    مستوى القرار الفريد الموثوق (verified_unique_decisions)، راجع
+    app/services/decision_grouping.py. active/expired تبقى عدّ خام —
+    مو ادعاء أداء، وكل مستخدم فعلاً عنده مركزه المستقل لسا مفتوح/منتهي."""
     closed_statuses = [SignalStatus.TP1_HIT, SignalStatus.TP2_HIT, SignalStatus.SL_HIT]
 
-    all_signals = db.query(Signal).filter(
-        Signal.status.in_(closed_statuses + [SignalStatus.ACTIVE, SignalStatus.EXPIRED])
+    closed_raw = db.query(Signal).filter(Signal.status.in_(closed_statuses)).all()
+    open_ended = db.query(Signal).filter(
+        Signal.status.in_([SignalStatus.ACTIVE, SignalStatus.EXPIRED])
     ).all()
 
     stats: dict = {}
-    for sig in all_signals:
+    for d in verified_unique_decisions(closed_raw):
+        m = d["market"]
+        if m not in stats:
+            stats[m] = {"wins": 0, "losses": 0, "active": 0, "expired": 0}
+        if d["status"] in ("TP1_HIT", "TP2_HIT"):
+            stats[m]["wins"] += 1
+        elif d["status"] == "SL_HIT":
+            stats[m]["losses"] += 1
+
+    for sig in open_ended:
         m = sig.market
         if m not in stats:
             stats[m] = {"wins": 0, "losses": 0, "active": 0, "expired": 0}
-        if sig.status in (SignalStatus.TP1_HIT, SignalStatus.TP2_HIT):
-            stats[m]["wins"] += 1
-        elif sig.status == SignalStatus.SL_HIT:
-            stats[m]["losses"] += 1
-        elif sig.status == SignalStatus.ACTIVE:
+        if sig.status == SignalStatus.ACTIVE:
             stats[m]["active"] += 1
         else:
             stats[m]["expired"] += 1
@@ -619,23 +640,26 @@ def signals_backtest(
     if timeframe:
         q = q.filter(Signal.timeframe == timeframe)
 
-    sigs = q.order_by(Signal.created_at.desc()).all()
+    # (2026-09-03) نفس إصلاح get_signal_performance/get_public_results —
+    # راجع app/services/decision_grouping.py.
+    decisions = verified_unique_decisions(q.all())
+    decisions.sort(key=lambda d: d["created_at"] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
 
     # ── Aggregate by symbol ──────────────────────────────────────────────────
     by_symbol: dict = {}
     by_tf: dict = {}
     rr_values = []
 
-    for s in sigs:
-        m  = s.market or "?"
-        tf = s.timeframe or "?"
-        win = s.status in (SignalStatus.TP1_HIT, SignalStatus.TP2_HIT)
+    for d in decisions:
+        m  = d["market"] or "?"
+        tf = d["timeframe"] or "?"
+        win = d["status"] in ("TP1_HIT", "TP2_HIT")
 
         # by symbol
         if m not in by_symbol:
             by_symbol[m] = {"wins": 0, "losses": 0, "rr_sum": 0.0, "signals": []}
         by_symbol[m]["wins" if win else "losses"] += 1
-        rr = float(s.risk_reward_ratio or 0)
+        rr = float(d["risk_reward_ratio"] or 0)
         by_symbol[m]["rr_sum"] += rr if win else 0
 
         # by timeframe
@@ -649,12 +673,12 @@ def signals_backtest(
         # last 5 signals preview
         if len(by_symbol[m]["signals"]) < 5:
             by_symbol[m]["signals"].append({
-                "id":         s.id,
-                "direction":  s.signal_type,
-                "status":     s.status.value if s.status else "",
-                "entry":      s.entry_price,
+                "id":         d["id"],
+                "direction":  d["signal_type"],
+                "status":     d["status"],
+                "entry":      d["entry_price"],
                 "rr":         rr,
-                "created_at": s.created_at.isoformat() if s.created_at else None,
+                "created_at": d["created_at"].isoformat() if d["created_at"] else None,
             })
 
     # ── Build result ──────────────────────────────────────────────────────────

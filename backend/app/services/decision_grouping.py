@@ -65,6 +65,7 @@ def _finalize_decision_group(rows: list) -> dict:
     statuses = [r.status.value if hasattr(r.status, "value") else r.status for r in rows]
     rep = rows[0]
     return {
+        "id":              rep.id,
         "market":          rep.market,
         "timeframe":       rep.timeframe,
         "signal_type":     rep.signal_type.value if hasattr(rep.signal_type, "value") else rep.signal_type,
@@ -72,6 +73,22 @@ def _finalize_decision_group(rows: list) -> dict:
         "status":          max(set(statuses), key=statuses.count),   # الأغلبية (عادةً كلهم متطابقين)
         "status_conflict": len(set(statuses)) > 1,
         "points":          rep.points_earned or 0,
+        "risk_reward_ratio": rep.risk_reward_ratio,
+        "ai_confidence":   rep.ai_confidence,
+        "created_at":      rep.created_at,
         "exit_executed":   rep.exit_executed,
         "user_count":      len(rows),
     }
+
+
+def verified_unique_decisions(signals: list) -> list[dict]:
+    """الأداة الجاهزة لأي تقرير/إحصائية مجمّعة: تفلتر الصفوف الخام لمصدرها
+    الموثوق فقط (current_price IS NOT NULL — تلقائي عبر check_outcomes،
+    مو تحديد يدوي غير متحقق منه، راجع set_signal_outcome بـadmin.py)،
+    وتُجمّعها لقرارات فريدة عبر group_unique_decisions(). استُخدمت هون
+    بدل التكرار المباشر على signals الخام بكل مكان بالمشروع كان يحسب
+    winrate/نقاط/عدد صفقات (signals.py, bot.py, markets.py — راجع
+    commit 2026-09-03 اللي أضافها لكل هالمواقع دفعة وحدة بعد ما تأكد
+    إنها نفس المشكلة بالضبط بعدة مواقع مستقلة)."""
+    verified = [s for s in signals if s.current_price is not None]
+    return group_unique_decisions(verified)

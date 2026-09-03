@@ -818,48 +818,47 @@ def bot_user_stats(
     _: bool = Depends(verify_bot),
     db: Session = Depends(get_db),
 ):
-    """إحصائيات المستخدم للبوت"""
-    from sqlalchemy import func as sqlfunc
+    """إحصائيات المستخدم للبوت
+
+    (2026-09-03) نفس مشكلة get_signal_performance بـsignals.py — حتى
+    ضمن مستخدم واحد، مراقبة الـwatchlist القديمة (قبل إصلاح 2026-08-31
+    اللي ربط التنبيه بصلاحية الصفقة) كانت ممكن تكرر نفس القرار أكتر من
+    مرة لنفس المستخدم. total/wins/pts/best/worst محسوبة الآن على مستوى
+    القرار الفريد الموثوق (verified_unique_decisions). active يبقى عدّ
+    خام — مو ادعاء أداء."""
+    from app.services.decision_grouping import verified_unique_decisions
+
     user = _get_linked_user(telegram_id, db)
     if not user:
         return {"linked": False}
 
     closed = [SignalStatus.TP1_HIT, SignalStatus.TP2_HIT, SignalStatus.SL_HIT]
-    total  = db.query(Signal).filter(Signal.user_id == user.id, Signal.status.in_(closed)).count()
-    wins   = db.query(Signal).filter(Signal.user_id == user.id,
-                Signal.status.in_([SignalStatus.TP1_HIT, SignalStatus.TP2_HIT])).count()
-    pts    = db.query(sqlfunc.sum(Signal.points_earned)).filter(
-                Signal.user_id == user.id,
-                Signal.points_earned != None).scalar() or 0.0
-    active = db.query(Signal).filter(
+    closed_raw = db.query(Signal).filter(Signal.user_id == user.id, Signal.status.in_(closed)).all()
+    decisions  = verified_unique_decisions(closed_raw)
+    decisions.sort(key=lambda d: d["exit_executed"] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+
+    total   = len(decisions)
+    wins    = sum(1 for d in decisions if d["status"] in ("TP1_HIT", "TP2_HIT"))
+    pts     = sum(d["points"] for d in decisions)
+    win_pts = [d["points"] for d in decisions if d["points"] > 0]
+    loss_pts= [d["points"] for d in decisions if d["points"] < 0]
+    best    = max(win_pts, default=0.0)
+    worst   = min(loss_pts, default=0.0)
+    active  = db.query(Signal).filter(
                 Signal.user_id == user.id,
                 Signal.status == SignalStatus.ACTIVE).count()
-    best   = db.query(sqlfunc.max(Signal.points_earned)).filter(
-                Signal.user_id == user.id,
-                Signal.points_earned > 0).scalar() or 0.0
-    worst  = db.query(sqlfunc.min(Signal.points_earned)).filter(
-                Signal.user_id == user.id,
-                Signal.points_earned < 0).scalar() or 0.0
 
-    # آخر 5 صفقات مغلقة
-    recent_sigs = (
-        db.query(Signal)
-        .filter(Signal.user_id == user.id, Signal.status.in_(closed))
-        .order_by(Signal.exit_executed.desc())
-        .limit(5)
-        .all()
-    )
+    # آخر 5 قرارات مغلقة
     recent = []
-    for s in recent_sigs:
-        st = s.status.value if hasattr(s.status, "value") else str(s.status)
-        icon = "✅" if st in ("TP1_HIT", "TP2_HIT") else "❌"
+    for d in decisions[:5]:
+        icon = "✅" if d["status"] in ("TP1_HIT", "TP2_HIT") else "❌"
         recent.append({
-            "market":  s.market,
-            "type":    s.signal_type.value if hasattr(s.signal_type, "value") else str(s.signal_type),
-            "status":  st,
+            "market":  d["market"],
+            "type":    d["signal_type"],
+            "status":  d["status"],
             "icon":    icon,
-            "points":  round(s.points_earned or 0, 2),
-            "closed_at": s.exit_executed.strftime("%d/%m %H:%M") if s.exit_executed else "",
+            "points":  round(d["points"], 2),
+            "closed_at": d["exit_executed"].strftime("%d/%m %H:%M") if d["exit_executed"] else "",
         })
 
     aff_count = 0
