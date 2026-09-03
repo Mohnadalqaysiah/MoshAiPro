@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
+import Logo from '../components/Logo'
 import {
   Users, CreditCard, BarChart2, CheckCircle, XCircle, Clock,
   Search, Plus, Trash2, ToggleLeft, ToggleRight, TrendingUp,
@@ -612,7 +613,7 @@ export default function Admin() {
         <aside className="w-52 min-h-screen bg-gray-900 border-l border-gray-800 flex flex-col flex-shrink-0">
           <div className="p-4 border-b border-gray-800">
             <div className="flex items-center gap-2">
-              <img src="/brand/logo-icon-only.png" alt="Qaffel AI" className="w-8 h-8 rounded-lg" />
+              <Logo className="w-8 h-8 rounded-lg" />
               <div>
                 <div className="text-sm font-semibold">لوحة الإدارة</div>
                 <div className="text-xs text-gray-400">Qaffel AI</div>

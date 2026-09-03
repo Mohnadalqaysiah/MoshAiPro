@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import useSEO from '../hooks/useSEO'
 import useBreadcrumbSchema from '../hooks/useBreadcrumbSchema'
 import { mirrorPath } from '../utils/langRoutes'
+import Logo from '../components/Logo'
 import {
   Gift, Users, DollarSign, Star, ChevronRight, ChevronLeft,
   Share2, CheckCircle, Zap, TrendingUp, Shield, Copy, ArrowUpRight
@@ -222,7 +223,7 @@ export default function ReferralProgram() {
       <header className="sticky top-0 z-50 bg-[#070b14]/80 backdrop-blur-xl border-b border-white/5">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2.5 group">
-            <img src="/brand/logo-icon-only.png" alt="Qaffel AI" className="w-9 h-9 rounded-xl shadow-lg shadow-blue-500/30" />
+            <Logo className="w-9 h-9 rounded-xl shadow-lg shadow-blue-500/30" />
             <span className="font-bold text-lg tracking-tight">
               Qaffel <span className="text-blue-400">AI</span>
             </span>

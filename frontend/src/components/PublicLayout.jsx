@@ -8,6 +8,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
 import { LayoutDashboard, Menu, X, Star } from 'lucide-react'
 import { mirrorPath } from '../utils/langRoutes'
+import Logo from './Logo'
 
 // ── Social icons (inline SVG, no extra lib needed) ─────────────────────
 const IconInstagram = () => (
@@ -45,7 +46,7 @@ export default function PublicLayout({ children, bgClass = 'bg-[#070b14]' }) {
       <header className="sticky top-0 z-50 bg-[#070b14]/80 backdrop-blur-xl border-b border-white/5">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2.5 group">
-            <img src="/brand/logo-icon-only.png" alt="Qaffel AI" className="w-9 h-9 rounded-xl shadow-lg shadow-blue-500/30" />
+            <Logo className="w-9 h-9 rounded-xl shadow-lg shadow-blue-500/30" />
             <span className="font-bold text-lg tracking-tight">
               Qaffel <span className="text-blue-400">AI</span>
             </span>
@@ -138,7 +139,7 @@ export default function PublicLayout({ children, bgClass = 'bg-[#070b14]' }) {
             {/* Brand */}
             <div className="col-span-2 md:col-span-1">
               <Link to="/" className="flex items-center gap-2.5 mb-4">
-                <img src="/brand/logo-icon-only.png" alt="Qaffel AI" className="w-8 h-8 rounded-xl" />
+                <Logo className="w-8 h-8 rounded-xl" />
                 <span className="font-bold text-sm">Qaffel AI</span>
               </Link>
               <p className="text-gray-400 text-xs leading-relaxed mb-4">

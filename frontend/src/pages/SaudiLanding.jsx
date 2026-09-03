@@ -134,6 +134,23 @@ export default function SaudiLanding() {
               </div>
             ))}
           </div>
+
+          {/* ربط داخلي لشرح ICT/SMC المعمّق — نفس المفاهيم المذكورة فوق */}
+          <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
+            <span className="text-gray-500 text-sm">تعمّق أكتر بمنهجية التحليل:</span>
+            <Link to="/blog/smart-money-concepts-smc-guide"
+              className="text-sm text-green-400 hover:text-green-300 border border-green-500/20 hover:border-green-500/40 px-4 py-1.5 rounded-full transition-colors">
+              دليل Smart Money Concepts
+            </Link>
+            <Link to="/blog/order-blocks-explained"
+              className="text-sm text-green-400 hover:text-green-300 border border-green-500/20 hover:border-green-500/40 px-4 py-1.5 rounded-full transition-colors">
+              شرح Order Blocks
+            </Link>
+            <Link to="/blog/fvg-fair-value-gap-trading"
+              className="text-sm text-green-400 hover:text-green-300 border border-green-500/20 hover:border-green-500/40 px-4 py-1.5 rounded-full transition-colors">
+              شرح FVG
+            </Link>
+          </div>
         </div>
       </section>
 

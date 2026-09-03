@@ -17,6 +17,7 @@ import DemoSection from '../components/DemoSection'
 import StrategyBuilderDemo from '../components/StrategyBuilderDemo'
 import AffiliateSection from '../components/AffiliateSection'
 import PublicPerformance from '../components/PublicPerformance'
+import Logo from '../components/Logo'
 import useSEO from '../hooks/useSEO'
 
 // ── Scroll reveal hook ───────────────────────────────────────────────
@@ -149,7 +150,7 @@ export default function Landing() {
       `}>
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2.5 group">
-            <img src="/brand/logo-icon-only.png" alt="Qaffel AI" className="w-9 h-9 rounded-xl shadow-lg shadow-blue-500/30 group-hover:shadow-blue-500/50 transition-shadow" />
+            <Logo className="w-9 h-9 rounded-xl shadow-lg shadow-blue-500/30 group-hover:shadow-blue-500/50 transition-shadow" />
             <span className="font-bold text-lg tracking-tight">
               Qaffel <span className="text-blue-400">AI</span>
             </span>
@@ -395,6 +396,24 @@ export default function Landing() {
                 <h3 className="font-bold text-white text-base mb-2">{f.title}</h3>
                 <p className="text-gray-400 text-sm leading-relaxed">{f.desc}</p>
               </div>
+            ))}
+          </div>
+
+          {/* ربط داخلي لمقالات ICT/SMC التعليمية — نفس المفاهيم المذكورة
+              بالميزات فوق (Order Blocks, FVG, Smart Money) بس بشرح معمّق */}
+          <div className="mt-10 flex flex-wrap items-center justify-center gap-3 reveal">
+            <span className="text-gray-500 text-sm">
+              {isAr ? 'تعمّق أكتر:' : 'Go deeper:'}
+            </span>
+            {[
+              { slug: 'smart-money-concepts-smc-guide', ar: 'دليل Smart Money Concepts', en: 'Smart Money Concepts Guide' },
+              { slug: 'order-blocks-explained',          ar: 'شرح Order Blocks',           en: 'Order Blocks Explained' },
+              { slug: 'fvg-fair-value-gap-trading',       ar: 'شرح FVG',                    en: 'FVG Explained' },
+            ].map(a => (
+              <Link key={a.slug} to={isAr ? `/blog/${a.slug}` : `/en/blog/${a.slug}`}
+                className="text-sm text-blue-400 hover:text-blue-300 border border-blue-500/20 hover:border-blue-500/40 px-4 py-1.5 rounded-full transition-colors">
+                {isAr ? a.ar : a.en}
+              </Link>
             ))}
           </div>
         </div>
@@ -668,7 +687,7 @@ export default function Landing() {
           <div className="grid grid-cols-2 md:grid-cols-5 gap-8 mb-10">
             <div className="col-span-2 md:col-span-1">
               <Link to="/" className="flex items-center gap-2.5 mb-4">
-                <img src="/brand/logo-icon-only.png" alt="Qaffel AI" className="w-8 h-8 rounded-xl" />
+                <Logo className="w-8 h-8 rounded-xl" />
                 <span className="font-bold text-sm">Qaffel AI</span>
               </Link>
               <p className="text-gray-400 text-xs leading-relaxed mb-4">

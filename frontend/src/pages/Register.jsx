@@ -6,6 +6,7 @@ import { Mail, Lock, User, Phone, AlertCircle, CheckCircle, ShieldCheck, Gift } 
 import useSEO from '../hooks/useSEO'
 import useBreadcrumbSchema from '../hooks/useBreadcrumbSchema'
 import { mirrorPath } from '../utils/langRoutes'
+import Logo from '../components/Logo'
 
 // Simple math captcha — generates client-side, no external API needed
 function useCaptcha() {
@@ -134,7 +135,7 @@ export default function Register() {
         </div>
 
         <div className="text-center mb-8">
-          <img src="/brand/logo-icon-only.png" alt="Qaffel AI" className="w-14 h-14 mx-auto mb-4 rounded-2xl" />
+          <Logo className="w-14 h-14 mx-auto mb-4 rounded-2xl" />
           <h1 className="text-2xl font-bold text-white">Qaffel <span className="text-blue-400">AI</span></h1>
           <p className="text-gray-400 text-sm mt-1">{tx.tagline}</p>
         </div>

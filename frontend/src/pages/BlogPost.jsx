@@ -6,6 +6,13 @@ import { Clock, ChevronLeft, ChevronRight, Tag, ArrowLeft, ArrowRight } from 'lu
 import useSEO from '../hooks/useSEO'
 import useArticleSchema from '../hooks/useArticleSchema'
 import useBreadcrumbSchema from '../hooks/useBreadcrumbSchema'
+import { OrderBlockDiagram, FVGDiagram, BosChochDiagram } from '../components/BlogDiagrams'
+
+const DIAGRAMS = {
+  orderblock: OrderBlockDiagram,
+  fvg:        FVGDiagram,
+  boschoch:   BosChochDiagram,
+}
 
 // ── Render individual content block ─────────────────────────────────────────
 function ContentBlock({ item }) {
@@ -26,6 +33,10 @@ function ContentBlock({ item }) {
         <p className="text-blue-200 italic leading-relaxed">"{item.text}"</p>
       </blockquote>
     )
+    case 'diagram': {
+      const Diagram = DIAGRAMS[item.diagramType]
+      return Diagram ? <Diagram caption={item.text} /> : null
+    }
     default:      return null
   }
 }
