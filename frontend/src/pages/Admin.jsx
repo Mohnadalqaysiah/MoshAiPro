@@ -1543,10 +1543,10 @@ export default function Admin() {
                   {/* الإحصائيات */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
                     {[
-                      { label:'إجمالي الصفقات', value: reportData.total,                      color:'text-white' },
+                      { label:'قرارات فريدة',    value: reportData.total,                      color:'text-white' },
                       { label:'رابحة',           value: reportData.wins,                       color:'text-green-400' },
                       { label:'خاسرة',           value: reportData.losses,                     color:'text-red-400' },
-                      { label:'نسبة الربح',      value: `${reportData.win_rate}%`,             color: reportData.win_rate>=50?'text-green-400':'text-red-400' },
+                      { label:'نسبة نجاح القرارات', value: `${reportData.win_rate}%`,          color: reportData.win_rate>=50?'text-green-400':'text-red-400' },
                     ].map(s => (
                       <div key={s.label} className="bg-gray-800 rounded-lg p-3 text-center">
                         <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
@@ -1554,6 +1554,12 @@ export default function Admin() {
                       </div>
                     ))}
                   </div>
+                  {reportData.total_raw > reportData.total && (
+                    <p className="text-xs text-gray-500 -mt-2 mb-5">
+                      وُزّعت على {reportData.total_raw} صفقة مستخدمين
+                      {reportData.conflicts > 0 && <span className="text-orange-400"> · ⚠️ {reportData.conflicts} قرار بنتائج متضاربة</span>}
+                    </p>
+                  )}
                   <div className="bg-gray-800 rounded-lg p-3 text-center mb-5">
                     <span className="text-gray-400 text-sm">إجمالي النقاط: </span>
                     <span className={`text-xl font-bold ${reportData.total_points>=0?'text-green-400':'text-red-400'}`}>
@@ -1571,7 +1577,7 @@ export default function Admin() {
                             <th className="pb-2 text-right">النوع</th>
                             <th className="pb-2 text-right">النتيجة</th>
                             <th className="pb-2 text-right">النقاط</th>
-                            <th className="pb-2 text-right">ثقة</th>
+                            <th className="pb-2 text-right">مستخدمون</th>
                             <th className="pb-2 text-right">التاريخ</th>
                           </tr>
                         </thead>
@@ -1585,7 +1591,7 @@ export default function Admin() {
                                 <td className="py-2"><span className={`text-xs px-2 py-0.5 rounded ${s.signal_type==='BUY'?'bg-green-900/50 text-green-300':'bg-red-900/50 text-red-300'}`}>{s.signal_type==='BUY'?'شراء':'بيع'}</span></td>
                                 <td className="py-2 text-sm">{statusLabel}</td>
                                 <td className={`py-2 font-bold ${isWin?'text-green-400':'text-red-400'}`}>{s.points>=0?'+':''}{s.points}</td>
-                                <td className="py-2 text-gray-400">{s.ai_confidence}%</td>
+                                <td className="py-2 text-gray-400">{s.user_count}</td>
                                 <td className="py-2 text-gray-500 text-xs">{s.exit_date}</td>
                               </tr>
                             )

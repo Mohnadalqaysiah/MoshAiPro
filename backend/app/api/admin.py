@@ -1188,16 +1188,86 @@ class ReportSendIn(BaseModel):
     include_expired: bool = True  # يشمل المستخدمين منتهي الاشتراك
 
 
+# (2026-09-03) نفس القرار (نفس السوق+النوع+الفريم+سعر الدخول) بينحفظ
+# كصف منفصل بجدول signals لكل مستخدم استلمه (كل مستخدم عنده صفقة/مركز
+# مستقل بحسابه — هذا صحيح وضروري لتاريخه الشخصي، ولا يُمس هون إطلاقاً).
+# لكن أي تقرير مجمّع (winrate، عدد الصفقات، مجموع النقاط) لازم يُحسب على
+# مستوى "القرار الفريد"، مو الصف الخام — وإلا قرار واحد بُثّ لـ5
+# مستخدمين يُحتسب 5 مرات بدل مرة، فيضخّم/يشوّه كل رقم مجمّع.
+#
+# معيار التجميع: نفس (السوق، الفريم، نوع الإشارة، سعر الدخول بالضبط) —
+# monitor_watchlists يحلل كل رمز مرة وحدة بالدورة ويُعيد استخدام نفس
+# الـdata dict (وبالتالي نفس entry_price بالضبط) لكل مستخدم بنفس الدورة
+# (انظر symbol_results بـtelegram-bot/bot.py) — فالتطابق الحرفي موثوق.
+# نافذة زمنية ±2 دقيقة تفصل بين تكرارات نفس السعر بأوقات بعيدة فعلاً
+# (نادر، بس ممكن يرجع السعر لنفس المستوى بالضبط بعد ساعات).
+_DECISION_GROUP_WINDOW_MIN = 2
+
+
+def _group_unique_decisions(signals: list) -> list[dict]:
+    """يُجمّع صفوف Signal (بيانات خام، لا تُعدَّل) إلى "قرارات فريدة".
+
+    يُعيد قائمة dicts: كل عنصر = قرار واحد، فيه:
+      status, points (تمثيلية — من أول صف بالمجموعة), market, timeframe,
+      signal_type, entry_price, exit_executed, user_count (كم صف/مستخدم
+      بهالمجموعة), status_conflict (True لو صفوف المجموعة مختلفة بالنتيجة
+      — حالة شاذة تستاهل تحقيق منفصل، بنحسبها هون بس نُبلّغ عنها).
+    """
+    buckets: dict[tuple, list] = {}
+    for s in signals:
+        stype = s.signal_type.value if hasattr(s.signal_type, "value") else s.signal_type
+        key = (s.market, s.timeframe, stype, round(float(s.entry_price or 0), 5))
+        buckets.setdefault(key, []).append(s)
+
+    groups: list[dict] = []
+    for key, rows in buckets.items():
+        rows.sort(key=lambda r: r.created_at or datetime.min.replace(tzinfo=timezone.utc))
+        cluster: list = []
+        for r in rows:
+            if cluster:
+                gap_min = abs(((r.created_at or cluster[-1].created_at) - cluster[-1].created_at).total_seconds()) / 60
+                if gap_min > _DECISION_GROUP_WINDOW_MIN:
+                    groups.append(_finalize_decision_group(cluster))
+                    cluster = []
+            cluster.append(r)
+        if cluster:
+            groups.append(_finalize_decision_group(cluster))
+
+    return groups
+
+
+def _finalize_decision_group(rows: list) -> dict:
+    statuses = [r.status.value if hasattr(r.status, "value") else r.status for r in rows]
+    rep = rows[0]
+    return {
+        "market":         rep.market,
+        "timeframe":      rep.timeframe,
+        "signal_type":    rep.signal_type.value if hasattr(rep.signal_type, "value") else rep.signal_type,
+        "entry_price":    rep.entry_price,
+        "status":         max(set(statuses), key=statuses.count),   # الأغلبية (عادةً كلهم متطابقين)
+        "status_conflict": len(set(statuses)) > 1,
+        "points":         rep.points_earned or 0,
+        "exit_executed":  rep.exit_executed,
+        "user_count":     len(rows),
+    }
+
+
 def _build_performance_report(signals: list, days: int) -> tuple[str, str]:
     """
     يبني تقرير الأداء — يُعيد (telegram_text, email_html)
+
+    (2026-09-03) يُحسب الآن على مستوى "القرار الفريد" (_group_unique_decisions)
+    بدل الصف الخام — انظر التعليق فوق `_group_unique_decisions`.
     """
-    closed   = [s for s in signals if s.status.value in ("TP1_HIT", "TP2_HIT", "SL_HIT")]
-    wins     = [s for s in closed if s.status.value in ("TP1_HIT", "TP2_HIT")]
-    losses   = [s for s in closed if s.status.value == "SL_HIT"]
-    total_pts= sum(s.points_earned or 0 for s in closed)
-    win_rate = round(len(wins) / len(closed) * 100) if closed else 0
-    period   = "اليوم" if days == 1 else f"آخر {days} يوم" if days < 30 else "الشهر"
+    decisions   = _group_unique_decisions(signals)
+    total_rows  = len(signals)
+    closed      = [d for d in decisions if d["status"] in ("TP1_HIT", "TP2_HIT", "SL_HIT")]
+    wins        = [d for d in closed if d["status"] in ("TP1_HIT", "TP2_HIT")]
+    losses      = [d for d in closed if d["status"] == "SL_HIT"]
+    total_pts   = sum(d["points"] for d in closed)
+    win_rate    = round(len(wins) / len(closed) * 100) if closed else 0
+    period      = "اليوم" if days == 1 else f"آخر {days} يوم" if days < 30 else "الشهر"
+    conflicts   = sum(1 for d in closed if d["status_conflict"])
 
     # ── Telegram (HTML) ──────────────────────────────────────────────────────
     pts_sign = "+" if total_pts >= 0 else ""
@@ -1205,27 +1275,29 @@ def _build_performance_report(signals: list, days: int) -> tuple[str, str]:
         f"📊 <b>تقرير أداء Qaffel AI</b>",
         f"🗓 الفترة: {period}",
         "━━━━━━━━━━━━━━━━━━━━━━",
-        f"📈 إجمالي الصفقات: <b>{len(closed)}</b>",
+        f"📈 قرارات فريدة: <b>{len(closed)}</b>  <i>(وُزّعت على {total_rows} صفقة مستخدمين)</i>",
         f"✅ رابحة: <b>{len(wins)}</b>  │  ❌ خاسرة: <b>{len(losses)}</b>",
-        f"🏆 نسبة الربح: <b>{win_rate}%</b>",
+        f"🏆 نسبة نجاح القرارات: <b>{win_rate}%</b>",
         f"⚡ إجمالي النقاط: <b>{pts_sign}{total_pts:.1f}</b>",
         "━━━━━━━━━━━━━━━━━━━━━━",
     ]
+    if conflicts:
+        tg_lines.insert(4, f"⚠️ {conflicts} قرار بنتائج متضاربة بين المستخدمين — يحتاج تحقيق")
 
     if closed:
-        tg_lines.append("📋 <b>الصفقات:</b>")
-        for s in closed[:10]:  # أقصى 10
-            st    = s.status.value
+        tg_lines.append("📋 <b>القرارات:</b>")
+        for d in closed[:10]:  # أقصى 10
+            st    = d["status"]
             icon  = "✅" if st in ("TP1_HIT", "TP2_HIT") else "❌"
             tp    = "TP2" if st == "TP2_HIT" else "TP1" if st == "TP1_HIT" else "SL"
-            pts   = s.points_earned or 0
+            pts   = d["points"]
             sign  = "+" if pts >= 0 else ""
-            stype = "شراء" if (s.signal_type.value if hasattr(s.signal_type,"value") else s.signal_type) == "BUY" else "بيع"
+            stype = "شراء" if d["signal_type"] == "BUY" else "بيع"
             tg_lines.append(
-                f"{icon} {s.market} {stype} — {tp}  <code>{sign}{pts:.1f} نقطة</code>"
+                f"{icon} {d['market']} {stype} — {tp}  <code>{sign}{pts:.1f} نقطة</code>"
             )
         if len(closed) > 10:
-            tg_lines.append(f"<i>... و {len(closed)-10} صفقة أخرى</i>")
+            tg_lines.append(f"<i>... و {len(closed)-10} قرار آخر</i>")
 
     tg_lines += [
         "━━━━━━━━━━━━━━━━━━━━━━",
@@ -1235,17 +1307,17 @@ def _build_performance_report(signals: list, days: int) -> tuple[str, str]:
 
     # ── Email (HTML) ─────────────────────────────────────────────────────────
     rows = ""
-    for s in closed:
-        st    = s.status.value
+    for d in closed:
+        st    = d["status"]
         color = "#22c55e" if st in ("TP1_HIT","TP2_HIT") else "#ef4444"
         tp    = "TP2" if st=="TP2_HIT" else "TP1" if st=="TP1_HIT" else "SL"
-        pts   = s.points_earned or 0
+        pts   = d["points"]
         sign  = "+" if pts >= 0 else ""
-        stype = "شراء" if (s.signal_type.value if hasattr(s.signal_type,"value") else s.signal_type) == "BUY" else "بيع"
-        date  = s.exit_executed.strftime("%d/%m") if s.exit_executed else "—"
+        stype = "شراء" if d["signal_type"] == "BUY" else "بيع"
+        date  = d["exit_executed"].strftime("%d/%m") if d["exit_executed"] else "—"
         rows += f"""
         <tr>
-          <td style="padding:8px 12px;border-bottom:1px solid #1f2937">{s.market}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #1f2937">{d['market']}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #1f2937">{stype}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #1f2937;color:{color};font-weight:bold">{tp}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #1f2937;color:{color};font-weight:bold">{sign}{pts:.1f}</td>
@@ -1262,11 +1334,11 @@ def _build_performance_report(signals: list, days: int) -> tuple[str, str]:
         <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px">
           <div style="flex:1;background:#1f2937;border-radius:8px;padding:16px;text-align:center;min-width:100px">
             <div style="font-size:28px;font-weight:bold">{len(closed)}</div>
-            <div style="color:#9ca3af;font-size:12px">إجمالي الصفقات</div>
+            <div style="color:#9ca3af;font-size:12px">قرارات فريدة<br>(وُزّعت على {total_rows} صفقة)</div>
           </div>
           <div style="flex:1;background:#1f2937;border-radius:8px;padding:16px;text-align:center;min-width:100px">
             <div style="font-size:28px;font-weight:bold;color:#22c55e">{win_rate}%</div>
-            <div style="color:#9ca3af;font-size:12px">نسبة الربح</div>
+            <div style="color:#9ca3af;font-size:12px">نسبة نجاح القرارات</div>
           </div>
           <div style="flex:1;background:#1f2937;border-radius:8px;padding:16px;text-align:center;min-width:100px">
             <div style="font-size:28px;font-weight:bold;color:{'#22c55e' if total_pts>=0 else '#ef4444'}">{pts_sign}{total_pts:.1f}</div>
@@ -1289,8 +1361,12 @@ def get_performance_report(
     admin: User = Depends(get_admin_user),
     db: Session = Depends(get_db),
 ):
-    """جلب بيانات تقرير الأداء للمعاينة قبل الإرسال"""
-    from datetime import date as dt_date, time as dt_time
+    """جلب بيانات تقرير الأداء للمعاينة قبل الإرسال
+
+    (2026-09-03) total/wins/losses/win_rate/total_points محسوبة على مستوى
+    "القرار الفريد" (_group_unique_decisions) — راجع تعليق تلك الدالة.
+    total_raw يبقى العدد الخام (كل صفوف المستخدمين) للشفافية فقط.
+    """
     now       = datetime.now(timezone.utc)
     start_dt  = now - timedelta(days=days)
     closed    = [SignalStatus.TP1_HIT, SignalStatus.TP2_HIT, SignalStatus.SL_HIT]
@@ -1302,28 +1378,32 @@ def get_performance_report(
         .all()
     )
 
-    wins    = [s for s in signals if s.status.value in ("TP1_HIT","TP2_HIT")]
-    losses  = [s for s in signals if s.status.value == "SL_HIT"]
-    pts     = sum(s.points_earned or 0 for s in signals)
+    decisions = _group_unique_decisions(signals)
+    decisions.sort(key=lambda d: d["exit_executed"] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+    wins    = [d for d in decisions if d["status"] in ("TP1_HIT","TP2_HIT")]
+    losses  = [d for d in decisions if d["status"] == "SL_HIT"]
+    pts     = sum(d["points"] for d in decisions)
 
     return {
-        "days":       days,
-        "total":      len(signals),
-        "wins":       len(wins),
-        "losses":     len(losses),
-        "win_rate":   round(len(wins)/len(signals)*100) if signals else 0,
+        "days":         days,
+        "total":        len(decisions),
+        "total_raw":    len(signals),
+        "wins":         len(wins),
+        "losses":       len(losses),
+        "win_rate":     round(len(wins)/len(decisions)*100) if decisions else 0,
         "total_points": round(pts, 2),
+        "conflicts":    sum(1 for d in decisions if d["status_conflict"]),
         "signals": [
             {
-                "market":       s.market,
-                "signal_type":  s.signal_type.value if hasattr(s.signal_type,"value") else s.signal_type,
-                "status":       s.status.value if hasattr(s.status,"value") else s.status,
-                "points":       round(s.points_earned or 0, 2),
-                "entry_price":  s.entry_price,
-                "ai_confidence":s.ai_confidence,
-                "exit_date":    s.exit_executed.strftime("%d/%m %H:%M") if s.exit_executed else None,
+                "market":       d["market"],
+                "signal_type":  d["signal_type"],
+                "status":       d["status"],
+                "points":       round(d["points"], 2),
+                "entry_price":  d["entry_price"],
+                "user_count":   d["user_count"],
+                "exit_date":    d["exit_executed"].strftime("%d/%m %H:%M") if d["exit_executed"] else None,
             }
-            for s in signals
+            for d in decisions
         ],
     }
 
