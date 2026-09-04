@@ -409,6 +409,33 @@ async def get_signal_performance(
         "total_trades":  len(week_decisions),
         "wins":          len(wins),
         "losses":        len(losses),
+        "win_rate":      round(len(wins) / len(week_decisions) * 100, 1) if week_decisions else 0.0,
+        "expectancy":    round(total_points / len(week_decisions), 2) if week_decisions else 0.0,
+    }
+
+    # (2026-09-04) نافذة متحركة (اليوم - 30 يوم) بدل أسبوع تقويمي ثابت —
+    # رقم أقل تذبذباً وأعدل تمثيلاً من current_week المنفرد، يُستخدم
+    # كواجهة العرض الرئيسية بالفرونت (PerformanceSection) بدل رقم أسبوع
+    # واحد ممكن يكون شاذاً إحصائياً.
+    rolling_start = datetime.combine(
+        today - timedelta(days=30), dt_time(0, 0, 0)
+    ).replace(tzinfo=timezone.utc)
+
+    rolling_decisions = verified_unique_decisions(_signals_in_range(rolling_start, now_utc))
+    r_wins   = [d for d in rolling_decisions if d["points"] > 0]
+    r_losses = [d for d in rolling_decisions if d["points"] < 0]
+    r_total_points = sum(d["points"] for d in rolling_decisions)
+    r_count = len(rolling_decisions)
+
+    rolling_30d = {
+        "total_points":  round(r_total_points, 2),
+        "win_points":    round(sum(d["points"] for d in r_wins), 2),
+        "loss_points":   round(sum(d["points"] for d in r_losses), 2),
+        "total_trades":  r_count,
+        "wins":          len(r_wins),
+        "losses":        len(r_losses),
+        "win_rate":      round(len(r_wins) / r_count * 100, 1) if r_count else 0.0,
+        "expectancy":    round(r_total_points / r_count, 2) if r_count else 0.0,
     }
 
     # ── Daily stats: last 14 days ──
@@ -463,6 +490,7 @@ async def get_signal_performance(
 
     return {
         "current_week": current_week,
+        "rolling_30d":  rolling_30d,
         "daily_stats":  daily_stats,
         "weekly_stats": weekly_stats,
     }

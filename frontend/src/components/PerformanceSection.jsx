@@ -24,6 +24,11 @@ const T = {
     tp2: 'TP2',
     sl: 'SL',
     recentTrades: 'آخر الصفقات المغلقة',
+    rolling30: 'متوسط آخر 30 يوم',
+    winRate: 'نسبة النجاح',
+    expectancy: 'العائد المتوقع لكل قرار',
+    thisWeekInline: 'الأسبوع الحالي',
+    decisions: 'قرار',
   },
   en: {
     title: 'Signal Performance',
@@ -43,6 +48,11 @@ const T = {
     tp2: 'TP2',
     sl: 'SL',
     recentTrades: 'Recent Closed Trades',
+    rolling30: '30-Day Rolling Average',
+    winRate: 'Win Rate',
+    expectancy: 'Expectancy / Decision',
+    thisWeekInline: 'Current Week',
+    decisions: 'decisions',
   },
 }
 
@@ -91,7 +101,7 @@ export default function PerformanceSection() {
 
   if (!data) return null
 
-  const { current_week, daily_stats, weekly_stats } = data
+  const { current_week, rolling_30d, daily_stats, weekly_stats } = data
   const ptColor = (pts) => pts > 0 ? 'text-green-400' : pts < 0 ? 'text-red-400' : 'text-gray-400'
   const ptBg    = (pts) => pts > 0 ? 'bg-green-900/30 border-green-800' : pts < 0 ? 'bg-red-900/30 border-red-800' : 'bg-gray-800 border-gray-700'
 
@@ -117,40 +127,56 @@ export default function PerformanceSection() {
         <h2 className="text-white font-semibold text-lg">{tx.title}</h2>
       </div>
 
-      {/* Current Week Summary */}
-      <div className={`border rounded-xl p-5 ${ptBg(current_week.total_points)}`}>
-        <div className="text-xs text-gray-400 mb-1">{tx.thisWeek} — {current_week.week_label}</div>
-        <div className={`text-3xl font-bold ${ptColor(current_week.total_points)}`}>
-          {current_week.total_points > 0 ? '+' : ''}{current_week.total_points} {tx.points}
+      {/* 30-Day Rolling Headline — leads with the fairer, less volatile number */}
+      {rolling_30d && (
+        <div className={`border rounded-xl p-5 ${ptBg(rolling_30d.total_points)}`}>
+          <div className="text-xs text-gray-400 mb-1">{tx.rolling30} ({rolling_30d.total_trades} {tx.decisions})</div>
+          <div className="flex flex-wrap items-end gap-x-8 gap-y-2">
+            <div>
+              <div className="text-[11px] text-gray-500 mb-0.5">{tx.winRate}</div>
+              <div className="text-3xl font-bold text-white">{rolling_30d.win_rate}%</div>
+            </div>
+            <div>
+              <div className="text-[11px] text-gray-500 mb-0.5">{tx.expectancy}</div>
+              <div className={`text-2xl font-semibold ${ptColor(rolling_30d.expectancy)}`}>
+                {rolling_30d.expectancy > 0 ? '+' : ''}{rolling_30d.expectancy} {tx.points}
+              </div>
+            </div>
+            <div>
+              <div className="text-[11px] text-gray-500 mb-0.5">{tx.totalPts}</div>
+              <div className={`text-2xl font-semibold ${ptColor(rolling_30d.total_points)}`}>
+                {rolling_30d.total_points > 0 ? '+' : ''}{rolling_30d.total_points} {tx.points}
+              </div>
+            </div>
+          </div>
+          <div className="flex gap-6 mt-3 text-sm">
+            <div>
+              <span className="text-gray-400">{tx.wins}: </span>
+              <span className="text-green-400 font-semibold">{rolling_30d.wins}</span>
+            </div>
+            <div>
+              <span className="text-gray-400">{tx.losses}: </span>
+              <span className="text-red-400 font-semibold">{rolling_30d.losses}</span>
+            </div>
+          </div>
         </div>
-        <div className="flex gap-6 mt-3 text-sm">
-          <div>
-            <span className="text-gray-400">{tx.wins}: </span>
-            <span className="text-green-400 font-semibold">{current_week.wins}</span>
-            {current_week.win_points !== 0 && (
-              <span className="text-green-500 text-xs mr-1">(+{current_week.win_points} {tx.points})</span>
-            )}
-          </div>
-          <div>
-            <span className="text-gray-400">{tx.losses}: </span>
-            <span className="text-red-400 font-semibold">{current_week.losses}</span>
-            {current_week.loss_points !== 0 && (
-              <span className="text-red-500 text-xs mr-1">({current_week.loss_points} {tx.points})</span>
-            )}
-          </div>
-          <div>
-            <span className="text-gray-400">{tx.trades}: </span>
-            <span className="text-white font-semibold">{current_week.total_trades}</span>
-          </div>
-        </div>
-      </div>
+      )}
 
-      {/* Weekly Stats Table */}
+      {/* Weekly Stats Table — current week's total now lives here (inline), not as the page headline */}
       <div className="bg-gray-800 border border-gray-700 rounded-xl p-5">
         <h3 className="text-white font-medium mb-3 flex items-center gap-2">
           <TrendingUp size={16} className="text-blue-400" />
           {tx.weeklyPerf}
         </h3>
+        <div className="flex items-center justify-between mb-3 pb-3 border-b border-gray-700/60">
+          <div className="text-xs text-gray-400">{tx.thisWeekInline} — {current_week.week_label}</div>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-gray-500">{current_week.wins}/{current_week.total_trades} {tx.wins.toLowerCase()}</span>
+            <span className={`text-sm font-bold font-mono ${ptColor(current_week.total_points)}`}>
+              {current_week.total_points > 0 ? '+' : ''}{current_week.total_points} {tx.points}
+            </span>
+          </div>
+        </div>
         {weekly_stats.filter(w => w.total_trades > 0).length === 0 ? (
           <p className="text-gray-500 text-sm text-center py-4">{tx.noData}</p>
         ) : (
