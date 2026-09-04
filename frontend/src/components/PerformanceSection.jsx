@@ -24,7 +24,7 @@ const T = {
     tp2: 'TP2',
     sl: 'SL',
     recentTrades: 'آخر الصفقات المغلقة',
-    rolling30: 'متوسط آخر 30 يوم',
+    rolling30: 'متوسط آخر {n} يوم',
     winRate: 'نسبة النجاح',
     expectancy: 'العائد المتوقع لكل قرار',
     thisWeekInline: 'الأسبوع الحالي',
@@ -48,7 +48,7 @@ const T = {
     tp2: 'TP2',
     sl: 'SL',
     recentTrades: 'Recent Closed Trades',
-    rolling30: '30-Day Rolling Average',
+    rolling30: 'Rolling {n}-Day Average',
     winRate: 'Win Rate',
     expectancy: 'Expectancy / Decision',
     thisWeekInline: 'Current Week',
@@ -130,7 +130,10 @@ export default function PerformanceSection() {
       {/* 30-Day Rolling Headline — leads with the fairer, less volatile number */}
       {rolling_30d && (
         <div className={`border rounded-xl p-5 ${ptBg(rolling_30d.total_points)}`}>
-          <div className="text-xs text-gray-400 mb-1">{tx.rolling30} ({rolling_30d.total_trades} {tx.decisions})</div>
+          <div className="text-xs text-gray-400 mb-1">
+            {tx.rolling30.replace('{n}', Math.max(0, Math.round(rolling_30d.window_days ?? 30)))}
+            {' '}({rolling_30d.total_trades} {tx.decisions})
+          </div>
           <div className="flex flex-wrap items-end gap-x-8 gap-y-2">
             <div>
               <div className="text-[11px] text-gray-500 mb-0.5">{tx.winRate}</div>

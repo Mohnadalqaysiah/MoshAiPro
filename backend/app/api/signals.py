@@ -414,12 +414,22 @@ async def get_signal_performance(
     }
 
     # (2026-09-04) نافذة متحركة (اليوم - 30 يوم) بدل أسبوع تقويمي ثابت —
-    # رقم أقل تذبذباً وأعدل تمثيلاً من current_week المنفرد، يُستخدم
-    # كواجهة العرض الرئيسية بالفرونت (PerformanceSection) بدل رقم أسبوع
-    # واحد ممكن يكون شاذاً إحصائياً.
-    rolling_start = datetime.combine(
-        today - timedelta(days=30), dt_time(0, 0, 0)
-    ).replace(tzinfo=timezone.utc)
+    # رقم أقل تذبذباً وأعدل تمثيلاً من current_week المنفرد. لكن: W32/W33
+    # (ضمن آخر 30 يوم حالياً) هي بالضبط الفترة الملوّثة/الانتقالية اللي
+    # القرار المتفق عليه (winrate-monitoring-plan) استبعدها من أي حكم على
+    # الأداء الحالي — "W37 هو أول أسبوع نظيف بالكامل". فبدل ما تبدأ النافذة
+    # عند today-30d ثابت (يسحب W32/W33 تلقائياً)، تبدأ عند أحدث نقطتين:
+    # today-30d أو تاريخ آخر تصحيح جوهري (commit 5791d4f، 2026-09-03) —
+    # أيهما أحدث. لحد ما تتجمع 30 يوم نظيفة كاملة، النافذة "تنمو" تدريجياً
+    # (window_days تعكس الأيام الفعلية المتاحة، مش 30 دايماً) بدل ما تدّعي
+    # تمثيل شهر كامل وهي فعلياً خالطة فترة معروفة إنها غير موثوقة.
+    _ROLLING_CLEAN_CUTOFF = datetime(2026, 9, 4, tzinfo=timezone.utc)
+
+    rolling_start = max(
+        datetime.combine(today - timedelta(days=30), dt_time(0, 0, 0)).replace(tzinfo=timezone.utc),
+        _ROLLING_CLEAN_CUTOFF,
+    )
+    window_days = round(max(0.0, (now_utc - rolling_start).total_seconds() / 86400), 1)
 
     rolling_decisions = verified_unique_decisions(_signals_in_range(rolling_start, now_utc))
     r_wins   = [d for d in rolling_decisions if d["points"] > 0]
@@ -436,6 +446,7 @@ async def get_signal_performance(
         "losses":        len(r_losses),
         "win_rate":      round(len(r_wins) / r_count * 100, 1) if r_count else 0.0,
         "expectancy":    round(r_total_points / r_count, 2) if r_count else 0.0,
+        "window_days":   window_days,
     }
 
     # ── Daily stats: last 14 days ──
