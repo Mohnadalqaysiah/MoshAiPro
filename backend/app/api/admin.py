@@ -962,10 +962,19 @@ def _calc_points(market: str, price_diff: float) -> float:
     Metals  ×10   → $0.1 move = 1 pt  (XAUUSD $47 move = 470 pts)
     Crypto  ×1    → $1   move = 1 pt  (BTC $500 move = 500 pts)
     Indices ×1    → 1 index point = 1 pt (NAS100 +40 = 40 pts)
+    US stocks ×1  → $1 move = 1 pt (same treatment as crypto/indices)
     Oil/Gas ×10   → $0.1 move = 1 pt
     Gulf    ×10   → نفس مقياس المعادن (أسهم بأسعار مشابهة النطاق: عشرات الريال/الدرهم)
     JPY     ×100  → standard yen pips
     Forex   ×10000→ standard pips (0.0001 = 1 pip)
+
+    (2026-09-04) الأسهم الأمريكية الفردية (AAPL/GOOGL/...) كانت غير
+    مذكورة هون إطلاقاً فتسقط على else وتاخذ مضاعف الفوركس ×10000 غلط —
+    باگ حقيقي مؤكد رياضياً على بيانات إنتاج فعلية (AAPL: فرق $2.75 صار
+    27,476.7 نقطة بدل ~2.75). المؤشرات كانت نفس المشكلة قبل ما تُضاف
+    هون لاحقاً (صفوف تاريخية من أبريل 2026 لسا فيها الأثر، لم تُصحح
+    رجعياً — نقاش منفصل مع المستخدم). أُضيفت الأسهم بنفس معاملة
+    المؤشرات/الكريبتو (×1) لأنها مو مسعّرة بنظام pip.
     """
     symbol = (market or "").upper()
     if symbol in ("XAUUSD", "XAGUSD", "XPTUSD", "XPDUSD"):
@@ -974,6 +983,8 @@ def _calc_points(market: str, price_diff: float) -> float:
         return round(price_diff * 1.0, 2)    # crypto: $1 per point
     elif symbol in ("NAS100", "US30", "SP500", "US100", "NASDAQ", "DOW"):
         return round(price_diff * 1.0, 2)    # indices: 1 index point = 1 pt
+    elif symbol in ("AAPL", "TSLA", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "AMD", "NFLX"):
+        return round(price_diff * 1.0, 2)    # US stocks: $1 move = 1 pt
     elif symbol in ("USOIL", "OIL", "NATGAS", "BRENT"):
         return round(price_diff * 10, 2)     # oil/gas: $0.1 per point
     elif symbol in ("ARAMCO", "RAJHI", "SABIC", "STC", "TASI", "SNB", "MAADEN", "ALMARAI",

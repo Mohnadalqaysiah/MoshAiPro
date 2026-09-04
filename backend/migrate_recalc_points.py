@@ -1,15 +1,21 @@
 """
 migrate_recalc_points.py
 ========================
-يُعيد حساب points_earned لجميع الإشارات المغلقة (TP1/TP2/SL)
-باستخدام المعادلة الصحيحة الموحّدة:
-  - XAUUSD / XAGUSD / Metals : price_diff × 100
-  - BTCUSD / ETHUSD          : price_diff × 1
-  - JPY pairs                : price_diff × 100
-  - Forex (default)          : price_diff × 10000
+يُعيد حساب points_earned لجميع الإشارات المغلقة (TP1/TP2/SL) باستخدام
+_calc_points() الحيّة الحقيقية من app/api/admin.py (مستوردة مباشرة، مش
+نسخة محلية) — أي تصحيح مستقبلي على الجدول هناك ينعكس هون تلقائياً.
 
-المشكلة التي تُصحَّح:
-  XAGUSD كان يستخدم ×10000 بدل ×100 → قسمة على 100 للنقاط القديمة
+⚠️ تحذير قبل التشغيل: هذا السكربت يعيد كتابة points_earned/profit_loss
+لكل صفقة مغلقة بكل النظام (كل المستخدمين). شغّله فقط بعد تأكيد صريح
+من المستخدم إنه فعلاً يريد إعادة حساب البيانات التاريخية — مو تلقائياً
+كجزء من أي نشر عادي.
+
+(2026-09-04) اكتُشف إن الأسهم الأمريكية الفردية (AAPL/GOOGL/...) كانت
+تسقط بدون تصنيف على مضاعف الفوركس ×10000 غلطاً — أُصلح بـ_calc_points
+نفسها (×1، بمعاملة المؤشرات/الكريبتو). صفوف من أبريل 2026 لسا فيها
+الأثر القديم (~22 صف تاريخي، مستبعدة حالياً من bot_user_stats تلقائياً
+لأنها current_price=NULL) — تشغيل هالسكربت هو الطريقة الصحيحة لتصحيحها
+رجعياً لو قرر المستخدم هيك.
 
 التشغيل:
   docker cp migrate_recalc_points.py moshapi_backend:/app/
@@ -21,18 +27,14 @@ sys.path.insert(0, "/app")
 from app.database import SessionLocal
 from app.models.signal import Signal, SignalStatus
 
-
-# ── نفس المعادلة من admin.py ──────────────────────────────────────────────
-def _calc_points(market: str, price_diff: float) -> float:
-    symbol = (market or "").upper()
-    if symbol in ("XAUUSD", "XAGUSD", "XPTUSD", "XPDUSD"):
-        return round(price_diff * 100, 2)
-    elif symbol in ("BTCUSD", "ETHUSD", "BNBUSD"):
-        return round(price_diff * 1.0, 2)
-    elif symbol.endswith("JPY"):
-        return round(price_diff * 100, 2)
-    else:
-        return round(price_diff * 10000, 2)
+# (2026-09-04) كانت هون نسخة محلية مستقلة من _calc_points بمعادلة قديمة
+# جداً (معادن ×100 بدل ×10 الحالي، ولا فئة إطلاقاً للمؤشرات/الأسهم
+# الأمريكية/الأسهم الخليجية — كلهم كانوا يسقطوا على ×10000 الفوركس
+# غلطاً). لو هالسكربت انشغّل بهيئته القديمة كان رح يعيد كتابة
+# points_earned لكل صفقة مغلقة بكل النظام بأرقام غلط. صار يستورد
+# الدالة الحقيقية الوحيدة من admin.py (نفس مبدأ decision_grouping.py
+# المشترك) بدل نسخة محلية قابلة للتقادم بصمت.
+from app.api.admin import _calc_points
 
 
 def recalc():
