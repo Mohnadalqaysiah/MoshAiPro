@@ -354,9 +354,10 @@ async def get_signal_history(
 
 @router.get("/performance")
 async def get_signal_performance(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
-    """إحصائيات أداء الإشارات (أسبوعية + يومية) — عامة لجميع المستخدمين"""
+    """إحصائيات أداء الإشارات (أسبوعية + يومية) — لكل مستخدم بحسب تاريخ اشتراكه"""
     from datetime import date, time as dt_time
 
     now_utc = datetime.now(timezone.utc)
@@ -368,7 +369,15 @@ async def get_signal_performance(
     # Closed statuses only for stats
     closed = [SignalStatus.TP1_HIT, SignalStatus.TP2_HIT, SignalStatus.SL_HIT]
 
-    # ── Helper: fetch closed signals in date range ──
+    # (2026-09-04) مشترك جديد ما لازم يشوف أداء تاريخي قبل ما ينضم — لا
+    # كرقم مقلق ("0 صفقات" بيوحي بغياب نشاط بينما النظام كان شغال فعلاً)
+    # ولا كأثر نفسي من فترة مش تجربته. join_start يقصّ أي نطاق زمني لبداية
+    # اشتراك المستخدم؛ لمستخدم قديم (created_at من زمان) هاد no-op تماماً.
+    join_start = user.created_at
+    if join_start and join_start.tzinfo is None:
+        join_start = join_start.replace(tzinfo=timezone.utc)
+
+    # ── Helper: fetch closed signals in date range (raw, no join clipping) ──
     def _signals_in_range(start_dt, end_dt):
         return (
             db.query(Signal)
@@ -379,6 +388,16 @@ async def get_signal_performance(
             )
             .all()
         )
+
+    # ── Helper: fetch signals in range, clipped to the user's join date.
+    #    Returns (decisions_list, before_join) — before_join=True means the
+    #    whole period ends before the user even joined, so it's reported as
+    #    "not yours to see" rather than a misleading "0 trades that week".
+    def _clipped_range(start_dt, end_dt):
+        eff_start = max(start_dt, join_start) if join_start else start_dt
+        if eff_start >= end_dt:
+            return [], True
+        return _signals_in_range(eff_start, end_dt), False
 
     # (2026-09-03) كل بلوك تحت كان يحسب مباشرة على صفوف Signal الخام —
     # نفس القرار المُبث لعدة مستخدمين (كل واحد له صف مستقل بحسابه، صحيح
@@ -394,7 +413,8 @@ async def get_signal_performance(
     ).replace(tzinfo=timezone.utc)
     week_end = week_start + timedelta(days=7)
 
-    week_decisions = verified_unique_decisions(_signals_in_range(week_start, week_end))
+    week_raw, week_before_join = _clipped_range(week_start, week_end)
+    week_decisions = verified_unique_decisions(week_raw)
     wins   = [d for d in week_decisions if d["points"] > 0]
     losses = [d for d in week_decisions if d["points"] < 0]
     total_points = sum(d["points"] for d in week_decisions)
@@ -403,6 +423,7 @@ async def get_signal_performance(
 
     current_week = {
         "week_label":    f"الأسبوع {iso_week} / {iso_year}",
+        "before_join":   week_before_join,
         "total_points":  round(total_points, 2),
         "win_points":    round(win_points, 2),
         "loss_points":   round(loss_points, 2),
@@ -429,24 +450,33 @@ async def get_signal_performance(
         datetime.combine(today - timedelta(days=30), dt_time(0, 0, 0)).replace(tzinfo=timezone.utc),
         _ROLLING_CLEAN_CUTOFF,
     )
-    window_days = round(max(0.0, (now_utc - rolling_start).total_seconds() / 86400), 1)
+    rolling_eff_start = max(rolling_start, join_start) if join_start else rolling_start
+    window_days = round(max(0.0, (now_utc - rolling_eff_start).total_seconds() / 86400), 1)
 
-    rolling_decisions = verified_unique_decisions(_signals_in_range(rolling_start, now_utc))
+    rolling_raw, _ = _clipped_range(rolling_start, now_utc)
+    rolling_decisions = verified_unique_decisions(rolling_raw)
     r_wins   = [d for d in rolling_decisions if d["points"] > 0]
     r_losses = [d for d in rolling_decisions if d["points"] < 0]
     r_total_points = sum(d["points"] for d in rolling_decisions)
     r_count = len(rolling_decisions)
 
+    # (2026-09-04) عينة صغيرة (يوم واحد، 6 قرارات) بتنتج نسبة نجاح/expectancy
+    # مضلّلة بنفس طريقة رقم الأسبوع المنفرد يلي أصلاً حاولنا نتجنبه — قبل
+    # ما توصل لعدد قرارات كافٍ، الفرونت يعرض "قيد جمع البيانات" بدل الرقم.
+    MIN_ROLLING_DECISIONS = 20
+
     rolling_30d = {
-        "total_points":  round(r_total_points, 2),
-        "win_points":    round(sum(d["points"] for d in r_wins), 2),
-        "loss_points":   round(sum(d["points"] for d in r_losses), 2),
-        "total_trades":  r_count,
-        "wins":          len(r_wins),
-        "losses":        len(r_losses),
-        "win_rate":      round(len(r_wins) / r_count * 100, 1) if r_count else 0.0,
-        "expectancy":    round(r_total_points / r_count, 2) if r_count else 0.0,
-        "window_days":   window_days,
+        "total_points":    round(r_total_points, 2),
+        "win_points":      round(sum(d["points"] for d in r_wins), 2),
+        "loss_points":     round(sum(d["points"] for d in r_losses), 2),
+        "total_trades":    r_count,
+        "wins":            len(r_wins),
+        "losses":          len(r_losses),
+        "win_rate":        round(len(r_wins) / r_count * 100, 1) if r_count else 0.0,
+        "expectancy":      round(r_total_points / r_count, 2) if r_count else 0.0,
+        "window_days":     window_days,
+        "min_decisions":   MIN_ROLLING_DECISIONS,
+        "sufficient_data": r_count >= MIN_ROLLING_DECISIONS,
     }
 
     # ── Daily stats: last 14 days ──
@@ -455,7 +485,8 @@ async def get_signal_performance(
         day = today - timedelta(days=i)
         day_start = datetime.combine(day, dt_time(0, 0, 0)).replace(tzinfo=timezone.utc)
         day_end   = day_start + timedelta(days=1)
-        day_decisions = verified_unique_decisions(_signals_in_range(day_start, day_end))
+        day_raw, day_before_join = _clipped_range(day_start, day_end)
+        day_decisions = verified_unique_decisions(day_raw)
         day_wins  = [d for d in day_decisions if d["points"] > 0]
         day_losses= [d for d in day_decisions if d["points"] < 0]
         trades_detail = [
@@ -477,6 +508,7 @@ async def get_signal_performance(
             "wins":          len(day_wins),
             "losses":        len(day_losses),
             "trades_detail": trades_detail,
+            "before_join":   day_before_join,
         })
 
     # ── Weekly stats: last 8 weeks ──
@@ -484,7 +516,8 @@ async def get_signal_performance(
     for w in range(7, -1, -1):
         wk_start = week_start - timedelta(weeks=w)
         wk_end   = wk_start + timedelta(days=7)
-        wk_decisions = verified_unique_decisions(_signals_in_range(wk_start, wk_end))
+        wk_raw, wk_before_join = _clipped_range(wk_start, wk_end)
+        wk_decisions = verified_unique_decisions(wk_raw)
         wk_wins  = [d for d in wk_decisions if d["points"] > 0]
         wk_losses= [d for d in wk_decisions if d["points"] < 0]
         wk_pts   = sum(d["points"] for d in wk_decisions)
@@ -497,6 +530,7 @@ async def get_signal_performance(
             "total_trades":  len(wk_decisions),
             "wins":          len(wk_wins),
             "losses":        len(wk_losses),
+            "before_join":   wk_before_join,
         })
 
     return {

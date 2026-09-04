@@ -29,6 +29,9 @@ const T = {
     expectancy: 'العائد المتوقع لكل قرار',
     thisWeekInline: 'الأسبوع الحالي',
     decisions: 'قرار',
+    collecting: 'قيد جمع بيانات كافية',
+    collectingProgress: '{count} من {min} قرار',
+    beforeJoin: 'قبل اشتراكك',
   },
   en: {
     title: 'Signal Performance',
@@ -53,6 +56,9 @@ const T = {
     expectancy: 'Expectancy / Decision',
     thisWeekInline: 'Current Week',
     decisions: 'decisions',
+    collecting: 'Collecting Enough Data',
+    collectingProgress: '{count} of {min} decisions',
+    beforeJoin: 'Before you joined',
   },
 }
 
@@ -127,42 +133,66 @@ export default function PerformanceSection() {
         <h2 className="text-white font-semibold text-lg">{tx.title}</h2>
       </div>
 
-      {/* 30-Day Rolling Headline — leads with the fairer, less volatile number */}
+      {/* 30-Day Rolling Headline — leads with the fairer, less volatile number.
+          Below min_decisions the sample itself is too small to be a fair
+          number (same volatility problem we're trying to avoid), so we show
+          a "collecting data" state instead — same real counts, no misleading
+          win-rate/expectancy headline yet. */}
       {rolling_30d && (
-        <div className={`border rounded-xl p-5 ${ptBg(rolling_30d.total_points)}`}>
-          <div className="text-xs text-gray-400 mb-1">
-            {tx.rolling30.replace('{n}', Math.max(0, Math.round(rolling_30d.window_days ?? 30)))}
-            {' '}({rolling_30d.total_trades} {tx.decisions})
-          </div>
-          <div className="flex flex-wrap items-end gap-x-8 gap-y-2">
-            <div>
-              <div className="text-[11px] text-gray-500 mb-0.5">{tx.winRate}</div>
-              <div className="text-3xl font-bold text-white">{rolling_30d.win_rate}%</div>
+        rolling_30d.sufficient_data ? (
+          <div className={`border rounded-xl p-5 ${ptBg(rolling_30d.total_points)}`}>
+            <div className="text-xs text-gray-400 mb-1">
+              {tx.rolling30.replace('{n}', Math.max(0, Math.round(rolling_30d.window_days ?? 30)))}
+              {' '}({rolling_30d.total_trades} {tx.decisions})
             </div>
-            <div>
-              <div className="text-[11px] text-gray-500 mb-0.5">{tx.expectancy}</div>
-              <div className={`text-2xl font-semibold ${ptColor(rolling_30d.expectancy)}`}>
-                {rolling_30d.expectancy > 0 ? '+' : ''}{rolling_30d.expectancy} {tx.points}
+            <div className="flex flex-wrap items-end gap-x-8 gap-y-2">
+              <div>
+                <div className="text-[11px] text-gray-500 mb-0.5">{tx.winRate}</div>
+                <div className="text-3xl font-bold text-white">{rolling_30d.win_rate}%</div>
+              </div>
+              <div>
+                <div className="text-[11px] text-gray-500 mb-0.5">{tx.expectancy}</div>
+                <div className={`text-2xl font-semibold ${ptColor(rolling_30d.expectancy)}`}>
+                  {rolling_30d.expectancy > 0 ? '+' : ''}{rolling_30d.expectancy} {tx.points}
+                </div>
+              </div>
+              <div>
+                <div className="text-[11px] text-gray-500 mb-0.5">{tx.totalPts}</div>
+                <div className={`text-2xl font-semibold ${ptColor(rolling_30d.total_points)}`}>
+                  {rolling_30d.total_points > 0 ? '+' : ''}{rolling_30d.total_points} {tx.points}
+                </div>
               </div>
             </div>
-            <div>
-              <div className="text-[11px] text-gray-500 mb-0.5">{tx.totalPts}</div>
-              <div className={`text-2xl font-semibold ${ptColor(rolling_30d.total_points)}`}>
-                {rolling_30d.total_points > 0 ? '+' : ''}{rolling_30d.total_points} {tx.points}
+            <div className="flex gap-6 mt-3 text-sm">
+              <div>
+                <span className="text-gray-400">{tx.wins}: </span>
+                <span className="text-green-400 font-semibold">{rolling_30d.wins}</span>
+              </div>
+              <div>
+                <span className="text-gray-400">{tx.losses}: </span>
+                <span className="text-red-400 font-semibold">{rolling_30d.losses}</span>
               </div>
             </div>
           </div>
-          <div className="flex gap-6 mt-3 text-sm">
-            <div>
-              <span className="text-gray-400">{tx.wins}: </span>
-              <span className="text-green-400 font-semibold">{rolling_30d.wins}</span>
+        ) : (
+          <div className="border border-gray-700 bg-gray-800 rounded-xl p-5">
+            <div className="flex items-center gap-2 text-white font-semibold mb-2">
+              <Activity size={16} className="text-blue-400" />
+              {tx.collecting}
             </div>
-            <div>
-              <span className="text-gray-400">{tx.losses}: </span>
-              <span className="text-red-400 font-semibold">{rolling_30d.losses}</span>
+            <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden mb-2">
+              <div
+                className="h-full bg-blue-500 rounded-full transition-all"
+                style={{ width: `${Math.min(100, (rolling_30d.total_trades / rolling_30d.min_decisions) * 100)}%` }}
+              />
+            </div>
+            <div className="text-xs text-gray-400">
+              {tx.collectingProgress
+                .replace('{count}', rolling_30d.total_trades)
+                .replace('{min}', rolling_30d.min_decisions)}
             </div>
           </div>
-        </div>
+        )
       )}
 
       {/* Weekly Stats Table — current week's total now lives here (inline), not as the page headline */}
@@ -180,12 +210,17 @@ export default function PerformanceSection() {
             </span>
           </div>
         </div>
-        {weekly_stats.filter(w => w.total_trades > 0).length === 0 ? (
-          <p className="text-gray-500 text-sm text-center py-4">{tx.noData}</p>
-        ) : (
+        {(() => {
+          // مشترك جديد ما لازم يشوف أسابيع قبل ما ينضم — لا حتى كـ"0
+          // صفقات" (بيوحي غلط إنه ما كان في نشاط، بينما النظام كان شغال)
+          const visibleWeeks = weekly_stats.filter(w => !w.before_join)
+          if (visibleWeeks.filter(w => w.total_trades > 0).length === 0) {
+            return <p className="text-gray-500 text-sm text-center py-4">{tx.noData}</p>
+          }
+          const maxPts = Math.max(...visibleWeeks.map(x => Math.abs(x.total_points)), 1)
+          return (
           <div className="space-y-2">
-            {weekly_stats.map((w, i) => {
-              const maxPts = Math.max(...weekly_stats.map(x => Math.abs(x.total_points)), 1)
+            {visibleWeeks.map((w, i) => {
               const barPct = Math.min(100, (Math.abs(w.total_points) / maxPts) * 100)
               return (
                 <div key={i} className="flex items-center gap-3">
@@ -204,7 +239,8 @@ export default function PerformanceSection() {
               )
             })}
           </div>
-        )}
+          )
+        })()}
       </div>
 
       {/* Daily Stats */}
