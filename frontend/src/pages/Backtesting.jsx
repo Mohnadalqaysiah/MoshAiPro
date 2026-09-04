@@ -8,8 +8,20 @@ const SYMBOLS  = ['','XAUUSD','BTCUSD','ETHUSD','EURUSD','GBPUSD','USDJPY','NAS1
 const TFS      = ['','1h','4h','15m','30m','1d']
 const DAYS_OPT = [30, 60, 90, 180, 365]
 
-function WinRateBadge({ wr }) {
+function WinRateBadge({ wr, sufficient = true, total, minSample }) {
   if (wr == null) return <span className="text-gray-500 text-xs">—</span>
+  // (2026-09-04) عينة صغيرة (مثلاً إشارة وحدة = 100%) توحي بموثوقية وهمية
+  // لو ظهرت بشارة خضراء واثقة — نفس منطق sufficient_data بصفحة الأداء.
+  if (!sufficient) {
+    return (
+      <span
+        className="text-xs font-medium px-2 py-0.5 rounded-lg border bg-gray-800 text-gray-400 border-gray-700"
+        title={`عينة صغيرة جداً (${total} من ${minSample} على الأقل) — النسبة مو موثوقة بعد`}
+      >
+        عينة صغيرة ({total})
+      </span>
+    )
+  }
   const cls = wr >= 65 ? 'bg-green-900/40 text-green-400 border-green-700/40'
             : wr >= 50 ? 'bg-yellow-900/40 text-yellow-400 border-yellow-700/40'
             :            'bg-red-900/40 text-red-400 border-red-700/40'
@@ -110,7 +122,7 @@ export default function Backtesting() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
               {[
                 { label:'إجمالي الإشارات', value: data.overall.total,    color:'text-white' },
-                { label:'نسبة النجاح',      value: data.overall.win_rate != null ? `${data.overall.win_rate}%` : '—', color: data.overall.win_rate >= 65?'text-green-400':data.overall.win_rate>=50?'text-yellow-400':'text-red-400' },
+                { label:'نسبة النجاح',      value: !data.overall.sufficient_sample ? `عينة صغيرة (${data.overall.total})` : (data.overall.win_rate != null ? `${data.overall.win_rate}%` : '—'), color: !data.overall.sufficient_sample ? 'text-gray-400' : (data.overall.win_rate >= 65?'text-green-400':data.overall.win_rate>=50?'text-yellow-400':'text-red-400') },
                 { label:'فوز / خسارة',      value: `${data.overall.wins} / ${data.overall.losses}`, color:'text-gray-300' },
                 { label:'متوسط R/R',         value: data.overall.avg_rr ? `${data.overall.avg_rr}×` : '—', color:'text-blue-400' },
               ].map(s => (
@@ -138,11 +150,11 @@ export default function Backtesting() {
                         <div className="flex items-center gap-3">
                           <span className="text-xs text-gray-400">{row.wins}✓ {row.losses}✗</span>
                           {row.avg_winning_rr && <span className="text-xs text-blue-400">RR {row.avg_winning_rr}×</span>}
-                          <WinRateBadge wr={row.win_rate}/>
+                          <WinRateBadge wr={row.win_rate} sufficient={row.sufficient_sample} total={row.total} minSample={data.min_sample}/>
                         </div>
                       </div>
                       <MiniBar value={row.wins} max={row.total}
-                        color={row.win_rate>=65?'bg-green-500':row.win_rate>=50?'bg-yellow-500':'bg-red-500'}/>
+                        color={!row.sufficient_sample ? 'bg-gray-500' : row.win_rate>=65?'bg-green-500':row.win_rate>=50?'bg-yellow-500':'bg-red-500'}/>
                       {/* Last 5 signals */}
                       {row.recent?.length > 0 && (
                         <div className="flex gap-1.5 mt-1.5">
@@ -175,7 +187,7 @@ export default function Backtesting() {
                     <div key={row.timeframe} className="bg-gray-800/50 rounded-xl p-3 text-center">
                       <p className="text-lg font-bold text-white font-mono">{row.timeframe}</p>
                       <p className="text-xs text-gray-500 my-1">{row.wins + row.losses} إشارة</p>
-                      <WinRateBadge wr={row.win_rate}/>
+                      <WinRateBadge wr={row.win_rate} sufficient={row.sufficient_sample} total={row.wins + row.losses} minSample={data.min_sample}/>
                       <p className="text-xs text-gray-400 mt-1">{row.wins}✓ {row.losses}✗</p>
                     </div>
                   ))}

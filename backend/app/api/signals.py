@@ -754,6 +754,13 @@ def signals_backtest(
                 "created_at": d["created_at"].isoformat() if d["created_at"] else None,
             })
 
+    # (2026-09-04) نفس مشكلة عينة الـDashboard الصغيرة: رمز بإشارة وحدة
+    # فايزة بيطلع "100%" بشارة خضراء توحي بموثوقية وهمية. MIN_SAMPLE هو
+    # نفس حد get_signal_performance (20 قرار) — تحته win_rate لسا يُحسب
+    # ويُرجع (شفافية، ما منخفي شي) بس sufficient_sample=False يخلي
+    # الفرونت يعرضه بشكل محايد بدل شارة خضراء/حمراء واثقة.
+    MIN_SAMPLE = 20
+
     # ── Build result ──────────────────────────────────────────────────────────
     symbol_rows = []
     for m, d in sorted(by_symbol.items()):
@@ -761,20 +768,27 @@ def signals_backtest(
         wr = round(d["wins"] / resolved * 100, 1) if resolved > 0 else None
         avg_rr = round(d["rr_sum"] / d["wins"], 2) if d["wins"] > 0 else None
         symbol_rows.append({
-            "symbol":        m,
-            "wins":          d["wins"],
-            "losses":        d["losses"],
-            "total":         resolved,
-            "win_rate":      wr,
-            "avg_winning_rr": avg_rr,
-            "recent":        d["signals"],
+            "symbol":           m,
+            "wins":             d["wins"],
+            "losses":           d["losses"],
+            "total":            resolved,
+            "win_rate":         wr,
+            "avg_winning_rr":   avg_rr,
+            "recent":           d["signals"],
+            "sufficient_sample": resolved >= MIN_SAMPLE,
         })
 
     tf_rows = []
     for tf, d in sorted(by_tf.items()):
         resolved = d["wins"] + d["losses"]
         wr = round(d["wins"] / resolved * 100, 1) if resolved > 0 else None
-        tf_rows.append({"timeframe": tf, "wins": d["wins"], "losses": d["losses"], "win_rate": wr})
+        tf_rows.append({
+            "timeframe":        tf,
+            "wins":             d["wins"],
+            "losses":           d["losses"],
+            "win_rate":         wr,
+            "sufficient_sample": resolved >= MIN_SAMPLE,
+        })
 
     total_wins   = sum(d["wins"]   for d in by_symbol.values())
     total_losses = sum(d["losses"] for d in by_symbol.values())
@@ -789,7 +803,9 @@ def signals_backtest(
             "losses":   total_losses,
             "win_rate": round(total_wins / total_res * 100, 1) if total_res > 0 else None,
             "avg_rr":   avg_rr_all,
+            "sufficient_sample": total_res >= MIN_SAMPLE,
         },
+        "min_sample":   MIN_SAMPLE,
         "by_symbol":    symbol_rows,
         "by_timeframe": tf_rows,
     }
