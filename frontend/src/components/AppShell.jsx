@@ -19,17 +19,17 @@ const OnboardingTour     = lazy(() => import('./OnboardingTour'))
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
+// Categories as they exist in market_configs today (forex includes XAUUSD;
+// commodity = indices + silver/platinum/copper + oil/gas). Unknown categories
+// still render (uppercased 3-letter code) rather than being dropped.
 const CAT_META = {
-  metals:  { short: 'Au',  ar: 'معادن',         en: 'Metals',  cls: 'from-yellow-400 to-amber-600 text-amber-950' },
-  forex:   { short: 'FX',  ar: 'فوركس',         en: 'Forex',   cls: 'from-sky-400 to-blue-600 text-white' },
-  crypto:  { short: 'BTC', ar: 'كريبتو',        en: 'Crypto',  cls: 'from-orange-400 to-orange-700 text-white' },
-  indices: { short: 'IDX', ar: 'مؤشرات',        en: 'Indices', cls: 'from-emerald-400 to-green-700 text-white' },
-  energy:  { short: 'OIL', ar: 'طاقة',          en: 'Energy',  cls: 'from-orange-300 to-red-600 text-white' },
-  gulf:    { short: 'GCC', ar: 'أسواق خليجية',  en: 'Gulf',    cls: 'from-teal-300 to-emerald-700 text-white' },
-  commodity: { short: 'CM', ar: 'سلع',          en: 'Commod.', cls: 'from-lime-300 to-lime-700 text-lime-950' },
-  other:   { short: '…',   ar: 'أخرى',          en: 'Other',   cls: 'from-gray-300 to-gray-600 text-white' },
+  forex:     { short: 'FX',  ar: 'فوركس وذهب',   en: 'Forex & Gold' },
+  commodity: { short: 'CMD', ar: 'سلع ومؤشرات',  en: 'Commodities & Indices' },
+  crypto:    { short: 'BTC', ar: 'كريبتو',       en: 'Crypto' },
+  stock:     { short: 'STK', ar: 'أسهم أمريكية', en: 'US Stocks' },
+  gulf:      { short: 'GCC', ar: 'أسواق خليجية', en: 'Gulf Markets' },
 }
-const CAT_ORDER = ['metals', 'forex', 'crypto', 'indices', 'energy', 'gulf', 'commodity', 'other']
+const CAT_ORDER = Object.keys(CAT_META)
 
 const planBadge = {
   trial:   { ar: 'تجريبي', en: 'Trial',   cls: 'bg-blue-900/50 text-blue-300 border border-blue-700/50' },
@@ -46,8 +46,8 @@ function Rail({ isAr }) {
   const [params] = useSearchParams()
   const siteSettings = useSiteSettings()
 
-  const present = new Set(markets.map(m => m.category || 'other'))
-  const cats = CAT_ORDER.filter(c => present.has(c))
+  const present = [...new Set(markets.map(m => m.category || 'other'))]
+  const cats = [...CAT_ORDER.filter(c => present.includes(c)), ...present.filter(c => !CAT_META[c])]
   const activeCat = location.pathname === '/dashboard'
     ? (params.get('cat') || localStorage.getItem('mosh_quick_cat') || '')
     : ''
@@ -61,7 +61,7 @@ function Rail({ isAr }) {
       </Link>
       <hr className="w-6 q-line" />
       {cats.map(c => {
-        const meta = CAT_META[c] || CAT_META.other
+        const meta = CAT_META[c] || { short: c.slice(0, 3).toUpperCase(), ar: c, en: c }
         const on = activeCat === c
         return (
           <button
@@ -133,11 +133,17 @@ function LiveGoldWidget({ isAr }) {
   const chg = first && last ? ((last - first) / first) * 100 : null
 
   return (
+    // السعر الكبير = سبوت (TV feed) — نفس اللي يشوفه المستخدم بالتحليل.
+    // الخط البياني = شموع GC=F (العقود الآجلة، مصدر الكاندلز الوحيد للذهب)
+    // ويختلف عن السبوت بفارق أساس $10-60، فنسمّيه بوضوح بدل ما نوهم إنه سبوت.
     <div className="rounded-2xl q-glass p-3">
       <div className="flex items-baseline justify-between text-[11px] text-gray-400">
-        <span>XAUUSD · {isAr ? 'آخر 10 ساعات' : 'last 10h'}</span>
+        <span>XAUUSD · {isAr ? 'سبوت' : 'spot'}</span>
         {chg != null && (
-          <span className={`tabular-nums font-semibold ${chg >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+          <span
+            className={`tabular-nums font-semibold ${chg >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}
+            title={isAr ? 'تغيّر عقود الذهب الآجلة (GC=F) خلال آخر 10 ساعات تداول' : 'Gold futures (GC=F) change over the last 10 trading hours'}
+          >
             {chg >= 0 ? '+' : ''}{chg.toFixed(2)}%
           </span>
         )}
@@ -145,7 +151,12 @@ function LiveGoldWidget({ isAr }) {
       <div className="text-xl font-extrabold text-white tabular-nums leading-tight mt-0.5">
         {price != null ? Number(price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
       </div>
-      <canvas ref={canvasRef} className="block w-full h-11 mt-1" aria-label="XAUUSD 15m sparkline" />
+      {closes.length > 1 && (
+        <>
+          <canvas ref={canvasRef} className="block w-full h-11 mt-1" aria-label="Gold futures 15m sparkline" />
+          <div className="text-[10px] text-gray-500 mt-0.5">{isAr ? 'الاتجاه: عقود آجلة GC=F · 15m · آخر 10 ساعات تداول' : 'Trend: GC=F futures · 15m · last 10 trading hours'}</div>
+        </>
+      )}
     </div>
   )
 }

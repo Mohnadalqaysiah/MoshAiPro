@@ -462,6 +462,9 @@ export default function Dashboard() {
     indices: { label: 'مؤشرات',   color: 'from-green-600/20 to-green-700/10 border-green-700/40 hover:border-green-500/60 text-green-300', ring: 'ring-green-500/40' },
     energy:  { label: 'طاقة',     color: 'from-orange-600/20 to-orange-700/10 border-orange-700/40 hover:border-orange-500/60 text-orange-300', ring: 'ring-orange-500/40' },
     gulf:    { label: '🕌 أسواق خليجية', color: 'from-emerald-600/20 to-emerald-700/10 border-emerald-700/40 hover:border-emerald-500/60 text-emerald-300', ring: 'ring-emerald-500/40' },
+    // الفئتان الفعليتان بـmarket_configs اللي كانتا تسقطان على "أخرى" (فتظهر مرتين)
+    commodity: { label: 'سلع ومؤشرات', color: 'from-yellow-600/20 to-yellow-700/10 border-yellow-700/40 hover:border-yellow-500/60 text-yellow-300', ring: 'ring-yellow-500/40' },
+    stock:   { label: 'أسهم أمريكية', color: 'from-sky-600/20 to-sky-700/10 border-sky-700/40 hover:border-sky-500/60 text-sky-300', ring: 'ring-sky-500/40' },
     other:   { label: 'أخرى',     color: 'from-gray-600/20 to-gray-700/10 border-gray-700/40 hover:border-gray-500/60 text-gray-300', ring: 'ring-gray-500/40' },
   }
   const catKeys   = Object.keys(cats)
@@ -783,7 +786,8 @@ export default function Dashboard() {
                               { l: 'R/R', v: rr ? `1:${typeof rr === 'number' ? rr.toFixed(1) : rr}` : '—', c: 'text-amber-300' },
                               { l: isAr ? 'الهدف الأول' : 'TP1', v: fmt(tp1), c: 'text-emerald-400' },
                               { l: isAr ? 'الهدف الثاني' : 'TP2', v: fmt(tp2), c: 'text-emerald-300' },
-                              { l: isAr ? 'السعر الحالي' : 'Price', v: fmt(livePrice, market === 'BTCUSD' ? 2 : 4), c: 'text-cyan-300' },
+                              // /signals/latest لا يرجّع سعراً حياً (بس نتيجة التحليل المباشر) — نخفي الخلية بدل "—" دائمة
+                              ...(livePrice != null ? [{ l: isAr ? 'السعر الحالي' : 'Price', v: fmt(livePrice, market === 'BTCUSD' ? 2 : 4), c: 'text-cyan-300' }] : []),
                             ].map(x => (
                               <div key={x.l} className="min-w-0">
                                 <div className="text-[11px] text-gray-500">{x.l}</div>
