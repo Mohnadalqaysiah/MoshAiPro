@@ -5,19 +5,11 @@ import { LangProvider, useLang } from './contexts/LangContext'
 import { ThemeProvider } from './contexts/ThemeContext'
 import './App.css'
 
-// (2026-09-04) كانوا مستوردين eagerly ("أهم المكونات المشتركة") — لكن
-// كلهم يُعرَضون حصراً جوا ProtectedRoute (شجرة /* المحمية بالأسفل)، يعني
-// أي زائر لصفحة عامة (/, /sa, /ae, /pricing...) يحمّل كودهم بدون أي
-// استخدام فعلي — بالضبط "JavaScript غير مستخدَم" اللي رصده Lighthouse
-// بـchunk الدخول الرئيسي. ProtectedRoute أصلاً بتعرض حالة تحميل خاصة فيها
-// (auth loading check) قبل ما توصل لهالمكونات، وSuspense فوق بالـRoutes
-// كله جاهز أصلاً — تحويلهم lazy ما بيضيف أي وميض جديد، بس بيشيلهم من
-// حزمة الصفحات العامة.
-const Navbar             = lazy(() => import('./components/Navbar'))
-const TrialBanner        = lazy(() => import('./components/TrialBanner'))
-const TelegramLinkBanner = lazy(() => import('./components/TelegramLinkBanner'))
-const EmailVerifyBanner  = lazy(() => import('./components/EmailVerifyBanner'))
-const OnboardingTour     = lazy(() => import('./components/OnboardingTour'))
+// (2026-09-04) lazy بدل eager: يُعرَض حصراً جوا ProtectedRoute، فتحميله
+// بالصفحات العامة كان "JavaScript غير مستخدَم" بتقرير Lighthouse.
+// (2026-09-05) AppShell يضم القائمة الجانبية + الشريط + لوحة الملف الشخصي
+// + البانرات (بدل Navbar القديم).
+const AppShell = lazy(() => import('./components/AppShell'))
 
 // Lazy-load all pages — each becomes its own JS chunk
 const Landing        = lazy(() => import('./pages/Landing'))
@@ -87,7 +79,6 @@ function LangRouteSync() {
 
 function AppRoutes() {
   const { user } = useAuth()
-  const { lang } = useLang()
 
   return (
     <Suspense fallback={<PageLoader />}>
@@ -135,29 +126,22 @@ function AppRoutes() {
         {/* Protected */}
         <Route path="/*" element={
           <ProtectedRoute>
-            <div className="min-h-screen bg-gray-900 text-gray-100" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-              <Navbar />
-              <EmailVerifyBanner />
-              <TrialBanner />
-              <TelegramLinkBanner />
-              <OnboardingTour />
-              <main className="container mx-auto px-3 sm:px-4 py-5 sm:py-6 max-w-7xl">
-                <Routes>
-                  <Route path="/dashboard" element={<Dashboard />} />
-                  <Route path="/signals"   element={<Signals />} />
-                  <Route path="/markets"   element={<Markets />} />
-                  <Route path="/analytics" element={<Analytics />} />
-                  <Route path="/analyses"  element={<Analyses />} />
-                  <Route path="/profile"   element={<Profile />} />
-                  <Route path="/affiliate"       element={<AffiliatePage />} />
-                  <Route path="/market-overview" element={<MarketOverview />} />
-                  <Route path="/backtesting"     element={<Backtesting />} />
-                  <Route path="/journal"         element={<TradeJournal />} />
-                </Routes>
-              </main>
+            <AppShell>
+              <Routes>
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/signals"   element={<Signals />} />
+                <Route path="/markets"   element={<Markets />} />
+                <Route path="/analytics" element={<Analytics />} />
+                <Route path="/analyses"  element={<Analyses />} />
+                <Route path="/profile"   element={<Profile />} />
+                <Route path="/affiliate"       element={<AffiliatePage />} />
+                <Route path="/market-overview" element={<MarketOverview />} />
+                <Route path="/backtesting"     element={<Backtesting />} />
+                <Route path="/journal"         element={<TradeJournal />} />
+              </Routes>
               <ChatBot />
               <SupportChatWidget />
-            </div>
+            </AppShell>
           </ProtectedRoute>
         } />
       </Routes>

@@ -64,8 +64,8 @@ export default function Backtesting() {
   const maxTotal = Math.max(...(data?.by_symbol || []).map(x => x.total), 1)
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white" dir="rtl">
-      <div className="max-w-5xl mx-auto px-4 py-8">
+    <div className="text-white" dir="rtl">
+      <div className="max-w-5xl mx-auto">
 
         {/* Header */}
         <div className="mb-6">

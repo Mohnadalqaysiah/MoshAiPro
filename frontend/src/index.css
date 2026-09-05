@@ -4,19 +4,36 @@
    Tailwind's opacity modifier: rgb(var(--tw-gray-800) / 0.6)
    ══════════════════════════════════════════════════════════════════════ */
 
-/* ── DARK MODE (default — matches Tailwind's standard gray palette) ── */
+/* ── DARK MODE (default) — violet-tinted grays ─────────────────────────
+   (2026-09-05) كانت رمادي Tailwind القياسي. الهوية الجديدة للوحة التحكم
+   (AppShell) بنفسجية زجاجية؛ لأن كل bg/text/border-gray-* بالمشروع
+   مربوطة بهالمتغيرات، تعديلها هون يحوّل كل الصفحات المحمية للنغمة
+   الجديدة بدون لمس أي مكوّن. ── */
 :root {
-  --tw-gray-50:  249 250 251;
-  --tw-gray-100: 243 244 246;
-  --tw-gray-200: 229 231 235;
-  --tw-gray-300: 209 213 219;
-  --tw-gray-400: 156 163 175;
-  --tw-gray-500: 107 114 128;
-  --tw-gray-600: 75 85 99;
-  --tw-gray-700: 55 65 81;
-  --tw-gray-800: 31 41 55;
-  --tw-gray-900: 17 24 39;
-  --tw-gray-950: 3 7 18;
+  --tw-gray-50:  247 244 255;   /* #F7F4FF */
+  --tw-gray-100: 240 236 252;
+  --tw-gray-200: 225 218 245;
+  --tw-gray-300: 201 191 230;   /* #C9BFE6 — secondary text */
+  --tw-gray-400: 165 150 208;   /* #A596D0 — muted text     */
+  --tw-gray-500: 128 108 176;   /* #806CB0                  */
+  --tw-gray-600:  88  66 140;
+  --tw-gray-700:  58  36 110;   /* #3A246E — borders/hover  */
+  --tw-gray-800:  37  18  79;   /* #25124F — cards          */
+  --tw-gray-900:  26  11  63;   /* #1A0B3F — panels         */
+  --tw-gray-950:  15   7  36;   /* #0F0724 — page ground    */
+
+  /* AppShell tokens */
+  --q-acc1: #FF4FD8;
+  --q-acc2: #7C3AED;
+  --q-acc3: #22D3EE;
+  --q-glass:  rgba(255,255,255,0.055);
+  --q-glass2: rgba(255,255,255,0.09);
+  --q-line:   rgba(255,255,255,0.10);
+  --q-ground:
+    radial-gradient(1200px 700px at 85% -10%, #4C1D95 0%, transparent 60%),
+    radial-gradient(900px 600px at 0% 100%,  #3B0764 0%, transparent 55%),
+    linear-gradient(180deg, #1A0B3F, #0F0724);
+  --q-panel: rgba(0,0,0,0.18);
 }
 
 /* ── LIGHT MODE — warm slate palette, easy on the eyes ───────────────
@@ -28,17 +45,26 @@
    ── */
 .theme-light {
   color-scheme: light;
-  --tw-gray-50:  15  23  42;   /*  #0f172a — headings (was lightest bg)    */
-  --tw-gray-100: 30  41  59;   /*  #1e293b — strong text                   */
-  --tw-gray-200: 51  65  85;   /*  #334155 — body text                     */
-  --tw-gray-300: 71  85 105;   /*  #475569 — secondary text                */
-  --tw-gray-400: 100 116 139;  /*  #64748b — muted text                    */
-  --tw-gray-500: 148 163 184;  /*  #94a3b8 — very muted / placeholder      */
-  --tw-gray-600: 203 213 225;  /*  #cbd5e1 — dividers / subtle borders     */
-  --tw-gray-700: 226 232 240;  /*  #e2e8f0 — hover states / section tint   */
+  --tw-gray-50:  24  16  53;   /*  #181035 — headings (was lightest bg)    */
+  --tw-gray-100: 40  29  80;   /*  strong text                             */
+  --tw-gray-200: 62  49 106;   /*  body text                               */
+  --tw-gray-300: 84  70 128;   /*  secondary text                          */
+  --tw-gray-400: 112  98 156;  /*  muted text                              */
+  --tw-gray-500: 156 144 194;  /*  very muted / placeholder                */
+  --tw-gray-600: 214 206 240;  /*  dividers / subtle borders               */
+  --tw-gray-700: 233 228 250;  /*  hover states / section tint             */
   --tw-gray-800: 255 255 255;  /*  #ffffff — cards / inputs / panels       */
-  --tw-gray-900: 241 245 249;  /*  #f1f5f9 — page background               */
-  --tw-gray-950: 226 232 240;  /*  #e2e8f0 — deepest bg → now light border */
+  --tw-gray-900: 245 243 255;  /*  #f5f3ff — page background               */
+  --tw-gray-950: 233 228 250;  /*  deepest bg → now light border           */
+
+  --q-glass:  rgba(255,255,255,0.72);
+  --q-glass2: rgba(255,255,255,0.95);
+  --q-line:   rgba(76,29,149,0.14);
+  --q-ground:
+    radial-gradient(1200px 700px at 85% -10%, #E9D5FF 0%, transparent 60%),
+    radial-gradient(900px 600px at 0% 100%,  #CFFAFE 0%, transparent 55%),
+    linear-gradient(180deg, #F5F3FF, #EDE9FE);
+  --q-panel: rgba(255,255,255,0.35);
 }
 
 @tailwind base;
@@ -66,9 +92,9 @@ html {
 
 /* ── Custom scrollbar ───────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: #0f172a; }
-::-webkit-scrollbar-thumb { background: #334155; border-radius: 99px; }
-::-webkit-scrollbar-thumb:hover { background: #475569; }
+::-webkit-scrollbar-track { background: rgb(var(--tw-gray-950)); }
+::-webkit-scrollbar-thumb { background: rgb(var(--tw-gray-700)); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: rgb(var(--tw-gray-600)); }
 
 /* ── Keyframes ──────────────────────────────────────────────────────── */
 @keyframes fade-up {
@@ -355,3 +381,50 @@ html {
 .theme-light .best-opp-track      { background-color: rgb(var(--tw-gray-700)); }
 .theme-light .best-opp-level-card { background-color: rgb(var(--tw-gray-900)); }
 .theme-light .best-opp-sub        { color: rgb(var(--tw-gray-400)); }
+
+/* ══════════════════════════════════════════════════════════════════════
+   APP SHELL (rail + sidebar + main + profile panel) — token-driven so the
+   light theme only swaps the --q-* variables defined at the top.
+   ══════════════════════════════════════════════════════════════════════ */
+.q-ground { background: var(--q-ground); background-attachment: fixed; }
+.q-panel  { background: var(--q-panel); }
+.q-glass  { background: var(--q-glass); border: 1px solid var(--q-line); }
+.q-glass-hover:hover { background: var(--q-glass2); }
+.q-line   { border-color: var(--q-line); }
+.q-nav-on {
+  background: linear-gradient(90deg, rgba(255,79,216,0.22), rgba(124,58,237,0.18));
+}
+.theme-light .q-nav-on {
+  background: linear-gradient(90deg, rgba(255,79,216,0.16), rgba(124,58,237,0.14));
+}
+.q-rail-on {
+  background: linear-gradient(135deg, rgba(255,79,216,0.35), rgba(124,58,237,0.45));
+  border-color: rgba(255,79,216,0.5) !important;
+}
+.q-logo {
+  background: linear-gradient(135deg, var(--q-acc1), var(--q-acc2));
+  box-shadow: 0 8px 24px rgba(255,79,216,0.35);
+}
+.q-hero {
+  background: linear-gradient(105deg, #7C3AED 0%, #C026D3 45%, #22D3EE 120%);
+  box-shadow: 0 20px 50px rgba(124,58,237,0.35);
+}
+.q-hero::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(400px 260px at 20% 0%, rgba(255,255,255,0.22), transparent 60%);
+  pointer-events: none;
+}
+.q-cta {
+  background: linear-gradient(90deg, var(--q-acc1), var(--q-acc2));
+  box-shadow: 0 8px 20px rgba(255,79,216,0.30);
+}
+.q-conf { background: linear-gradient(90deg, var(--q-acc3), var(--q-acc1)); }
+.q-art-buy  { background: linear-gradient(135deg, rgba(52,211,153,0.35), rgba(34,211,238,0.25) 60%, rgba(124,58,237,0.35)); }
+.q-art-sell { background: linear-gradient(135deg, rgba(251,113,133,0.35), rgba(255,79,216,0.25) 60%, rgba(124,58,237,0.35)); }
+.q-art-wait { background: linear-gradient(135deg, rgba(165,150,208,0.25), rgba(124,58,237,0.30)); }
+.q-hero-text { color: #fff; }
+.theme-light .q-hero .text-white,
+.theme-light .q-hero-text { color: #fff !important; }
+.theme-light .q-cta,
+.theme-light .q-logo { color: #fff !important; }

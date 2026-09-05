@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 import { TrendingUp, TrendingDown, Activity, Zap, AlertCircle, RefreshCw, Send, ExternalLink, Copy, CheckCircle, X, ChevronDown, ChevronUp, BarChart2, User, LayoutDashboard, Share2, Wallet, Calculator, Lock } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
@@ -77,9 +77,20 @@ export default function Dashboard() {
   const [calcBalance, setCalcBalance]     = useState(1000)
   const [calcRisk, setCalcRisk]           = useState(1)
   const [copiedSignal, setCopiedSignal]   = useState(false)
+  const [heroSymbol, setHeroSymbol]       = useState('')
+  const [heroTf, setHeroTf]               = useState('1h')
+  const [searchParams] = useSearchParams()
 
   // جلب آخر الإشارات
   useEffect(() => { fetchSignals(); fetchSignalHistory() }, [])
+
+  // الشريط الجانبي (AppShell) يوجّه لـ /dashboard?cat=… و ?tab=…
+  useEffect(() => {
+    const cat = searchParams.get('cat')
+    const tab = searchParams.get('tab')
+    if (cat) { setQuickCat(cat); localStorage.setItem('mosh_quick_cat', cat) }
+    if (tab) setActiveTab(tab)
+  }, [searchParams])
 
   const fetchSignals = async () => {
     try {
@@ -99,13 +110,13 @@ export default function Dashboard() {
     }
   }
 
-  const analyzeMarket = async (symbol, forceRefresh = false) => {
+  const analyzeMarket = async (symbol, forceRefresh = false, timeframe = '1h') => {
     setAnalyzing(symbol)
     setError(null)
     setLimitReached(false)
     try {
       const res = await axios.post(
-        `${API}/api/v1/signals/analyze?symbol=${symbol}&timeframe=1h&advanced_mode=true&force_refresh=${forceRefresh}`
+        `${API}/api/v1/signals/analyze?symbol=${symbol}&timeframe=${timeframe}&advanced_mode=true&force_refresh=${forceRefresh}`
       )
       const data = res.data.data
       const entry = { ...data, market: symbol, id: Date.now() }
@@ -437,24 +448,34 @@ export default function Dashboard() {
     { id: 'account',     labelAr: 'الحساب',    labelEn: 'Account',     icon: <User size={16} />            },
   ]
 
+  // ── Markets grouped by category (shared by the hero form + symbol grid) ──
+  const cats = {}
+  markets.forEach(m => {
+    const c = m.category || 'other'
+    if (!cats[c]) cats[c] = []
+    cats[c].push(m)
+  })
+  const catMeta = {
+    forex:   { label: 'فوركس',    color: 'from-blue-600/20 to-blue-700/10 border-blue-700/40 hover:border-blue-500/60 text-blue-300', ring: 'ring-blue-500/40' },
+    metals:  { label: 'معادن',    color: 'from-yellow-600/20 to-yellow-700/10 border-yellow-700/40 hover:border-yellow-500/60 text-yellow-300', ring: 'ring-yellow-500/40' },
+    crypto:  { label: 'كريبتو',   color: 'from-purple-600/20 to-purple-700/10 border-purple-700/40 hover:border-purple-500/60 text-purple-300', ring: 'ring-purple-500/40' },
+    indices: { label: 'مؤشرات',   color: 'from-green-600/20 to-green-700/10 border-green-700/40 hover:border-green-500/60 text-green-300', ring: 'ring-green-500/40' },
+    energy:  { label: 'طاقة',     color: 'from-orange-600/20 to-orange-700/10 border-orange-700/40 hover:border-orange-500/60 text-orange-300', ring: 'ring-orange-500/40' },
+    gulf:    { label: '🕌 أسواق خليجية', color: 'from-emerald-600/20 to-emerald-700/10 border-emerald-700/40 hover:border-emerald-500/60 text-emerald-300', ring: 'ring-emerald-500/40' },
+    other:   { label: 'أخرى',     color: 'from-gray-600/20 to-gray-700/10 border-gray-700/40 hover:border-gray-500/60 text-gray-300', ring: 'ring-gray-500/40' },
+  }
+  const catKeys   = Object.keys(cats)
+  const activeCat = catKeys.includes(quickCat) ? quickCat : (catKeys[0] || '')
+  const setCat    = (c) => { setQuickCat(c); localStorage.setItem('mosh_quick_cat', c); setHeroSymbol('') }
+  const catItems  = cats[activeCat] || []
+  const heroSym   = catItems.some(m => m.symbol === heroSymbol) ? heroSymbol : (catItems[0]?.symbol || '')
+
+  const featured = signals.slice(0, 2)
+  const rest     = signals.slice(2)
+
   return (
     <div className="space-y-0" dir={isAr ? 'rtl' : 'ltr'}>
       <DashboardAnnouncement />
-
-      {/* ── Page Header ── */}
-      <div className="flex items-center justify-between pb-4">
-        <div>
-          <h1 className="text-2xl font-bold text-white">{tx.title}</h1>
-          <p className="text-gray-400 text-sm mt-1">{tx.sub}</p>
-        </div>
-        <button
-          onClick={fetchSignals}
-          className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm transition-colors"
-        >
-          <RefreshCw size={14} />
-          {tx.refresh}
-        </button>
-      </div>
 
       {/* Modals */}
       <QuickModal result={quickResult} onClose={() => setQuickResult(null)} />
@@ -481,46 +502,31 @@ export default function Dashboard() {
       )}
 
       {/* ── Tab Bar ── */}
-      <div className="sticky top-0 z-10 -mx-4 px-3 py-2.5 bg-gray-900/95 backdrop-blur-md border-b border-gray-700/60 mb-5">
-        <div className="flex gap-1.5">
+      <div className="flex items-center gap-2 mb-5">
+        <div className="flex-1 flex gap-1 p-1 rounded-2xl q-glass">
           {TABS.map(tab => {
             const isActive = activeTab === tab.id
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                style={isActive ? {
-                  boxShadow: '0 0 18px rgba(96,165,250,0.30), inset 0 0 14px rgba(59,130,246,0.08)'
-                } : {}}
-                className={`relative flex-1 flex flex-col items-center justify-center gap-1 py-2.5 px-1 rounded-xl transition-all duration-200 active:scale-95 border ${
-                  isActive
-                    ? 'bg-blue-600/15 border-blue-500/35 scale-[1.02]'
-                    : 'bg-transparent border-transparent hover:bg-blue-500/5 hover:border-blue-400/20'
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs sm:text-sm font-semibold transition-all active:scale-95 ${
+                  isActive ? 'q-nav-on text-white' : 'text-gray-400 hover:text-white q-glass-hover'
                 }`}
               >
-                {/* bottom glow accent */}
-                {isActive && (
-                  <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-7 h-[2px] rounded-full bg-blue-400"
-                    style={{ boxShadow: '0 0 8px 2px rgba(96,165,250,0.7)' }} />
-                )}
-
-                {/* icon */}
-                <span className={`transition-all duration-200 ${
-                  isActive ? 'text-blue-400 scale-110' : 'text-gray-400'
-                }`}>
-                  {tab.icon}
-                </span>
-
-                {/* label — always visible */}
-                <span className={`text-[10px] font-semibold leading-none transition-colors duration-200 ${
-                  isActive ? 'text-blue-300' : 'text-gray-400'
-                }`}>
-                  {isAr ? tab.labelAr : tab.labelEn}
-                </span>
+                <span className={isActive ? 'text-[var(--q-acc3)]' : ''}>{tab.icon}</span>
+                <span className="leading-none">{isAr ? tab.labelAr : tab.labelEn}</span>
               </button>
             )
           })}
         </div>
+        <button
+          onClick={fetchSignals}
+          title={tx.refresh}
+          className="w-10 h-10 rounded-xl q-glass q-glass-hover grid place-items-center text-gray-300 hover:text-white"
+        >
+          <RefreshCw size={15} />
+        </button>
       </div>
 
       {/* ══ TAB: الرئيسية ══ */}
@@ -529,7 +535,7 @@ export default function Dashboard() {
 
           {/* ── Telegram CTA — prominent for unlinked users ── */}
           {showTgCard && (
-            <div className="relative overflow-hidden bg-gradient-to-r from-indigo-950/80 to-blue-950/80 border border-indigo-500/50 rounded-2xl p-5" dir="rtl">
+            <div className="relative overflow-hidden rounded-2xl p-5 border q-line bg-gradient-to-br from-cyan-500/10 via-violet-600/10 to-fuchsia-500/10" dir="rtl">
               {/* Background glow */}
               <div className="absolute -top-6 -end-6 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
               <div className="relative flex items-start gap-4">
@@ -575,138 +581,249 @@ export default function Dashboard() {
 
           <BestOpportunityWidget />
 
-          {/* Quick Analyze */}
-          <div className="bg-gray-800/60 border border-gray-700/80 rounded-2xl overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-700/60">
-          <h2 className="text-white font-semibold flex items-center gap-2">
-            <Zap size={16} className="text-yellow-400" />
-            تحليل سريع
-          </h2>
-          <span className="text-xs text-gray-500 hidden sm:block">كليك = كاش · شيفت+كليك = تحديث · كليك يمين = Confluence</span>
-        </div>
+          {/* ── Hero: quick analysis ── */}
+          <section className="relative overflow-hidden rounded-3xl q-hero p-6 sm:p-7 grid md:grid-cols-[1fr_auto] gap-5 items-center">
+            <div className="relative">
+              <h1 className="q-hero-text text-2xl sm:text-3xl font-extrabold leading-tight max-w-[18ch]" style={{ textWrap: 'balance' }}>
+                {isAr ? 'حلّل أي سوق خلال ثوانٍ بالذكاء الاصطناعي' : 'Analyze any market in seconds with AI'}
+              </h1>
+              <p className="q-hero-text opacity-85 text-sm mt-2 mb-4 max-w-[46ch]">
+                {isAr
+                  ? 'Smart Money Concepts + Gemini — هيكل السوق، السيولة، Order Blocks وFVG، مع توصية واضحة ومستويات دخول ووقف وأهداف.'
+                  : 'Smart Money Concepts + Gemini — structure, liquidity, Order Blocks & FVG, with a clear call and entry / SL / TP levels.'}
+              </p>
+              <form
+                className="relative flex flex-wrap gap-2"
+                onSubmit={e => { e.preventDefault(); if (heroSym && !analyzing) analyzeMarket(heroSym, false, heroTf) }}
+              >
+                <select
+                  value={activeCat}
+                  onChange={e => setCat(e.target.value)}
+                  aria-label={isAr ? 'الفئة' : 'Category'}
+                  className="q-hero-text px-3 py-2 rounded-xl bg-[rgba(20,8,48,0.55)] border border-white/25 text-sm backdrop-blur focus:outline-none focus:ring-2 focus:ring-white/40"
+                >
+                  {catKeys.map(cat => <option key={cat} value={cat}>{(catMeta[cat] || catMeta.other).label}</option>)}
+                </select>
+                <select
+                  value={heroSym}
+                  onChange={e => setHeroSymbol(e.target.value)}
+                  aria-label={isAr ? 'الرمز' : 'Symbol'}
+                  className="q-hero-text px-3 py-2 rounded-xl bg-[rgba(20,8,48,0.55)] border border-white/25 text-sm backdrop-blur focus:outline-none focus:ring-2 focus:ring-white/40 min-w-[150px]"
+                >
+                  {catItems.map(m => <option key={m.symbol} value={m.symbol}>{m.symbol} — {isAr ? (m.name_ar || m.name) : (m.name || m.name_ar)}</option>)}
+                </select>
+                <select
+                  value={heroTf}
+                  onChange={e => setHeroTf(e.target.value)}
+                  aria-label={isAr ? 'الإطار الزمني' : 'Timeframe'}
+                  className="q-hero-text px-3 py-2 rounded-xl bg-[rgba(20,8,48,0.55)] border border-white/25 text-sm backdrop-blur focus:outline-none focus:ring-2 focus:ring-white/40"
+                >
+                  {['15m', '30m', '1h', '4h', '1d'].map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+                <button
+                  type="submit"
+                  disabled={!heroSym || !!analyzing}
+                  className="flex items-center gap-2 px-5 py-2 rounded-xl bg-white text-violet-900 font-extrabold text-sm shadow-lg shadow-black/20 disabled:opacity-60 active:scale-95 transition"
+                >
+                  {analyzing === heroSym ? <RefreshCw size={14} className="animate-spin" /> : <Zap size={14} />}
+                  {analyzing === heroSym ? tx.analyzing : (isAr ? 'تحليل الآن' : 'Analyze now')}
+                </button>
+              </form>
+            </div>
+            <div className="relative hidden md:block w-[200px] h-[150px]" aria-hidden="true">
+              <i className="absolute rounded-full end-0 top-1.5 w-[140px] h-[140px] shadow-2xl" style={{ background: 'radial-gradient(circle at 35% 30%,#FFD1F5,#FF4FD8 45%,#7C3AED 90%)' }} />
+              <i className="absolute rounded-full end-[130px] top-[70px] w-16 h-16 opacity-90" style={{ background: 'radial-gradient(circle at 35% 30%,#CFFAFE,#22D3EE 50%,#0E7490)' }} />
+              <i className="absolute rounded-full end-[118px] top-3.5 w-[30px] h-[30px]" style={{ background: 'radial-gradient(circle at 35% 30%,#fff,#C4B5FD 60%,#7C3AED)' }} />
+              <div className="absolute bottom-0 end-6 flex items-end gap-1.5 h-[60px]">
+                {[22, 34, 40, 28, 18, 48, 56].map((h, i) => (
+                  <b key={i} className={`w-2 rounded-[3px] ${i % 3 === 1 ? 'bg-[rgba(15,7,36,0.7)]' : 'bg-white/85'}`} style={{ height: h }} />
+                ))}
+              </div>
+            </div>
+          </section>
 
-        <div className="p-4">
-          {/* تجميع الأسواق حسب الفئة — فلترة بـdropdown بدل عرض كل الأزواج مرة وحدة */}
-          {(() => {
-            const cats = {}
-            markets.forEach(m => {
-              const c = m.category || 'other'
-              if (!cats[c]) cats[c] = []
-              cats[c].push(m)
-            })
-            const catMeta = {
-              forex:   { label: 'فوركس',    color: 'from-blue-600/20 to-blue-700/10 border-blue-700/40 hover:border-blue-500/60 text-blue-300', ring: 'ring-blue-500/40' },
-              metals:  { label: 'معادن',    color: 'from-yellow-600/20 to-yellow-700/10 border-yellow-700/40 hover:border-yellow-500/60 text-yellow-300', ring: 'ring-yellow-500/40' },
-              crypto:  { label: 'كريبتو',   color: 'from-purple-600/20 to-purple-700/10 border-purple-700/40 hover:border-purple-500/60 text-purple-300', ring: 'ring-purple-500/40' },
-              indices: { label: 'مؤشرات',   color: 'from-green-600/20 to-green-700/10 border-green-700/40 hover:border-green-500/60 text-green-300', ring: 'ring-green-500/40' },
-              energy:  { label: 'طاقة',     color: 'from-orange-600/20 to-orange-700/10 border-orange-700/40 hover:border-orange-500/60 text-orange-300', ring: 'ring-orange-500/40' },
-              gulf:    { label: '🕌 أسواق خليجية', color: 'from-emerald-600/20 to-emerald-700/10 border-emerald-700/40 hover:border-emerald-500/60 text-emerald-300', ring: 'ring-emerald-500/40' },
-              other:   { label: 'أخرى',     color: 'from-gray-600/20 to-gray-700/10 border-gray-700/40 hover:border-gray-500/60 text-gray-300', ring: 'ring-gray-500/40' },
-            }
-            const catKeys = Object.keys(cats)
-            const activeCat = catKeys.includes(quickCat) ? quickCat : (catKeys[0] || '')
-            const setCat = (c) => { setQuickCat(c); localStorage.setItem('mosh_quick_cat', c) }
-
-            return (
-              <>
-                {/* اختيار الفئة — dropdown بدل عرض كل الفئات دفعة وحدة */}
-                <div className="flex items-center gap-2 mb-4">
-                  <select
-                    value={activeCat}
-                    onChange={e => setCat(e.target.value)}
-                    className="bg-gray-900 border border-gray-700 text-white text-sm rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[160px]"
-                  >
-                    {catKeys.map(cat => {
-                      const meta = catMeta[cat] || catMeta.other
-                      return <option key={cat} value={cat}>{meta.label} ({cats[cat].length})</option>
-                    })}
-                  </select>
-                  <span className="text-xs text-gray-500">{cats[activeCat]?.length || 0} زوج</span>
-                </div>
-
-                {activeCat && cats[activeCat] && (() => {
-                  const cat = activeCat
-                  const items = cats[cat]
+          {/* Quick Analyze — كل الأزواج */}
+          <div className="rounded-2xl q-glass overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-3.5 border-b q-line">
+              <h2 className="text-white font-semibold flex items-center gap-2 text-sm">
+                <Zap size={15} className="text-[var(--q-acc3)]" />
+                {isAr ? 'كل الأزواج' : 'All pairs'}
+                <span className="text-xs text-gray-500 font-normal">({catItems.length})</span>
+              </h2>
+              <span className="text-xs text-gray-500 hidden sm:block">كليك = كاش · شيفت+كليك = تحديث · كليك يمين = Confluence</span>
+            </div>
+            <div className="p-4">
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {catKeys.map(cat => {
                   const meta = catMeta[cat] || catMeta.other
+                  const on = cat === activeCat
                   return (
-                <div key={cat} className="mb-4 last:mb-0">
-                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 gap-2">
-                    {items.map(m => {
-                      const isAnalyzing = analyzing === m.symbol
-                      return (
-                        <button
-                          key={m.symbol}
-                          onClick={(e) => e.shiftKey ? analyzeMarket(m.symbol, true) : analyzeMarket(m.symbol, false)}
-                          onContextMenu={(e) => { e.preventDefault(); setConfluenceSymbol(m.symbol) }}
-                          disabled={isAnalyzing}
-                          className={`relative py-2.5 px-2 bg-gradient-to-b border rounded-xl text-xs font-semibold transition-all duration-200 select-none
-                            ${meta.color}
-                            ${isAnalyzing
-                              ? 'opacity-60 cursor-not-allowed scale-95'
-                              : 'hover:scale-105 active:scale-95 cursor-pointer'
-                            }
-                            ${isAnalyzing ? `ring-2 ${meta.ring}` : ''}
-                          `}
-                        >
-                          {isAnalyzing ? (
-                            <span className="flex items-center justify-center gap-1">
-                              <RefreshCw size={11} className="animate-spin" />
-                              <span className="truncate">{m.symbol}</span>
-                            </span>
-                          ) : (
-                            <span className="truncate">{m.symbol}</span>
-                          )}
-                          {isAnalyzing && (
-                            <span className="absolute inset-0 rounded-xl animate-pulse bg-white/5" />
-                          )}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
+                    <button
+                      key={cat}
+                      onClick={() => setCat(cat)}
+                      className={`text-xs px-3 py-1.5 rounded-full border transition ${on ? 'q-nav-on border-transparent text-white font-semibold' : 'q-line text-gray-400 hover:text-white q-glass-hover'}`}
+                    >
+                      {meta.label} <span className="opacity-60">({cats[cat].length})</span>
+                    </button>
                   )
-                })()}
-              </>
-            )
-          })()}
-        </div>
-      </div>
+                })}
+              </div>
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
+                {catItems.map(m => {
+                  const meta = catMeta[activeCat] || catMeta.other
+                  const isAnalyzing = analyzing === m.symbol
+                  return (
+                    <button
+                      key={m.symbol}
+                      onClick={(e) => e.shiftKey ? analyzeMarket(m.symbol, true) : analyzeMarket(m.symbol, false)}
+                      onContextMenu={(e) => { e.preventDefault(); setConfluenceSymbol(m.symbol) }}
+                      disabled={isAnalyzing}
+                      className={`relative py-2.5 px-2 bg-gradient-to-b border rounded-xl text-xs font-semibold transition-all duration-200 select-none
+                        ${meta.color}
+                        ${isAnalyzing ? 'opacity-60 cursor-not-allowed scale-95' : 'hover:scale-105 active:scale-95 cursor-pointer'}
+                        ${isAnalyzing ? `ring-2 ${meta.ring}` : ''}
+                      `}
+                    >
+                      {isAnalyzing ? (
+                        <span className="flex items-center justify-center gap-1">
+                          <RefreshCw size={11} className="animate-spin" />
+                          <span className="truncate">{m.symbol}</span>
+                        </span>
+                      ) : (
+                        <span className="truncate">{m.symbol}</span>
+                      )}
+                      {isAnalyzing && <span className="absolute inset-0 rounded-xl animate-pulse bg-white/5" />}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
             {[
-              { label: isAr ? 'إجمالي الإشارات' : 'Total Signals', value: signals.length, icon: <Activity size={20} />, color: 'text-blue-400' },
-              { label: isAr ? 'إشارات شراء' : 'Buy Signals', value: signals.filter(s => (s.recommendation || s.signal_type) === 'BUY').length, icon: <TrendingUp size={20} />, color: 'text-green-400' },
-              { label: isAr ? 'إشارات بيع' : 'Sell Signals', value: signals.filter(s => (s.recommendation || s.signal_type) === 'SELL').length, icon: <TrendingDown size={20} />, color: 'text-red-400' },
-              { label: isAr ? 'متوسط الثقة' : 'Avg Confidence', value: signals.length ? Math.round(signals.reduce((a, s) => a + (s.ai_confidence_score || s.ai_confidence || 0), 0) / signals.length) + '%' : 'N/A', icon: <Zap size={20} />, color: 'text-yellow-400' },
+              { label: isAr ? 'إجمالي الإشارات' : 'Total Signals', value: signals.length, icon: <Activity size={16} />, color: 'text-[var(--q-acc3)]' },
+              { label: isAr ? 'إشارات شراء' : 'Buy Signals', value: signals.filter(s => (s.recommendation || s.signal_type) === 'BUY').length, icon: <TrendingUp size={16} />, color: 'text-emerald-400' },
+              { label: isAr ? 'إشارات بيع' : 'Sell Signals', value: signals.filter(s => (s.recommendation || s.signal_type) === 'SELL').length, icon: <TrendingDown size={16} />, color: 'text-rose-400' },
+              { label: isAr ? 'متوسط الثقة' : 'Avg Confidence', value: signals.length ? Math.round(signals.reduce((a, s) => a + (s.ai_confidence_score || s.ai_confidence || 0), 0) / signals.length) + '%' : 'N/A', icon: <Zap size={16} />, color: 'text-amber-300' },
             ].map((stat, i) => (
-              <div key={i} className="bg-gray-800 border border-gray-700 rounded-xl p-4">
-                <div className={`${stat.color} mb-2`}>{stat.icon}</div>
-                <div className="text-2xl font-bold text-white">{stat.value}</div>
-                <div className="text-gray-400 text-sm">{stat.label}</div>
+              <div key={i} className="rounded-xl q-glass px-3.5 py-3 flex items-center gap-3">
+                <span className={`w-9 h-9 rounded-xl grid place-items-center bg-white/5 flex-shrink-0 ${stat.color}`}>{stat.icon}</span>
+                <div className="min-w-0">
+                  <div className="text-xl font-extrabold text-white leading-none tabular-nums">{stat.value}</div>
+                  <div className="text-[11px] text-gray-400 mt-1 truncate">{stat.label}</div>
+                </div>
               </div>
             ))}
           </div>
 
-          {/* Recent Signals */}
-          <div className="bg-gray-800/60 border border-gray-700/80 rounded-2xl overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-700/60">
+          {/* ── Featured signals (latest two) ── */}
+          <div>
+            <div className="flex items-baseline justify-between mb-3">
+              <h2 className="text-white font-extrabold text-lg flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-[var(--q-acc3)] animate-pulse inline-block" />
+                {isAr ? 'إشارات مميزة' : 'Featured signals'}
+              </h2>
+              <Link to="/signals" className="text-xs text-gray-400 hover:text-[var(--q-acc3)]">{isAr ? 'عرض الكل' : 'View all'}</Link>
+            </div>
+            {signals.length === 0 ? (
+              <div className="rounded-2xl q-glass py-10 text-center text-gray-500 text-sm">
+                {isAr ? 'لا توجد إشارات بعد. حلّل سوقاً من الأعلى للبدء.' : 'No signals yet. Analyze a market above to start.'}
+              </div>
+            ) : (
+              <div className="grid md:grid-cols-2 gap-3.5">
+                {featured.map((sig, i) => {
+                  const rec        = sig.recommendation || sig.signal_type || 'WATCH'
+                  const confidence = sig.ai_confidence_score || sig.ai_confidence || 0
+                  const market     = sig.market || sig.symbol || 'N/A'
+                  const levels     = sig.levels || {}
+                  const entry      = levels.entry || sig.entry_zones?.[0] || sig.entry_price
+                  const sl         = levels.stop_loss || sig.stop_loss_zone || sig.stop_loss
+                  const tp1        = levels.tp1 || sig.take_profit_zones?.[0] || sig.take_profit_1
+                  const tp2        = levels.tp2 || sig.take_profit_zones?.[1] || sig.take_profit_2
+                  const rr         = sig.risk_reward || levels.risk_reward || sig.risk_reward_ratio
+                  const locked     = !!sig.locked
+                  const livePrice  = sig.current_price
+                  const fmt = (v, d = 5) => v != null ? (typeof v === 'number' ? v.toFixed(d) : v) : '—'
+                  const isBuy = rec === 'BUY', isSell = rec === 'SELL'
+                  const art = isBuy ? 'q-art-buy' : isSell ? 'q-art-sell' : 'q-art-wait'
+                  const recLabel = isBuy ? `▲ ${tx.buy}` : isSell ? `▼ ${tx.sell}` : `◈ ${tx.watch}`
+                  const recCls = isBuy ? 'text-emerald-300 border-emerald-400/40' : isSell ? 'text-rose-300 border-rose-400/40' : 'text-gray-200 border-white/20'
+                  const isMetal = /^XA[UG]/.test(market)
+                  return (
+                    <article
+                      key={sig.id || i}
+                      onClick={() => locked ? navigate('/pricing') : setQuickResult({ ...sig, market })}
+                      className="rounded-3xl q-glass overflow-hidden cursor-pointer q-glass-hover transition-colors"
+                    >
+                      <div className={`relative h-24 ${art}`}>
+                        <div className="absolute top-3 start-3 flex gap-1.5">
+                          <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full bg-black/40 border backdrop-blur ${recCls}`}>{recLabel}</span>
+                          {sig.timeframe && <span className="text-[11px] px-2 py-1 rounded-full bg-black/40 border border-white/15 text-gray-200">{sig.timeframe}</span>}
+                          {sig.from_cache && <span className="text-[11px] px-2 py-1 rounded-full bg-black/40 border border-white/15 text-gray-300">كاش</span>}
+                        </div>
+                        <div className={`absolute -bottom-5 start-4 w-12 h-12 rounded-2xl grid place-items-center font-extrabold text-[11px] border-[3px] border-gray-800 ${isMetal ? 'bg-gradient-to-br from-amber-300 to-amber-600 text-amber-950' : 'bg-gradient-to-br from-[var(--q-acc3)] to-[var(--q-acc2)] text-white'}`}>
+                          {market.slice(0, 3)}
+                        </div>
+                      </div>
+                      <div className="px-4 pt-7 pb-4">
+                        <h3 className="text-white font-extrabold text-base">{market}</h3>
+                        {locked ? (
+                          <div className="flex items-center gap-2 mt-3 text-xs">
+                            <Lock size={12} className="text-amber-300 flex-shrink-0" />
+                            <span className="text-gray-400">{isAr ? 'تفاصيل الدخول وSL/TP مقفلة —' : 'Entry & SL/TP locked —'}</span>
+                            <span className="text-amber-300 font-semibold hover:underline">{isAr ? 'اشترك لرؤيتها' : 'Subscribe to view'}</span>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-3 gap-x-3 gap-y-2 mt-3 tabular-nums">
+                            {[
+                              { l: isAr ? 'سعر الدخول' : 'Entry', v: fmt(entry), c: 'text-white' },
+                              { l: isAr ? 'وقف الخسارة' : 'Stop loss', v: fmt(sl), c: 'text-rose-400' },
+                              { l: 'R/R', v: rr ? `1:${typeof rr === 'number' ? rr.toFixed(1) : rr}` : '—', c: 'text-amber-300' },
+                              { l: isAr ? 'الهدف الأول' : 'TP1', v: fmt(tp1), c: 'text-emerald-400' },
+                              { l: isAr ? 'الهدف الثاني' : 'TP2', v: fmt(tp2), c: 'text-emerald-300' },
+                              { l: isAr ? 'السعر الحالي' : 'Price', v: fmt(livePrice, market === 'BTCUSD' ? 2 : 4), c: 'text-cyan-300' },
+                            ].map(x => (
+                              <div key={x.l} className="min-w-0">
+                                <div className="text-[11px] text-gray-500">{x.l}</div>
+                                <div className={`text-[13px] font-semibold truncate ${x.c}`}>{x.v}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <div className="flex items-center justify-between gap-3 mt-3 pt-3 border-t q-line text-xs text-gray-400">
+                          <span className="truncate">{sig.news_context ? `📰 ${sig.news_context}` : (sig.summary || '')}</span>
+                          <span className="flex items-center gap-2 flex-shrink-0">
+                            {tx.conf}
+                            <span className="w-20 h-1.5 rounded-full bg-white/10 overflow-hidden"><span className="block h-full q-conf" style={{ width: `${confidence}%` }} /></span>
+                            <b className="text-white tabular-nums">{Math.round(confidence)}%</b>
+                          </span>
+                        </div>
+                      </div>
+                    </article>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Latest signals (the rest) */}
+          {rest.length > 0 && (
+          <div className="rounded-2xl q-glass overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b q-line">
               <h2 className="text-white font-semibold flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse inline-block" />
                 {isAr ? 'آخر الإشارات' : 'Latest Signals'}
-                {signals.length > 0 && <span className="text-xs text-gray-500 font-normal">({signals.length})</span>}
+                <span className="text-xs text-gray-500 font-normal">({rest.length})</span>
               </h2>
               <button onClick={fetchSignals} className="text-gray-500 hover:text-gray-300 transition-colors p-1 rounded-lg hover:bg-gray-700">
                 <RefreshCw size={14} />
               </button>
             </div>
 
-            {signals.length === 0 ? (
-              <p className="text-gray-500 text-center py-10 text-sm">{isAr ? 'لا توجد إشارات. اضغط على زر التحليل أعلاه.' : 'No signals yet. Click a market above.'}</p>
-            ) : (
+            {(
               <div className="divide-y divide-gray-700/40">
-                {signals.slice(0, signalsLimit).map((sig, i) => {
+                {rest.slice(0, signalsLimit).map((sig, i) => {
                   const rec        = sig.recommendation || sig.signal_type || 'WATCH'
                   const confidence = sig.ai_confidence_score || sig.ai_confidence || 0
                   const market     = sig.market || sig.symbol || 'N/A'
@@ -794,16 +911,17 @@ export default function Dashboard() {
               </div>
             )}
 
-            {signals.length > signalsLimit && (
+            {rest.length > signalsLimit && (
               <button
                 onClick={() => setSignalsLimit(l => l + 10)}
-                className="w-full py-3 text-sm text-gray-400 hover:text-white hover:bg-gray-700/30 transition-colors flex items-center justify-center gap-2 border-t border-gray-700/60"
+                className="w-full py-3 text-sm text-gray-400 hover:text-white hover:bg-gray-700/30 transition-colors flex items-center justify-center gap-2 border-t q-line"
               >
                 <ChevronDown size={15} />
-                {isAr ? `عرض المزيد (${signals.length - signalsLimit} متبقية)` : `Show more (${signals.length - signalsLimit} left)`}
+                {isAr ? `عرض المزيد (${rest.length - signalsLimit} متبقية)` : `Show more (${rest.length - signalsLimit} left)`}
               </button>
             )}
           </div>
+          )}
         </div>
       )}
 

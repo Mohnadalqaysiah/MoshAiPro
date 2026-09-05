@@ -96,8 +96,8 @@ export default function MarketOverview() {
   const summary = data?.summary || { buy:0, sell:0, wait:0 }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white" dir="rtl">
-      <div className="max-w-7xl mx-auto px-4 py-8">
+    <div className="text-white" dir="rtl">
+      <div className="max-w-7xl mx-auto">
 
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
