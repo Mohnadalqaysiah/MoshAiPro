@@ -89,6 +89,7 @@ function Rail({ isAr }) {
 
 // ── Live gold sparkline (real 15m closes) ───────────────────────────────────
 function LiveGoldWidget({ isAr }) {
+  const { isDark } = useTheme()
   const [price, setPrice] = useState(null)
   const [closes, setCloses] = useState([])
   const canvasRef = useRef(null)
@@ -116,18 +117,20 @@ function LiveGoldWidget({ isAr }) {
     const x = i => i / (closes.length - 1) * w
     const y = v => h - pad - (v - min) / span * (h - pad * 2)
     const up = closes[closes.length - 1] >= closes[0]
-    const col = up ? '34,211,238' : '251,113,133'
+    // Dark glass: bright cyan/rose. Light glass (near-white): darker cyan-600/rose-600 so the
+    // line and fill don't melt into the background.
+    const col = isDark ? (up ? '34,211,238' : '251,113,133') : (up ? '8,145,178' : '225,29,72')
     g.clearRect(0, 0, w, h)
     const gr = g.createLinearGradient(0, 0, 0, h)
-    gr.addColorStop(0, `rgba(${col},0.45)`); gr.addColorStop(1, `rgba(${col},0)`)
+    gr.addColorStop(0, `rgba(${col},${isDark ? 0.45 : 0.28})`); gr.addColorStop(1, `rgba(${col},0)`)
     g.beginPath(); g.moveTo(x(0), h)
     closes.forEach((v, i) => g.lineTo(x(i), y(v)))
     g.lineTo(x(closes.length - 1), h); g.closePath(); g.fillStyle = gr; g.fill()
     g.beginPath(); closes.forEach((v, i) => i ? g.lineTo(x(i), y(v)) : g.moveTo(x(i), y(v)))
-    g.strokeStyle = `rgba(${col},1)`; g.lineWidth = 2; g.lineJoin = 'round'; g.stroke()
+    g.strokeStyle = `rgba(${col},1)`; g.lineWidth = 2.25; g.lineJoin = 'round'; g.stroke()
     const lx = x(closes.length - 1), ly = y(closes[closes.length - 1])
     g.beginPath(); g.arc(lx, ly, 3.5, 0, Math.PI * 2); g.fillStyle = `rgba(${col},1)`; g.fill()
-  }, [closes])
+  }, [closes, isDark])
 
   const first = closes[0], last = closes[closes.length - 1]
   const chg = first && last ? ((last - first) / first) * 100 : null
@@ -137,11 +140,11 @@ function LiveGoldWidget({ isAr }) {
     // الخط البياني = شموع GC=F (العقود الآجلة، مصدر الكاندلز الوحيد للذهب)
     // ويختلف عن السبوت بفارق أساس $10-60، فنسمّيه بوضوح بدل ما نوهم إنه سبوت.
     <div className="rounded-2xl q-glass p-3">
-      <div className="flex items-baseline justify-between text-[11px] text-gray-400">
-        <span>XAUUSD · {isAr ? 'سبوت' : 'spot'}</span>
+      <div className="flex items-baseline justify-between text-[11px] text-gray-300">
+        <span className="font-semibold">XAUUSD · {isAr ? 'سبوت' : 'spot'}</span>
         {chg != null && (
           <span
-            className={`tabular-nums font-semibold ${chg >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}
+            className={`tabular-nums font-bold ${chg >= 0 ? (isDark ? 'text-emerald-400' : 'text-emerald-600') : (isDark ? 'text-rose-400' : 'text-rose-600')}`}
             title={isAr ? 'تغيّر عقود الذهب الآجلة (GC=F) خلال آخر 10 ساعات تداول' : 'Gold futures (GC=F) change over the last 10 trading hours'}
           >
             {chg >= 0 ? '+' : ''}{chg.toFixed(2)}%
@@ -154,7 +157,7 @@ function LiveGoldWidget({ isAr }) {
       {closes.length > 1 && (
         <>
           <canvas ref={canvasRef} className="block w-full h-11 mt-1" aria-label="Gold futures 15m sparkline" />
-          <div className="text-[10px] text-gray-500 mt-0.5">{isAr ? 'الاتجاه: عقود آجلة GC=F · 15m · آخر 10 ساعات تداول' : 'Trend: GC=F futures · 15m · last 10 trading hours'}</div>
+          <div className="text-[11px] text-gray-300 mt-1 leading-snug">{isAr ? 'الاتجاه: عقود آجلة GC=F · 15m · آخر 10 ساعات تداول' : 'Trend: GC=F futures · 15m · last 10 trading hours'}</div>
         </>
       )}
     </div>
@@ -366,7 +369,7 @@ function ProfilePanel({ isAr }) {
   const days = user.days_left
 
   return (
-    <aside className="hidden xl:flex flex-col gap-3.5 p-4 q-panel border-s q-line">
+    <aside className="hidden xl:flex flex-col gap-3.5 p-4 pb-24 q-panel border-s q-line">
       <div className="rounded-2xl q-glass p-4">
         <div className="relative w-24 h-24 mx-auto mb-2 grid place-items-center">
           <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full" aria-hidden="true">
@@ -426,8 +429,8 @@ export default function AppShell({ children }) {
         <Rail isAr={isAr} />
 
         <aside className="hidden lg:block p-3.5 q-panel border-e q-line">
-          {/* pb-16 keeps the user row clear of the floating chat button (fixed bottom-5) */}
-          <div className="sticky top-3.5 h-[calc(100vh-28px)] pb-16"><SidebarContent isAr={isAr} /></div>
+          {/* pb-24 keeps the user row clear of the floating chat button (ChatBot: fixed bottom-5, ~56px tall) */}
+          <div className="sticky top-3.5 h-[calc(100vh-28px)] pb-24"><SidebarContent isAr={isAr} /></div>
         </aside>
 
         <div className="min-w-0 flex flex-col">
