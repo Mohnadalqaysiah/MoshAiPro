@@ -302,10 +302,18 @@ html {
 .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(59,130,246,0.4); }
 
 /* ── Orb blobs ──────────────────────────────────────────────────────── */
+/* (2026-09-07) كانت filter: blur(80px) — Lighthouse حقيقي على الصفحة
+   الرئيسية رصد "Style & Layout: 2,467ms" وForced reflow ضمن أسباب LCP
+   البطيء (4.6-5.7 ثانية)؛ blur() بهالنصف قطر مكلف جداً على الـcompositor
+   خصوصاً بأجهزة موبايل ضعيفة، و12 عنصر orb عالصفحة الرئيسية وحدها.
+   Radial-gradient بديل يعطي نفس شكل "الوهج الناعم" بدون أي تكلفة رسم
+   لحظية — يُحسب مرة وحدة كخلفية عادية، ما في compositing متكرر. الألوان
+   تُمرَّر عبر currentColor (استخدم text-{color} بدل bg-{color} بكل عنصر
+   orb). */
 .orb {
   position: absolute;
   border-radius: 50%;
-  filter: blur(80px);
+  background: radial-gradient(circle, currentColor 0%, currentColor 35%, transparent 72%);
   pointer-events: none;
   contain: strict;
   will-change: transform;

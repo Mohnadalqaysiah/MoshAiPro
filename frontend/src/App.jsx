@@ -5,14 +5,22 @@ import { LangProvider, useLang } from './contexts/LangContext'
 import { ThemeProvider } from './contexts/ThemeContext'
 import './App.css'
 
-// (2026-09-04) lazy بدل eager: يُعرَض حصراً جوا ProtectedRoute، فتحميله
+// (2026-09-07) Landing استُثنيت من lazy() عمداً — تقرير Lighthouse حقيقي
+// على "/" رصد "Element render delay: 3,560ms" بالـLCP، سببه بالضبط
+// double round-trip كان هون: الحزمة الرئيسية تتحمّل وتشتغل، وبعدين تكتشف
+// إنها محتاجة تجيب حزمة Landing.jsx (طلب شبكة ثاني متسلسل، مو متوازي) —
+// قبل ما يترسم أي حرف على الشاشة. "/" هو أعلى صفحة زيارة بالموقع، فتأجيلها
+// كسول ما بيوفّر شي — كل زائر تقريباً محتاجها فوراً، فصارت جزء من حزمة
+// index الرئيسية مباشرة.
+import Landing from './pages/Landing'
+
+// (2026-09-04) لسا lazy بحق: تُعرَض حصراً جوا ProtectedRoute، فتحميلها
 // بالصفحات العامة كان "JavaScript غير مستخدَم" بتقرير Lighthouse.
 // (2026-09-05) AppShell يضم القائمة الجانبية + الشريط + لوحة الملف الشخصي
 // + البانرات (بدل Navbar القديم).
 const AppShell = lazy(() => import('./components/AppShell'))
 
-// Lazy-load all pages — each becomes its own JS chunk
-const Landing        = lazy(() => import('./pages/Landing'))
+// Lazy-load the rest of the pages — each becomes its own JS chunk
 const Login          = lazy(() => import('./pages/Login'))
 const Register       = lazy(() => import('./pages/Register'))
 const Pricing        = lazy(() => import('./pages/Pricing'))

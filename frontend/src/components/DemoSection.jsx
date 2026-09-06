@@ -145,7 +145,7 @@ export default function DemoSection({ isAr = true }) {
   return (
     <section ref={sectionRef} className="py-24 px-4 relative overflow-hidden">
       {/* background */}
-      <div className="orb w-[500px] h-[400px] bg-purple-600/8 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
+      <div className="orb w-[500px] h-[400px] text-purple-600/15 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
 
       <div className="max-w-6xl mx-auto">
         {/* Title */}

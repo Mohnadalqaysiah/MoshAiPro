@@ -46,7 +46,7 @@ export default function StrategyBuilderDemo({ isAr = true }) {
 
   return (
     <section id="strategy-builder-demo" className="py-24 px-4 relative overflow-hidden bg-white/[0.01]">
-      <div className="orb w-[500px] h-[400px] bg-indigo-600/8 top-0 right-0 pointer-events-none" />
+      <div className="orb w-[500px] h-[400px] text-indigo-600/15 top-0 right-0 pointer-events-none" />
       <div className="max-w-6xl mx-auto relative">
         <div className="text-center mb-14 reveal">
           <p className="text-indigo-400 text-sm font-semibold mb-3 uppercase tracking-widest">

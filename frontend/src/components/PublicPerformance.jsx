@@ -183,7 +183,7 @@ export default function PublicPerformance({ isAr = true }) {
     <section ref={sectionRef} className="py-24 px-4 relative overflow-hidden">
       {/* Backgrounds */}
       <div className="absolute inset-0 bg-gradient-to-b from-transparent via-emerald-950/8 to-transparent pointer-events-none" />
-      <div className="orb w-[600px] h-[400px] bg-emerald-600/5 top-1/2 left-0 -translate-x-1/3 -translate-y-1/2 pointer-events-none" />
+      <div className="orb w-[600px] h-[400px] text-emerald-600/12 top-1/2 left-0 -translate-x-1/3 -translate-y-1/2 pointer-events-none" />
 
       <div className="max-w-5xl mx-auto relative">
 

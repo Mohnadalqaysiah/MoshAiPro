@@ -50,8 +50,8 @@ export default function AffiliateSection({ isAr = true }) {
   return (
     <section ref={sectionRef} className="py-24 px-4 relative overflow-hidden">
       {/* Background orbs */}
-      <div className="orb w-[500px] h-[400px] bg-green-600/8 top-0 right-0 translate-x-1/3 -translate-y-1/4 pointer-events-none" />
-      <div className="orb w-[400px] h-[300px] bg-purple-600/8 bottom-0 left-0 -translate-x-1/4 translate-y-1/4 pointer-events-none" />
+      <div className="orb w-[500px] h-[400px] text-green-600/15 top-0 right-0 translate-x-1/3 -translate-y-1/4 pointer-events-none" />
+      <div className="orb w-[400px] h-[300px] text-purple-600/15 bottom-0 left-0 -translate-x-1/4 translate-y-1/4 pointer-events-none" />
 
       <div className="max-w-6xl mx-auto relative">
 

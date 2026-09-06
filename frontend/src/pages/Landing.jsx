@@ -259,9 +259,9 @@ export default function Landing() {
       {/* ── Hero ───────────────────────────────────────────────────────── */}
       <section className="relative pt-36 pb-24 md:pt-44 md:pb-36 px-4 overflow-hidden bg-grid">
         {/* Orbs */}
-        <div className="orb w-[500px] h-[500px] bg-fuchsia-600/15 top-0 left-1/2 -translate-x-1/2 -translate-y-1/2" />
-        <div className="orb w-[300px] h-[300px] bg-violet-600/12 bottom-0 right-0" />
-        <div className="orb w-[200px] h-[200px] bg-cyan-500/10 top-1/3 left-0" />
+        <div className="orb w-[500px] h-[500px] text-fuchsia-600/25 top-0 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+        <div className="orb w-[300px] h-[300px] text-violet-600/20 bottom-0 right-0" />
+        <div className="orb w-[200px] h-[200px] text-cyan-500/18 top-1/3 left-0" />
 
         <div className="max-w-4xl mx-auto text-center relative animate-fade-up">
           {/* Badge */}
@@ -428,7 +428,7 @@ export default function Landing() {
 
       {/* ── How it works ───────────────────────────────────────────────── */}
       <section className="py-24 px-4 relative overflow-hidden">
-        <div className="orb w-[400px] h-[400px] bg-indigo-600/8 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+        <div className="orb w-[400px] h-[400px] text-indigo-600/15 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
         <div className="max-w-4xl mx-auto relative">
           <div className="text-center mb-16 reveal">
             <p className="text-purple-400 text-sm font-semibold mb-3 uppercase tracking-widest">
@@ -458,7 +458,7 @@ export default function Landing() {
 
       {/* ── Testimonials ───────────────────────────────────────────────── */}
       <section id="testimonials" className="py-24 px-4 relative overflow-hidden bg-white/[0.01]">
-        <div className="orb w-[500px] h-[400px] bg-purple-600/7 top-1/2 right-0 translate-x-1/4 -translate-y-1/2 pointer-events-none" />
+        <div className="orb w-[500px] h-[400px] text-purple-600/14 top-1/2 right-0 translate-x-1/4 -translate-y-1/2 pointer-events-none" />
         <div className="max-w-6xl mx-auto relative">
           <div className="text-center mb-14 reveal">
             <p className="text-purple-400 text-sm font-semibold mb-3 uppercase tracking-widest">
@@ -508,7 +508,7 @@ export default function Landing() {
 
       {/* ── Pricing ────────────────────────────────────────────────────── */}
       <section id="pricing" className="py-24 px-4 relative overflow-hidden">
-        <div className="orb w-[600px] h-[400px] bg-blue-600/6 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
+        <div className="orb w-[600px] h-[400px] text-blue-600/12 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
         <div className="max-w-5xl mx-auto relative">
           <div className="text-center mb-16 reveal">
             <p className="text-green-400 text-sm font-semibold mb-3 uppercase tracking-widest">
@@ -634,7 +634,7 @@ export default function Landing() {
 
       {/* ── CTA ────────────────────────────────────────────────────────── */}
       <section className="py-24 px-4 relative overflow-hidden">
-        <div className="orb w-[700px] h-[500px] bg-blue-600/12 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+        <div className="orb w-[700px] h-[500px] text-blue-600/20 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
         {/* Subtle grid */}
         <div className="absolute inset-0 bg-grid opacity-30 pointer-events-none" />
         <div className="max-w-2xl mx-auto text-center relative reveal">
