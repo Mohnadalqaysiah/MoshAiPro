@@ -21,17 +21,15 @@ def _norm_symbol(sym: str) -> str:
     return sym.replace("/", "").upper()
 
 
-def _norm_timeframe(tf: str) -> str:
-    return (tf or "1h").lower()
-
-
 _LOCK_KEY = 90210001  # arbitrary unique advisory-lock key for this task
 
 async def strategy_checker():
     from app.database import SessionLocal
     from app.models.strategy import Strategy, StrategyStatus, StrategyTriggerEvent
     from app.models.user import UserRole, PlanType
-    from app.services.strategy_engine import evaluate_strategy, build_telegram_message
+    from app.services.strategy_engine import (
+        evaluate_strategy, build_telegram_message, distinct_timeframes, primary_timeframe,
+    )
     from app.services.ai_engine_v5 import mosh_ai_engine_v5
     from app.services.admin_notify import get_bot_token
     from app.services.worker_lock import try_acquire_singleton_lock
@@ -64,19 +62,23 @@ async def strategy_checker():
                     conditions = [c for g in s.groups for c in g.conditions]
                     if not conditions or not s.symbols:
                         continue
-                    tf_candidates = sorted({c.timeframe for c in conditions if c.enabled}) or ["15m"]
-                    tf = _norm_timeframe(tf_candidates[-1])
+                    # (2026-09-06) كل شرط له فريمه الخاص — تحليل حقيقي مستقل لكل
+                    # فريم فريد مستخدم فعليًا، مش فريم واحد مُختار اعتباطيًا
+                    # (البَق الأصلي: فرز أبجدي بيختار "1H" قبل "1D" رغم إنه أصغر).
+                    tfs = distinct_timeframes(conditions)
+                    primary_tf = primary_timeframe(conditions)
 
                     for symbol in s.symbols:
                         try:
-                            analysis = await mosh_ai_engine_v5.analyze_market(_norm_symbol(symbol), tf)
+                            analyses = await mosh_ai_engine_v5.analyze_market_multi_tf(_norm_symbol(symbol), tfs)
                         except Exception as e:
-                            logger.warning(f"Strategy checker: analyze failed {symbol}/{tf}: {e}")
+                            logger.warning(f"Strategy checker: analyze failed {symbol}/{tfs}: {e}")
                             continue
+                        primary_analysis = analyses.get(primary_tf) or next(iter(analyses.values()), {})
 
                         result = evaluate_strategy(
-                            s.groups, conditions, analysis, s.min_score,
-                            price=analysis.get("current_price"),
+                            s.groups, conditions, analyses, s.min_score,
+                            price=primary_analysis.get("current_price"),
                         )
 
                         telegram_sent = False
@@ -88,7 +90,7 @@ async def strategy_checker():
                             chat_id = s.tg_chat_override or (s.user.telegram_id if s.user else None)
                             token = get_bot_token()
                             if cooled_down and chat_id and token:
-                                text = build_telegram_message(s, result, symbol, tf, analysis)
+                                text = build_telegram_message(s, result, symbol, primary_tf, primary_analysis)
                                 url = f"https://api.telegram.org/bot{token}/sendMessage"
                                 try:
                                     async with aiohttp.ClientSession() as sess:
@@ -104,7 +106,10 @@ async def strategy_checker():
                             s.last_triggered_at = datetime.now(timezone.utc)
 
                         db.add(StrategyTriggerEvent(
-                            strategy_id=s.id, symbol=symbol, timeframe=tf,
+                            # عمود timeframe فردي بقاعدة البيانات — نسجّل كل الأطر
+                            # الفريدة المستخدمة فعلياً بهالتقييم (مفصولة بفاصلة)
+                            # بدل فريم واحد مضلّل لاستراتيجية متعددة الأطر.
+                            strategy_id=s.id, symbol=symbol, timeframe=",".join(tfs),
                             score=result["score"], triggered=result["triggered"],
                             matched_json=result["matched"], price=result["price"],
                             telegram_sent=telegram_sent,

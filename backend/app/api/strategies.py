@@ -21,6 +21,7 @@ from app.models.strategy import (
 )
 from app.services.strategy_engine import (
     evaluate_strategy, build_telegram_message, SUPPORTED_CONDITION_TYPES,
+    distinct_timeframes, primary_timeframe, norm_timeframe,
 )
 
 router = APIRouter()
@@ -44,8 +45,6 @@ def _norm_symbol(sym: str) -> str:
     return sym.replace("/", "").upper()
 
 
-def _norm_timeframe(tf: str) -> str:
-    return (tf or "1h").lower()
 
 
 # ─── Schemas ──────────────────────────────────────────────────────────────────
@@ -309,16 +308,20 @@ async def _run_evaluation(db: Session, groups, conditions, min_score: int, symbo
     # محاكاة استراتيجية مبنية على ARAMCO مقابل مجموعة أسواق فوركس ثابتة.
     scan_symbols = symbols or SIM_SYMBOLS
 
-    timeframe_candidates = sorted({c.timeframe for c in conditions if c.enabled}) or ["15m"]
-    tf = _norm_timeframe(timeframe_candidates[-1])
+    # (2026-09-06) كل شرط له فريمه الخاص — نجيب تحليل حقيقي مستقل لكل فريم
+    # فريد مستخدم فعليًا (عبر analyze_market_multi_tf)، لا فريم واحد مُختار
+    # اعتباطيًا لكل الاستراتيجية.
+    tfs = distinct_timeframes(conditions)
+    primary_tf = primary_timeframe(conditions)
 
     async def _one(symbol: str) -> dict:
         try:
-            analysis = await mosh_ai_engine_v5.analyze_market(_norm_symbol(symbol), tf)
+            analyses = await mosh_ai_engine_v5.analyze_market_multi_tf(_norm_symbol(symbol), tfs)
         except Exception as e:
-            logger.warning(f"Strategy evaluation failed for {symbol}/{tf}: {e}")
+            logger.warning(f"Strategy evaluation failed for {symbol}/{tfs}: {e}")
             return {"symbol": symbol, "error": "تعذّر تحليل هذا الرمز الآن"}
-        result = evaluate_strategy(groups, conditions, analysis, min_score, price=analysis.get("current_price"))
+        primary_analysis = analyses.get(primary_tf) or next(iter(analyses.values()), {})
+        result = evaluate_strategy(groups, conditions, analyses, min_score, price=primary_analysis.get("current_price"))
         return {
             "symbol": symbol, "price": result["price"], "score": result["score"],
             "triggered": result["triggered"], "matched": result["matched"],
@@ -415,16 +418,18 @@ async def send_test_alert(strategy_id: int, db: Session = Depends(get_db), user 
         raise HTTPException(500, "توكن بوت Telegram غير مضبوط بالمنصة")
 
     symbol = (s.symbols or ["XAU/USD"])[0]
-    tf = _norm_timeframe((s.timeframes or ["15m"])[-1])
 
     from app.services.ai_engine_v5 import mosh_ai_engine_v5
     conditions = _flat_conditions(s)
     if not conditions:
         raise HTTPException(400, "أضف شروطًا للاستراتيجية أولًا")
 
-    analysis = await mosh_ai_engine_v5.analyze_market(_norm_symbol(symbol), tf)
-    result = evaluate_strategy(s.groups, conditions, analysis, s.min_score, price=analysis.get("current_price"))
-    text = "🧪 [رسالة تجريبية]\n" + build_telegram_message(s, result, symbol, tf, analysis)
+    tfs = distinct_timeframes(conditions)
+    primary_tf = primary_timeframe(conditions)
+    analyses = await mosh_ai_engine_v5.analyze_market_multi_tf(_norm_symbol(symbol), tfs)
+    primary_analysis = analyses.get(primary_tf) or next(iter(analyses.values()), {})
+    result = evaluate_strategy(s.groups, conditions, analyses, s.min_score, price=primary_analysis.get("current_price"))
+    text = "🧪 [رسالة تجريبية]\n" + build_telegram_message(s, result, symbol, primary_tf, primary_analysis)
 
     chat_id = s.tg_chat_override or user.telegram_id
     url = f"https://api.telegram.org/bot{token}/sendMessage"

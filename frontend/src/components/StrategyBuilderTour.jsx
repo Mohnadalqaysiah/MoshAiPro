@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { X, ChevronRight, ChevronLeft, Sparkles, Layers, SlidersHorizontal, Play, Bot, FolderOpen } from 'lucide-react'
+import { X, ChevronRight, ChevronLeft, Sparkles, Layers, SlidersHorizontal, ShieldCheck, Bot, FolderOpen } from 'lucide-react'
 
 const STORAGE_KEY = 'strategy_tour_done_v1'
 
@@ -21,9 +21,9 @@ const STEPS = [
     desc: 'كل شرط له وزن (Weight) يُحتسب بالسكور الكلي فقط لو تحقق فعليًا. اضبط الحد الأدنى لتفعيل الاستراتيجية من نفس التبويب.',
   },
   {
-    icon: <Play size={28} className="text-teal-400" />,
-    title: 'المحاكاة (Simulation)',
-    desc: 'جرّب استراتيجيتك مقابل بيانات سوق حقيقية فورًا — قبل ما تحفظ أو تفعّل أي شي.',
+    icon: <ShieldCheck size={28} className="text-teal-400" />,
+    title: 'كل شرط بالمكتبة شغّال فعلياً',
+    desc: 'مكتبة الشروط مقصودة قصدًا على الشروط المربوطة بمحرك التحليل الحقيقي فقط — أي شرط تضيفه بيُحتسب فعليًا بالمراقبة الحية، بدون أي شرط زخرفي.',
   },
   {
     icon: <Bot size={28} className="text-green-400" />,
@@ -33,7 +33,7 @@ const STEPS = [
   {
     icon: <FolderOpen size={28} className="text-gold" />,
     title: 'جاهز؟ 🚀',
-    desc: 'الحفظ والتفعيل والمراقبة الحقيقية حصرية للمشتركين. جرّب البناء والمحاكاة الآن مجانًا، واشترك متى قررت تفعيلها فعليًا.',
+    desc: 'الحفظ والتفعيل والمراقبة الحقيقية حصرية للمشتركين. جرّب البناء الآن مجانًا، واشترك متى قررت تفعيلها فعليًا.',
   },
 ]
 

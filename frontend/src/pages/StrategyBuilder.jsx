@@ -5,22 +5,14 @@ import { useAuth } from "../contexts/AuthContext";
 import StrategyBuilderTour from "../components/StrategyBuilderTour";
 import {
   Search, Plus, X, ChevronDown, ChevronRight, Copy, Trash2, Power,
-  Edit3, Eye, Play, Send, Bot, Link2, Check, AlertTriangle, Sparkles,
-  Activity, Layers, Target, CandlestickChart, Percent, BarChart3, Gauge,
-  Waves, Clock, GitBranch, ShieldCheck, RefreshCw, Undo2, Redo2, Save,
-  Radio, TrendingUp, ArrowLeft, Loader2, ListChecks, FileText, Zap,
+  Edit3, Eye, Send, Bot, Link2, Check, AlertTriangle, Sparkles,
+  Activity, Layers, Target,
+  Waves, Clock, RefreshCw, Undo2, Redo2, Save,
+  ArrowLeft, Loader2, ListChecks, FileText, Zap,
   SlidersHorizontal, MonitorDot, FolderOpen, Hammer, Ban, HelpCircle,
 } from "lucide-react";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
-
-// أنواع الشروط المربوطة فعليًا بمحرك التحليل الحقيقي (ai_engine_v5) —
-// نفس القائمة الموجودة بـ backend/app/services/strategy_engine.py::SUPPORTED_CONDITION_TYPES
-const IMPLEMENTED_TYPES = new Set([
-  "bos", "choch", "ob", "fvg", "liquidity", "eqh", "eql", "premium", "killzone",
-  "london", "newyork", "asian", "killzones",
-  "rsi", "macd", "ema", "stoch", "atrv",
-]);
 
 // أنواع الشروط الرقمية — القيمة عندها لازم تكون بصيغة "<30" / ">=70" حتى
 // يقدر المحرك الحقيقي يقارنها رقمياً (backend/app/services/strategy_engine.py
@@ -103,7 +95,12 @@ const TIMEFRAMES = ["1m", "5m", "15m", "1H", "4H", "1D"];
 const TF_MODES = ["نفس الفريم", "فريم أعلى", "فريم مخصص"];
 
 /* =========================================================================
-   CONDITION CATALOG — 11 schools
+   CONDITION CATALOG — (2026-09-06) مقصودة على الشروط المربوطة فعلياً بمحرك
+   التحليل الحقيقي (ai_engine_v5) فقط — نفس القائمة بالضبط الموجودة بـ
+   backend/app/services/strategy_engine.py::SUPPORTED_CONDITION_TYPES.
+   كانت المكتبة تعرض ~85 شرط وبس 18 منها شغّالة فعلياً (الباقي يظهر بس ما
+   يُحتسب بالسكور أبداً) — قُصّت كاملة بدل ما تُعلَّم "تجريبي"، حتى ما
+   يبني المستخدم استراتيجية أساسها شرط ميت بدون ما يعرف.
 ========================================================================= */
 const CAT = [
   { id: "indicators", label: "مؤشرات فنية", en: "Technical Indicators", icon: Activity, color: C.teal, w: 10,
@@ -111,86 +108,23 @@ const CAT = [
       ["rsi", "RSI", "مؤشر القوة النسبية — تشبع شرائي/بيعي"],
       ["macd", "MACD", "تقاطع خط الإشارة مع MACD"],
       ["ema", "EMA", "المتوسط المتحرك الأسي"],
-      ["sma", "SMA", "المتوسط المتحرك البسيط"],
       ["stoch", "Stochastic", "مذبذب الزخم العشوائي"],
-      ["bbands", "Bollinger Bands", "ملامسة/اختراق نطاقات بولنجر"],
-      ["atr", "ATR", "متوسط المدى الحقيقي"],
-      ["adx", "ADX", "قوة الاتجاه"],
-      ["volume", "Volume", "قراءة الحجم اللحظية"],
-      ["vwap", "VWAP", "متوسط السعر الموزون بالحجم"],
     ]},
   { id: "smc", label: "ICT / SMC", en: "ICT / SMC", icon: Layers, color: C.gold, w: 18,
     items: [
       ["bos", "BOS", "Break of Structure — كسر هيكل"],
       ["choch", "CHoCH", "Change of Character — تغيّر طابع"],
-      ["mss", "MSS", "Market Structure Shift"],
       ["ob", "Order Block", "منطقة أوامر مؤسساتية"],
-      ["breaker", "Breaker Block", "كتلة كاسرة بعد فشل OB"],
       ["fvg", "FVG", "Fair Value Gap — فجوة سعرية"],
-      ["ifvg", "IFVG", "Inversion FVG"],
       ["liquidity", "Liquidity Sweep", "سحب سيولة قبل الانعكاس"],
       ["eqh", "Equal Highs", "قمم متساوية"],
       ["eql", "Equal Lows", "قيعان متساوية"],
       ["premium", "Premium/Discount", "منطقة علاوة أو خصم"],
-      ["dealing", "Dealing Range", "نطاق التداول المؤسساتي"],
       ["killzone", "Kill Zone", "نافذة زمنية عالية النشاط"],
-    ]},
-  { id: "price", label: "سعر ومستويات", en: "Price Action", icon: Target, color: C.blue, w: 14,
-    items: [
-      ["support", "Support", "ارتداد من دعم"],
-      ["resistance", "Resistance", "رفض من مقاومة"],
-      ["breakout", "Breakout", "اختراق مستوى"],
-      ["retest", "Retest", "إعادة اختبار مستوى مخترق"],
-      ["trendbreak", "Trendline Break", "كسر خط اتجاه"],
-      ["hh", "Higher High", "قمة أعلى"],
-      ["hl", "Higher Low", "قاع أعلى"],
-      ["lh", "Lower High", "قمة أدنى"],
-      ["ll", "Lower Low", "قاع أدنى"],
-    ]},
-  { id: "candles", label: "أنماط الشموع", en: "Candlestick", icon: CandlestickChart, color: "#E08FD8", w: 8,
-    items: [
-      ["bull_engulf", "Bullish Engulfing", "ابتلاعية صعودية"],
-      ["bear_engulf", "Bearish Engulfing", "ابتلاعية هبوطية"],
-      ["pinbar", "Pin Bar", "شمعة رفض بذيل طويل"],
-      ["hammer", "Hammer", "مطرقة انعكاسية"],
-      ["shootingstar", "Shooting Star", "نجمة هابطة"],
-      ["doji", "Doji", "تردد السوق"],
-      ["morningstar", "Morning Star", "نجمة الصباح"],
-      ["eveningstar", "Evening Star", "نجمة المساء"],
-      ["marubozu", "Marubozu", "شمعة بلا ظلال"],
-    ]},
-  { id: "fibonacci", label: "فيبوناتشي", en: "Fibonacci", icon: Percent, color: "#F0B86E", w: 9,
-    items: [
-      ["fib236", "0.236", "مستوى تصحيح ضحل"],
-      ["fib382", "0.382", "تصحيح ثانوي"],
-      ["fib5", "0.5", "منتصف الحركة"],
-      ["fib618", "0.618", "النسبة الذهبية"],
-      ["fib705", "0.705", "منطقة OTE"],
-      ["fib786", "0.786", "تصحيح عميق"],
-      ["fibext", "Extension", "امتداد فيبوناتشي للأهداف"],
-    ]},
-  { id: "volume", label: "الحجم وتدفق الأوامر", en: "Volume / Order Flow", icon: BarChart3, color: "#6FE0A0", w: 8,
-    items: [
-      ["volspike", "Volume Spike", "ارتفاع حجم مفاجئ"],
-      ["volavg", "Volume Above Average", "حجم أعلى من المتوسط"],
-      ["voldelta", "Volume Delta", "فرق حجم الشراء والبيع"],
-      ["buypressure", "Buying Pressure", "ضغط شرائي واضح"],
-      ["sellpressure", "Selling Pressure", "ضغط بيعي واضح"],
-    ]},
-  { id: "momentum", label: "الزخم", en: "Momentum", icon: Gauge, color: "#7CC7FF", w: 9,
-    items: [
-      ["rsidiv", "RSI Divergence", "دايفرجنس على RSI"],
-      ["macddiv", "MACD Divergence", "دايفرجنس على MACD"],
-      ["mominc", "Momentum Increase", "تسارع الزخم"],
-      ["momdec", "Momentum Decrease", "تباطؤ الزخم"],
     ]},
   { id: "volatility", label: "التذبذب", en: "Volatility", icon: Waves, color: "#9AA7FF", w: 7,
     items: [
       ["atrv", "ATR", "قراءة التذبذب الحالية"],
-      ["highvol", "High Volatility", "تذبذب مرتفع"],
-      ["lowvol", "Low Volatility", "تذبذب منخفض"],
-      ["volexp", "Volatility Expansion", "توسع التذبذب"],
-      ["volcomp", "Volatility Compression", "انضغاط التذبذب"],
     ]},
   { id: "sessions", label: "الجلسات والوقت", en: "Sessions & Time", icon: Clock, color: "#F0C24E", w: 6,
     items: [
@@ -198,31 +132,6 @@ const CAT = [
       ["newyork", "New York Session", "جلسة نيويورك"],
       ["asian", "Asian Session", "الجلسة الآسيوية"],
       ["killzones", "Kill Zones", "نوافذ التقلب العالي"],
-      ["specificday", "Specific Day", "يوم محدد بالأسبوع"],
-      ["specifictime", "Specific Time", "وقت محدد باليوم"],
-      ["marketopen", "Market Open", "افتتاح السوق"],
-      ["sesshl", "Session High/Low", "أعلى/أدنى الجلسة"],
-    ]},
-  { id: "structure", label: "هيكل السوق", en: "Market Structure", icon: GitBranch, color: C.purple, w: 15,
-    items: [
-      ["trend", "Trend", "اتجاه صاعد/هابط"],
-      ["range", "Range", "سوق عرضي"],
-      ["structhh", "Higher High", "استمرار صعودي"],
-      ["structll", "Lower Low", "استمرار هبوطي"],
-      ["structbreak", "Structure Break", "كسر هيكلي عام"],
-      ["consolidation", "Consolidation", "تجميع"],
-      ["expansion", "Expansion", "توسع حركي"],
-    ]},
-  { id: "risk", label: "إدارة المخاطر", en: "Risk / Trade Mgmt", icon: ShieldCheck, color: "#FF9F6E", w: 5,
-    items: [
-      ["minrr", "Minimum RR", "أقل نسبة مخاطرة/عائد"],
-      ["maxrr", "Maximum RR", "أعلى نسبة مخاطرة/عائد"],
-      ["sldist", "Stop Loss Distance", "مسافة وقف الخسارة"],
-      ["tpdist", "Take Profit Distance", "مسافة جني الأرباح"],
-      ["riskpct", "Risk %", "نسبة المخاطرة من الرصيد"],
-      ["maxspread", "Max Spread", "أعلى سبريد مسموح"],
-      ["maxtrades", "Max Trades / Day", "أقصى صفقات يوميًا"],
-      ["cooldown", "Cooldown", "فترة انتظار بين الصفقات"],
     ]},
 ];
 const CAT_BY_ID = Object.fromEntries(CAT.map((c) => [c.id, c]));
@@ -231,7 +140,6 @@ const ALL_ITEMS = CAT.flatMap((c) => c.items.map(([type, label, desc]) => ({ cat
 const TABS = [
   { id: "build", label: "البناء", icon: Hammer },
   { id: "logic", label: "المنطق والسكور", icon: SlidersHorizontal },
-  { id: "simulation", label: "المحاكاة", icon: Play },
   { id: "telegram", label: "تلجرام", icon: Bot },
   { id: "monitoring", label: "المراقبة الحية", icon: MonitorDot },
   { id: "saved", label: "المحفوظة", icon: FolderOpen },
@@ -250,7 +158,7 @@ function buildDemoState() {
     value, weight: CAT_BY_ID[catId].w, enabled: true, not: false,
   });
   const conditions = [
-    mk("gA", "structure", "trend", "HTF Trend Bullish", "1D", "صاعد"),
+    mk("gA", "smc", "premium", "HTF Discount Zone", "1D", "خصم"),
     mk("gA", "smc", "liquidity", "Liquidity Sweep", "1H", "قمة"),
     mk("gA", "smc", "bos", "BOS", "15m", "صعودي"),
     mk("gB", "smc", "fvg", "FVG", "15m", "امتلاء 50%"),
@@ -291,28 +199,6 @@ const Toggle = ({ on, onClick, colorOn = C.teal }) => (
     />
   </button>
 );
-
-function Sparkline({ color = C.teal, seed = 1, width = 64, height = 22 }) {
-  const pts = useMemo(() => {
-    let v = 50, arr = [];
-    let s = seed;
-    for (let i = 0; i < 18; i++) {
-      s = (s * 9301 + 49297) % 233280;
-      v += (s / 233280 - 0.5) * 22;
-      v = Math.max(5, Math.min(95, v));
-      arr.push(v);
-    }
-    return arr;
-  }, [seed]);
-  const pathD = pts
-    .map((v, i) => `${i === 0 ? "M" : "L"} ${(i / (pts.length - 1)) * width} ${height - (v / 100) * height}`)
-    .join(" ");
-  return (
-    <svg width={width} height={height}>
-      <path d={pathD} fill="none" stroke={color} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" opacity="0.85" />
-    </svg>
-  );
-}
 
 function ScoreRing({ pct, size = 58, color }) {
   const r = (size - 8) / 2;
@@ -386,7 +272,6 @@ export default function StrategyBuilder() {
   const [tgChannel, setTgChannel] = useState("");
   const [tgFields, setTgFields] = useState({ entry: true, sl: true, tp: true, rr: true, confidence: true, conditions: true, chart: false });
 
-  const [sim, setSim] = useState({ status: "idle", results: [] });
   const [monitor, setMonitor] = useState({ active: false, events: [], lastScan: null });
 
   const [saved, setSaved] = useState([]);
@@ -594,29 +479,6 @@ export default function StrategyBuilder() {
     tgChannel, tgFields, groups, conditions,
   });
 
-  /* ---------------- simulation (REAL — evaluates against live analyze_market()) ---------------- */
-  const runSimulation = async () => {
-    if (enabledConditions.length === 0) return showToast("أضف شروطًا قبل تشغيل المحاكاة");
-    setSim({ status: "scanning", results: [] });
-    try {
-      const res = currentStrategyId
-        ? await axios.post(`${API}/api/v1/strategies/${currentStrategyId}/evaluate`)
-        : await axios.post(`${API}/api/v1/strategies/evaluate-preview`, buildPayload());
-      const results = (res.data.results || []).map((r) => ({
-        symbol: r.symbol,
-        matched: (r.matched || []).map((m) => ({ ...m })),
-        unsupported: r.unsupported || [],
-        score: r.score ?? 0,
-        triggered: !!r.triggered,
-        price: r.price != null ? fmtPrice(r.symbol, r.price) : "—",
-        error: r.error || null,
-      }));
-      setSim({ status: "done", results });
-    } catch (e) {
-      setSim({ status: "idle", results: [] });
-      showToast(e.response?.data?.detail || "فشل تشغيل المحاكاة");
-    }
-  };
 
   /* ---------------- live monitor (REAL — polls saved trigger events) ---------------- */
   useEffect(() => {
@@ -905,9 +767,6 @@ export default function StrategyBuilder() {
                         <div className="flex items-center gap-1.5">
                           <span style={{ width: 5, height: 5, borderRadius: 99, background: cat.color }} />
                           <span style={{ fontSize: 12.5, fontWeight: 500 }}>{item.label}</span>
-                          {!IMPLEMENTED_TYPES.has(item.type) && (
-                            <span title="غير مربوط بمحرك التحليل الحقيقي بعد" style={{ color: C.muted, fontSize: 9, border: `1px solid ${C.border}` }} className="px-1 py-0.5 rounded">تجريبي</span>
-                          )}
                         </div>
                         <div style={{ color: C.muted, fontSize: 10.5 }} className="mt-0.5">{item.desc}</div>
                       </div>
@@ -1062,9 +921,6 @@ export default function StrategyBuilder() {
                                 className="rounded-xl p-2.5 flex flex-wrap items-center gap-2"
                               >
                                 <Pill color={cat.color} bg={`${cat.color}1A`} border={cat.color} style={{ fontSize: 10 }}>{cat.label}</Pill>
-                                {!IMPLEMENTED_TYPES.has(c.type) && (
-                                  <span title="غير مربوط بمحرك التحليل الحقيقي بعد — لا يُحتسب بالسكور" style={{ color: C.muted, fontSize: 9, border: `1px solid ${C.border}` }} className="px-1 py-0.5 rounded">تجريبي</span>
-                                )}
                                 {NUMERIC_VALUE_TYPES.has(c.type) && !/-?\d/.test(c.value || "") && (
                                   <span title="أدخل رقمًا حتى يُحتسب هذا الشرط بالتقييم الحقيقي" style={{ color: C.red, fontSize: 9, border: `1px solid ${C.red}` }} className="px-1 py-0.5 rounded">بلا قيمة</span>
                                 )}
@@ -1272,102 +1128,6 @@ export default function StrategyBuilder() {
           </div>
         )}
 
-        {/* ============ TAB: SIMULATION ============ */}
-        {activeTab === "simulation" && (
-          <div className="flex flex-col gap-4">
-            <div style={{ background: C.surface, border: `1px solid ${C.border}` }} className="rounded-2xl p-5 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <div style={{ fontFamily: FD, fontWeight: 600, fontSize: 15 }}>Market Scan</div>
-                <div style={{ color: C.sub, fontSize: 12 }}>محاكاة تحقق شروط الاستراتيجية عبر {SYMBOL_POOL.length} أسواق</div>
-              </div>
-              <button
-                onClick={runSimulation}
-                disabled={sim.status === "scanning"}
-                style={{ background: C.gold, color: "#1A1200", fontWeight: 600 }}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm"
-              >
-                {sim.status === "scanning" ? <Loader2 size={15} className="animate-spin" /> : <Play size={15} />}
-                SIMULATE STRATEGY
-              </button>
-            </div>
-
-            {sim.status === "scanning" && (
-              <div style={{ background: C.surface, border: `1px solid ${C.border}` }} className="rounded-2xl p-5 flex flex-col gap-2">
-                <div style={{ color: C.gold, fontSize: 12.5 }} className="flex items-center gap-2 mb-2">
-                  <Loader2 size={13} className="animate-spin" /> جاري فحص الأسواق...
-                </div>
-                {SYMBOL_POOL.map((m) => <div key={m.s} className="skeleton h-8 rounded-lg" />)}
-              </div>
-            )}
-
-            {sim.status === "done" && (
-              <>
-                <div className="grid grid-cols-3 gap-3">
-                  <div style={{ background: C.surface, border: `1px solid ${C.border}` }} className="rounded-xl p-3 text-center">
-                    <div style={{ fontFamily: FM, fontSize: 20, color: C.text }}>{sim.results.length}</div>
-                    <div style={{ color: C.sub, fontSize: 11 }}>Scanned</div>
-                  </div>
-                  <div style={{ background: C.surface, border: `1px solid ${C.border}` }} className="rounded-xl p-3 text-center">
-                    <div style={{ fontFamily: FM, fontSize: 20, color: C.teal }}>
-                      {sim.results.filter((r) => r.matched.some((m) => m.hit)).length}
-                    </div>
-                    <div style={{ color: C.sub, fontSize: 11 }}>Conditions matched</div>
-                  </div>
-                  <div style={{ background: C.surface, border: `1px solid ${C.border}` }} className="rounded-xl p-3 text-center">
-                    <div style={{ fontFamily: FM, fontSize: 20, color: C.gold }}>{sim.results.filter((r) => r.triggered).length}</div>
-                    <div style={{ color: C.sub, fontSize: 11 }}>Potential signals</div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {sim.results.map((r) => (
-                    <div key={r.symbol} style={{ background: C.surface, border: `1px solid ${r.triggered ? C.gold : C.border}` }} className="rounded-2xl p-4 fade-in">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <span style={{ fontFamily: FD, fontWeight: 600, fontSize: 13.5 }}>{r.symbol}</span>
-                          <Sparkline seed={r.symbol.length + r.score} color={r.triggered ? C.gold : C.muted} />
-                        </div>
-                        <Pill color={r.triggered ? C.gold : C.muted} bg={r.triggered ? C.goldSoft : "transparent"} border={r.triggered ? C.gold : C.border}>
-                          {r.triggered ? "TRIGGERED" : "WAITING"}
-                        </Pill>
-                      </div>
-                      {r.error ? (
-                        <div style={{ color: C.red, fontSize: 11.5 }} className="mb-2">{r.error}</div>
-                      ) : (
-                        <>
-                          <div className="flex flex-wrap gap-1 mb-2">
-                            {r.matched.slice(0, 8).map((m) => (
-                              <span key={m.id} style={{ color: m.hit ? C.teal : C.muted, fontSize: 10.5, fontFamily: FM }} className="flex items-center gap-0.5">
-                                {m.hit ? <Check size={10} /> : <X size={10} />} {m.label}
-                              </span>
-                            ))}
-                          </div>
-                          {r.unsupported?.length > 0 && (
-                            <div style={{ color: C.gold, fontSize: 10 }} className="mb-2 flex items-center gap-1">
-                              <AlertTriangle size={10} /> {r.unsupported.length} شرط غير مدعوم بعد (لم يُحتسب)
-                            </div>
-                          )}
-                          <div className="flex items-center justify-between" style={{ fontFamily: FM, fontSize: 11 }}>
-                            <span style={{ color: C.sub }}>Price {r.price}</span>
-                            <span style={{ color: r.score >= minScore ? C.gold : C.sub }}>Score {r.score}</span>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-
-            {sim.status === "idle" && (
-              <div style={{ background: C.surface, border: `1px dashed ${C.border}`, color: C.muted }} className="rounded-2xl py-14 flex flex-col items-center gap-2 text-sm">
-                <Radio size={22} />
-                اضغط SIMULATE STRATEGY لفحص حقيقي للأسواق مقابل محرك التحليل
-              </div>
-            )}
-          </div>
-        )}
-
         {/* ============ TAB: TELEGRAM ============ */}
         {activeTab === "telegram" && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -1571,7 +1331,7 @@ export default function StrategyBuilder() {
         <Modal title="🔒 ميزة حصرية للمشتركين" onClose={() => setPaywallOpen(false)}>
           <p style={{ color: C.sub, fontSize: 13 }} className="mb-4 leading-relaxed">
             حفظ الاستراتيجيات، تفعيل المراقبة الحقيقية، وإرسال تنبيهات Telegram متاحة للمشتركين (أسبوعي/شهري) فقط.
-            تقدر تبني وتجرّب (Simulate) استراتيجيتك الآن مجانًا — واشترك لتفعيلها فعليًا على السوق.
+            تقدر تبني استراتيجيتك الآن مجانًا — واشترك لحفظها وتفعيلها فعليًا على السوق.
           </p>
           <div className="flex gap-2 justify-end">
             <button onClick={() => setPaywallOpen(false)} style={{ background: C.surfaceHi, border: `1px solid ${C.border}`, color: C.text }} className="px-3.5 py-2 rounded-lg text-sm">لاحقًا</button>

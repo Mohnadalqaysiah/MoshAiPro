@@ -11,6 +11,39 @@ from typing import Any, Dict, List, Optional
 _BULL_WORDS = ("صاعد", "شراء", "BULL", "BUY")
 _BEAR_WORDS = ("هابط", "بيع", "BEAR", "SELL")
 
+# (2026-09-06) كل شرط عنده حقل timeframe خاص فيه بالواجهة (وكان محفوظ
+# بقاعدة البيانات) — بس التقييم كان يتجاهله كليًا ويفحص كل الشروط على فريم
+# واحد للاستراتيجية كلها، مُختار أبجديًا لا زمنيًا (مثلاً "1H" يسبق "1D"
+# أبجديًا رغم إنه أصغر زمنيًا). الدوال هون تحسب الأطر الفريدة المستخدمة
+# فعليًا وترتّبها زمنيًا صح، تمهيدًا لجلب تحليل حقيقي مستقل لكل فريم
+# (عبر analyze_market_multi_tf) وتوجيه كل شرط لتحليل فريمه هو تحديدًا.
+_TF_MINUTES = {
+    "1m": 1, "5m": 5, "15m": 15, "30m": 30,
+    "1h": 60, "4h": 240, "1d": 1440, "1w": 10080,
+}
+
+
+def norm_timeframe(tf: Optional[str]) -> str:
+    return (tf or "15m").strip().lower()
+
+
+def tf_minutes(tf: Optional[str]) -> int:
+    return _TF_MINUTES.get(norm_timeframe(tf), 60)
+
+
+def distinct_timeframes(conditions: List) -> List[str]:
+    """كل الأطر الزمنية الفريدة المفعّلة بشروط الاستراتيجية، مرتّبة زمنيًا
+    (الأصغر أولًا) — لا فرز أبجدي."""
+    tfs = {norm_timeframe(c.timeframe) for c in conditions if c.enabled}
+    return sorted(tfs, key=tf_minutes) or ["15m"]
+
+
+def primary_timeframe(conditions: List) -> str:
+    """الأصغر (الأكثر دقة) بين الأطر المستخدمة — فريم الدخول الفعلي عادة،
+    بينما الأطر الأعلى تُستخدم كفلتر اتجاه/سياق. يُستخدم لعرض السعر
+    والتوصية والمستويات برسالة التنبيه."""
+    return distinct_timeframes(conditions)[0]
+
 
 def _direction_hint(value: Optional[str]) -> Optional[str]:
     v = (value or "").strip().upper()
@@ -193,12 +226,16 @@ SUPPORTED_CONDITION_TYPES = {
 }
 
 
-def evaluate_condition(condition, analysis: Dict) -> Optional[bool]:
+def evaluate_condition(condition, analyses: Dict[str, Dict]) -> Optional[bool]:
     """Returns True/False if the condition type is supported and evaluable
-    against `analysis` (the real analyze_market() output), or None if the
-    condition type has no real implementation yet."""
+    against the real analyze_market() result for THIS condition's own
+    declared timeframe, or None if the type has no real implementation yet
+    (or that timeframe's analysis couldn't be fetched this cycle)."""
     extractor = SUPPORTED_CONDITION_TYPES.get(condition.type)
     if not extractor:
+        return None
+    analysis = analyses.get(norm_timeframe(condition.timeframe))
+    if analysis is None:
         return None
     result = extractor(analysis, condition.value)
     if result is None:
@@ -206,17 +243,20 @@ def evaluate_condition(condition, analysis: Dict) -> Optional[bool]:
     return (not result) if condition.negate else result
 
 
-def evaluate_strategy(groups: List, conditions: List, analysis: Dict, min_score: int, price: Optional[float] = None) -> Dict:
-    """Pure evaluation of a strategy's saved groups/conditions against one
-    real analyze_market() result. Unsupported conditions never count as a
-    match — they're surfaced separately in `unsupported` for UI honesty."""
+def evaluate_strategy(groups: List, conditions: List, analyses: Dict[str, Dict], min_score: int, price: Optional[float] = None) -> Dict:
+    """Pure evaluation of a strategy's saved groups/conditions. `analyses` is
+    {timeframe: analyze_market() result} — one real, independent result per
+    distinct timeframe actually used by the strategy's conditions (see
+    distinct_timeframes()), each condition routed to its own. Unsupported
+    conditions never count as a match — they're surfaced separately in
+    `unsupported` for UI honesty."""
     enabled = [c for c in conditions if c.enabled]
 
     hit_by_id: Dict[int, bool] = {}
     unsupported_ids = set()
     unsupported = []
     for c in enabled:
-        raw = evaluate_condition(c, analysis)
+        raw = evaluate_condition(c, analyses)
         if raw is None:
             unsupported_ids.add(c.id)
             unsupported.append({"id": c.id, "type": c.type, "label": c.label})
