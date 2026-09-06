@@ -9,7 +9,7 @@ import {
   DollarSign, Activity, RefreshCw, Calendar,
   X, ExternalLink, Shield, AlertTriangle, Settings, Mail, Upload, Signal, Send,
   FileText, TrendingUp as TrendUp, Bell, Sparkles,
-  ShieldCheck, UserCog, MessageCircle, UserMinus, Paperclip
+  ShieldCheck, UserCog, MessageCircle, UserMinus, Paperclip, Gift
 } from 'lucide-react'
 
 const MAX_SUPPORT_ATTACHMENT_BYTES = 1 * 1024 * 1024
@@ -46,6 +46,9 @@ const StatusBadge = ({ status }) => {
 }
 
 // ── User Detail Modal ──────────────────────────────────────────────────────────
+const RENEW_DAY_PRESETS = [7, 14, 30, 60, 90]
+const RENEW_REASON_PRESETS = ['تحويل بنكي', 'دفع كاش', 'PayPal يدوي', 'تعويض/مكافأة']
+
 function UserModal({ user: u, onClose, onUpdate }) {
   const [extraDays, setExtraDays] = useState(7)
   const [loading, setLoading] = useState('')
@@ -55,6 +58,10 @@ function UserModal({ user: u, onClose, onUpdate }) {
   const [renewPlan, setRenewPlan]       = useState('monthly')
   const [renewReason, setRenewReason]   = useState('')
   const [renewNotify, setRenewNotify]   = useState(true)
+
+  const renewBaseDate = u.subscription_ends_at ? new Date(u.subscription_ends_at) : new Date()
+  const renewBase = renewBaseDate > new Date() ? renewBaseDate : new Date()
+  const renewNewEnd = new Date(renewBase.getTime() + renewDays * 86400000)
 
   const doAction = async (action, payload = {}) => {
     setLoading(action); setMsg(null)
@@ -150,43 +157,71 @@ function UserModal({ user: u, onClose, onUpdate }) {
               </div>
             </div>
 
-            {/* Renewal */}
-            <div className="bg-gray-800/50 rounded-xl p-3 border border-green-700/30">
-              <p className="text-xs text-green-400 font-semibold mb-3 flex items-center gap-1">
-                <RefreshCw size={12}/> إعادة تنشيط / تجديد الاشتراك
-              </p>
-              <div className="grid grid-cols-2 gap-2 mb-2">
-                <div>
-                  <label className="text-xs text-gray-400 block mb-1">المدة (يوم)</label>
-                  <input type="number" min="1" max="365" value={renewDays}
-                    onChange={e => setRenewDays(Number(e.target.value))}
-                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-green-500 text-center" dir="ltr"/>
-                </div>
-                <div>
-                  <label className="text-xs text-gray-400 block mb-1">الباقة</label>
-                  <select value={renewPlan} onChange={e => setRenewPlan(e.target.value)}
-                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-green-500">
-                    <option value="monthly">شهري</option>
-                    <option value="weekly">أسبوعي</option>
-                  </select>
-                </div>
+            {/* منح اشتراك يدوي — لدفعات خارج المنصة (تحويل بنكي، كاش...) */}
+            <div className="rounded-2xl p-4 border border-emerald-700/30 bg-gradient-to-br from-emerald-950/40 to-gray-900/40">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-sm text-emerald-400 font-bold flex items-center gap-1.5">
+                  <Gift size={14}/> منح اشتراك يدوي
+                </p>
+                <span className="text-[10px] text-gray-500">لدفعات خارج المنصة</span>
               </div>
-              <div className="mb-2">
-                <label className="text-xs text-gray-400 block mb-1">السبب (اختياري)</label>
-                <input type="text" value={renewReason} placeholder="مكافأة / استثناء / خطأ دفع..."
-                  onChange={e => setRenewReason(e.target.value)}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-green-500"/>
+              <p className="text-[11px] text-gray-500 mb-3">استلمت الدفع بتحويل بنكي أو كاش أو أي وسيلة غير مربوطة بالمنصة؟ فعّل الاشتراك يدوياً من هون.</p>
+
+              {/* المدة — أزرار سريعة + مخصّص */}
+              <label className="text-[11px] text-gray-400 block mb-1.5">المدة</label>
+              <div className="flex items-center gap-1.5 flex-wrap mb-3">
+                {RENEW_DAY_PRESETS.map(d => (
+                  <button key={d} type="button" onClick={() => setRenewDays(d)}
+                    className={`text-xs px-3 py-1.5 rounded-lg border transition font-medium ${renewDays===d ? 'border-emerald-500 bg-emerald-900/40 text-emerald-300' : 'border-gray-700 text-gray-400 hover:border-gray-500 hover:text-white'}`}>
+                    {d} يوم
+                  </button>
+                ))}
+                <input type="number" min="1" max="365" value={renewDays}
+                  onChange={e => setRenewDays(Number(e.target.value) || 1)}
+                  className="w-20 bg-gray-900 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 text-center" dir="ltr"/>
               </div>
+
+              {/* الباقة */}
+              <label className="text-[11px] text-gray-400 block mb-1.5">الباقة</label>
+              <div className="flex gap-1.5 mb-3">
+                {[['weekly','أسبوعي'], ['monthly','شهري']].map(([val, label]) => (
+                  <button key={val} type="button" onClick={() => setRenewPlan(val)}
+                    className={`flex-1 text-xs px-3 py-2 rounded-lg border transition font-medium ${renewPlan===val ? 'border-emerald-500 bg-emerald-900/40 text-emerald-300' : 'border-gray-700 text-gray-400 hover:border-gray-500 hover:text-white'}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {/* السبب */}
+              <label className="text-[11px] text-gray-400 block mb-1.5">سبب المنح (يظهر للعميل بإشعار تلغرام)</label>
+              <div className="flex gap-1.5 flex-wrap mb-1.5">
+                {RENEW_REASON_PRESETS.map(r => (
+                  <button key={r} type="button" onClick={() => setRenewReason(r)}
+                    className={`text-[11px] px-2.5 py-1 rounded-full border transition ${renewReason===r ? 'border-emerald-500 text-emerald-300' : 'border-gray-700 text-gray-500 hover:text-gray-300'}`}>
+                    {r}
+                  </button>
+                ))}
+              </div>
+              <input type="text" value={renewReason} placeholder="اكتب سبب مخصّص أو اختر من الأعلى..."
+                onChange={e => setRenewReason(e.target.value)}
+                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 mb-3"/>
+
+              {/* ملخص حي قبل التنفيذ */}
+              <div className="flex items-center justify-between bg-black/20 rounded-lg px-3 py-2 mb-3 text-[11px]">
+                <span className="text-gray-400">سينتهي الاشتراك الجديد بتاريخ</span>
+                <span className="text-emerald-300 font-mono font-semibold" dir="ltr">{renewNewEnd.toISOString().slice(0,10)}</span>
+              </div>
+
               <div className="flex items-center justify-between">
                 <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
                   <input type="checkbox" checked={renewNotify} onChange={e => setRenewNotify(e.target.checked)}
-                    className="accent-green-500"/>
+                    className="accent-emerald-500"/>
                   إشعار تلغرام للمستخدم
                 </label>
                 <button disabled={loading==='renew'}
                   onClick={() => doAction('renew')}
-                  className="flex items-center gap-1 text-xs bg-green-700 hover:bg-green-600 text-white px-4 py-1.5 rounded-lg transition font-semibold">
-                  {loading==='renew' ? '...' : <><RefreshCw size={11}/> تجديد</>}
+                  className="flex items-center gap-1.5 text-xs bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white px-5 py-2 rounded-lg transition font-bold shadow-lg shadow-emerald-900/30">
+                  {loading==='renew' ? '...' : <><Gift size={13}/> منح الاشتراك</>}
                 </button>
               </div>
             </div>
