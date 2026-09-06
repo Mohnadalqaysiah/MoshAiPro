@@ -70,6 +70,9 @@ function UserModal({ user: u, onClose, onUpdate }) {
   const renewBase = renewBaseDate > new Date() ? renewBaseDate : new Date()
   const renewNewEnd = new Date(renewBase.getTime() + renewDays * 86400000)
 
+  const extendBase = u.subscription_ends_at ? new Date(u.subscription_ends_at) : new Date()
+  const extendNewEnd = new Date(extendBase.getTime() + (extraDays || 0) * 86400000)
+
   const doAction = async (action, payload = {}) => {
     setLoading(action); setMsg(null)
     try {
@@ -83,8 +86,9 @@ function UserModal({ user: u, onClose, onUpdate }) {
         })
         setMsg({ type:'ok', text:`✅ تم التجديد حتى ${res.data.new_end?.slice(0,10)} | إشعار: ${res.data.notified?'أُرسل':'لا Telegram'} | مسجّل بالمدفوعات: $${renewAmount}` })
       } else if (action === 'extend') {
+        if (!extraDays) { setMsg({ type:'err', text:'أدخل رقماً غير صفر' }); setLoading(''); return }
         await axios.put(`${API}/api/v1/admin/users/${u.id}`, { extra_days: extraDays })
-        setMsg({ type:'ok', text:`تم تمديد الاشتراك ${extraDays} يوم` })
+        setMsg({ type:'ok', text: extraDays > 0 ? `✅ تمت إضافة ${extraDays} يوم` : `✅ تم خصم ${Math.abs(extraDays)} يوم` })
       } else if (action === 'ban') {
         if (!confirm('حظر هذا المستخدم؟')) { setLoading(''); return }
         await axios.delete(`${API}/api/v1/admin/users/${u.id}/ban`)
@@ -246,21 +250,37 @@ function UserModal({ user: u, onClose, onUpdate }) {
               </div>
             </div>
 
-            {/* Extend */}
-            <div>
-              <p className="text-xs text-gray-400 mb-2">تمديد بسيط</p>
-              <div className="flex gap-2">
-                <input type="number" min="1" max="365" lang="en" value={extraDays}
-                  onChange={e => setExtraDays(Number(e.target.value))}
-                  className="w-20 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500 text-center"
+            {/* تعديل الأيام — تصحيح غلطة إدارية، بدون سجل دفع ولا إشعار للعميل */}
+            <div className="bg-gray-800/40 rounded-xl p-3 border border-gray-700/50">
+              <p className="text-xs text-gray-300 font-semibold mb-1">تعديل الأيام (+/-)</p>
+              <p className="text-[11px] text-gray-500 mb-2">لتصحيح غلطة إدارية — يزيد أو ينقص من تاريخ الانتهاء مباشرة، بدون سجل دفع أو إشعار تلغرام للعميل.</p>
+              <div className="flex gap-2 mb-2">
+                <button type="button" onClick={() => setExtraDays(d => -Math.abs(d || 1))}
+                  className={`px-3 py-1.5 rounded-lg border text-sm font-bold transition ${extraDays < 0 ? 'border-red-500 bg-red-900/30 text-red-300' : 'border-gray-700 text-gray-500 hover:text-gray-300'}`}>
+                  −
+                </button>
+                <input type="number" lang="en" value={extraDays}
+                  onChange={e => setExtraDays(Number(e.target.value) || 0)}
+                  className="w-24 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500 text-center"
                   dir="ltr" />
+                <button type="button" onClick={() => setExtraDays(d => Math.abs(d || 1))}
+                  className={`px-3 py-1.5 rounded-lg border text-sm font-bold transition ${extraDays > 0 ? 'border-green-500 bg-green-900/30 text-green-300' : 'border-gray-700 text-gray-500 hover:text-gray-300'}`}>
+                  +
+                </button>
                 <span className="text-sm text-gray-400 self-center">يوم</span>
-                <button disabled={loading==='extend'}
+                <button disabled={loading==='extend' || !extraDays}
                   onClick={() => doAction('extend')}
-                  className="flex items-center gap-1 text-xs bg-blue-700 hover:bg-blue-600 text-white px-3 py-1.5 rounded-lg transition">
-                  <Calendar size={12}/> تمديد
+                  className={`flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg transition font-semibold ${extraDays < 0 ? 'bg-red-700 hover:bg-red-600 text-white' : 'bg-blue-700 hover:bg-blue-600 text-white'}`}>
+                  <Calendar size={12}/> {extraDays < 0 ? 'خصم' : 'إضافة'}
                 </button>
               </div>
+              {!!extraDays && (
+                <p className="text-[11px] text-gray-500">
+                  الانتهاء الحالي <span className="font-mono text-gray-400" dir="ltr">{extendBase.toISOString().slice(0,10)}</span>
+                  {' '}← الجديد{' '}
+                  <span className={`font-mono font-semibold ${extraDays < 0 ? 'text-red-400' : 'text-green-400'}`} dir="ltr">{extendNewEnd.toISOString().slice(0,10)}</span>
+                </p>
+              )}
             </div>
 
             {/* Quick Actions */}
