@@ -22,7 +22,7 @@ const IconTelegram = () => (
   </svg>
 )
 
-export default function PublicLayout({ children, bgClass = 'bg-[#070b14]' }) {
+export default function PublicLayout({ children, bgClass = 'q-ground' }) {
   const { user } = useAuth()
   const { lang, toggle, t } = useLang()
   const isAr = lang === 'ar'
@@ -43,12 +43,14 @@ export default function PublicLayout({ children, bgClass = 'bg-[#070b14]' }) {
     <div className={`min-h-screen ${bgClass} text-white`} dir={isAr ? 'rtl' : 'ltr'}>
 
       {/* ── Header ──────────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-50 bg-[#070b14]/80 backdrop-blur-xl border-b border-white/5">
+      <header className="sticky top-0 z-50 q-panel backdrop-blur-xl border-b q-line">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2.5 group">
-            <Logo className="w-9 h-9 rounded-xl shadow-lg shadow-blue-500/30" />
+            <span className="w-9 h-9 rounded-xl q-logo grid place-items-center overflow-hidden flex-shrink-0">
+              <Logo className="w-6 h-6 object-contain" />
+            </span>
             <span className="font-bold text-lg tracking-tight">
-              Qaffel <span className="text-blue-400">AI</span>
+              Qaffel <span style={{ color: 'var(--q-acc3)' }}>AI</span>
             </span>
           </Link>
 
@@ -70,7 +72,7 @@ export default function PublicLayout({ children, bgClass = 'bg-[#070b14]' }) {
             </button>
             {user ? (
               <Link to="/dashboard"
-                className="hidden md:flex items-center gap-1.5 text-sm bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white px-4 py-2 rounded-xl font-semibold transition-all shadow-md">
+                className="hidden md:flex items-center gap-1.5 text-sm q-cta text-white px-4 py-2 rounded-xl font-semibold transition-all">
                 <LayoutDashboard size={14} /> {t.nav.dashboard}
               </Link>
             ) : (
@@ -80,7 +82,7 @@ export default function PublicLayout({ children, bgClass = 'bg-[#070b14]' }) {
                   {t.nav.login}
                 </Link>
                 <Link to="/register"
-                  className="hidden md:block text-sm bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-4 py-2 rounded-xl font-semibold transition-all shadow-md">
+                  className="hidden md:block text-sm q-cta text-white px-4 py-2 rounded-xl font-semibold transition-all">
                   {t.nav.start}
                 </Link>
               </>
@@ -94,7 +96,7 @@ export default function PublicLayout({ children, bgClass = 'bg-[#070b14]' }) {
 
         {/* Mobile dropdown */}
         {mobileOpen && (
-          <div className="md:hidden border-t border-white/5 bg-[#070b14]/95 backdrop-blur-xl px-4 py-4 space-y-1">
+          <div className="md:hidden border-t q-line bg-gray-900/95 backdrop-blur-xl px-4 py-4 space-y-1">
             {[
               { href: '/#features', label: t.nav.features },
               { to: '/pricing',     label: t.nav.pricing },
@@ -105,10 +107,10 @@ export default function PublicLayout({ children, bgClass = 'bg-[#070b14]' }) {
               ? <a key={i} href={l.href} onClick={() => setMobileOpen(false)} className="block py-2.5 px-3 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-colors">{l.label}</a>
               : <Link key={i} to={l.to} onClick={() => setMobileOpen(false)} className="block py-2.5 px-3 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-colors">{l.label}</Link>
             )}
-            <div className="pt-2 border-t border-white/5 space-y-2">
+            <div className="pt-2 border-t q-line space-y-2">
               {user ? (
                 <Link to="/dashboard" onClick={() => setMobileOpen(false)}
-                  className="flex items-center gap-2 w-full py-2.5 px-3 rounded-xl text-sm bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold">
+                  className="flex items-center gap-2 w-full py-2.5 px-3 rounded-xl text-sm q-cta text-white font-semibold">
                   <LayoutDashboard size={14} /> {t.nav.dashboard}
                 </Link>
               ) : (
@@ -118,7 +120,7 @@ export default function PublicLayout({ children, bgClass = 'bg-[#070b14]' }) {
                     {t.nav.login}
                   </Link>
                   <Link to="/register" onClick={() => setMobileOpen(false)}
-                    className="block py-2.5 px-3 rounded-xl text-sm text-center bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold">
+                    className="block py-2.5 px-3 rounded-xl text-sm text-center q-cta text-white font-semibold">
                     {t.nav.start}
                   </Link>
                 </>
@@ -132,14 +134,16 @@ export default function PublicLayout({ children, bgClass = 'bg-[#070b14]' }) {
       <main>{children}</main>
 
       {/* ── Footer ──────────────────────────────────────────────────────── */}
-      <footer className="border-t border-white/5 py-12 px-4 bg-[#050810]">
+      <footer className="border-t q-line py-12 px-4 bg-black/20">
         <div className="max-w-6xl mx-auto">
           <div className="grid grid-cols-2 md:grid-cols-5 gap-8 mb-10">
 
             {/* Brand */}
             <div className="col-span-2 md:col-span-1">
               <Link to="/" className="flex items-center gap-2.5 mb-4">
-                <Logo className="w-8 h-8 rounded-xl" />
+                <span className="w-8 h-8 rounded-xl q-logo grid place-items-center overflow-hidden flex-shrink-0">
+                  <Logo className="w-5 h-5 object-contain" />
+                </span>
                 <span className="font-bold text-sm">Qaffel AI</span>
               </Link>
               <p className="text-gray-400 text-xs leading-relaxed mb-4">
@@ -198,7 +202,7 @@ export default function PublicLayout({ children, bgClass = 'bg-[#070b14]' }) {
             ))}
           </div>
 
-          <div className="border-t border-white/5 pt-6 flex flex-col md:flex-row items-center justify-between gap-3 text-xs text-gray-700">
+          <div className="border-t q-line pt-6 flex flex-col md:flex-row items-center justify-between gap-3 text-xs text-gray-700">
             <span>{t.footer.copy}</span>
             <span className="flex items-center gap-1.5">
               <Star size={10} className="text-yellow-600 fill-yellow-600" />

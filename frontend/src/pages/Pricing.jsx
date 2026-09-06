@@ -125,10 +125,6 @@ const DEFAULT_PLANS = [
     price: 7,
     periodAr: '/ أسبوع',
     periodEn: '/ week',
-    color: 'blue',
-    gradient: 'from-blue-900/40 to-blue-800/10',
-    border: 'border-blue-500/60',
-    glow: 'shadow-blue-500/20',
     popular: false,
     featuresAr: ['تحليل ICT/SMC كامل', 'شات AI غير محدود', 'تنبيهات Telegram', 'جميع الأزواج', 'تحليل متعدد الفريمات'],
     featuresEn: ['Full ICT/SMC Analysis', 'Unlimited AI Chat', 'Telegram Alerts', 'All Pairs', 'Multi-Timeframe Analysis'],
@@ -140,10 +136,6 @@ const DEFAULT_PLANS = [
     price: 30,
     periodAr: '/ شهر',
     periodEn: '/ month',
-    color: 'purple',
-    gradient: 'from-purple-900/40 to-purple-800/10',
-    border: 'border-purple-500/60',
-    glow: 'shadow-purple-500/20',
     popular: true,
     featuresAr: ['كل مزايا الأسبوعي', 'أولوية الدعم الفني', 'تقارير أسبوعية مفصّلة', 'وصول مبكر للمزايا الجديدة', 'توفير 46% مقارنة بالأسبوعي'],
     featuresEn: ['All Weekly Features', 'Priority Support', 'Detailed Weekly Reports', 'Early Access to New Features', 'Save 46% vs Weekly'],
@@ -323,18 +315,18 @@ export default function Pricing() {
 
           {/* Header */}
           <div className="text-center mb-12">
-            <div className="inline-flex items-center gap-2 bg-blue-600/20 border border-blue-500/30 text-blue-300 text-xs px-4 py-1.5 rounded-full mb-4">
+            <div className="inline-flex items-center gap-2 q-glass px-4 py-1.5 rounded-full mb-4 text-sm" style={{ color: 'var(--q-acc3)' }}>
               <Zap size={12} />
               {isAr ? 'الباقات والأسعار' : 'Plans & Pricing'}
             </div>
-            <h1 className="text-4xl font-bold text-white mb-3">{t.title}</h1>
+            <h1 className="text-4xl font-bold text-white mb-3" style={{ textWrap: 'balance' }}>{t.title}</h1>
             <p className="text-gray-400">{t.subtitle}</p>
 
             {/* Trust badges */}
             <div className="flex items-center justify-center gap-6 mt-6 text-xs text-gray-500">
-              <span className="flex items-center gap-1.5"><Shield size={13} className="text-green-400" /> {t.guarantee}</span>
-              <span className="flex items-center gap-1.5"><Clock size={13} className="text-blue-400" /> {t.support}</span>
-              <span className="flex items-center gap-1.5"><Zap size={13} className="text-yellow-400" /> {t.instant}</span>
+              <span className="flex items-center gap-1.5"><Shield size={13} className="text-emerald-400" /> {t.guarantee}</span>
+              <span className="flex items-center gap-1.5"><Clock size={13} style={{ color: 'var(--q-acc3)' }} /> {t.support}</span>
+              <span className="flex items-center gap-1.5"><Zap size={13} className="text-amber-400" /> {t.instant}</span>
             </div>
           </div>
 
@@ -351,15 +343,18 @@ export default function Pricing() {
                     <div
                       key={p.key}
                       onClick={() => setSelected(p.key)}
-                      className={`relative rounded-2xl border-2 p-7 cursor-pointer transition-all duration-200 ${
-                        isSelected
-                          ? `bg-gradient-to-br ${p.gradient} ${p.border} shadow-xl ${p.glow}`
-                          : 'border-gray-700/60 bg-gray-900/60 hover:border-gray-600'
+                      className={`relative rounded-2xl border p-7 cursor-pointer transition-all duration-200 ${
+                        isSelected ? 'shadow-xl' : 'q-glass q-glass-hover'
                       }`}
+                      style={isSelected ? {
+                        background: 'linear-gradient(135deg, rgba(255,79,216,0.14), rgba(124,58,237,0.16))',
+                        borderColor: 'var(--q-acc1)',
+                        boxShadow: '0 20px 45px rgba(124,58,237,0.25)',
+                      } : undefined}
                     >
                       {/* Popular badge */}
                       {p.popular && (
-                        <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-purple-600 to-purple-500 text-white text-xs font-bold px-4 py-1 rounded-full flex items-center gap-1.5 shadow-lg">
+                        <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 q-cta text-white text-xs font-bold px-4 py-1 rounded-full flex items-center gap-1.5 shadow-lg">
                           <Star size={10} fill="white" />
                           {t.popular}
                         </div>
@@ -367,7 +362,7 @@ export default function Pricing() {
 
                       {/* Selected indicator */}
                       {isSelected && (
-                        <div className={`absolute top-4 ${isAr ? 'left-4' : 'right-4'} w-5 h-5 rounded-full bg-${p.color}-500 flex items-center justify-center`}>
+                        <div className={`absolute top-4 ${isAr ? 'left-4' : 'right-4'} w-5 h-5 rounded-full grid place-items-center`} style={{ background: 'var(--q-acc1)' }}>
                           <Check size={12} className="text-white" strokeWidth={3} />
                         </div>
                       )}
@@ -375,7 +370,7 @@ export default function Pricing() {
                       {/* Price */}
                       <div className="mb-5">
                         <div className="flex items-end gap-1 mb-1">
-                          <span className={`text-5xl font-black ${isSelected ? `text-${p.color}-300` : 'text-white'}`}>
+                          <span className="text-5xl font-black text-white">
                             ${p.price}
                           </span>
                           <span className="text-gray-400 mb-2 text-sm">{period}</span>
@@ -389,14 +384,15 @@ export default function Pricing() {
                       </div>
 
                       {/* Divider */}
-                      <div className={`border-t ${isSelected ? `border-${p.color}-700/40` : 'border-gray-700/40'} mb-5`} />
+                      <div className="border-t q-line mb-5" />
 
                       {/* Features */}
                       <ul className="space-y-2.5">
                         {features.map((f, i) => (
                           <li key={i} className="flex items-center gap-2.5 text-sm">
-                            <div className={`w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 ${isSelected ? `bg-${p.color}-500/30` : 'bg-gray-700/50'}`}>
-                              <Check size={10} className={isSelected ? `text-${p.color}-300` : 'text-gray-400'} strokeWidth={3} />
+                            <div className={`w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 ${isSelected ? '' : 'bg-gray-700/50'}`}
+                                 style={isSelected ? { background: 'rgba(255,79,216,0.22)' } : undefined}>
+                              <Check size={10} style={isSelected ? { color: 'var(--q-acc1)' } : undefined} className={isSelected ? '' : 'text-gray-400'} strokeWidth={3} />
                             </div>
                             <span className={isSelected ? 'text-gray-200' : 'text-gray-400'}>{f}</span>
                           </li>
@@ -409,9 +405,9 @@ export default function Pricing() {
 
               {/* CTA */}
               {!user ? (
-                <div className="text-center bg-gray-900/60 border border-gray-800 rounded-2xl p-8">
+                <div className="text-center q-glass rounded-2xl p-8">
                   <p className="text-gray-400 mb-4">{t.loginNote}</p>
-                  <Link to="/register" className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-xl font-semibold transition-all hover:scale-105">
+                  <Link to="/register" className="inline-flex items-center gap-2 q-cta text-white px-8 py-3 rounded-xl font-semibold transition-all hover:scale-105">
                     <Zap size={16} />
                     {t.loginBtn}
                   </Link>
@@ -419,11 +415,7 @@ export default function Pricing() {
               ) : (
                 <button
                   onClick={goToPay}
-                  className={`w-full font-bold py-4 rounded-2xl text-base flex items-center justify-center gap-2 transition-all hover:scale-[1.02] shadow-xl ${
-                    plan?.color === 'purple'
-                      ? 'bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white shadow-purple-500/30'
-                      : 'bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white shadow-blue-500/30'
-                  }`}
+                  className="w-full q-cta text-white font-bold py-4 rounded-2xl text-base flex items-center justify-center gap-2 transition-all hover:scale-[1.02] shadow-xl"
                 >
                   <Zap size={18} />
                   {t.proceedBtn(plan?.price)}
@@ -433,12 +425,12 @@ export default function Pricing() {
           )}
 
           {step === 'pay' && (
-            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 max-w-lg mx-auto">
+            <div className="q-glass rounded-2xl p-8 max-w-lg mx-auto">
               <h2 className="text-xl font-bold text-white mb-1">{t.payTitle}</h2>
               <p className="text-gray-400 text-sm mb-6">
                 {t.planLabel}: <span className="text-white font-medium">{planName}</span>
                 {' · '}
-                {t.amountLabel}: <span className="text-green-400 font-bold">${plan?.price}</span>
+                {t.amountLabel}: <span className="text-emerald-400 font-bold">${plan?.price}</span>
               </p>
 
               {error && (
@@ -602,7 +594,7 @@ export default function Pricing() {
                     <button
                       onClick={submitPayment}
                       disabled={loading}
-                      className="flex-1 bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 disabled:from-green-900 disabled:to-green-900 text-white font-bold py-3 rounded-xl text-sm transition"
+                      className="flex-1 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl text-sm transition"
                     >
                       {loading ? t.sendingBtn : t.confirmBtn}
                     </button>
@@ -622,9 +614,9 @@ export default function Pricing() {
           )}
 
           {step === 'activating' && (
-            <div className="text-center bg-gray-900 border border-gray-800 rounded-2xl p-12 max-w-lg mx-auto">
-              <div className="w-16 h-16 bg-indigo-500/20 rounded-full flex items-center justify-center mx-auto mb-5">
-                <Loader2 size={32} className="text-indigo-400 animate-spin" />
+            <div className="text-center q-glass rounded-2xl p-12 max-w-lg mx-auto">
+              <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5" style={{ background: 'rgba(124,58,237,0.18)' }}>
+                <Loader2 size={32} className="animate-spin" style={{ color: 'var(--q-acc2)' }} />
               </div>
               <h2 className="text-2xl font-bold text-white mb-3">{t.activatingTitle}</h2>
               <p className="text-gray-400 text-sm leading-relaxed">{t.activatingDesc}</p>
@@ -632,13 +624,13 @@ export default function Pricing() {
           )}
 
           {step === 'done' && (
-            <div className="text-center bg-gray-900 border border-gray-800 rounded-2xl p-12 max-w-lg mx-auto">
-              <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-5">
-                <CheckCircle size={36} className="text-green-400" />
+            <div className="text-center q-glass rounded-2xl p-12 max-w-lg mx-auto">
+              <div className="w-16 h-16 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-5">
+                <CheckCircle size={36} className="text-emerald-400" />
               </div>
               <h2 className="text-2xl font-bold text-white mb-3">{paidVia === 'card' ? t.doneTitleCard : t.doneTitle}</h2>
               <p className="text-gray-400 text-sm leading-relaxed">{paidVia === 'card' ? t.doneDescCard : t.doneDesc}</p>
-              <Link to="/dashboard" className="mt-8 inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-xl font-semibold text-sm transition">
+              <Link to="/dashboard" className="mt-8 inline-flex items-center gap-2 q-cta text-white px-8 py-3 rounded-xl font-semibold text-sm transition">
                 {t.dashboardBtn}
               </Link>
             </div>
