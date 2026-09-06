@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
@@ -9,8 +9,27 @@ import {
   DollarSign, Activity, RefreshCw, Calendar,
   X, ExternalLink, Shield, AlertTriangle, Settings, Mail, Upload, Signal, Send,
   FileText, TrendingUp as TrendUp, Bell, Sparkles,
-  ShieldCheck, UserCog, MessageCircle, UserMinus
+  ShieldCheck, UserCog, MessageCircle, UserMinus, Paperclip
 } from 'lucide-react'
+
+const MAX_SUPPORT_ATTACHMENT_BYTES = 1 * 1024 * 1024
+const ALLOWED_SUPPORT_ATTACHMENT_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'application/pdf']
+
+function SupportAttachment({ url, name, type }) {
+  const full = `${API}${url}`
+  if (type?.startsWith('image/')) {
+    return (
+      <a href={full} target="_blank" rel="noreferrer" className="block mt-1.5">
+        <img src={full} alt={name || 'attachment'} className="max-w-[220px] max-h-[220px] rounded-lg border border-black/10" />
+      </a>
+    )
+  }
+  return (
+    <a href={full} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 mt-1.5 text-xs underline opacity-90 hover:opacity-100">
+      <FileText size={13} /> {name || 'ملف مرفق'}
+    </a>
+  )
+}
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -322,6 +341,9 @@ export default function Admin() {
   const [activeThreadMsgs, setActiveThreadMsgs] = useState([])
   const [supportReply,  setSupportReply]      = useState('')
   const [supportSending, setSupportSending]   = useState(false)
+  const [supportFile,   setSupportFile]       = useState(null)
+  const [supportFileError, setSupportFileError] = useState('')
+  const supportFileRef = useRef(null)
 
   // "show more" limits
   const [usersLimit,    setUsersLimit]    = useState(10)
@@ -432,16 +454,34 @@ export default function Admin() {
     } catch (e) {}
   }
   const sendSupportReply = async () => {
-    if (!supportReply.trim() || !activeThreadId) return
+    if (!supportReply.trim() && !supportFile) return
+    if (!activeThreadId) return
     setSupportSending(true)
     try {
-      await axios.post(`${API}/api/v1/support/admin/threads/${activeThreadId}/messages`, { body: supportReply.trim() })
+      const form = new FormData()
+      form.append('body', supportReply.trim())
+      if (supportFile) form.append('file', supportFile)
+      await axios.post(`${API}/api/v1/support/admin/threads/${activeThreadId}/messages`, form)
       setSupportReply('')
+      setSupportFile(null)
       await openSupportThread(activeThreadId, true)
       loadSupportThreads()
     } catch (e) {
       alert('خطأ بالإرسال: ' + (e.response?.data?.detail || e.message))
     } finally { setSupportSending(false) }
+  }
+  const pickSupportFile = (f) => {
+    setSupportFileError('')
+    if (!f) { setSupportFile(null); return }
+    if (!ALLOWED_SUPPORT_ATTACHMENT_TYPES.includes(f.type)) {
+      setSupportFileError('نوع الملف غير مدعوم — صورة أو PDF فقط')
+      return
+    }
+    if (f.size > MAX_SUPPORT_ATTACHMENT_BYTES) {
+      setSupportFileError('حجم الملف أكبر من 1 ميجابايت')
+      return
+    }
+    setSupportFile(f)
   }
   const setThreadStatus = async (threadId, status) => {
     try {
@@ -954,6 +994,7 @@ export default function Admin() {
                           <div key={m.id} className={`flex ${m.sender_role==='admin' ? 'justify-start' : 'justify-end'}`}>
                             <div className={`max-w-[75%] rounded-xl px-3 py-2 text-sm ${m.sender_role==='admin' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-100'}`}>
                               {m.body}
+                              {m.attachment_url && <SupportAttachment url={m.attachment_url} name={m.attachment_name} type={m.attachment_type} />}
                               <div className={`text-[10px] mt-1 ${m.sender_role==='admin' ? 'text-blue-200' : 'text-gray-500'}`}>
                                 {m.created_at ? new Date(m.created_at).toLocaleTimeString('ar', { hour:'2-digit', minute:'2-digit' }) : ''}
                               </div>
@@ -964,18 +1005,32 @@ export default function Admin() {
                           <p className="text-center text-gray-500 text-sm py-8">لا رسائل بعد</p>
                         )}
                       </div>
-                      <div className="p-3 border-t border-gray-800 flex items-center gap-2">
-                        <input
-                          value={supportReply}
-                          onChange={e => setSupportReply(e.target.value)}
-                          onKeyDown={e => e.key === 'Enter' && !supportSending && sendSupportReply()}
-                          placeholder="اكتب ردك..."
-                          className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        />
-                        <button onClick={sendSupportReply} disabled={supportSending || !supportReply.trim()}
-                          className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white p-2.5 rounded-lg">
-                          <Send size={15}/>
-                        </button>
+                      <div className="border-t border-gray-800">
+                        {supportFile && (
+                          <div className="flex items-center gap-2 px-3 pt-2 text-xs text-gray-300">
+                            <Paperclip size={12} />
+                            <span className="truncate flex-1">{supportFile.name}</span>
+                            <button onClick={() => { setSupportFile(null); if (supportFileRef.current) supportFileRef.current.value = '' }} className="text-gray-500 hover:text-red-400"><X size={13}/></button>
+                          </div>
+                        )}
+                        {supportFileError && <p className="px-3 pt-1 text-[11px] text-red-400">{supportFileError}</p>}
+                        <div className="p-3 flex items-center gap-2">
+                          <input ref={supportFileRef} type="file" accept={ALLOWED_SUPPORT_ATTACHMENT_TYPES.join(',')} className="hidden" onChange={e => pickSupportFile(e.target.files?.[0])} />
+                          <button onClick={() => supportFileRef.current?.click()} title="إرفاق ملف" className="text-gray-400 hover:text-white p-2 flex-shrink-0">
+                            <Paperclip size={16}/>
+                          </button>
+                          <input
+                            value={supportReply}
+                            onChange={e => setSupportReply(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && !supportSending && sendSupportReply()}
+                            placeholder="اكتب ردك..."
+                            className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          />
+                          <button onClick={sendSupportReply} disabled={supportSending || (!supportReply.trim() && !supportFile)}
+                            className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white p-2.5 rounded-lg">
+                            <Send size={15}/>
+                          </button>
+                        </div>
                       </div>
                     </>
                   )}

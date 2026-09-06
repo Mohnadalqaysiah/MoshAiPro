@@ -18,6 +18,7 @@ import ConfluenceModal from '../components/ConfluenceModal'
 import AchievementBadges from '../components/AchievementBadges'
 import PWAInstallBanner from '../components/PWAInstallBanner'
 import DashboardAnnouncement from '../components/DashboardAnnouncement'
+import Sparkline from '../components/Sparkline'
 
 const T = {
   ar: {
@@ -761,6 +762,8 @@ export default function Dashboard() {
                       className="rounded-3xl q-glass overflow-hidden cursor-pointer q-glass-hover transition-colors"
                     >
                       <div className={`relative h-24 ${art}`}>
+                        {/* شمعات حقيقية من /markets/{symbol}/candles — مو رسم زخرفي */}
+                        <Sparkline symbol={market} interval={sig.timeframe || '1h'} limit={30} className="absolute inset-0 w-full h-full opacity-80" />
                         <div className="absolute top-3 start-3 flex gap-1.5">
                           <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full bg-black/40 border backdrop-blur ${recCls}`}>{recLabel}</span>
                           {sig.timeframe && <span className="text-[11px] px-2 py-1 rounded-full bg-black/40 border border-white/15 text-gray-200">{sig.timeframe}</span>}
