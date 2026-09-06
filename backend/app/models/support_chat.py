@@ -39,7 +39,10 @@ class SupportChatMessage(Base):
     thread_id   = Column(Integer, ForeignKey("support_chat_threads.id"), nullable=False, index=True)
     sender_role = Column(String, nullable=False)   # "user" | "admin"
     sender_id   = Column(Integer, ForeignKey("users.id"), nullable=True)
-    body        = Column(Text, nullable=False)
+    body        = Column(Text, nullable=True)      # نص الرسالة — قد يكون فاضي لو الرسالة مرفق فقط
+    attachment_url  = Column(String, nullable=True)   # "/static/uploads/support/xxx.png"
+    attachment_name = Column(String, nullable=True)   # اسم الملف الأصلي
+    attachment_type = Column(String, nullable=True)   # content-type (image/png, application/pdf...)
     created_at  = Column(DateTime(timezone=True), server_default=func.now())
 
     thread = relationship("SupportChatThread", back_populates="messages")

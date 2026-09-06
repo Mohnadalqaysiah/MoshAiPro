@@ -38,14 +38,29 @@ def notify_admin_telegram(message: str) -> None:
     if not admin_id or not bot_token:
         return  # Not configured — silently skip
 
+    _send(bot_token, admin_id, message)
+
+
+def notify_user_telegram(telegram_id: str, message: str) -> None:
+    """Send a Telegram message to an arbitrary linked user (e.g. support-reply alert)."""
+    if not telegram_id:
+        return
+    settings = get_settings()
+    bot_token = _resolve_bot_token(settings)
+    if not bot_token:
+        return
+    _send(bot_token, telegram_id, message)
+
+
+def _send(bot_token: str, chat_id: str, message: str) -> None:
     url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
     try:
         resp = requests.post(url, json={
-            "chat_id": admin_id,
+            "chat_id": chat_id,
             "text": message,
             "parse_mode": "HTML",
         }, timeout=8)
         if not resp.ok:
-            logger.warning(f"Admin notify failed: {resp.text}")
+            logger.warning(f"Telegram notify failed ({chat_id}): {resp.text}")
     except Exception as e:
-        logger.warning(f"Admin notify error: {e}")
+        logger.warning(f"Telegram notify error ({chat_id}): {e}")
