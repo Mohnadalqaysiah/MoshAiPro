@@ -185,6 +185,7 @@ export default function Pricing() {
   const [showCrypto, setShowCrypto] = useState(false)
   const [showSpaceremit, setShowSpaceremit] = useState(false)
   const [paidVia, setPaidVia]     = useState('usdt')
+  const [spaceremitAuthLink, setSpaceremitAuthLink] = useState('')  // fallback link if the auth popup was blocked
   const hasPrimaryMethod = cardPaymentEnabled || spaceremitEnabled
 
   // Stripe Elements — نموذج بطاقة مدمج داخل الصفحة
@@ -272,6 +273,7 @@ export default function Pricing() {
   }
 
   const onSpaceremitSuccess = async (spaceremitCode) => {
+    setSpaceremitAuthLink('')
     setPaidVia('card')
     setStep('activating')
     try {
@@ -284,6 +286,32 @@ export default function Pricing() {
       setStep('pay')
     }
   }
+
+  // (2026-09-06) نافذة التحقق الخارجية (SP_NEED_AUTH) تنفتح بـpopup بدل ما
+  // تدمّر الصفحة — هاد الهاندلر شبكة أمان لما الـpopup يُغلق بدون ما نستلم
+  // SP_SUCCESSFUL_PAYMENT صراحةً (مثلاً المستخدم قفلها يدوياً بعد ما شاف
+  // النجاح بصفحة البنك). منستنى شوي نعطي الكولباك العادي أولوية، وبعدين
+  // نتحقق من حالة الاشتراك فعلياً — الويبهوك (شبكة أمان تانية بالباك اند)
+  // ممكن يكون فعّل الاشتراك أصلاً حتى لو الكود ما وصلنا بالفرونت.
+  const onSpaceremitAuthClosed = async () => {
+    await new Promise(res => setTimeout(res, 1200))
+    if (step !== 'pay') return   // onSpaceremitSuccess تولّى الأمر أصلاً
+    setPaidVia('card')
+    setStep('activating')
+    for (let i = 0; i < 8; i++) {
+      await new Promise(res => setTimeout(res, 1200))
+      try {
+        const r = await axios.get(`${API}/api/v1/subscription/status`)
+        if (r.data.plan === selected) { setStep('done'); return }
+      } catch { /* استمر بالاستطلاع */ }
+    }
+    setError(isAr
+      ? 'إذا أكملت الدفع فعلاً، قد يستغرق التفعيل دقيقة إضافية — حدّث الصفحة بعد قليل. إذا لم يُفعَّل، تواصل مع الدعم.'
+      : "If you completed the payment, activation may take a moment — refresh shortly. If it's still not active, contact support.")
+    setStep('pay')
+  }
+
+  const onSpaceremitAuthBlocked = (link) => setSpaceremitAuthLink(link)
 
   const plan = PLANS.find(p => p.key === selected)
   const planName = isAr ? plan?.nameAr : plan?.nameEn
@@ -484,9 +512,34 @@ export default function Pricing() {
                           notes={`uid=${user?.id};plan=${selected}`}
                           onSuccess={onSpaceremitSuccess}
                           onError={(msg) => setError(msg)}
+                          onAuthClosed={onSpaceremitAuthClosed}
+                          onAuthBlocked={onSpaceremitAuthBlocked}
                           isAr={isAr}
                         />
                       </div>
+                      {spaceremitAuthLink && (
+                        <div className="bg-yellow-900/20 border border-yellow-700/40 rounded-xl p-3 mb-2 text-center space-y-2">
+                          <p className="text-xs text-yellow-300">
+                            {isAr ? 'المتصفح منع فتح نافذة التحقق تلقائياً — افتحها بالتبويب التالي، أكمل الدفع، ثم ارجع هنا واضغط "تحقّقت من الدفع":' : 'Your browser blocked the verification pop-up — open it in the next tab, complete payment, then come back and click "I\'ve paid":'}
+                          </p>
+                          <div className="flex items-center justify-center gap-2">
+                            <a
+                              href={spaceremitAuthLink}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-block bg-yellow-600 hover:bg-yellow-500 text-white text-xs font-semibold px-4 py-2 rounded-lg"
+                            >
+                              {isAr ? 'فتح صفحة التحقق' : 'Open verification page'}
+                            </a>
+                            <button
+                              onClick={onSpaceremitAuthClosed}
+                              className="inline-block bg-gray-700 hover:bg-gray-600 text-white text-xs font-semibold px-4 py-2 rounded-lg"
+                            >
+                              {isAr ? 'تحقّقت من الدفع' : "I've paid"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
                       <p className="text-xs text-gray-400 text-center mb-3">{t.spaceremitInstant}</p>
                     </div>
                   )}

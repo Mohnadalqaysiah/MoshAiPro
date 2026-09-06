@@ -24,13 +24,18 @@ function loadSpaceremitScript() {
 
 export default function SpaceremitCheckout({
   publicKey, amount, currency = 'USD', buyerName, buyerEmail, notes,
-  onSuccess, onError, isAr,
+  onSuccess, onError, onAuthClosed, onAuthBlocked, isAr,
 }) {
   const [ready, setReady] = useState(false)
-  const onSuccessRef = useRef(onSuccess)
-  const onErrorRef   = useRef(onError)
-  onSuccessRef.current = onSuccess
-  onErrorRef.current   = onError
+  const onSuccessRef     = useRef(onSuccess)
+  const onErrorRef       = useRef(onError)
+  const onAuthClosedRef  = useRef(onAuthClosed)
+  const onAuthBlockedRef = useRef(onAuthBlocked)
+  const authPollRef      = useRef(null)
+  onSuccessRef.current     = onSuccess
+  onErrorRef.current       = onError
+  onAuthClosedRef.current  = onAuthClosed
+  onAuthBlockedRef.current = onAuthBlocked
 
   useEffect(() => {
     window.SP_PUBLIC_KEY        = publicKey
@@ -45,14 +50,40 @@ export default function SpaceremitCheckout({
     window.SP_SUCCESSFUL_PAYMENT = (code) => onSuccessRef.current?.(code)
     window.SP_FAILD_PAYMENT      = () => onErrorRef.current?.(isAr ? 'فشلت عملية الدفع' : 'Payment failed')
     window.SP_RECIVED_MESSAGE    = (message) => onErrorRef.current?.(message)
-    window.SP_NEED_AUTH          = (targetAuthLink) => { if (targetAuthLink) window.location.href = targetAuthLink }
+
+    // (2026-09-06) كانت window.location.href = targetAuthLink — full-page
+    // navigation تدمّر كل الـJS الحالي، بما فيها SP_SUCCESSFUL_PAYMENT نفسها،
+    // فمهما صار بصفحة التحقق الخارجية ما في طريقة يوصلنا رد أبداً — هيك كان
+    // المستخدم يضل عالق هناك ولا يرجع لموقعنا إطلاقاً. فتح popup بيخلي هالصفحة
+    // حية فتقدر تستقبل نداء SP_SUCCESSFUL_PAYMENT العادي؛ ومراقبة إغلاق الـ
+    // popup (onAuthClosed) هي شبكة أمان إضافية تتحقق من حالة الاشتراك حتى لو
+    // ما وصل نداء صريح.
+    window.SP_NEED_AUTH = (targetAuthLink) => {
+      if (!targetAuthLink) return
+      const popup = window.open(targetAuthLink, 'spaceremit_auth', 'width=480,height=760')
+      if (!popup) {
+        onAuthBlockedRef.current?.(targetAuthLink)
+        return
+      }
+      if (authPollRef.current) clearInterval(authPollRef.current)
+      authPollRef.current = setInterval(() => {
+        if (popup.closed) {
+          clearInterval(authPollRef.current)
+          authPollRef.current = null
+          onAuthClosedRef.current?.()
+        }
+      }, 800)
+    }
 
     let cancelled = false
     loadSpaceremitScript()
       .then(() => { if (!cancelled) setReady(true) })
       .catch(() => { if (!cancelled) onErrorRef.current?.(isAr ? 'تعذّر تحميل بوابة الدفع' : 'Could not load payment gateway') })
 
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+      if (authPollRef.current) clearInterval(authPollRef.current)
+    }
   }, [publicKey, isAr])
 
   return (
