@@ -75,14 +75,10 @@ const FEATURE_ICONS = [
   <Shield    size={22} />,
   <Zap       size={22} />,
 ]
-const FEATURE_COLORS = [
-  'from-blue-500/20 to-blue-600/10 border-blue-500/20 text-blue-400',
-  'from-purple-500/20 to-purple-600/10 border-purple-500/20 text-purple-400',
-  'from-green-500/20 to-green-600/10 border-green-500/20 text-green-400',
-  'from-yellow-500/20 to-yellow-600/10 border-yellow-500/20 text-yellow-400',
-  'from-red-500/20 to-red-600/10 border-red-500/20 text-red-400',
-  'from-cyan-500/20 to-cyan-600/10 border-cyan-500/20 text-cyan-400',
-]
+// (2026-09-06) كل ميزة إلها لون أيقونة مميّز (يساعد بالتصفح البصري) بس
+// بخلفية بطاقة زجاجية موحّدة q-glass بدل تدرّج قوس قزح لكل بطاقة — "اصرف
+// جرأة اللون بمكان واحد" بدل ما تتوزّع على كل بطاقة بلون مختلف بالكامل.
+const FEATURE_ICON_COLORS = ['#22D3EE', '#FF4FD8', '#34D399', '#FBBF24', '#FB7185', '#7C3AED']
 
 export default function Landing() {
   const { user } = useAuth()
@@ -139,20 +135,22 @@ export default function Landing() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-[#070b14] text-white overflow-x-hidden" dir={t.dir}>
+    <div className="min-h-screen q-ground text-white overflow-x-hidden" dir={t.dir}>
 
       {/* ── Navbar ─────────────────────────────────────────────────────── */}
       <header className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ease-in-out
         ${scrolled
-          ? 'bg-[#070b14]/96 backdrop-blur-2xl border-b border-white/10 shadow-xl shadow-black/40'
+          ? 'q-panel backdrop-blur-2xl border-b q-line shadow-xl shadow-black/40'
           : 'bg-transparent border-b border-transparent'}
         ${hidden ? '-translate-y-full' : 'translate-y-0'}
       `}>
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2.5 group">
-            <Logo className="w-9 h-9 rounded-xl shadow-lg shadow-blue-500/30 group-hover:shadow-blue-500/50 transition-shadow" />
+            <span className="w-9 h-9 rounded-xl q-logo grid place-items-center overflow-hidden flex-shrink-0">
+              <Logo className="w-6 h-6 object-contain" />
+            </span>
             <span className="font-bold text-lg tracking-tight">
-              Qaffel <span className="text-blue-400">AI</span>
+              Qaffel <span style={{ color: 'var(--q-acc3)' }}>AI</span>
             </span>
           </Link>
 
@@ -167,7 +165,7 @@ export default function Landing() {
               <a key={href} href={href}
                 className="hover:text-white transition-colors relative group">
                 {label}
-                <span className="absolute -bottom-0.5 right-0 w-0 h-px bg-blue-400 group-hover:w-full transition-all duration-300" />
+                <span className="absolute -bottom-0.5 right-0 w-0 h-px group-hover:w-full transition-all duration-300" style={{ background: 'var(--q-acc3)' }} />
               </a>
             ))}
             <Link to="/about"    className="hover:text-white transition-colors">{t.nav.about}</Link>
@@ -187,7 +185,7 @@ export default function Landing() {
             {/* Desktop: login / register / dashboard */}
             {user ? (
               <Link to="/dashboard"
-                className="hidden md:flex items-center gap-1.5 text-sm bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white px-4 py-2 rounded-xl font-semibold transition-all shadow-md shadow-blue-500/20 hover:shadow-blue-500/40">
+                className="hidden md:flex items-center gap-1.5 text-sm q-cta text-white px-4 py-2 rounded-xl font-semibold transition-all">
                 <LayoutDashboard size={14} /> {t.nav.dashboard}
               </Link>
             ) : (
@@ -197,7 +195,7 @@ export default function Landing() {
                   {t.nav.login}
                 </Link>
                 <Link to="/register"
-                  className="hidden md:block text-sm bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white px-4 py-2 rounded-xl font-semibold transition-all shadow-md shadow-blue-500/20 hover:shadow-blue-500/40">
+                  className="hidden md:block text-sm q-cta text-white px-4 py-2 rounded-xl font-semibold transition-all">
                   {t.nav.start}
                 </Link>
               </>
@@ -216,7 +214,7 @@ export default function Landing() {
 
         {/* Mobile dropdown */}
         {mobileOpen && (
-          <div className="md:hidden border-t border-white/5 bg-[#070b14]/95 backdrop-blur-xl px-4 py-4 space-y-1">
+          <div className="md:hidden border-t q-line bg-gray-900/95 backdrop-blur-xl px-4 py-4 space-y-1">
             {[
               { href: '#features',      label: t.nav.features },
               { href: '#strategy-builder-demo', label: isAr ? 'بناء الاستراتيجيات' : 'Strategy Builder' },
@@ -235,10 +233,10 @@ export default function Landing() {
             <Link to="/referral" onClick={() => setMobileOpen(false)} className="block py-2.5 px-3 rounded-lg text-sm text-yellow-400/80 hover:text-yellow-400 hover:bg-white/5 transition-colors font-medium">
               💰 {isAr ? 'برنامج الإحالات' : 'Referral Program'}
             </Link>
-            <div className="pt-2 border-t border-white/5 space-y-2">
+            <div className="pt-2 border-t q-line space-y-2">
               {user ? (
                 <Link to="/dashboard" onClick={() => setMobileOpen(false)}
-                  className="flex items-center gap-2 w-full py-2.5 px-3 rounded-xl text-sm bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold">
+                  className="flex items-center gap-2 w-full py-2.5 px-3 rounded-xl text-sm q-cta text-white font-semibold">
                   <LayoutDashboard size={14} /> {t.nav.dashboard}
                 </Link>
               ) : (
@@ -248,7 +246,7 @@ export default function Landing() {
                     {t.nav.login}
                   </Link>
                   <Link to="/register" onClick={() => setMobileOpen(false)}
-                    className="block py-2.5 px-3 rounded-xl text-sm text-center bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-semibold">
+                    className="block py-2.5 px-3 rounded-xl text-sm text-center q-cta text-white font-semibold">
                     {t.nav.start}
                   </Link>
                 </>
@@ -261,14 +259,14 @@ export default function Landing() {
       {/* ── Hero ───────────────────────────────────────────────────────── */}
       <section className="relative pt-36 pb-24 md:pt-44 md:pb-36 px-4 overflow-hidden bg-grid">
         {/* Orbs */}
-        <div className="orb w-[500px] h-[500px] bg-blue-600/15 top-0 left-1/2 -translate-x-1/2 -translate-y-1/2" />
-        <div className="orb w-[300px] h-[300px] bg-indigo-600/10 bottom-0 right-0" />
-        <div className="orb w-[200px] h-[200px] bg-purple-600/10 top-1/3 left-0" />
+        <div className="orb w-[500px] h-[500px] bg-fuchsia-600/15 top-0 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+        <div className="orb w-[300px] h-[300px] bg-violet-600/12 bottom-0 right-0" />
+        <div className="orb w-[200px] h-[200px] bg-cyan-500/10 top-1/3 left-0" />
 
         <div className="max-w-4xl mx-auto text-center relative animate-fade-up">
           {/* Badge */}
-          <div className="inline-flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 text-blue-300 text-xs px-4 py-1.5 rounded-full mb-7 animate-pulse-glow">
-            <Zap size={11} className="fill-blue-400 text-blue-400" />
+          <div className="inline-flex items-center gap-2 q-glass text-xs px-4 py-1.5 rounded-full mb-7 animate-pulse-glow" style={{ color: 'var(--q-acc3)' }}>
+            <Zap size={11} style={{ fill: 'var(--q-acc3)' }} />
             {t.hero.badge}
           </div>
 
@@ -284,12 +282,12 @@ export default function Landing() {
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link to="/register"
-              className="group flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white px-9 py-3.5 rounded-2xl font-bold text-base transition-all shadow-xl shadow-blue-500/30 hover:shadow-blue-500/50 hover:-translate-y-0.5">
+              className="group flex items-center gap-2 q-cta text-white px-9 py-3.5 rounded-2xl font-bold text-base transition-all hover:-translate-y-0.5">
               {t.hero.cta1}
               <ChevronCta size={18} className="group-hover:translate-x-0.5 transition-transform" />
             </Link>
             <Link to="/pricing"
-              className="flex items-center gap-2 glass hover:bg-white/8 text-gray-300 hover:text-white px-8 py-3.5 rounded-2xl font-medium text-base transition-all">
+              className="flex items-center gap-2 q-glass q-glass-hover text-gray-300 hover:text-white px-8 py-3.5 rounded-2xl font-medium text-base transition-all">
               {t.hero.cta2}
               <ArrowUpRight size={16} />
             </Link>
@@ -304,7 +302,7 @@ export default function Landing() {
               { icon: <Target size={13}/>, label: isAr ? 'دقة ICT/SMC مؤسسية' : 'Institutional ICT/SMC' },
             ].map((b, i) => (
               <div key={i} className="flex items-center gap-1.5 text-xs text-gray-500">
-                <span className="text-blue-500">{b.icon}</span>
+                <span style={{ color: 'var(--q-acc2)' }}>{b.icon}</span>
                 {b.label}
               </div>
             ))}
@@ -377,26 +375,29 @@ export default function Landing() {
       <section id="features" className="py-24 px-4">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16 reveal">
-            <p className="text-blue-400 text-sm font-semibold mb-3 uppercase tracking-widest">
+            <p className="text-sm font-semibold mb-3 uppercase tracking-widest" style={{ color: 'var(--q-acc3)' }}>
               {isAr ? 'المميزات' : 'Features'}
             </p>
             <h2 className="text-3xl md:text-4xl font-black mb-4 section-title">{t.featuresTitle}</h2>
             <p className="text-gray-400 max-w-xl mx-auto leading-relaxed">{t.featuresSub}</p>
           </div>
           <div className="grid md:grid-cols-3 gap-5">
-            {t.features.map((f, i) => (
-              <div key={i}
-                className={`reveal card-hover relative bg-gradient-to-br ${FEATURE_COLORS[i]} border rounded-2xl p-6 overflow-hidden`}
-                style={{ transitionDelay: `${i * 80}ms` }}>
-                {/* shimmer */}
-                <div className="absolute inset-0 animate-shimmer opacity-40 pointer-events-none" />
-                <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${FEATURE_COLORS[i]} border flex items-center justify-center mb-4`}>
-                  {FEATURE_ICONS[i]}
+            {t.features.map((f, i) => {
+              const iconColor = FEATURE_ICON_COLORS[i % FEATURE_ICON_COLORS.length]
+              return (
+                <div key={i}
+                  className="reveal q-glass q-glass-hover relative rounded-2xl p-6 overflow-hidden transition-colors"
+                  style={{ transitionDelay: `${i * 80}ms` }}>
+                  {/* shimmer */}
+                  <div className="absolute inset-0 animate-shimmer opacity-40 pointer-events-none" />
+                  <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-4" style={{ background: `${iconColor}22`, border: `1px solid ${iconColor}40`, color: iconColor }}>
+                    {FEATURE_ICONS[i]}
+                  </div>
+                  <h3 className="font-bold text-white text-base mb-2">{f.title}</h3>
+                  <p className="text-gray-400 text-sm leading-relaxed">{f.desc}</p>
                 </div>
-                <h3 className="font-bold text-white text-base mb-2">{f.title}</h3>
-                <p className="text-gray-400 text-sm leading-relaxed">{f.desc}</p>
-              </div>
-            ))}
+              )
+            })}
           </div>
 
           {/* ربط داخلي لمقالات ICT/SMC التعليمية — نفس المفاهيم المذكورة
@@ -411,7 +412,7 @@ export default function Landing() {
               { slug: 'fvg-fair-value-gap-trading',       ar: 'شرح FVG',                    en: 'FVG Explained' },
             ].map(a => (
               <Link key={a.slug} to={isAr ? `/blog/${a.slug}` : `/en/blog/${a.slug}`}
-                className="text-sm text-blue-400 hover:text-blue-300 border border-blue-500/20 hover:border-blue-500/40 px-4 py-1.5 rounded-full transition-colors">
+                className="text-sm q-glass hover:text-white px-4 py-1.5 rounded-full transition-colors" style={{ color: 'var(--q-acc3)' }}>
                 {isAr ? a.ar : a.en}
               </Link>
             ))}

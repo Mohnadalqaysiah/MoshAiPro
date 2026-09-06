@@ -234,7 +234,7 @@ html {
 
 /* ── Gradient text ──────────────────────────────────────────────────── */
 .gradient-text {
-  background: linear-gradient(135deg, #60a5fa, #a78bfa, #34d399);
+  background: linear-gradient(135deg, var(--q-acc3, #60a5fa), var(--q-acc2, #a78bfa), var(--q-acc1, #34d399));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -266,7 +266,7 @@ html {
   display: block;
   width: 60px;
   height: 3px;
-  background: linear-gradient(90deg, #3b82f6, #a78bfa);
+  background: linear-gradient(90deg, var(--q-acc3, #3b82f6), var(--q-acc1, #a78bfa));
   border-radius: 99px;
   margin: 12px auto 0;
 }
