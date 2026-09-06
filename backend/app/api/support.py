@@ -14,12 +14,21 @@ from loguru import logger
 from app.database import get_db
 from app.config import get_settings
 from app.models.user import User
+from app.models.site_settings import SiteSettings
 from app.models.support_chat import SupportChatThread, SupportChatMessage, ChatThreadStatus
 from app.services.auth_service import get_current_user, get_admin_user
 from app.services.admin_notify import notify_admin_telegram, notify_user_telegram
 
 router = APIRouter()
 _settings = get_settings()
+
+
+def _setting(db: Session, key: str, fallback: str) -> str:
+    """DB override (SiteSettings) أولاً، وإلا القيمة الافتراضية — نفس نمط باقي الملفات."""
+    row = db.query(SiteSettings).filter(SiteSettings.key == key).first()
+    if row and row.value and row.value.strip():
+        return row.value.strip()
+    return fallback
 
 # ── Attachments (images + docs, ≤1MB) ───────────────────────────────────────
 _MAX_ATTACHMENT_BYTES = 1 * 1024 * 1024
@@ -161,20 +170,41 @@ async def send_my_message(
     )
     db.add(msg)
     thread.unread_for_admin += 1
-    thread.last_message_at  = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc)
+    thread.last_message_at  = now
     thread.status = ChatThreadStatus.OPEN
+
+    # (2026-09-06) كان كل رسالة دعم — حتى لو 5 رسائل متتالية بنفس الدقيقة —
+    # تبعث تنبيه تلغرام منفصل للأدمن، وده كان مزعج بحق. صار في حد أقصى
+    # تنبيه واحد كل N دقيقة لكل محادثة (افتراضياً 20)، وقابل للإطفاء بالكامل
+    # من إعدادات الموقع (support_telegram_notify_enabled) — الرسالة نفسها
+    # تُحفظ دايماً بغض النظر عن هالفلترة، هاي فلترة إشعار مو فلترة بيانات.
+    notify_enabled = _setting(db, "support_telegram_notify_enabled", "true").lower() == "true"
+    cooldown_min = 20
+    try:
+        cooldown_min = int(_setting(db, "support_telegram_cooldown_min", "20"))
+    except ValueError:
+        pass
+    due = notify_enabled and (
+        thread.last_admin_notify_at is None
+        or (now - thread.last_admin_notify_at).total_seconds() >= cooldown_min * 60
+    )
+    if due:
+        thread.last_admin_notify_at = now
+
     db.commit()
     db.refresh(msg)
 
-    preview = body[:200] if body else ("📎 " + (attachment.get("attachment_name") or "مرفق"))
-    admin_link = f"{_frontend_url()}/admin?tab=support"
-    background_tasks.add_task(
-        notify_admin_telegram,
-        f"💬 <b>رسالة دعم جديدة</b>\n"
-        f"من: {user.full_name or user.email}\n"
-        f"{preview}\n\n"
-        f"<a href=\"{admin_link}\">فتح لوحة الدعم</a>",
-    )
+    if due:
+        preview = body[:200] if body else ("📎 " + (attachment.get("attachment_name") or "مرفق"))
+        admin_link = f"{_frontend_url()}/admin?tab=support"
+        background_tasks.add_task(
+            notify_admin_telegram,
+            f"💬 <b>رسالة دعم جديدة</b>\n"
+            f"من: {user.full_name or user.email}\n"
+            f"{preview}\n\n"
+            f"<a href=\"{admin_link}\">فتح لوحة الدعم</a>",
+        )
     return _msg_out(msg)
 
 

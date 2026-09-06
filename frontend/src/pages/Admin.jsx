@@ -58,6 +58,13 @@ function UserModal({ user: u, onClose, onUpdate }) {
   const [renewPlan, setRenewPlan]       = useState('monthly')
   const [renewReason, setRenewReason]   = useState('')
   const [renewNotify, setRenewNotify]   = useState(true)
+  const PLAN_PRICE = { weekly: 7, monthly: 30 }
+  const [renewAmount, setRenewAmount]   = useState(PLAN_PRICE.monthly)
+  const [renewAmountTouched, setRenewAmountTouched] = useState(false)
+  const setRenewPlanAndPrice = (val) => {
+    setRenewPlan(val)
+    if (!renewAmountTouched) setRenewAmount(PLAN_PRICE[val] ?? 0)
+  }
 
   const renewBaseDate = u.subscription_ends_at ? new Date(u.subscription_ends_at) : new Date()
   const renewBase = renewBaseDate > new Date() ? renewBaseDate : new Date()
@@ -72,8 +79,9 @@ function UserModal({ user: u, onClose, onUpdate }) {
       } else if (action === 'renew') {
         const res = await axios.post(`${API}/api/v1/admin/users/${u.id}/renew`, {
           days: renewDays, plan: renewPlan, reason: renewReason, notify_telegram: renewNotify,
+          amount_usd: renewAmount,
         })
-        setMsg({ type:'ok', text:`✅ تم التجديد حتى ${res.data.new_end?.slice(0,10)} | إشعار: ${res.data.notified?'أُرسل':'لا Telegram'}` })
+        setMsg({ type:'ok', text:`✅ تم التجديد حتى ${res.data.new_end?.slice(0,10)} | إشعار: ${res.data.notified?'أُرسل':'لا Telegram'} | مسجّل بالمدفوعات: $${renewAmount}` })
       } else if (action === 'extend') {
         await axios.put(`${API}/api/v1/admin/users/${u.id}`, { extra_days: extraDays })
         setMsg({ type:'ok', text:`تم تمديد الاشتراك ${extraDays} يوم` })
@@ -176,7 +184,7 @@ function UserModal({ user: u, onClose, onUpdate }) {
                     {d} يوم
                   </button>
                 ))}
-                <input type="number" min="1" max="365" value={renewDays}
+                <input type="number" min="1" max="365" lang="en" value={renewDays}
                   onChange={e => setRenewDays(Number(e.target.value) || 1)}
                   className="w-20 bg-gray-900 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 text-center" dir="ltr"/>
               </div>
@@ -185,12 +193,18 @@ function UserModal({ user: u, onClose, onUpdate }) {
               <label className="text-[11px] text-gray-400 block mb-1.5">الباقة</label>
               <div className="flex gap-1.5 mb-3">
                 {[['weekly','أسبوعي'], ['monthly','شهري']].map(([val, label]) => (
-                  <button key={val} type="button" onClick={() => setRenewPlan(val)}
+                  <button key={val} type="button" onClick={() => setRenewPlanAndPrice(val)}
                     className={`flex-1 text-xs px-3 py-2 rounded-lg border transition font-medium ${renewPlan===val ? 'border-emerald-500 bg-emerald-900/40 text-emerald-300' : 'border-gray-700 text-gray-400 hover:border-gray-500 hover:text-white'}`}>
                     {label}
                   </button>
                 ))}
               </div>
+
+              {/* المبلغ المستلم — يُسجَّل بتبويب المدفوعات للتوثيق */}
+              <label className="text-[11px] text-gray-400 block mb-1.5">المبلغ المستلم فعلياً ($)</label>
+              <input type="number" min="0" step="0.01" lang="en" value={renewAmount}
+                onChange={e => { setRenewAmountTouched(true); setRenewAmount(Number(e.target.value) || 0) }}
+                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 mb-3 text-center" dir="ltr"/>
 
               {/* السبب */}
               <label className="text-[11px] text-gray-400 block mb-1.5">سبب المنح (يظهر للعميل بإشعار تلغرام)</label>
@@ -207,9 +221,15 @@ function UserModal({ user: u, onClose, onUpdate }) {
                 className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-emerald-500 mb-3"/>
 
               {/* ملخص حي قبل التنفيذ */}
-              <div className="flex items-center justify-between bg-black/20 rounded-lg px-3 py-2 mb-3 text-[11px]">
-                <span className="text-gray-400">سينتهي الاشتراك الجديد بتاريخ</span>
-                <span className="text-emerald-300 font-mono font-semibold" dir="ltr">{renewNewEnd.toISOString().slice(0,10)}</span>
+              <div className="bg-black/20 rounded-lg px-3 py-2 mb-3 text-[11px] space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-400">سينتهي الاشتراك الجديد بتاريخ</span>
+                  <span className="text-emerald-300 font-mono font-semibold" dir="ltr">{renewNewEnd.toISOString().slice(0,10)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-400">سيُسجَّل بتبويب المدفوعات كـ</span>
+                  <span className="text-emerald-300 font-mono font-semibold" dir="ltr">${renewAmount} · manual</span>
+                </div>
               </div>
 
               <div className="flex items-center justify-between">
@@ -230,7 +250,7 @@ function UserModal({ user: u, onClose, onUpdate }) {
             <div>
               <p className="text-xs text-gray-400 mb-2">تمديد بسيط</p>
               <div className="flex gap-2">
-                <input type="number" min="1" max="365" value={extraDays}
+                <input type="number" min="1" max="365" lang="en" value={extraDays}
                   onChange={e => setExtraDays(Number(e.target.value))}
                   className="w-20 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500 text-center"
                   dir="ltr" />
@@ -1095,10 +1115,19 @@ export default function Admin() {
                       <div className="flex-1 min-w-0">
                         <div className="font-medium text-white text-sm">{p.user_name || p.user_email}</div>
                         <div className="text-xs text-gray-500 mb-1">{p.user_email}</div>
-                        <div className="text-xs text-gray-400">
-                          {p.plan==='weekly'?'أسبوعي':'شهري'} · <span className="text-green-400 font-bold">${p.amount_usd} USDT</span> · {p.network}
+                        <div className="text-xs text-gray-400 flex items-center gap-1.5 flex-wrap">
+                          {p.plan==='weekly'?'أسبوعي':'شهري'} · <span className="text-green-400 font-bold">${p.amount_usd}</span> ·
+                          {p.provider === 'manual' ? (
+                            <span className="inline-flex items-center gap-1 text-emerald-300 bg-emerald-900/30 border border-emerald-700/40 px-2 py-0.5 rounded-full text-[10px] font-semibold">
+                              <Gift size={10}/> منح يدوي — خارج المنصة
+                            </span>
+                          ) : (
+                            <span>{p.network}</span>
+                          )}
                         </div>
-                        <div className="text-xs font-mono text-blue-400 mt-1 break-all">{p.tx_id}</div>
+                        {p.provider !== 'manual' && (
+                          <div className="text-xs font-mono text-blue-400 mt-1 break-all">{p.tx_id}</div>
+                        )}
                         <div className="text-xs text-gray-400 mt-1">{p.created_at?.slice(0,16)}</div>
                         {p.admin_note && <div className="text-xs text-yellow-400 mt-1">ملاحظة: {p.admin_note}</div>}
                       </div>
@@ -2494,6 +2523,42 @@ export default function Admin() {
                       </button>
                     </div>
                   ))}
+
+                  {/* تنبيهات تلغرام — الدعم الفني */}
+                  <div className="mt-4 bg-gray-900 border border-gray-800 rounded-xl p-4 space-y-3">
+                    <h3 className="text-sm font-semibold text-gray-300 flex items-center gap-2">
+                      <MessageCircle size={13}/> تنبيهات تلغرام — الدعم الفني
+                    </h3>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <label className="block text-sm text-gray-300 font-medium">تفعيل التنبيه</label>
+                        <p className="text-xs text-gray-500">إرسال تنبيه تلغرام لك عند وصول رسالة دعم جديدة</p>
+                      </div>
+                      <button
+                        onClick={() => saveSetting('support_telegram_notify_enabled', (siteSettings['support_telegram_notify_enabled']?.value ?? 'true') === 'true' ? 'false' : 'true')}
+                        disabled={settingSaving === 'support_telegram_notify_enabled'}
+                        className={`w-11 h-6 rounded-full flex items-center px-0.5 transition-colors flex-shrink-0 ${
+                          (siteSettings['support_telegram_notify_enabled']?.value ?? 'true') === 'true'
+                            ? 'bg-green-600 justify-end' : 'bg-gray-700 justify-start'
+                        }`}
+                      >
+                        <span className="w-5 h-5 rounded-full bg-white" />
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-400 mb-1">أقل فاصل بين تنبيهين لنفس المحادثة (دقيقة) — يمنع إزعاج التنبيه عن كل رسالة</p>
+                        <input type="number" min="0" lang="en" dir="ltr"
+                          value={settingEdits['support_telegram_cooldown_min'] ?? (siteSettings['support_telegram_cooldown_min']?.value || '20')}
+                          onChange={e => setSettingEdits(s => ({...s, support_telegram_cooldown_min: e.target.value}))}
+                          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                      </div>
+                      <button disabled={settingSaving === 'support_telegram_cooldown_min'} onClick={() => saveSetting('support_telegram_cooldown_min')}
+                        className="mt-4 flex items-center bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-2.5 py-2 rounded-lg transition">
+                        {settingSaving === 'support_telegram_cooldown_min' ? <RefreshCw size={12} className="animate-spin"/> : <CheckCircle size={12}/>}
+                      </button>
+                    </div>
+                  </div>
 
                   {/* Bulk Reset Trial */}
                   <div className="mt-4 bg-yellow-900/20 border border-yellow-700/40 rounded-xl p-4 space-y-3">

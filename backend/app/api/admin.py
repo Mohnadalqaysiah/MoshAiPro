@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 from loguru import logger
 import requests
+import uuid
 from app.services.email_service import send_email as _send_email_svc
 
 from app.database import get_db
@@ -335,6 +336,7 @@ class RenewUserIn(BaseModel):
     plan:             str    = "monthly"   # monthly | weekly
     reason:           str    = ""
     notify_telegram:  bool   = True
+    amount_usd:       Optional[float] = None   # دفعة خارج المنصة — يظهر بتبويب المدفوعات للتوثيق
 
 
 class BulkRenewIn(BaseModel):
@@ -343,6 +345,31 @@ class BulkRenewIn(BaseModel):
     plan:            str  = "monthly"
     reason:          str  = ""
     notify_telegram: bool = True
+    amount_usd:      Optional[float] = None
+
+
+def _record_manual_payment(db: Session, user: User, plan: str, amount_usd: Optional[float], reason: str, admin: User) -> None:
+    """يسجّل منح الاشتراك اليدوي كصف Payment (provider=manual, معتمد فوراً) عشان يظهر
+    بتبويب المدفوعات — نفس مبدأ باقي مزودي الدفع (usdt/stripe/spaceremit)، بس بدون
+    تحقق تلقائي لأنه الأدمن هو يلي أكّد استلام الدفعة يدوياً."""
+    from app.api.subscription import PLANS
+    try:
+        plan_enum = PaymentPlan(plan)
+    except ValueError:
+        plan_enum = PaymentPlan.MONTHLY
+    amount = amount_usd if amount_usd is not None else PLANS.get(plan, {}).get("price_usd", 0)
+    note = f"منح يدوي بواسطة {admin.email}" + (f" — {reason}" if reason else "")
+    db.add(Payment(
+        user_id=user.id,
+        plan=plan_enum,
+        amount_usd=amount,
+        network="manual",
+        tx_id=f"manual-{uuid.uuid4().hex[:12]}",
+        provider="manual",
+        status=PaymentStatus.APPROVED,
+        admin_note=note,
+        approved_by=admin.id,
+    ))
 
 
 @router.post("/users/{user_id}/renew")
@@ -370,6 +397,7 @@ def renew_user(
     user.plan                = plan_enum
     user.is_active           = True
     user.subscription_ends_at = new_end
+    _record_manual_payment(db, user, data.plan, data.amount_usd, data.reason, admin)
     db.commit()
 
     logger.info(
@@ -436,6 +464,7 @@ def bulk_renew(
         user.plan                = plan_enum
         user.is_active           = True
         user.subscription_ends_at = new_end
+        _record_manual_payment(db, user, data.plan, data.amount_usd, data.reason, admin)
         renewed += 1
 
         if data.notify_telegram and user.telegram_id:

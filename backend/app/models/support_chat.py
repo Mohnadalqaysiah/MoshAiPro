@@ -23,6 +23,7 @@ class SupportChatThread(Base):
     unread_for_admin = Column(Integer, default=0, nullable=False)   # user messages not yet seen by admin
     unread_for_user  = Column(Integer, default=0, nullable=False)   # admin messages not yet seen by user
     last_message_at  = Column(DateTime(timezone=True), server_default=func.now())
+    last_admin_notify_at = Column(DateTime(timezone=True), nullable=True)   # آخر مرة انبعث فيها تنبيه تلغرام للأدمن (cooldown)
     created_at       = Column(DateTime(timezone=True), server_default=func.now())
 
     user     = relationship("User", back_populates="support_chat_thread")
