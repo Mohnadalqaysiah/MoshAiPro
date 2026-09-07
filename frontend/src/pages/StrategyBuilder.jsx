@@ -713,6 +713,22 @@ export default function StrategyBuilder() {
         </div>
       </header>
 
+      {/* (2026-09-07) أزرار الحفظ كانت موجودة فقط داخل تبويب "البناء" — أي
+          تعديل بتبويب تاني (متل رفع/خفض الحد الأدنى بـ"المنطق والسكور")
+          ما كان إله زر حفظ ظاهر إطلاقاً، فيضيع عند تبديل التبويب أو الريفرش
+          بدون أي تنبيه. شريط حفظ ثابت يظهر بكل تبويب ما عدا البناء (اللي
+          عنده شريطه الكامل أصلاً). */}
+      {activeTab !== "build" && (
+        <div className="max-w-[1500px] mx-auto px-4 md:px-8 pt-4 flex items-center justify-end gap-2">
+          <button disabled={saving} onClick={() => saveStrategy(false)} style={{ background: C.surfaceHi, border: `1px solid ${C.border}`, color: C.text, opacity: saving ? 0.6 : 1 }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12.5px]">
+            {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} حفظ كمسودة
+          </button>
+          <button disabled={saving} onClick={() => saveStrategy(true)} style={{ background: C.gold, color: "#1A1200", fontWeight: 600, opacity: saving ? 0.6 : 1 }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12.5px]">
+            {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} حفظ وتفعيل
+          </button>
+        </div>
+      )}
+
       <div className="max-w-[1500px] mx-auto px-4 md:px-8 py-5">
         {/* ============ VISUAL FLOW RIBBON ============ */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-4 mb-1 scroll-thin">
