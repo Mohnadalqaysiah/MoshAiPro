@@ -6,6 +6,15 @@ import { useLang } from '../contexts/LangContext'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
+// (2026-09-07) نفس جدول "أقصى عمر قبل اعتبار الإشارة قديمة جداً" المستخدم
+// فعلياً بمنطق البث الحقيقي (backend/app/api/bot.py::_MAX_SIGNAL_AGE) —
+// مو رقم جديد مخترع. قبل هذا التعديل كانت الودجت تعرض أي إشارة عمرها لغاية
+// 12 ساعة كـ"أفضل فرصة الآن"، بينما نفس الإشارة يعتبرها النظام "قديمة جداً
+// للبث" بعد 20 دقيقة بس (لإطار 15m) — تناقض داخلي حقيقي. توحيد المعيار هون
+// يحل التناقض بدون أي لمسة لمنطق التوليد/البث/تتبع النتائج نفسه.
+const MAX_AGE_MIN = { '1m': 5, '5m': 10, '15m': 20, '30m': 30, '1h': 60, '4h': 180, '1d': 720 }
+const maxAgeForTf = (tf) => MAX_AGE_MIN[(tf || '1h').toLowerCase()] ?? 60
+
 const T = {
   ar: {
     title: 'أفضل فرصة الآن',
@@ -41,15 +50,15 @@ export default function BestOpportunityWidget() {
 
       const now = Date.now()
       const active = signals.filter(s => {
-        const rec  = s.recommendation || s.signal_type || ''
-        const conf = s.ai_confidence_score || s.ai_confidence || 0
-        const rr   = s.risk_reward_ratio || 0
-        const age  = s.created_at ? (now - new Date(s.created_at).getTime()) / 3600000 : 99
+        const rec     = s.recommendation || s.signal_type || ''
+        const conf    = s.ai_confidence_score || s.ai_confidence || 0
+        const rr      = s.risk_reward_ratio || 0
+        const ageMin  = s.created_at ? (now - new Date(s.created_at).getTime()) / 60000 : 9999
         return (
           ['BUY', 'SELL'].includes(rec) &&
           conf >= 55 && conf <= 95 &&
           (s.locked || rr >= 1.3) &&
-          age <= 12   // client-side age guard (backup)
+          ageMin <= maxAgeForTf(s.timeframe)   // إشارة "حالية" فعلاً حسب إطارها، مو 12 ساعة موحّدة للكل
         )
       })
 
