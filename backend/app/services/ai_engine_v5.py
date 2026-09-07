@@ -2321,6 +2321,12 @@ class MoshAIEngineV5:
         tp_dist = abs(tp1 - entry)
         if sl_dist <= 0:
             return self._hard_reject(analysis, "ZERO_SL_DISTANCE")
+        # Rule 7b: Metals-only SL distance cap (XAUUSD/XAGUSD).
+        # Backtest: rejects 7 historical decisions, all 7 were losers (0W/7L),
+        # zero winners sacrificed; expectancy/decision improved from -15.51 to
+        # -5.82. Hard reject only — never clamp/round the SL to fit the cap.
+        if symbol.upper() in ("XAUUSD", "XAGUSD") and (sl_dist / entry) > 0.005:
+            return self._hard_reject(analysis, "SL_DISTANCE_EXCEEDS_CAP")
         rr = round(tp_dist / sl_dist, 2)
         levels["risk_reward"] = rr
         analysis["risk_reward_ratio"] = rr
