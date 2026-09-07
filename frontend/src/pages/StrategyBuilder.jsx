@@ -563,6 +563,18 @@ export default function StrategyBuilder() {
     }
   };
 
+  // (2026-09-07) فتح تبويب "المراقبة الحية" مباشرة (بدون المرور بـ"تحرير" من
+  // تبويب المحفوظة أولًا) كان يعرض حالة فارغة مضلّلة — "INACTIVE / احفظ
+  // الاستراتيجية أولًا" — رغم إن الاستراتيجية فعليًا محفوظة وACTIVE وتُفحص
+  // حقيقياً بالخلفية. السبب: currentStrategyId يبدأ null ولا شي كان يحمّله
+  // تلقائياً. لو عندك استراتيجية واحدة محفوظة فقط (الحالة الشائعة)، نحمّلها
+  // تلقائياً؛ لو أكتر من وحدة، نعرض قائمة اختيار بدل التخمين.
+  useEffect(() => {
+    if (activeTab !== "monitoring" || currentStrategyId || savedLoading) return;
+    if (saved.length === 1) loadStrategy(saved[0], "monitoring");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, currentStrategyId, savedLoading, saved]);
+
   const duplicateSaved = async (rec) => {
     if (!requirePaid()) return;
     try {
@@ -1199,7 +1211,35 @@ export default function StrategyBuilder() {
         )}
 
         {/* ============ TAB: MONITORING ============ */}
-        {activeTab === "monitoring" && (
+        {activeTab === "monitoring" && !currentStrategyId && !savedLoading && saved.length > 1 && (
+          // (2026-09-07) أكتر من استراتيجية محفوظة — ما نقدر نخمّن أي وحدة
+          // يقصدها المستخدم، فنعرض قائمة اختيار صريحة بدل تحميل عشوائي.
+          <div style={{ background: C.surface, border: `1px dashed ${C.border}` }} className="rounded-2xl p-6 flex flex-col gap-3">
+            <div style={{ color: C.sub, fontSize: 13 }} className="flex items-center gap-2">
+              <MonitorDot size={16} /> عندك أكثر من استراتيجية محفوظة — اختر وحدة لعرض مراقبتها الحية
+            </div>
+            <div className="flex flex-col gap-2">
+              {saved.map((r) => (
+                <button
+                  key={r.id}
+                  onClick={() => loadStrategy(r, "monitoring")}
+                  style={{ background: C.surfaceHi, border: `1px solid ${C.borderSoft}` }}
+                  className="rounded-lg px-3.5 py-2.5 flex items-center justify-between text-start hover:opacity-80 transition-opacity"
+                >
+                  <span style={{ fontFamily: FD, fontSize: 13 }}>{r.name}</span>
+                  <Pill
+                    color={r.status === "ACTIVE" ? C.teal : C.muted}
+                    bg={r.status === "ACTIVE" ? C.tealSoft : "transparent"}
+                    border={r.status === "ACTIVE" ? C.teal : C.border}
+                  >
+                    {r.status}
+                  </Pill>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {activeTab === "monitoring" && !(!currentStrategyId && !savedLoading && saved.length > 1) && (
           <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-5">
             <div style={{ background: C.surface, border: `1px solid ${C.border}` }} className="rounded-2xl p-5 h-fit">
               <div className="flex items-center gap-2 mb-3">
@@ -1225,7 +1265,9 @@ export default function StrategyBuilder() {
                 <Power size={14} /> {monitor.active ? "إيقاف المراقبة" : "بدء المراقبة"}
               </button>
               {!currentStrategyId && (
-                <p style={{ color: C.muted, fontSize: 10.5 }} className="text-center mt-2">احفظ الاستراتيجية أولًا</p>
+                <p style={{ color: C.muted, fontSize: 10.5 }} className="text-center mt-2">
+                  {savedLoading ? "جاري التحميل..." : "احفظ الاستراتيجية أولًا"}
+                </p>
               )}
             </div>
 
