@@ -7,7 +7,7 @@ import useBreadcrumbSchema from '../hooks/useBreadcrumbSchema'
 const T = {
   ar: {
     h1: 'الشروط والأحكام',
-    updated: 'آخر تحديث: مارس 2026',
+    updated: 'آخر تحديث: سبتمبر 2026',
     sections: [
       {
         h: '1. قبول الشروط',
@@ -19,9 +19,16 @@ const T = {
         ul: ['التوصيات لا تضمن الربح أو تجنّب الخسارة', 'المستخدم مسؤول كلياً عن قراراته الاستثمارية', 'يُنصح باستشارة مستشار مالي مرخص قبل التداول'],
       },
       {
-        h: '3. الاشتراكات والمدفوعات',
-        p: 'تُقدَّم الخدمة بثلاث خطط: تجريبية مجانية، أسبوعية، وشهرية. جميع المدفوعات غير قابلة للاسترداد إلا في حالات استثنائية يُبتّ فيها من قِبَل الإدارة.',
-        ul: ['الاشتراك غير ملزم وينتهي تلقائياً بنهاية المدة (أسبوع أو شهر) دون أي تجديد أو خصم إضافي', 'لإكمال الاستخدام بعد الانتهاء، يشترك المستخدم يدوياً من جديد', 'الأسعار قابلة للتغيير مع إشعار مسبق', 'تُطبَّق حدود استخدام يومية حسب الخطة'],
+        h: '3. الاشتراكات والمدفوعات وسياسة الاسترداد',
+        p: <>تُقدَّم الخدمة بثلاث خطط: تجريبية مجانية لمدة <strong>أسبوع كامل</strong>، أسبوعية، وشهرية. تمنحك المنصة فترة تجربة مجانية كاملة لاختبار الخدمة والتأكد من ملاءمتها لاحتياجاتك <strong>قبل</strong> أي اشتراك مدفوع — ولذلك فإن جميع المبالغ المدفوعة بعد الاشتراك في أي خطة مدفوعة <strong>غير قابلة للاسترداد نهائياً</strong>، ولا تضمن المنصة استرداد أي مبلغ مدفوع مهما كانت الأسباب.</>,
+        ul: [
+          'استخدم فترة التجربة المجانية (أسبوع كامل) للتأكد من ملاءمة الخدمة لك قبل الدفع',
+          'بمجرد إتمام الدفع لأي باقة (أسبوعية أو شهرية)، لا يحق للمستخدم استرداد المبلغ المدفوع تحت أي ظرف',
+          'الاشتراك غير ملزم وينتهي تلقائياً بنهاية المدة (أسبوع أو شهر) دون أي تجديد أو خصم إضافي',
+          'لإكمال الاستخدام بعد الانتهاء، يشترك المستخدم يدوياً من جديد',
+          'الأسعار قابلة للتغيير مع إشعار مسبق',
+          'تُطبَّق حدود استخدام يومية حسب الخطة',
+        ],
       },
       {
         h: '4. سلوك المستخدم',
@@ -42,7 +49,7 @@ const T = {
   },
   en: {
     h1: 'Terms & Conditions',
-    updated: 'Last updated: March 2026',
+    updated: 'Last updated: September 2026',
     sections: [
       {
         h: '1. Acceptance of Terms',
@@ -54,9 +61,16 @@ const T = {
         ul: ['Recommendations do not guarantee profit or protection from loss', 'The user is fully responsible for their investment decisions', 'It is recommended to consult a licensed financial advisor before trading'],
       },
       {
-        h: '3. Subscriptions & Payments',
-        p: 'The service is offered in three plans: a free trial, weekly, and monthly. All payments are non-refundable except in exceptional cases decided by management.',
-        ul: ['Subscriptions are non-binding and expire automatically at the end of the period (week or month) with no renewal or extra charge', 'To keep using the service afterward, the user subscribes again manually', 'Prices are subject to change with prior notice', 'Daily usage limits apply based on the plan'],
+        h: '3. Subscriptions, Payments & Refund Policy',
+        p: <>The service is offered in three plans: a <strong>full one-week</strong> free trial, weekly, and monthly. The platform gives you a complete free trial period to test the service and confirm it fits your needs <strong>before</strong> any paid subscription — therefore, all amounts paid after subscribing to any paid plan are <strong>final and non-refundable</strong>, and the platform does not guarantee a refund of any paid amount for any reason.</>,
+        ul: [
+          'Use the free trial (a full week) to confirm the service fits your needs before paying',
+          'Once payment for any plan (weekly or monthly) is completed, the user is not entitled to a refund under any circumstances',
+          'Subscriptions are non-binding and expire automatically at the end of the period (week or month) with no renewal or extra charge',
+          'To keep using the service afterward, the user subscribes again manually',
+          'Prices are subject to change with prior notice',
+          'Daily usage limits apply based on the plan',
+        ],
       },
       {
         h: '4. User Conduct',
