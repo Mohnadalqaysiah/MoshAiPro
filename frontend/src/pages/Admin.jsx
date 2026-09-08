@@ -9,7 +9,7 @@ import {
   DollarSign, Activity, RefreshCw, Calendar,
   X, ExternalLink, Shield, AlertTriangle, Settings, Mail, Upload, Signal, Send,
   FileText, TrendingUp as TrendUp, Bell, Sparkles,
-  ShieldCheck, UserCog, MessageCircle, UserMinus, Paperclip, Gift
+  ShieldCheck, UserCog, MessageCircle, UserMinus, Paperclip, Gift, ChevronRight, Menu
 } from 'lucide-react'
 
 const MAX_SUPPORT_ATTACHMENT_BYTES = 1 * 1024 * 1024
@@ -318,6 +318,7 @@ export default function Admin() {
   const { user } = useAuth()
   const navigate  = useNavigate()
   const [tab, setTab]         = useState('stats')
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [stats, setStats]     = useState(null)
   const [users, setUsers]     = useState([])
   const [onlineCount, setOnlineCount] = useState(0)
@@ -723,10 +724,29 @@ export default function Admin() {
         />
       )}
 
+      {/* (2026-09-08) شريط علوي + هامبرجر — يظهر فقط على الموبايل، الشريط
+          الجانبي كان ثابت العرض (208px) دايماً ظاهر بدون أي انطواء، فياكل
+          معظم عرض شاشة الهاتف. */}
+      <div className="md:hidden sticky top-0 z-30 flex items-center gap-3 px-4 py-3 bg-gray-900 border-b border-gray-800">
+        <button onClick={() => setMobileNavOpen(true)} className="text-gray-300 hover:text-white p-1">
+          <Menu size={20}/>
+        </button>
+        <span className="text-sm font-semibold">{TABS.find(t => t.key === tab)?.label || 'لوحة الإدارة'}</span>
+        {supportUnread > 0 && (
+          <span className="mr-auto bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">{supportUnread}</span>
+        )}
+      </div>
+
+      {mobileNavOpen && (
+        <div className="md:hidden fixed inset-0 z-40 bg-black/60" onClick={() => setMobileNavOpen(false)} />
+      )}
+
       <div className="flex">
-        {/* Sidebar */}
-        <aside className="w-52 min-h-screen bg-gray-900 border-l border-gray-800 flex flex-col flex-shrink-0">
-          <div className="p-4 border-b border-gray-800">
+        {/* Sidebar — ثابت بالديسكتوب، درج منزلق فوق المحتوى بالموبايل */}
+        <aside className={`w-64 md:w-52 min-h-screen bg-gray-900 border-l border-gray-800 flex flex-col flex-shrink-0
+          fixed md:static inset-y-0 right-0 z-50 transition-transform duration-200
+          ${mobileNavOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0'}`}>
+          <div className="p-4 border-b border-gray-800 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Logo className="w-8 h-8 rounded-lg" />
               <div>
@@ -734,10 +754,13 @@ export default function Admin() {
                 <div className="text-xs text-gray-400">Qaffel AI</div>
               </div>
             </div>
+            <button onClick={() => setMobileNavOpen(false)} className="md:hidden text-gray-400 hover:text-white p-1">
+              <X size={18}/>
+            </button>
           </div>
-          <nav className="flex-1 p-3 space-y-1">
+          <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
             {TABS.map(t => (
-              <button key={t.key} onClick={() => setTab(t.key)}
+              <button key={t.key} onClick={() => { setTab(t.key); setMobileNavOpen(false) }}
                 className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${tab===t.key?'bg-blue-600 text-white':'text-gray-400 hover:text-white hover:bg-gray-800'}`}>
                 <t.icon size={16}/>{t.label}
                 {t.key === 'support' && supportUnread > 0 && (
@@ -758,7 +781,7 @@ export default function Admin() {
         </aside>
 
         {/* Main */}
-        <main className="flex-1 p-6 overflow-x-auto">
+        <main className="flex-1 p-4 md:p-6 overflow-x-auto max-w-full">
 
           {/* ── Stats ── */}
           {tab === 'stats' && stats && (
@@ -1016,9 +1039,12 @@ export default function Admin() {
               <h1 className="text-xl font-bold mb-1">الدعم — الشات الفوري</h1>
               <p className="text-sm text-gray-500 mb-5">محادثات المستخدمين المباشرة مع الإدارة</p>
 
-              <div className="flex gap-4 h-[70vh]">
+              {/* (2026-09-08) بموبايل: لوحة واحدة تظهر بكل مرة (القائمة أو
+                  المحادثة) — قبل هيك كان الاثنين جنب بعض بعرض ثابت وينضغطوا
+                  ببعض على شاشة صغيرة. بديسكتوب (md+) نفس التخطيط القديم. */}
+              <div className="flex flex-col md:flex-row gap-4 h-[75vh] md:h-[70vh]">
                 {/* Threads list */}
-                <div className="w-72 flex-shrink-0 bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden flex flex-col">
+                <div className={`w-full md:w-72 flex-shrink-0 bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden flex-col ${activeThreadId ? 'hidden md:flex' : 'flex'}`}>
                   <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
                     <h2 className="font-semibold text-sm">المحادثات ({supportThreads.length})</h2>
                     {supportLoading && <RefreshCw size={12} className="animate-spin text-gray-500"/>}
@@ -1046,21 +1072,26 @@ export default function Admin() {
                 </div>
 
                 {/* Active thread */}
-                <div className="flex-1 bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden flex flex-col">
+                <div className={`flex-1 bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden flex-col ${activeThreadId ? 'flex' : 'hidden md:flex'}`}>
                   {!activeThreadId ? (
                     <div className="flex-1 flex items-center justify-center text-gray-500 text-sm">
                       <MessageCircle size={20} className="ml-2"/> اختر محادثة من القائمة
                     </div>
                   ) : (
                     <>
-                      <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
-                        <div>
-                          <div className="text-sm font-semibold text-white">{activeThreadInfo?.user_name || activeThreadInfo?.user_email || `#${activeThreadId}`}</div>
-                          <div className="text-xs text-gray-500 font-mono">{activeThreadInfo?.user_email}</div>
+                      <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <button onClick={() => setActiveThreadId(null)} className="md:hidden text-gray-400 hover:text-white p-1 -ml-1 flex-shrink-0" title="رجوع للمحادثات">
+                            <ChevronRight size={18}/>
+                          </button>
+                          <div className="min-w-0">
+                            <div className="text-sm font-semibold text-white truncate">{activeThreadInfo?.user_name || activeThreadInfo?.user_email || `#${activeThreadId}`}</div>
+                            <div className="text-xs text-gray-500 font-mono truncate">{activeThreadInfo?.user_email}</div>
+                          </div>
                         </div>
                         <button
                           onClick={() => setThreadStatus(activeThreadId, activeThreadInfo?.status === 'open' ? 'closed' : 'open')}
-                          className="text-xs px-3 py-1.5 rounded-lg border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 transition">
+                          className="text-xs px-3 py-1.5 rounded-lg border border-gray-700 text-gray-400 hover:text-white hover:border-gray-500 transition flex-shrink-0">
                           {activeThreadInfo?.status === 'open' ? 'إغلاق المحادثة' : 'إعادة فتح'}
                         </button>
                       </div>

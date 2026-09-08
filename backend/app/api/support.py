@@ -196,13 +196,14 @@ async def send_my_message(
     db.refresh(msg)
 
     if due:
-        preview = body[:200] if body else ("📎 " + (attachment.get("attachment_name") or "مرفق"))
+        # (2026-09-08) بطلب صريح: تنبيه الأدمن على تلغرام يبقى مجرد إشعار
+        # "وصلتك رسالة" — بدون أي معاينة لمحتوى الرسالة نفسه. المحتوى
+        # يُقرأ من لوحة الدعم مباشرة عبر الرابط تحت.
         admin_link = f"{_frontend_url()}/admin?tab=support"
         background_tasks.add_task(
             notify_admin_telegram,
             f"💬 <b>رسالة دعم جديدة</b>\n"
-            f"من: {user.full_name or user.email}\n"
-            f"{preview}\n\n"
+            f"من: {user.full_name or user.email}\n\n"
             f"<a href=\"{admin_link}\">فتح لوحة الدعم</a>",
         )
     return _msg_out(msg)

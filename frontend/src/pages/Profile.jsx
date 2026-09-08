@@ -41,6 +41,22 @@ export default function Profile() {
       .catch(() => {})
   }, [])
 
+  // (2026-09-08) الديفلت المطلوب: تنبيهات كل الأسواق فعّالة تلقائياً للعميل
+  // الجديد، وهو يخصّص/يضيّق حسب حاجته. notify_watchlist فاضية بالباك اند
+  // أصلاً تعني "كل الأسواق" بمنطق البث (backend/app/api/bot.py::all-watchlists
+  // — "if not wl: continue" يستثنيها من القائمة المخصّصة فتوصلها كل إشارة)،
+  // بس هيك كانت تظهر بالواجهة كـ"0 مختار" وتوحي إنها مطفأة. هالتأثير مرة
+  // وحدة بس (defaultedWatchlist) — أي تخصيص سابق محفوظ فعلياً يبقى كما هو
+  // بدون أي لمسة، وأي تعديل يدوي لاحق (حتى لصفر) يُحترم ولا يُستبدل.
+  const [defaultedWatchlist, setDefaultedWatchlist] = useState(false)
+  useEffect(() => {
+    if (defaultedWatchlist || !markets.length) return
+    if ((user?.notify_watchlist || []).length === 0) {
+      setPrefs(p => ({ ...p, notify_watchlist: markets.map(m => m.symbol) }))
+    }
+    setDefaultedWatchlist(true)
+  }, [markets, user, defaultedWatchlist])
+
   const copyLink = () => {
     if (!affiliate?.referral_link) return
     navigator.clipboard.writeText(affiliate.referral_link).then(() => {
@@ -119,6 +135,9 @@ export default function Profile() {
         : [...p.notify_watchlist, m],
     }))
   }
+
+  const selectAllWatchlist   = () => setPrefs(p => ({ ...p, notify_watchlist: markets.map(m => m.symbol) }))
+  const deselectAllWatchlist = () => setPrefs(p => ({ ...p, notify_watchlist: [] }))
 
   const toggleTimeframe = (tf) => {
     if (tf === 'all') {
@@ -301,10 +320,22 @@ export default function Profile() {
 
           {/* Watchlist */}
           <div>
-            <label className="block text-sm text-gray-400 mb-2">
-              {isAr ? 'الأزواج للمراقبة' : 'Markets to Watch'}
-              <span className="text-gray-400 mr-1 text-xs">({prefs.notify_watchlist.length} {isAr ? 'مختار' : 'selected'})</span>
-            </label>
+            <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+              <label className="block text-sm text-gray-400">
+                {isAr ? 'الأزواج للمراقبة' : 'Markets to Watch'}
+                <span className="text-gray-400 mr-1 text-xs">({prefs.notify_watchlist.length} {isAr ? 'مختار' : 'selected'})</span>
+              </label>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={selectAllWatchlist}
+                  className="text-xs px-2.5 py-1 rounded-lg border border-blue-700 text-blue-400 hover:bg-blue-900/30 transition-colors">
+                  {isAr ? 'تحديد الكل' : 'Select All'}
+                </button>
+                <button type="button" onClick={deselectAllWatchlist}
+                  className="text-xs px-2.5 py-1 rounded-lg border border-gray-700 text-gray-400 hover:bg-gray-700/40 transition-colors">
+                  {isAr ? 'إلغاء التحديد' : 'Clear'}
+                </button>
+              </div>
+            </div>
             <div className="flex flex-wrap gap-2">
               {markets.map(m => (
                 <button key={m.symbol} type="button" onClick={() => toggleWatchlist(m.symbol)}
