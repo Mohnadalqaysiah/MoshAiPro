@@ -7,7 +7,7 @@ import useBreadcrumbSchema from '../hooks/useBreadcrumbSchema'
 const T = {
   ar: {
     h1: 'الشروط والأحكام',
-    updated: 'آخر تحديث: سبتمبر 2026',
+    updated: 'آخر تحديث: مارس 2026',
     sections: [
       {
         h: '1. قبول الشروط',
@@ -49,7 +49,7 @@ const T = {
   },
   en: {
     h1: 'Terms & Conditions',
-    updated: 'Last updated: September 2026',
+    updated: 'Last updated: March 2026',
     sections: [
       {
         h: '1. Acceptance of Terms',
