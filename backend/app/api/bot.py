@@ -442,15 +442,35 @@ async def bot_check_outcomes(
             tp2    = float(sig.take_profit_2)
             is_buy = sig.signal_type.value == "BUY"
 
+            # (2026-09-09) بلاغ حقيقي: هالفحص كان يقارن السعر اللحظي بس، بينما
+            # هالـendpoint نفسه ما يشتغل إلا كل 15 دقيقة (MONITOR_INTERVAL
+            # بـtelegram-bot/bot.py). لو السعر لمس SL/TP لحظياً (wick) وبعدين
+            # ارتد قبل الدورة الجاية، الإشارة تضل ACTIVE للأبد رغم إن أي وقف
+            # خسارة حقيقي عند وسيط فعلي كان نفّذ فوراً. نجيب أعلى/أدنى سعر
+            # بآخر ~30 شمعة 5m (~2.5 ساعة، يغطي أي فجوة فحص فعلياً) ونفحص
+            # المدى كامل مو نقطة وحدة — بنفس أولوية SL أولاً ثم TP2 ثم TP1
+            # المعتمدة أصلاً بالأسفل. get_ohlcv نفسها ترفض أي طلب bars<30
+            # (شرط داخلي بالدالة)، فلازم نطلب 30 بالضبط ولو محتاجين نافذة
+            # أضيق فعلياً. هذا يصلح المستقبل فقط — ما يرجّع يصحح إشارات
+            # فاتها wick قبل الآن.
+            range_high, range_low = price, price
+            try:
+                range_df = await _smart_data.get_ohlcv(market_upper, "5m", bars=30)
+                if range_df is not None and len(range_df):
+                    range_high = max(price, float(range_df["high"].max()))
+                    range_low  = min(price, float(range_df["low"].min()))
+            except Exception:
+                pass
+
             new_status = None
             if is_buy:
-                if   price <= sl:  new_status = SignalStatus.SL_HIT
-                elif price >= tp2: new_status = SignalStatus.TP2_HIT
-                elif price >= tp1: new_status = SignalStatus.TP1_HIT
+                if   range_low  <= sl:  new_status = SignalStatus.SL_HIT
+                elif range_high >= tp2: new_status = SignalStatus.TP2_HIT
+                elif range_high >= tp1: new_status = SignalStatus.TP1_HIT
             else:
-                if   price >= sl:  new_status = SignalStatus.SL_HIT
-                elif price <= tp2: new_status = SignalStatus.TP2_HIT
-                elif price <= tp1: new_status = SignalStatus.TP1_HIT
+                if   range_high >= sl:  new_status = SignalStatus.SL_HIT
+                elif range_low  <= tp2: new_status = SignalStatus.TP2_HIT
+                elif range_low  <= tp1: new_status = SignalStatus.TP1_HIT
 
             if new_status and new_status != sig.status:
                 is_buy  = sig.signal_type.value == "BUY"
