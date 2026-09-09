@@ -1595,7 +1595,9 @@ export default function Admin() {
                               <td className={`py-2 font-semibold font-mono ${ptColor(s.points_earned)}`}>
                                 {s.points_earned != null ? (s.points_earned > 0 ? '+' : '') + s.points_earned : '—'}
                               </td>
-                              <td className="py-2 text-gray-500">{s.created_at?.slice(0, 10) ?? '-'}</td>
+                              <td className="py-2 text-gray-500 font-mono whitespace-nowrap" title={s.created_at ? `${s.created_at} (UTC)` : ''}>
+                                {s.created_at ? `${s.created_at.slice(0, 10)} ${s.created_at.slice(11, 16)}` : '-'}
+                              </td>
                               <td className="py-2">
                                 {!['TP1_HIT','TP2_HIT','SL_HIT','EXPIRED'].includes(s.status) && (
                                   <button
