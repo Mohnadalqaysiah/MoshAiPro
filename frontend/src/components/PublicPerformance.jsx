@@ -182,8 +182,8 @@ export default function PublicPerformance({ isAr = true }) {
   return (
     <section ref={sectionRef} className="py-24 px-4 relative overflow-hidden">
       {/* Backgrounds */}
-      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-emerald-950/8 to-transparent pointer-events-none" />
-      <div className="orb w-[600px] h-[400px] text-emerald-600/12 top-1/2 left-0 -translate-x-1/3 -translate-y-1/2 pointer-events-none" />
+      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-emerald-950/10 to-transparent pointer-events-none" />
+      <div className="orb w-[600px] h-[400px] text-emerald-600/10 top-1/2 left-0 -translate-x-1/3 -translate-y-1/2 pointer-events-none" />
 
       <div className="max-w-5xl mx-auto relative">
 
@@ -247,7 +247,7 @@ export default function PublicPerformance({ isAr = true }) {
                     ? ['HTF Alignment ✓', 'Order Block ✓', 'FVG Confluence ✓', 'RR ≥ 1.3 ✓']
                     : ['HTF Alignment ✓', 'Order Block ✓', 'FVG Confluence ✓', 'RR ≥ 1.3 ✓']
                   ).map(c => (
-                    <span key={c} className="flex items-center gap-1.5 text-xs text-emerald-300/80 bg-emerald-500/8 border border-emerald-500/15 px-3 py-1.5 rounded-lg">
+                    <span key={c} className="flex items-center gap-1.5 text-xs text-emerald-300/80 bg-emerald-500/10 border border-emerald-500/15 px-3 py-1.5 rounded-lg">
                       <CheckCircle size={11} className="text-emerald-400 flex-shrink-0" />
                       {c}
                     </span>

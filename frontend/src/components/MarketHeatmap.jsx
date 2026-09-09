@@ -19,12 +19,12 @@ function cellStyle(rec, conf) {
   if (rec === 'BUY') {
     return conf >= 75
       ? { bg: 'bg-green-500/25 border-green-500/50',  text: 'text-green-300', labelAr: '▲ شراء',  labelEn: '▲ BUY'  }
-      : { bg: 'bg-green-500/12 border-green-700/30',  text: 'text-green-400', labelAr: '▲ شراء',  labelEn: '▲ BUY'  }
+      : { bg: 'bg-green-500/10 border-green-700/30',  text: 'text-green-400', labelAr: '▲ شراء',  labelEn: '▲ BUY'  }
   }
   if (rec === 'SELL') {
     return conf >= 75
       ? { bg: 'bg-red-500/25 border-red-500/50',      text: 'text-red-300',   labelAr: '▼ بيع',   labelEn: '▼ SELL' }
-      : { bg: 'bg-red-500/12 border-red-700/30',      text: 'text-red-400',   labelAr: '▼ بيع',   labelEn: '▼ SELL' }
+      : { bg: 'bg-red-500/10 border-red-700/30',      text: 'text-red-400',   labelAr: '▼ بيع',   labelEn: '▼ SELL' }
   }
   if (rec === 'WATCH' || rec === 'WAIT') {
     return { bg: 'bg-gray-800/50 border-gray-700/30', text: 'text-gray-500',   labelAr: '◈ راقب',  labelEn: '◈ WATCH' }

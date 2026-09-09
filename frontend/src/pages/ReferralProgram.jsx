@@ -257,7 +257,7 @@ export default function ReferralProgram() {
         {/* Orbs */}
         <div className="absolute top-0 left-1/4 w-96 h-96 bg-yellow-500/10 rounded-full blur-[120px] pointer-events-none" />
         <div className="absolute bottom-0 right-1/4 w-80 h-80 bg-orange-500/10 rounded-full blur-[100px] pointer-events-none" />
-        <div className="absolute top-1/3 right-0 w-64 h-64 bg-blue-500/8 rounded-full blur-[80px] pointer-events-none" />
+        <div className="absolute top-1/3 right-0 w-64 h-64 bg-blue-500/10 rounded-full blur-[80px] pointer-events-none" />
 
         <div className="max-w-4xl mx-auto px-4 text-center relative z-10">
           <div className="animate-fade-up inline-flex items-center gap-2 bg-yellow-500/10 border border-yellow-500/20 text-yellow-300 text-sm px-4 py-2 rounded-full mb-6 font-medium">
@@ -439,7 +439,7 @@ export default function ReferralProgram() {
       {/* ── CTA ───────────────────────────────────────────────────────── */}
       <section className="py-24 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-yellow-900/20 via-orange-900/10 to-transparent pointer-events-none" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-yellow-500/8 rounded-full blur-[100px] pointer-events-none" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-yellow-500/10 rounded-full blur-[100px] pointer-events-none" />
 
         <div className="max-w-3xl mx-auto px-4 text-center relative z-10">
           <div className="rv">

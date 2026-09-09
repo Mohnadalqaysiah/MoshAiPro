@@ -386,7 +386,7 @@ function ProfilePanel({ isAr }) {
         <div className="flex justify-center flex-wrap gap-2 mt-3">
           {badge && <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${badge.cls}`}>{isAr ? badge.ar : badge.en}</span>}
           {days != null && (
-            <span className="text-xs px-2.5 py-1 rounded-full bg-amber-400/12 border border-amber-400/30 text-amber-300 tabular-nums">
+            <span className="text-xs px-2.5 py-1 rounded-full bg-amber-400/10 border border-amber-400/30 text-amber-300 tabular-nums">
               {isAr ? `${days} أيام متبقية` : `${days} days left`}
             </span>
           )}

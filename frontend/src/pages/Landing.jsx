@@ -261,7 +261,7 @@ export default function Landing() {
         {/* Orbs */}
         <div className="orb w-[500px] h-[500px] text-fuchsia-600/25 top-0 left-1/2 -translate-x-1/2 -translate-y-1/2" />
         <div className="orb w-[300px] h-[300px] text-violet-600/20 bottom-0 right-0" />
-        <div className="orb w-[200px] h-[200px] text-cyan-500/18 top-1/3 left-0" />
+        <div className="orb w-[200px] h-[200px] text-cyan-500/20 top-1/3 left-0" />
 
         <div className="max-w-4xl mx-auto text-center relative animate-fade-up">
           {/* Badge */}
@@ -458,7 +458,7 @@ export default function Landing() {
 
       {/* ── Testimonials ───────────────────────────────────────────────── */}
       <section id="testimonials" className="py-24 px-4 relative overflow-hidden bg-white/[0.01]">
-        <div className="orb w-[500px] h-[400px] text-purple-600/14 top-1/2 right-0 translate-x-1/4 -translate-y-1/2 pointer-events-none" />
+        <div className="orb w-[500px] h-[400px] text-purple-600/15 top-1/2 right-0 translate-x-1/4 -translate-y-1/2 pointer-events-none" />
         <div className="max-w-6xl mx-auto relative">
           <div className="text-center mb-14 reveal">
             <p className="text-purple-400 text-sm font-semibold mb-3 uppercase tracking-widest">
@@ -508,7 +508,7 @@ export default function Landing() {
 
       {/* ── Pricing ────────────────────────────────────────────────────── */}
       <section id="pricing" className="py-24 px-4 relative overflow-hidden">
-        <div className="orb w-[600px] h-[400px] text-blue-600/12 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
+        <div className="orb w-[600px] h-[400px] text-blue-600/10 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none" />
         <div className="max-w-5xl mx-auto relative">
           <div className="text-center mb-16 reveal">
             <p className="text-green-400 text-sm font-semibold mb-3 uppercase tracking-widest">
