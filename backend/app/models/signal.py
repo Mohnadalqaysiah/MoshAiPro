@@ -76,6 +76,12 @@ class Signal(Base):
     points_earned = Column(Float, nullable=True)  # calculated when admin marks TP/SL
     broadcast_sent        = Column(Boolean, default=False, nullable=False)
     result_broadcast_sent = Column(Boolean, default=False, nullable=True)   # إشعار النتيجة (TP/SL) لكل المشتركين
+    # (2026-09-10) True = نتيجة يدوية لكن مؤكدة بالسعر الحقيقي (زر "تحقق" +
+    # تحقّق closed_price بـset_signal_outcome). تُحتسب بتقارير الأداء والصفحة
+    # العامة (verified_unique_decisions)، بعكس التصحيح اليدوي القديم غير
+    # المؤكد (current_price IS NULL و outcome_verified=False). معايرة المحرك
+    # تبقى صارمة: تلقائي بحت فقط (current_price IS NOT NULL).
+    outcome_verified      = Column(Boolean, default=False, nullable=True)
     entry_executed = Column(DateTime(timezone=True), nullable=True)
     exit_executed = Column(DateTime(timezone=True), nullable=True)
     

@@ -1152,7 +1152,14 @@ def set_signal_outcome(
     signal.profit_loss              = round(points, 2)
     signal.profit_loss_percentage   = pnl_pct
     signal.exit_executed            = datetime.now(timezone.utc)
-    # current_price عمداً غير مُضبوط هون — راجع تعليق أعلى الدالة
+    # current_price عمداً غير مُضبوط هون — هو الفارق الوحيد بين "رصد تلقائي"
+    # و"تصحيح يدوي" لمعايرة المحرك (تبقى صارمة على التلقائي البحت).
+    # (2026-09-10) لكن TP/SL هون مؤكدة الآن: closed_price إجباري وتحقّقنا
+    # فوق إنه وصل المستوى فعلاً (تسامح 0.05%). فنعلّمها outcome_verified
+    # حتى تُحتسب بتقارير الأداء + الصفحة العامة. EXPIRED تبقى False (ما
+    # تدّعي وصول أي مستوى).
+    if data.status in ("TP1_HIT", "TP2_HIT", "SL_HIT"):
+        signal.outcome_verified = True
 
     db.commit()
     db.refresh(signal)

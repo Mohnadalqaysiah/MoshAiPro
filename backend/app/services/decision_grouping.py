@@ -90,5 +90,12 @@ def verified_unique_decisions(signals: list) -> list[dict]:
     winrate/نقاط/عدد صفقات (signals.py, bot.py, markets.py — راجع
     commit 2026-09-03 اللي أضافها لكل هالمواقع دفعة وحدة بعد ما تأكد
     إنها نفس المشكلة بالضبط بعدة مواقع مستقلة)."""
-    verified = [s for s in signals if s.current_price is not None]
+    # (2026-09-10) نشمل التصحيحات اليدوية المؤكدة بالسعر (outcome_verified)
+    # جنب الرصد التلقائي (current_price IS NOT NULL). التصحيح اليدوي القديم
+    # غير المؤكد (الاثنين False/NULL) يبقى مستبعداً. معايرة المحرك
+    # (load_performance_from_db) ما تستخدم هالدالة — تبقى صارمة على التلقائي.
+    verified = [
+        s for s in signals
+        if s.current_price is not None or getattr(s, "outcome_verified", False)
+    ]
     return group_unique_decisions(verified)
