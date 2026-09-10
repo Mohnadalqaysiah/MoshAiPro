@@ -1251,6 +1251,59 @@ async def broadcast_new_signals(app: Application):
         await asyncio.sleep(BROADCAST_INTERVAL)
 
 
+# ─── Background: Outcome checker ──────────────────────────────────────────────
+# (2026-09-10) بلاغ حقيقي: حالة الإشارة كانت تتحدث لـTP/SL كل 15 دقيقة فقط
+# (كانت مدمجة بحلقة monitor_watchlists)، فتبقى ACTIVE دقايق طويلة بعد ما
+# ضربت المستوى فعلياً. حلقة مخصصة كل 90ث: فحص السعر اللحظي (رخيص، مكاش 30ث)
+# لرصد شبه فوري، + فحص المدى الكامل (wicks) كل ~9 دورات (~13.5 دقيقة).
+OUTCOME_CHECK_INTERVAL = 90    # ثانية
+_DEEP_EVERY = 9               # كل كام دورة نعمل range_check كامل (~13.5 دقيقة)
+
+async def outcome_checker(app: Application):
+    logger.info("🎯 بدء حلقة رصد نتائج الإشارات (كل 90ث)…")
+    await asyncio.sleep(35)
+    _cycle = 0
+    while True:
+        try:
+            _cycle += 1
+            deep = (_cycle % _DEEP_EVERY == 1)   # أول دورة + كل 9 دورات
+            outcomes = (await _get(
+                "/api/v1/bot/check-outcomes",
+                params={"range_check": "true" if deep else "false"},
+                timeout=45,
+            )).get("triggered", [])
+
+            sent_result_ids: set = set()
+            for o in outcomes:
+                try:
+                    await app.bot.send_message(
+                        chat_id=int(o["telegram_id"]),
+                        text=fmt_outcome(o),
+                        parse_mode="Markdown",
+                        reply_markup=InlineKeyboardMarkup([[
+                            InlineKeyboardButton("📈 إحصائياتي", callback_data="m_stats"),
+                            InlineKeyboardButton("📡 الإشارات",  callback_data="m_signals"),
+                        ]]),
+                    )
+                    sent_result_ids.add(o.get("signal_id"))
+                    await asyncio.sleep(0.05)
+                except Exception as _e:
+                    logger.warning(f"outcome send error: {_e}")
+
+            for sid in sent_result_ids:
+                if sid:
+                    try:
+                        await _post(f"/api/v1/bot/mark-result-broadcast/{sid}")
+                    except Exception:
+                        pass
+
+            if outcomes:
+                logger.info(f"🎯 رصد {len(outcomes)} نتيجة (deep={deep})")
+        except Exception as e:
+            logger.error(f"outcome_checker: {e}", exc_info=True)
+        await asyncio.sleep(OUTCOME_CHECK_INTERVAL)
+
+
 # ─── Background: Monitor watchlists ───────────────────────────────────────────
 async def monitor_watchlists(app: Application):
     logger.info("🔍 بدء مراقبة قوائم المشتركين…")
@@ -1272,34 +1325,8 @@ async def monitor_watchlists(app: Application):
                 except Exception as _re:
                     logger.warning(f"renew-trials: {_re}")
 
-            # ── 1. نتائج الإشارات (TP/SL) ─────────────────────────────────
-            outcomes = (await _get("/api/v1/bot/check-outcomes", timeout=45)).get("triggered", [])
-
-            # نجمع الإشارات المُغلقة لنُعلّم كل واحدة مرة واحدة
-            sent_result_ids: set = set()
-            for o in outcomes:
-                try:
-                    await app.bot.send_message(
-                        chat_id=int(o["telegram_id"]),
-                        text=fmt_outcome(o),
-                        parse_mode="Markdown",
-                        reply_markup=InlineKeyboardMarkup([[
-                            InlineKeyboardButton("📈 إحصائياتي", callback_data="m_stats"),
-                            InlineKeyboardButton("📡 الإشارات",  callback_data="m_signals"),
-                        ]]),
-                    )
-                    sent_result_ids.add(o.get("signal_id"))
-                    await asyncio.sleep(0.05)
-                except Exception as _e:
-                    logger.warning(f"outcome send error: {_e}")
-
-            # علامة أن النتيجة بُثّت (لا نُرسل مجدداً)
-            for sid in sent_result_ids:
-                if sid:
-                    try:
-                        await _post(f"/api/v1/bot/mark-result-broadcast/{sid}")
-                    except Exception:
-                        pass
+            # ── 1. نتائج الإشارات (TP/SL) — نُقلت لحلقة outcome_checker
+            #      المخصصة (كل ~90ث بدل 15 دقيقة) لرصد شبه فوري. (2026-09-10)
 
             # ── 2. مراقبة الأزواج
             # المصدر الوحيد للـ Watchlist هو DB — لا merge مع الذاكرة المحلية
@@ -1796,6 +1823,7 @@ def main():
 
     async def post_init(application: Application):
         asyncio.create_task(broadcast_new_signals(application))
+        asyncio.create_task(outcome_checker(application))
         asyncio.create_task(monitor_watchlists(application))
         asyncio.create_task(notify_expiry(application))
         asyncio.create_task(market_session_notifier(application))
@@ -1805,7 +1833,7 @@ def main():
 
     app.post_init = post_init
 
-    logger.success("✅ البوت يعمل — 7 مهام خلفية نشطة")
+    logger.success("✅ البوت يعمل — 8 مهام خلفية نشطة")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 

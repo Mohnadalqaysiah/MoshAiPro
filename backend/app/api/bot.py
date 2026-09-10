@@ -371,12 +371,20 @@ def bot_expiring(
 
 @router.get("/check-outcomes")
 async def bot_check_outcomes(
+    range_check: bool = True,
     _: bool = Depends(verify_bot),
     db: Session = Depends(get_db),
 ):
     """
     يفحص كل الإشارات النشطة ويعيد أي منها ضرب TP/SL.
     يستخدمه البوت للإشعارات التلقائية بالنتائج.
+
+    range_check=True (افتراضي): يجيب أعلى/أدنى سعر بآخر ~2.5 ساعة (5m) ويفحص
+      المدى الكامل — يمسك الـwicks اللي ارتدت. مكلف (طلب OHLC لكل رمز).
+    range_check=False: يفحص السعر اللحظي فقط (مكاش 30ث) — رخيص، للحلقة
+      السريعة (كل ~90ث) اللي هدفها رصد شبه فوري للحالة الشائعة (السعر
+      حالياً متجاوز المستوى). الحلقة السريعة تستدعي range_check=True كل
+      عدة دورات لتغطية الـwicks.
     """
     now = datetime.now(timezone.utc)
     active = db.query(Signal).filter(
@@ -454,13 +462,14 @@ async def bot_check_outcomes(
             # أضيق فعلياً. هذا يصلح المستقبل فقط — ما يرجّع يصحح إشارات
             # فاتها wick قبل الآن.
             range_high, range_low = price, price
-            try:
-                range_df = await _smart_data.get_ohlcv(market_upper, "5m", bars=30)
-                if range_df is not None and len(range_df):
-                    range_high = max(price, float(range_df["high"].max()))
-                    range_low  = min(price, float(range_df["low"].min()))
-            except Exception:
-                pass
+            if range_check:
+                try:
+                    range_df = await _smart_data.get_ohlcv(market_upper, "5m", bars=30)
+                    if range_df is not None and len(range_df):
+                        range_high = max(price, float(range_df["high"].max()))
+                        range_low  = min(price, float(range_df["low"].min()))
+                except Exception:
+                    pass
 
             new_status = None
             if is_buy:
