@@ -1599,12 +1599,15 @@ export default function Admin() {
                                 {s.created_at ? `${s.created_at.slice(0, 10)} ${s.created_at.slice(11, 16)}` : '-'}
                               </td>
                               <td className="py-2">
-                                {!['TP1_HIT','TP2_HIT','SL_HIT','EXPIRED'].includes(s.status) && (
+                                {/* (2026-09-10) EXPIRED صارت قابلة لإعادة التصنيف — كتير إشارات
+                                    انتهت صلاحيتها بالنظام رغم إنها فعلياً ضربت TP/SL (بسبب فجوة
+                                    فحص النتائج). الأدمن لازم يقدر يصححها للنتيجة الحقيقية. */}
+                                {!['TP1_HIT','TP2_HIT','SL_HIT'].includes(s.status) && (
                                   <button
                                     onClick={() => setOpenOutcome(isOpen ? null : s.id)}
                                     className="text-xs bg-blue-700 hover:bg-blue-600 text-white px-2 py-1 rounded transition"
                                   >
-                                    تحديد النتيجة
+                                    {s.status === 'EXPIRED' ? 'تصحيح النتيجة' : 'تحديد النتيجة'}
                                   </button>
                                 )}
                               </td>
