@@ -1006,12 +1006,18 @@ def _calc_points(market: str, price_diff: float) -> float:
     المؤشرات/الكريبتو (×1) لأنها مو مسعّرة بنظام pip.
     """
     symbol = (market or "").upper()
-    if symbol in ("XAUUSD", "XAGUSD", "XPTUSD", "XPDUSD"):
+    if symbol in ("XAUUSD", "XAGUSD", "XPTUSD", "XPDUSD", "COPPER"):
         return round(price_diff * 10, 2)     # metals: $0.1 per point
-    elif symbol in ("BTCUSD", "ETHUSD", "BNBUSD", "SOLUSD", "XRPUSD"):
+    elif symbol in (
+        # (2026-09-10) ADAUSD/DOGEUSD كانوا ناقصين هون فيسقطوا على مضاعف
+        # الفوركس ×10000 غلط (خطأ ×10000 بالنقاط). أُضيفوا + باقي رموز
+        # CRYPTO_MARKETS للتحصين المستقبلي حتى لو انضافوا لـCATEGORIES لاحقاً.
+        "BTCUSD", "ETHUSD", "BNBUSD", "SOLUSD", "XRPUSD", "ADAUSD", "DOGEUSD",
+        "DOTUSD", "LTCUSD", "LINKUSD", "MATICUSD", "AVAXUSD", "ATOMUSD", "UNIUSD", "TRXUSD",
+    ):
         return round(price_diff * 1.0, 2)    # crypto: $1 per point
-    elif symbol in ("NAS100", "US30", "SP500", "US100", "NASDAQ", "DOW"):
-        return round(price_diff * 1.0, 2)    # indices: 1 index point = 1 pt
+    elif symbol in ("NAS100", "US30", "SP500", "US100", "NASDAQ", "DOW", "DXY"):
+        return round(price_diff * 1.0, 2)    # indices (+ DXY): 1 index point = 1 pt
     elif symbol in ("AAPL", "TSLA", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "AMD", "NFLX"):
         return round(price_diff * 1.0, 2)    # US stocks: $1 move = 1 pt
     elif symbol in ("USOIL", "OIL", "NATGAS", "BRENT"):
