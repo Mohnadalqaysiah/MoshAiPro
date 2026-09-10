@@ -392,9 +392,21 @@ async def bot_check_outcomes(
         Signal.expires_at > now,
     ).all()
 
-    # رموز المعادن — مستوياتها محفوظة بسعر Spot (بعد basis correction)
-    # يجب استخدام نفس مصدر السعر (TV OANDA Spot) للمقارنة الصحيحة
-    _SPOT_SYMBOLS = {"XAUUSD", "XAGUSD"}
+    # (2026-09-10) بلاغ حقيقي مؤكد: USOIL سجّلت TP2_HIT رغم إن السعر الحقيقي
+    # (حساب Exness/MT4 فعلي) كان أوطأ من الـSL نفسه وقتها. السبب: هون كان
+    # يستخدم yfinance CL=F (عقد مستقبلي محدد) فقط لغير المعادن، وهو ينحرف
+    # عدة دولارات عن سعر الوسيط الحقيقي أحياناً (تحقق مباشر: CL=F تحرك من
+    # ~96 إلى ~102 بنفس اليوم بدون أي تفسير سوقي حقيقي — عيّنة بيانات
+    # مضطربة). المشروع أصلاً عنده تغذية Spot حقيقية حية عبر TradingView
+    # (tv_price_feed.TV_SYMBOL_MAP) لـ20 رمز — كانت مستخدمة هون للذهب/الفضة
+    # بس. توسيعها لكل رمز فيها تحل نفس المشكلة لأي رمز تاني بنفس البنية
+    # (NAS100/US30/SP500/فوركس رئيسي/كريبتو رئيسي) — وتفسّر جزئياً كمان ليش
+    # الرصد التلقائي كان يعمل صح على الفضة تحديداً (المسار الوحيد المستقر)
+    # بينما باقي الرموز تعتمد يفينانس/فينهب (عرضة لتقييد معدل الطلبات لما
+    # نفحص رموز كتيرة بدورة وحدة — راجع range_check تحت).
+    from app.services.tv_price_feed import TV_SYMBOL_MAP, fetch_tv_history
+    _SPOT_SYMBOLS = set(TV_SYMBOL_MAP.keys())
+    _METALS_ONLY  = {"XAUUSD", "XAGUSD"}   # الوحيدة اللي عندها fallback نظري خاص تحت
 
     # (2026-09-03) نفس القرار (سوق+فريم+نوع+سعر دخول) بينحفظ كصف Signal
     # منفصل لكل مستخدم استلمه — كلهم بيوصلوا لنفس new_status بنفس هالدورة
@@ -415,26 +427,23 @@ async def bot_check_outcomes(
             if not _smart_data.is_market_open(sig.market):
                 continue
 
-            # ── للمعادن: استخدم TV Spot (نفس مصدر الإشارة) ─────────────────
+            # ── لأي رمز عنده Spot حقيقي حي عبر TradingView: استخدمه ────────
             if market_upper in _SPOT_SYMBOLS:
                 try:
                     from app.services.tv_price_feed import tv_feed
                     tv_p = tv_feed.get_price_sync(market_upper)
                     if tv_p and float(tv_p) > 0:
                         price = float(tv_p)
-                    else:
-                        # fallback: theoretical carry
-                        # (2026-09-03) كان في import محلي لـmosh_ai_engine_v5 هون —
-                        # بايثون بيعتبر أي اسم مستورد جوا الدالة "محلي" لكل الدالة
-                        # كلها (مش بس الفرع هذا)، فبيحجب النسخة العامة المستوردة
-                        # فوق (سطر 15) طول الدالة. أي استدعاء لـmosh_ai_engine_v5
-                        # قبل ما هالسطر يتنفذ فعلياً بنفس الاستدعاء (زي
-                        # update_performance تحت) كان يطلع UnboundLocalError —
-                        # مكتوم بصمت بالـexcept العام، فمنعت تسجيل winrate الحي
-                        # ونتيجة الصفقة (triggered.append) بالكامل لأي إشارة
-                        # تُعالَج قبل أول استخدام فعلي لهالفرع بنفس الدورة.
+                    elif market_upper in _METALS_ONLY:
+                        # fallback: theoretical carry — معادن فقط، mosh_ai_engine_v5
+                        # مستورد بالأعلى (سطر 15) بشكل عام؛ الاستيراد المحلي هون كان
+                        # يحجبه لبقية الدالة كلها ويسبب UnboundLocalError صامت.
                         price_raw, _ = mosh_ai_engine_v5._fetch_spot_price(market_upper)
                         price = float(price_raw) if price_raw > 0 else None
+                    else:
+                        # كاش TV فارغ/منتهي لرمز غير معدني — نرجع لمصدر عام
+                        price_info = await _smart_data.get_realtime_price_with_meta(sig.market)
+                        price = float(price_info["price"]) if price_info and price_info.get("price") else None
                 except Exception:
                     price = None
             else:
@@ -461,13 +470,29 @@ async def bot_check_outcomes(
             # (شرط داخلي بالدالة)، فلازم نطلب 30 بالضبط ولو محتاجين نافذة
             # أضيق فعلياً. هذا يصلح المستقبل فقط — ما يرجّع يصحح إشارات
             # فاتها wick قبل الآن.
+            # (2026-09-10) لرمز عنده Spot حي عبر TradingView: نجيب المدى من
+            # نفس المصدر (fetch_tv_history، مستقل عن yfinance/finnhub) بدل
+            # get_ohlcv — يحل مشكلتين مرة وحدة: (أ) دقة السعر (نفس مصدر نقطة
+            # السعر فوق، بدل خلط مصدرين مختلفين قد ينحرفوا عن بعض)، و(ب)
+            # تقييد معدل الطلبات — get_ohlcv عبر yfinance بيفشل بصمت لو
+            # فحصنا رموز كتيرة بنفس الدورة (rate limit)، وهذا كان يفسّر
+            # جزئياً ليش الرصد كان يعمل صح لرمز وحيد بس (أول رمز بالدورة
+            # قبل ما نوصل لحد الطلبات) ولا يعمل للباقي.
             range_high, range_low = price, price
             if range_check:
                 try:
-                    range_df = await _smart_data.get_ohlcv(market_upper, "5m", bars=30)
-                    if range_df is not None and len(range_df):
-                        range_high = max(price, float(range_df["high"].max()))
-                        range_low  = min(price, float(range_df["low"].min()))
+                    if market_upper in _SPOT_SYMBOLS:
+                        raw_bars = await fetch_tv_history(TV_SYMBOL_MAP[market_upper], "5m", bars=30)
+                        if raw_bars:
+                            highs = [float(b[2]) for b in raw_bars]
+                            lows  = [float(b[3]) for b in raw_bars]
+                            range_high = max(price, max(highs))
+                            range_low  = min(price, min(lows))
+                    else:
+                        range_df = await _smart_data.get_ohlcv(market_upper, "5m", bars=30)
+                        if range_df is not None and len(range_df):
+                            range_high = max(price, float(range_df["high"].max()))
+                            range_low  = min(price, float(range_df["low"].min()))
                 except Exception:
                     pass
 

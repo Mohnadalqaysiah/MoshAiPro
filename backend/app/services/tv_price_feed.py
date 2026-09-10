@@ -45,6 +45,11 @@ TV_SYMBOL_MAP: dict[str, str] = {
     "US30":    "DJ:DJI",
     "SP500":   "SP:SPX",
     "USOIL":   "NYMEX:CL1!",
+    # (2026-09-10) نفس منطق USOIL بالضبط — بلاغ حقيقي: NATGAS كانت تعتمد
+    # فقط على عقود yfinance المستقبلية (NG=F) لتتبع النتائج، بدون بديل حي
+    # من TradingView. NYMEX:NG1! هو العقد المستمر (continuous) — نفس النمط
+    # المستخدم أصلاً لـUSOIL/NAS100/US30/SP500.
+    "NATGAS":  "NYMEX:NG1!",
 }
 
 _TV_REVERSE_MAP: dict[str, str] = {v: k for k, v in TV_SYMBOL_MAP.items()}
