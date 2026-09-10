@@ -500,8 +500,12 @@ export default function AppShell({ children }) {
       </div>
 
       {/* Mobile drawer */}
+      {/* (2026-09-10) بلاغ حقيقي: القائمة الجانبية بالموبايل كانت z-40، بينما
+          زري شات كفيل والدعم العائمين z-50 — فيضلّوا فوقها لما تنفتح
+          ويغطّوا أسفلها (تسجيل الخروج/اللغة/الوضع الليلي). رفعتها فوق
+          الاثنين حتى تكون القائمة المفتوحة الطبقة الأعلى فعلياً. */}
       {drawer && (
-        <div className="lg:hidden fixed inset-0 z-40" role="dialog" aria-modal="true">
+        <div className="lg:hidden fixed inset-0 z-[60]" role="dialog" aria-modal="true">
           <div className="absolute inset-0 bg-black/60" onClick={() => setDrawer(false)} />
           <div className="absolute inset-y-0 start-0 w-[280px] max-w-[85vw] p-4 bg-gray-900 border-e q-line overflow-y-auto">
             <button onClick={() => setDrawer(false)} aria-label={isAr ? 'إغلاق' : 'Close'} className="absolute top-3 end-3 w-8 h-8 rounded-lg q-glass grid place-items-center text-gray-300"><X size={16} /></button>
