@@ -2321,11 +2321,23 @@ class MoshAIEngineV5:
         tp_dist = abs(tp1 - entry)
         if sl_dist <= 0:
             return self._hard_reject(analysis, "ZERO_SL_DISTANCE")
-        # Rule 7b: Metals-only SL distance cap (XAUUSD/XAGUSD).
-        # Backtest: rejects 7 historical decisions, all 7 were losers (0W/7L),
-        # zero winners sacrificed; expectancy/decision improved from -15.51 to
-        # -5.82. Hard reject only — never clamp/round the SL to fit the cap.
-        if symbol.upper() in ("XAUUSD", "XAGUSD") and (sl_dist / entry) > 0.005:
+        # Rule 7b: Metals-only SL distance cap (XAUUSD/XAGUSD) — adaptive to
+        # current volatility via ATR, not a bare fixed %.
+        # Backtest that validated the original static 0.5%: rejected 7
+        # historical decisions, all 7 losers (0W/7L), zero winners sacrificed,
+        # expectancy improved -15.51 → -5.82 — that calibration assumed
+        # ATR/price ≈ 0.2-0.3% (gold's regime at the time).
+        # (2026-09-10) Gold's ATR is now ~0.55% (1h) to ~1.7% (1d) — verified
+        # live — so the static 0.5% cap was hard-rejecting essentially every
+        # gold decision (structural SL naturally wider than 0.5% when ATR
+        # alone already exceeds it), producing zero BUY/SELL signals for days
+        # despite real opportunities. Floor stays 0.5% (unchanged in calm
+        # markets — same backtest validation still applies), but widens to
+        # 2x the current ATR% when the market itself is genuinely more
+        # volatile. Hard reject only — never clamp/round the SL to fit the cap.
+        atr = float(levels.get("atr") or 0)
+        sl_cap_pct = max(0.005, (atr / entry) * 2.0) if atr > 0 else 0.005
+        if symbol.upper() in ("XAUUSD", "XAGUSD") and (sl_dist / entry) > sl_cap_pct:
             return self._hard_reject(analysis, "SL_DISTANCE_EXCEEDS_CAP")
         rr = round(tp_dist / sl_dist, 2)
         levels["risk_reward"] = rr
