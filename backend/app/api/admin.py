@@ -1154,6 +1154,91 @@ def set_signal_outcome(
     return {"success": True, "signal": _signal_info(signal)}
 
 
+@router.get("/signals/{signal_id}/verify-outcome")
+async def verify_signal_outcome(
+    signal_id: int,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """(2026-09-10) يفحص الإشارة مقابل بيانات السوق التاريخية الحقيقية من
+    لحظة إنشائها لهلق، ويحدد شو ضربت أولاً (الهدف ولا الستوب) — بدون ما
+    يعدّل أي شي. الأدمن يستخدمه ليصحح الإشارات القديمة العالقة يدوياً
+    (زر "طبّق" بالواجهة يستدعي PATCH /outcome بالنتيجة المكتشفة).
+
+    يفحص شمعة 5m: أول شمعة يلمس فيها مداها (high/low) مستوى SL أو TP.
+    لو الاثنين بنفس الشمعة → غامض، يفترض SL أولاً (تحفّظ)."""
+    signal = db.query(Signal).filter(Signal.id == signal_id).first()
+    if not signal:
+        raise HTTPException(404, "الإشارة غير موجودة")
+    if not signal.created_at:
+        raise HTTPException(400, "لا يوجد وقت إنشاء للإشارة")
+
+    entry = float(signal.entry_price or 0)
+    sl    = float(signal.stop_loss or 0)
+    tp1   = float(signal.take_profit_1 or 0)
+    tp2   = float(signal.take_profit_2 or tp1)
+    is_buy = (signal.signal_type.value if hasattr(signal.signal_type, "value") else signal.signal_type) == "BUY"
+    if not (entry and sl and tp1):
+        raise HTTPException(400, "مستويات الإشارة ناقصة")
+
+    # bars=1000 من 5m ≈ آخر 3.5 يوم تداول متواصل — يغطي أي إشارة حديثة
+    df = await _smart_data.get_ohlcv(signal.market, "5m", bars=1000)
+    if df is None or df.empty:
+        return {"detected": "NO_DATA", "reason": "تعذّر جلب بيانات السوق التاريخية لهذا الرمز"}
+
+    import pandas as _pd
+    created = signal.created_at
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    if "datetime" in df.columns:
+        ts_series = _pd.to_datetime(df["datetime"], utc=True)
+        rows = list(zip(ts_series, df["high"], df["low"]))
+    else:
+        idx = _pd.to_datetime(df.index, utc=True)
+        rows = list(zip(idx, df["high"], df["low"]))
+
+    if not rows or rows[0][0] > _pd.Timestamp(created):
+        return {"detected": "NO_DATA", "reason": "بيانات السوق المتاحة لا تعود لوقت إنشاء الإشارة"}
+
+    # tp2 يُفحص فقط لو فعلاً هدف أبعد من tp1 (لبعض الإشارات tp2==tp1 أو مفقود)
+    has_tp2 = (tp2 > tp1) if is_buy else (tp2 < tp1)
+
+    hit_status, hit_time, hit_price = None, None, None
+    for ts, hi, lo in rows:
+        if ts < _pd.Timestamp(created):
+            continue
+        hi, lo = float(hi), float(lo)
+        sl_touched = (lo <= sl) if is_buy else (hi >= sl)
+        tp2_touched = has_tp2 and ((hi >= tp2) if is_buy else (lo <= tp2))
+        tp1_touched = (hi >= tp1) if is_buy else (lo <= tp1)
+        if sl_touched:
+            hit_status, hit_time, hit_price = "SL_HIT", ts, sl
+            break
+        if tp2_touched:
+            hit_status, hit_time, hit_price = "TP2_HIT", ts, tp2
+            break
+        if tp1_touched:
+            hit_status, hit_time, hit_price = "TP1_HIT", ts, tp1
+            break
+
+    if hit_status is None:
+        return {
+            "detected": "STILL_ACTIVE",
+            "reason": "لم يلمس السعر الهدف ولا الستوب حتى الآن (حسب بيانات 5m)",
+            "current_system_status": signal.status.value if hasattr(signal.status, "value") else signal.status,
+        }
+
+    return {
+        "detected": hit_status,
+        "hit_time": hit_time.isoformat(),
+        "suggested_closed_price": round(hit_price, 8),
+        "current_system_status": signal.status.value if hasattr(signal.status, "value") else signal.status,
+        "market": signal.market,
+        "side": "BUY" if is_buy else "SELL",
+        "entry": entry, "sl": sl, "tp1": tp1,
+    }
+
+
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 _ONLINE_WINDOW_SEC = 300   # نفس نافذة "متصل الآن" بكل مكان بالإدارة — 5 دقائق

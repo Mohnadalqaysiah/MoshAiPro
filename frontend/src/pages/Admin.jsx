@@ -671,6 +671,34 @@ export default function Admin() {
     finally { setSignalsLoading(false) }
   }
 
+  // (2026-09-10) فحص الإشارة مقابل السوق التاريخي الحقيقي — يقول شو ضربت
+  // (هدف/ستوب) بدون ما يعدّل، + زر "طبّق" يصحح مباشرة بالنتيجة المكتشفة.
+  const [verifyResults, setVerifyResults] = useState({})
+  const verifySignal = async (signalId) => {
+    setVerifyResults(prev => ({ ...prev, [signalId]: { loading: true } }))
+    try {
+      const r = await axios.get(`${API}/api/v1/admin/signals/${signalId}/verify-outcome`)
+      setVerifyResults(prev => ({ ...prev, [signalId]: { ...r.data, loading: false } }))
+    } catch (e) {
+      setVerifyResults(prev => ({ ...prev, [signalId]: { loading: false, error: e.response?.data?.detail || 'خطأ بالفحص' } }))
+    }
+  }
+  const applyVerified = async (signalId) => {
+    const v = verifyResults[signalId]
+    if (!v || !['TP1_HIT', 'TP2_HIT', 'SL_HIT'].includes(v.detected)) return
+    setVerifyResults(prev => ({ ...prev, [signalId]: { ...prev[signalId], applying: true } }))
+    try {
+      await axios.patch(`${API}/api/v1/admin/signals/${signalId}/outcome`, {
+        status: v.detected,
+        closed_price: v.suggested_closed_price,
+      })
+      setVerifyResults(prev => { const n = { ...prev }; delete n[signalId]; return n })
+      loadAdminSignals()
+    } catch (e) {
+      setVerifyResults(prev => ({ ...prev, [signalId]: { ...prev[signalId], applying: false, error: e.response?.data?.detail || 'فشل التطبيق' } }))
+    }
+  }
+
   const submitOutcome = async (signalId) => {
     const form = outcomeForm[signalId] || {}
     if (!form.status) return
@@ -1599,19 +1627,62 @@ export default function Admin() {
                                 {s.created_at ? `${s.created_at.slice(0, 10)} ${s.created_at.slice(11, 16)}` : '-'}
                               </td>
                               <td className="py-2">
-                                {/* (2026-09-10) EXPIRED صارت قابلة لإعادة التصنيف — كتير إشارات
-                                    انتهت صلاحيتها بالنظام رغم إنها فعلياً ضربت TP/SL (بسبب فجوة
-                                    فحص النتائج). الأدمن لازم يقدر يصححها للنتيجة الحقيقية. */}
+                                {/* (2026-09-10) EXPIRED صارت قابلة لإعادة التصنيف + زر "تحقق"
+                                    يفحص السوق التاريخي الحقيقي ويقول شو ضربت. */}
                                 {!['TP1_HIT','TP2_HIT','SL_HIT'].includes(s.status) && (
-                                  <button
-                                    onClick={() => setOpenOutcome(isOpen ? null : s.id)}
-                                    className="text-xs bg-blue-700 hover:bg-blue-600 text-white px-2 py-1 rounded transition"
-                                  >
-                                    {s.status === 'EXPIRED' ? 'تصحيح النتيجة' : 'تحديد النتيجة'}
-                                  </button>
+                                  <div className="flex items-center gap-1.5">
+                                    <button
+                                      onClick={() => verifySignal(s.id)}
+                                      disabled={verifyResults[s.id]?.loading}
+                                      className="text-xs bg-purple-800 hover:bg-purple-700 disabled:opacity-50 text-white px-2 py-1 rounded transition"
+                                    >
+                                      {verifyResults[s.id]?.loading ? '...' : '🔍 تحقق'}
+                                    </button>
+                                    <button
+                                      onClick={() => setOpenOutcome(isOpen ? null : s.id)}
+                                      className="text-xs bg-blue-700 hover:bg-blue-600 text-white px-2 py-1 rounded transition"
+                                    >
+                                      {s.status === 'EXPIRED' ? 'تصحيح' : 'تحديد'}
+                                    </button>
+                                  </div>
                                 )}
                               </td>
                             </tr>
+                            {verifyResults[s.id] && !verifyResults[s.id].loading && (
+                              <tr key={`verify-${s.id}`} className="bg-purple-950/30">
+                                <td colSpan={11} className="py-2.5 px-4">
+                                  {verifyResults[s.id].error ? (
+                                    <span className="text-xs text-red-400">⚠️ {verifyResults[s.id].error}</span>
+                                  ) : verifyResults[s.id].detected === 'STILL_ACTIVE' ? (
+                                    <span className="text-xs text-gray-300">⏳ حسب بيانات السوق الحقيقية — لم تلمس الهدف ولا الستوب حتى الآن، الإشارة لسا نشطة فعلاً.</span>
+                                  ) : verifyResults[s.id].detected === 'NO_DATA' ? (
+                                    <span className="text-xs text-yellow-400">ℹ️ {verifyResults[s.id].reason || 'تعذّر جلب بيانات السوق التاريخية'}</span>
+                                  ) : (
+                                    <div className="flex items-center gap-3 flex-wrap text-xs">
+                                      <span className={verifyResults[s.id].detected === 'SL_HIT' ? 'text-red-300' : 'text-green-300'}>
+                                        {verifyResults[s.id].detected === 'SL_HIT' ? '❌ ضربت الستوب' : verifyResults[s.id].detected === 'TP2_HIT' ? '🏆 ضربت الهدف 2' : '✅ ضربت الهدف 1'}
+                                        {' — '}
+                                        {new Date(verifyResults[s.id].hit_time).toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' })}
+                                        {' · سعر '}{verifyResults[s.id].suggested_closed_price}
+                                      </span>
+                                      <button
+                                        onClick={() => applyVerified(s.id)}
+                                        disabled={verifyResults[s.id].applying}
+                                        className="bg-green-700 hover:bg-green-600 disabled:opacity-50 text-white px-3 py-1 rounded-lg transition"
+                                      >
+                                        {verifyResults[s.id].applying ? 'جاري...' : 'طبّق التصحيح'}
+                                      </button>
+                                      <button
+                                        onClick={() => setVerifyResults(prev => { const n = { ...prev }; delete n[s.id]; return n })}
+                                        className="text-gray-400 hover:text-white px-2 py-1 rounded-lg transition"
+                                      >
+                                        إخفاء
+                                      </button>
+                                    </div>
+                                  )}
+                                </td>
+                              </tr>
+                            )}
                             {isOpen && (
                               <tr key={`form-${s.id}`} className="bg-gray-900/70">
                                 <td colSpan={10} className="py-3 px-4">
