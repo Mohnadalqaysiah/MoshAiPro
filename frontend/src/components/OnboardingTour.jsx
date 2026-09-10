@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
 import { X, ChevronRight, ChevronLeft, Zap, BarChart2, Activity,
-         MessageCircle, TrendingUp, Star } from 'lucide-react'
+         MessageCircle, TrendingUp, Star, Send, CheckCircle } from 'lucide-react'
 import { useLang } from '../contexts/LangContext'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -139,6 +139,8 @@ export default function OnboardingTour() {
   const [step,      setStep]      = useState(0)
   const [markets,   setMarkets]   = useState(['XAUUSD', 'BTCUSD'])   // defaults
   const [saving,    setSaving]    = useState(false)
+  const [tgLink,    setTgLink]    = useState('')
+  const [tgBot,     setTgBot]     = useState('Qaffelbot')
 
   // MARKET_PICKER is inserted between step 0 (welcome) and step 1 (features)
   const MARKET_STEP = 1
@@ -151,6 +153,24 @@ export default function OnboardingTour() {
 
   const isMarketStep = step === MARKET_STEP
   const isLast       = step === totalSteps - 1
+  // steps[2] ("تنبيهات Telegram") displays at step===3 (currentStepData
+  // formula above: step - 1 === 2 → step === 3).
+  // (2026-09-10) كانت هاي الخطوة مجرد نص وصفي بدون زر فعلي — تحقّقنا من بيانات
+  // حقيقية: 57% من المستخدمين الجدد (آخر 14 يوم) ما ربطوا تيليجرام أبداً، فما
+  // وصلتهم ولا إشارة رغم "الديفلت" (الديفلت بيتحكم بالمحتوى بعد الربط، مش
+  // قبله). إضافة زر ربط مباشر هون بدل نص بس يحوّل نقطة تسرّب لفرصة تحويل حقيقية.
+  const isTelegramStep = step === 3
+
+  useEffect(() => {
+    if (isTelegramStep && user && !user.telegram_linked && !tgLink) {
+      axios.get(`${API}/api/v1/auth/telegram-link`)
+        .then(r => {
+          setTgLink(r.data.link)
+          if (r.data.bot_username) setTgBot(r.data.bot_username)
+        })
+        .catch(() => {})
+    }
+  }, [isTelegramStep, user, tgLink])
 
   useEffect(() => {
     const done = localStorage.getItem(STORAGE_KEY)
@@ -248,6 +268,29 @@ export default function OnboardingTour() {
               <p className="text-gray-400 text-sm leading-relaxed">
                 {currentStepData?.desc}
               </p>
+
+              {isTelegramStep && (
+                user?.telegram_linked ? (
+                  <div className="flex items-center gap-1.5 text-emerald-400 text-xs font-medium">
+                    <CheckCircle size={14} />
+                    {isAr ? 'حسابك مربوط بتيليجرام بالفعل ✅' : 'Your account is already linked ✅'}
+                  </div>
+                ) : tgLink ? (
+                  <a
+                    href={tgLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center justify-center gap-2 w-full bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-all"
+                  >
+                    <Send size={15} />
+                    {isAr ? `ربط الآن مع @${tgBot}` : `Link now with @${tgBot}`}
+                  </a>
+                ) : (
+                  <div className="text-center text-xs text-gray-500 py-2">
+                    {isAr ? 'جاري تجهيز الرابط...' : 'Preparing link...'}
+                  </div>
+                )
+              )}
             </div>
           )}
 
