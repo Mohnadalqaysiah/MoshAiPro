@@ -2333,10 +2333,16 @@ class MoshAIEngineV5:
         # alone already exceeds it), producing zero BUY/SELL signals for days
         # despite real opportunities. Floor stays 0.5% (unchanged in calm
         # markets — same backtest validation still applies), but widens to
-        # 2x the current ATR% when the market itself is genuinely more
-        # volatile. Hard reject only — never clamp/round the SL to fit the cap.
+        # 1x the current ATR% when the market itself is genuinely more
+        # volatile — deliberately conservative (not 2x): checked historical
+        # gold prices near the original backtest's entry level and found ATR
+        # was already elevated (~1.6-2%) then too, so the "calm market"
+        # assumption behind the original 0.5% cap is unverified — 1x keeps
+        # this from reopening the same wide-SL losing pattern too readily
+        # while still fixing the zero-signal issue. Hard reject only — never
+        # clamp/round the SL to fit the cap.
         atr = float(levels.get("atr") or 0)
-        sl_cap_pct = max(0.005, (atr / entry) * 2.0) if atr > 0 else 0.005
+        sl_cap_pct = max(0.005, (atr / entry) * 1.0) if atr > 0 else 0.005
         if symbol.upper() in ("XAUUSD", "XAGUSD") and (sl_dist / entry) > sl_cap_pct:
             return self._hard_reject(analysis, "SL_DISTANCE_EXCEEDS_CAP")
         rr = round(tp_dist / sl_dist, 2)
