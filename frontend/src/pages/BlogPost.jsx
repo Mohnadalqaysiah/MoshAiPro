@@ -14,18 +14,38 @@ const DIAGRAMS = {
   boschoch:   BosChochDiagram,
 }
 
+// ── Inline markdown-style links: [label](/path) → <Link>, [label](https://…) → <a>
+function renderInline(text) {
+  if (!text || !text.includes('[')) return text
+  const parts = []
+  const re = /\[([^\]]+)\]\(([^)]+)\)/g
+  let last = 0, m
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) parts.push(text.slice(last, m.index))
+    const [, label, url] = m
+    if (url.startsWith('/')) {
+      parts.push(<Link key={m.index} to={url} className="text-blue-400 hover:text-blue-300 underline underline-offset-2">{label}</Link>)
+    } else {
+      parts.push(<a key={m.index} href={url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline underline-offset-2">{label}</a>)
+    }
+    last = m.index + m[0].length
+  }
+  if (last < text.length) parts.push(text.slice(last))
+  return parts
+}
+
 // ── Render individual content block ─────────────────────────────────────────
 function ContentBlock({ item }) {
   switch (item.type) {
     case 'h2':    return <h2 className="text-2xl font-black text-white mt-10 mb-4 leading-snug">{item.text}</h2>
     case 'h3':    return <h3 className="text-lg font-bold text-blue-300 mt-7 mb-3">{item.text}</h3>
-    case 'p':     return <p className="text-gray-300 leading-relaxed mb-4">{item.text}</p>
+    case 'p':     return <p className="text-gray-300 leading-relaxed mb-4">{renderInline(item.text)}</p>
     case 'ul':    return null   // container for li items — handled below
     case 'ol':    return null
     case 'li':    return (
       <li className="flex items-start gap-2.5 text-gray-300 mb-2">
         <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0" />
-        <span>{item.text}</span>
+        <span>{renderInline(item.text)}</span>
       </li>
     )
     case 'quote': return (

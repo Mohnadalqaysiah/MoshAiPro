@@ -192,6 +192,86 @@
     <priority>0.8</priority>
   </url>
 
+  <!-- مقالة: بوت التداول بالذكاء الاصطناعي تيليجرام (2026-09-10) -->
+  <url>
+    <loc>https://qaffel.com/blog/ai-trading-bot-telegram</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/ai-trading-bot-telegram" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/ai-trading-bot-telegram" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/ai-trading-bot-telegram" />
+    <lastmod>2026-09-10</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://qaffel.com/en/blog/ai-trading-bot-telegram</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/ai-trading-bot-telegram" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/ai-trading-bot-telegram" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/ai-trading-bot-telegram" />
+    <lastmod>2026-09-10</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- مقالة: ما هي منصة Qaffel AI (2026-09-10) -->
+  <url>
+    <loc>https://qaffel.com/blog/what-is-qaffel-ai</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/what-is-qaffel-ai" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/what-is-qaffel-ai" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/what-is-qaffel-ai" />
+    <lastmod>2026-09-10</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://qaffel.com/en/blog/what-is-qaffel-ai</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/what-is-qaffel-ai" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/what-is-qaffel-ai" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/what-is-qaffel-ai" />
+    <lastmod>2026-09-10</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- مقالة: تحليل الذهب بالذكاء الاصطناعي (2026-09-10) -->
+  <url>
+    <loc>https://qaffel.com/blog/gold-analysis-ai</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/gold-analysis-ai" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/gold-analysis-ai" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/gold-analysis-ai" />
+    <lastmod>2026-09-10</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://qaffel.com/en/blog/gold-analysis-ai</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/gold-analysis-ai" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/gold-analysis-ai" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/gold-analysis-ai" />
+    <lastmod>2026-09-10</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- مقالة: بوت إشارات التداول — كيف تختار (2026-09-10) -->
+  <url>
+    <loc>https://qaffel.com/blog/trading-signals-bot-guide</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/trading-signals-bot-guide" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/trading-signals-bot-guide" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/trading-signals-bot-guide" />
+    <lastmod>2026-09-10</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://qaffel.com/en/blog/trading-signals-bot-guide</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/trading-signals-bot-guide" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/trading-signals-bot-guide" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/trading-signals-bot-guide" />
+    <lastmod>2026-09-10</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
   <!-- من نحن (عربي) -->
   <url>
     <loc>https://qaffel.com/about</loc>
