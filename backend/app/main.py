@@ -166,11 +166,17 @@ async def lifespan(app: FastAPI):
     scanner_task = asyncio.create_task(market_scanner())
     logger.success("✅ Market scanner started")
 
+    # بدء فاحص سلامة الإحصائيات (نقاط صفرية مشبوهة + إشارات ACTIVE عالقة)
+    from app.services.integrity_checker import integrity_checker
+    integrity_task = asyncio.create_task(integrity_checker())
+    logger.success("✅ Integrity checker started")
+
     yield
 
     alert_task.cancel()
     strategy_task.cancel()
     scanner_task.cancel()
+    integrity_task.cancel()
 
     # Shutdown
     logger.info("👋 Shutting down Mosh AI Pro v5...")
