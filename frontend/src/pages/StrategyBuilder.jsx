@@ -3,6 +3,7 @@ import axios from "axios";
 import { Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import StrategyBuilderTour from "../components/StrategyBuilderTour";
+import UpgradeModal from "../components/UpgradeModal";
 import {
   Search, Plus, X, ChevronDown, ChevronRight, Copy, Trash2, Power,
   Edit3, Eye, Send, Bot, Link2, Check, AlertTriangle, Sparkles,
@@ -1385,18 +1386,7 @@ export default function StrategyBuilder() {
         </Modal>
       )}
 
-      {paywallOpen && (
-        <Modal title="🔒 ميزة حصرية للمشتركين" onClose={() => setPaywallOpen(false)}>
-          <p style={{ color: C.sub, fontSize: 13 }} className="mb-4 leading-relaxed">
-            حفظ الاستراتيجيات، تفعيل المراقبة الحقيقية، وإرسال تنبيهات Telegram متاحة للمشتركين (أسبوعي/شهري) فقط.
-            تقدر تبني استراتيجيتك الآن مجانًا — واشترك لحفظها وتفعيلها فعليًا على السوق.
-          </p>
-          <div className="flex gap-2 justify-end">
-            <button onClick={() => setPaywallOpen(false)} style={{ background: C.surfaceHi, border: `1px solid ${C.border}`, color: C.text }} className="px-3.5 py-2 rounded-lg text-sm">لاحقًا</button>
-            <Link to="/pricing" style={{ background: C.gold, color: "#1A1200" }} className="px-3.5 py-2 rounded-lg text-sm font-semibold">اشترك الآن</Link>
-          </div>
-        </Modal>
-      )}
+      <UpgradeModal open={paywallOpen} onClose={() => setPaywallOpen(false)} reason="premium" />
 
       {toast && (
         <div style={{ background: C.surfaceHi, border: `1px solid ${C.gold}`, color: C.text }} className="fixed bottom-5 left-1/2 -translate-x-1/2 px-4 py-2.5 rounded-xl text-sm shadow-2xl fade-in z-50">

@@ -15,6 +15,7 @@ import EconomicCalendar from '../components/EconomicCalendar'
 import SessionsClock from '../components/SessionsClock'
 import MarketHeatmap from '../components/MarketHeatmap'
 import ConfluenceModal from '../components/ConfluenceModal'
+import UpgradeModal from '../components/UpgradeModal'
 import AchievementBadges from '../components/AchievementBadges'
 import PWAInstallBanner from '../components/PWAInstallBanner'
 import DashboardAnnouncement from '../components/DashboardAnnouncement'
@@ -486,6 +487,7 @@ export default function Dashboard() {
       {confluenceSymbol && (
         <ConfluenceModal symbol={confluenceSymbol} onClose={() => setConfluenceSymbol(null)} />
       )}
+      <UpgradeModal open={limitReached} onClose={() => setLimitReached(false)} reason="limit_reached" />
 
       {/* PWA Install Banner */}
       <PWAInstallBanner />

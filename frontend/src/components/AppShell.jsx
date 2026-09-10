@@ -16,6 +16,8 @@ const TrialBanner        = lazy(() => import('./TrialBanner'))
 const TelegramLinkBanner = lazy(() => import('./TelegramLinkBanner'))
 const EmailVerifyBanner  = lazy(() => import('./EmailVerifyBanner'))
 const OnboardingTour     = lazy(() => import('./OnboardingTour'))
+const UpgradeModal       = lazy(() => import('./UpgradeModal'))
+const EmailVerifyModal   = lazy(() => import('./EmailVerifyModal'))
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -415,7 +417,40 @@ export default function AppShell({ children }) {
   const isAr = lang === 'ar'
   const location = useLocation()
   const siteSettings = useSiteSettings()
+  const { user } = useAuth()
   const [drawer, setDrawer] = useState(false)
+
+  // (2026-09-10) عميل تجربة انتهت مدته أو حصته → بوب أب واضح يوجّهه للباقات
+  // بدل شريط رفيع فوق يمكن ما ينتبه له. مرة واحدة بالجلسة (sessionStorage)،
+  // وما يظهر بصفحة الأسعار نفسها.
+  const trialExpired = user?.plan === 'trial' && (
+    (user.days_left ?? 1) <= 0 ||
+    ((user.trial_analyses_left ?? 1) <= 0 && (user.trial_chat_left ?? 1) <= 0)
+  )
+  const needsVerify = user && user.is_verified === false
+  const [upgradeOpen, setUpgradeOpen] = useState(false)
+  const [verifyOpen, setVerifyOpen]   = useState(false)
+  useEffect(() => {
+    // تفعيل البريد أولاً (هو اللي بيفعّل التجربة)، وإلا التجربة المنتهية
+    if (needsVerify) {
+      try { if (sessionStorage.getItem('verify_modal_seen')) return } catch { /* noop */ }
+      const t = setTimeout(() => setVerifyOpen(true), 900)
+      return () => clearTimeout(t)
+    }
+    if (!trialExpired) return
+    if (location.pathname.startsWith('/pricing')) return
+    try { if (sessionStorage.getItem('upgrade_modal_seen')) return } catch { /* noop */ }
+    const t = setTimeout(() => setUpgradeOpen(true), 900)
+    return () => clearTimeout(t)
+  }, [needsVerify, trialExpired, location.pathname])
+  const closeUpgrade = () => {
+    setUpgradeOpen(false)
+    try { sessionStorage.setItem('upgrade_modal_seen', '1') } catch { /* noop */ }
+  }
+  const closeVerify = () => {
+    setVerifyOpen(false)
+    try { sessionStorage.setItem('verify_modal_seen', '1') } catch { /* noop */ }
+  }
 
   useEffect(() => { setDrawer(false) }, [location.pathname])
   useEffect(() => {
@@ -452,6 +487,8 @@ export default function AppShell({ children }) {
             <div className="xl:hidden"><TrialBanner /></div>
             <div className="xl:hidden"><TelegramLinkBanner /></div>
             <OnboardingTour />
+            {verifyOpen && <EmailVerifyModal open onClose={closeVerify} />}
+            {upgradeOpen && !verifyOpen && <UpgradeModal open onClose={closeUpgrade} reason="trial_expired" />}
           </Suspense>
 
           <main className="flex-1 min-w-0 px-3 sm:px-5 py-4 sm:py-5 max-w-[1180px] w-full mx-auto">
