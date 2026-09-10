@@ -985,11 +985,12 @@ class SignalOutcomeIn(BaseModel):
     closed_price: Optional[float] = None
 
 
-def _calc_points(market: str, price_diff: float) -> float:
+def _calc_points(market: str, price_diff: float, entry_price: float = None) -> float:
     """
     Unified pip/points per market:
     Metals  ×10   → $0.1 move = 1 pt  (XAUUSD $47 move = 470 pts)
-    Crypto  ×1    → $1   move = 1 pt  (BTC $500 move = 500 pts)
+    Crypto  → نسبة مئوية من سعر الدخول × 10000 (basis points) — راجع تعليق
+              أسفل فرع الكريبتو، هذا مو "$1 = نقطة" متل باقي الفئات.
     Indices ×1    → 1 index point = 1 pt (NAS100 +40 = 40 pts)
     US stocks ×1  → $1 move = 1 pt (same treatment as crypto/indices)
     Oil/Gas ×10   → $0.1 move = 1 pt
@@ -1010,12 +1011,22 @@ def _calc_points(market: str, price_diff: float) -> float:
         return round(price_diff * 10, 2)     # metals: $0.1 per point
     elif symbol in (
         # (2026-09-10) ADAUSD/DOGEUSD كانوا ناقصين هون فيسقطوا على مضاعف
-        # الفوركس ×10000 غلط (خطأ ×10000 بالنقاط). أُضيفوا + باقي رموز
-        # CRYPTO_MARKETS للتحصين المستقبلي حتى لو انضافوا لـCATEGORIES لاحقاً.
+        # الفوركس ×10000 غلط. أُضيفوا + باقي رموز CRYPTO_MARKETS للتحصين
+        # المستقبلي حتى لو انضافوا لـCATEGORIES لاحقاً.
+        #
+        # (2026-09-10 #2) بلاغ حقيقي تاني: بعد إصلاح المضاعف لـ×1، عملات
+        # رخيصة (ADAUSD ~$0.22، DOGEUSD ~$0.09) صارت تظهر "+0" بتقارير
+        # الأداء — حركة $0.002-0.005 × 1 مقرّبة لرقمين عشريين = صفر ظاهرياً،
+        # رغم إنها حركة % حقيقية (أحياناً 1-2%). الحل: كريبتو تُحسب كنسبة
+        # مئوية من سعر الدخول (basis points × 10000، نفس أسلوب الفوركس) بدل
+        # دولار خام — يعطي رقم ذو معنى بغض النظر عن سعر العملة (BTC أو
+        # DOGE)، وموحّد المقياس تقريباً مع باقي الفئات (فوركس/JPY).
         "BTCUSD", "ETHUSD", "BNBUSD", "SOLUSD", "XRPUSD", "ADAUSD", "DOGEUSD",
         "DOTUSD", "LTCUSD", "LINKUSD", "MATICUSD", "AVAXUSD", "ATOMUSD", "UNIUSD", "TRXUSD",
     ):
-        return round(price_diff * 1.0, 2)    # crypto: $1 per point
+        if entry_price and entry_price > 0:
+            return round((price_diff / entry_price) * 10000, 2)   # % move × 10000 (basis points)
+        return round(price_diff * 1.0, 2)    # fallback إذا entry_price غير متوفر (لا يجب يصير بالمسارات الحالية)
     elif symbol in ("NAS100", "US30", "SP500", "US100", "NASDAQ", "DOW", "DXY"):
         return round(price_diff * 1.0, 2)    # indices (+ DXY): 1 index point = 1 pt
     elif symbol in ("AAPL", "TSLA", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "AMD", "NFLX"):
@@ -1118,17 +1129,17 @@ def set_signal_outcome(
     if data.status == "TP1_HIT":
         exit_price = data.closed_price
         diff = abs(tp1 - entry) if is_buy else abs(entry - tp1)
-        points = _calc_points(signal.market, diff)
+        points = _calc_points(signal.market, diff, entry)
 
     elif data.status == "TP2_HIT":
         exit_price = data.closed_price
         diff = abs(tp2 - entry)
-        points = _calc_points(signal.market, diff)
+        points = _calc_points(signal.market, diff, entry)
 
     elif data.status == "SL_HIT":
         exit_price = data.closed_price
         diff = abs(entry - sl)
-        points = -_calc_points(signal.market, diff)
+        points = -_calc_points(signal.market, diff, entry)
 
     else:  # EXPIRED — لا يدّعي وصول أي مستوى، السعر يبقى اختياري
         exit_price = data.closed_price or entry

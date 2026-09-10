@@ -61,15 +61,15 @@ def recalc():
 
             if status == "TP1_HIT":
                 diff   = abs((tp1 or entry) - entry)
-                points = _calc_points(s.market, diff)
+                points = _calc_points(s.market, diff, entry)
 
             elif status == "TP2_HIT":
                 diff   = abs((tp2 or tp1 or entry) - entry)
-                points = _calc_points(s.market, diff)
+                points = _calc_points(s.market, diff, entry)
 
             elif status == "SL_HIT":
                 diff   = abs((sl or entry) - entry)
-                points = -_calc_points(s.market, diff)
+                points = -_calc_points(s.market, diff, entry)
 
             else:
                 skipped += 1

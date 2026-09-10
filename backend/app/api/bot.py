@@ -27,15 +27,15 @@ def _pnl_for_outcome(entry: float, exit_price: float, sl: float, tp1: float, tp2
 
     if status == SignalStatus.SL_HIT:
         diff   = abs(entry - sl)
-        points = -_calc_points(market, diff)
+        points = -_calc_points(market, diff, entry)
         ep     = sl
     elif status == SignalStatus.TP2_HIT:
         diff   = abs(tp2 - entry)
-        points = _calc_points(market, diff)
+        points = _calc_points(market, diff, entry)
         ep     = tp2
     else:  # TP1_HIT
         diff   = abs(tp1 - entry)
-        points = _calc_points(market, diff)
+        points = _calc_points(market, diff, entry)
         ep     = tp1
 
     # نسبة الربح/الخسارة
