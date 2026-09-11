@@ -481,18 +481,43 @@ async def bot_check_outcomes(
             range_high, range_low = price, price
             if range_check:
                 try:
+                    # (2026-09-11) بلاغ حقيقي: USDJPY وBTCUSD سُجّلوا SL_HIT خلال
+                    # 1-2 دقيقة من إنشائهم — مستحيل طبيعياً. السبب: range_high/
+                    # range_low كانا يُحسبان من كل الشموع الـ30 (~2.5 ساعة) بدون
+                    # أي فلترة زمنية مقابل وقت إنشاء الإشارة، فأي لمسة تاريخية
+                    # لمستوى الـSL قبل ما الإشارة توجد أصلاً كانت تُنسب لها غلطاً.
+                    # لازم نستبعد أي شمعة أقدم من created_at (هامش 60ث لتغطية
+                    # الشمعة الجارية وقت الإنشاء بالضبط، مش أكتر).
+                    created = sig.created_at
+                    if created and created.tzinfo is None:
+                        created = created.replace(tzinfo=timezone.utc)
+                    created_ts = created.timestamp() - 60 if created else None
+
                     if market_upper in _SPOT_SYMBOLS:
                         raw_bars = await fetch_tv_history(TV_SYMBOL_MAP[market_upper], "5m", bars=30)
                         if raw_bars:
-                            highs = [float(b[2]) for b in raw_bars]
-                            lows  = [float(b[3]) for b in raw_bars]
-                            range_high = max(price, max(highs))
-                            range_low  = min(price, min(lows))
+                            relevant = (
+                                [b for b in raw_bars if float(b[0]) >= created_ts]
+                                if created_ts is not None else raw_bars
+                            )
+                            if relevant:
+                                highs = [float(b[2]) for b in relevant]
+                                lows  = [float(b[3]) for b in relevant]
+                                range_high = max(price, max(highs))
+                                range_low  = min(price, min(lows))
                     else:
                         range_df = await _smart_data.get_ohlcv(market_upper, "5m", bars=30)
                         if range_df is not None and len(range_df):
-                            range_high = max(price, float(range_df["high"].max()))
-                            range_low  = min(price, float(range_df["low"].min()))
+                            relevant_df = range_df
+                            if created_ts is not None:
+                                import pandas as _pd
+                                ts_col = range_df["datetime"] if "datetime" in range_df.columns else range_df.index
+                                ts_series = _pd.to_datetime(ts_col, utc=True)
+                                mask = ts_series >= _pd.Timestamp(created_ts, unit="s", tz="UTC")
+                                relevant_df = range_df[mask.values]
+                            if len(relevant_df):
+                                range_high = max(price, float(relevant_df["high"].max()))
+                                range_low  = min(price, float(relevant_df["low"].min()))
                 except Exception:
                     pass
 
