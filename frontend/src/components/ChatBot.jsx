@@ -1,11 +1,20 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import axios from 'axios'
 import {
   MessageCircle, X, Send, BarChart2, FileText,
-  Sparkles, Trash2, TrendingUp, TrendingDown, Minus
+  Sparkles, Trash2, TrendingUp, TrendingDown, Minus, Zap
 } from 'lucide-react'
+import useMarkets from '../hooks/useMarkets'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
+const TIMEFRAMES = ['15m', '30m', '1h', '4h', '1d']
+const CATEGORY_LABELS = {
+  forex: 'فوركس', crypto: 'كريبتو', commodity: 'سلع', metal: 'معادن',
+  metals: 'معادن', index: 'مؤشرات', indices: 'مؤشرات', stock: 'أسهم',
+  stocks: 'أسهم', gulf: 'أسهم خليجية',
+}
+const categoryLabel = (cat) => CATEGORY_LABELS[(cat || '').toLowerCase()] || cat || 'أخرى'
 
 // ─── Candlestick Chart ────────────────────────────────────────────────────────
 function CandlesChart({ candles, symbol, timeframe }) {
@@ -223,14 +232,6 @@ function MessageBubble({ msg }) {
   )
 }
 
-// ─── Quick Actions ────────────────────────────────────────────────────────────
-const QUICK_ACTIONS = [
-  { label: '📊 تحليل الذهب', msg: 'حلل الذهب XAUUSD ساعة' },
-  { label: '₿ بيتكوين', msg: 'تحليل BTCUSD 1h' },
-  { label: '💶 يورو', msg: 'تحليل EURUSD 1h' },
-  { label: '🕯️ شموع الذهب', msg: 'اعرض شموع الذهب XAUUSD' },
-]
-
 // ─── Main ChatBot ─────────────────────────────────────────────────────────────
 export default function ChatBot() {
   const [open, setOpen] = useState(false)
@@ -241,6 +242,23 @@ export default function ChatBot() {
   const [error, setError] = useState('')
   const [limitReached, setLimitReached] = useState(false)
   const bottomRef = useRef(null)
+
+  // ── شريط التحليل السريع (دائم أعلى الشات) + تابات الفئات (بحالة الفراغ) ──
+  const { markets } = useMarkets()
+  const [quickSymbol, setQuickSymbol] = useState('XAUUSD')
+  const [quickTf, setQuickTf] = useState('1h')
+  const categories = useMemo(() => {
+    const seen = [...new Set(markets.map(m => m.category || 'forex'))]
+    return seen.length ? seen : ['forex']
+  }, [markets])
+  const [activeCategory, setActiveCategory] = useState('')
+  useEffect(() => {
+    if (!activeCategory && categories.length) setActiveCategory(categories[0])
+  }, [categories, activeCategory])
+  const categoryMarkets = useMemo(
+    () => markets.filter(m => (m.category || 'forex') === activeCategory),
+    [markets, activeCategory]
+  )
 
   const scrollToBottom = useCallback(() => {
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
@@ -383,25 +401,75 @@ export default function ChatBot() {
               </div>
             </div>
 
+            {/* شريط التحليل السريع — دائم، مش بس بحالة الفراغ */}
+            <div className="flex items-center gap-1.5 px-3 py-2 border-b border-gray-800 bg-gray-900/60">
+              <select
+                value={quickSymbol}
+                onChange={e => setQuickSymbol(e.target.value)}
+                className="flex-1 min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                {(markets.length ? markets : [{ symbol: quickSymbol, name_ar: quickSymbol }]).map(m => (
+                  <option key={m.symbol} value={m.symbol}>{m.name_ar || m.symbol} ({m.symbol})</option>
+                ))}
+              </select>
+              <select
+                value={quickTf}
+                onChange={e => setQuickTf(e.target.value)}
+                className="w-16 flex-shrink-0 bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                {TIMEFRAMES.map(tf => <option key={tf} value={tf}>{tf}</option>)}
+              </select>
+              <button
+                onClick={() => sendMessage(`تحليل ${quickSymbol} ${quickTf}`)}
+                disabled={loading || limitReached}
+                title="حلّل الآن"
+                className="flex-shrink-0 flex items-center gap-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors"
+              >
+                <Zap size={12} />
+                حلّل
+              </button>
+            </div>
+
             {/* Messages */}
             <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-700">
 
-              {/* Empty state */}
+              {/* Empty state — تابات الفئات + شبكة الرموز */}
               {messages.length === 0 && (
                 <div className="space-y-3">
                   <p className="text-center text-xs text-gray-500 pt-2">
-                    خبير تداول بمدارس ICT/SMC/Wyckoff جاهز لمساعدتك
+                    خبير تداول بمدارس ICT/SMC/Wyckoff جاهز لمساعدتك — اختر رمزاً للتحليل الفوري
                   </p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {QUICK_ACTIONS.map((qa, i) => (
+
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-700">
+                    {categories.map(cat => (
                       <button
-                        key={i}
-                        onClick={() => sendMessage(qa.msg)}
-                        className="text-xs bg-gray-800/80 hover:bg-gray-700 border border-gray-700/60 rounded-xl px-3 py-2 text-gray-300 text-right transition-colors"
+                        key={cat}
+                        onClick={() => setActiveCategory(cat)}
+                        className={`flex-shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded-full border transition-colors ${
+                          activeCategory === cat
+                            ? 'bg-blue-600 border-blue-500 text-white'
+                            : 'bg-gray-800/80 border-gray-700/60 text-gray-400 hover:text-gray-200 hover:border-gray-600'
+                        }`}
                       >
-                        {qa.label}
+                        {categoryLabel(cat)}
                       </button>
                     ))}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    {categoryMarkets.map(m => (
+                      <button
+                        key={m.symbol}
+                        onClick={() => sendMessage(`تحليل ${m.symbol} ${quickTf}`)}
+                        className="text-xs bg-gray-800/80 hover:bg-gray-700 border border-gray-700/60 rounded-xl px-3 py-2 text-gray-300 text-right transition-colors truncate"
+                        title={m.name_ar || m.symbol}
+                      >
+                        {m.name_ar || m.symbol} <span className="text-gray-500 font-mono">{m.symbol}</span>
+                      </button>
+                    ))}
+                    {categoryMarkets.length === 0 && (
+                      <p className="col-span-2 text-center text-gray-600 text-xs py-3">لا رموز بهذي الفئة</p>
+                    )}
                   </div>
                 </div>
               )}
