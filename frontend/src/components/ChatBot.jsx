@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import axios from 'axios'
 import {
   MessageCircle, X, Send, BarChart2, FileText,
-  Sparkles, Trash2, TrendingUp, TrendingDown, Minus, Zap
+  Sparkles, Trash2, TrendingUp, TrendingDown, Minus, Zap, Copy, Check
 } from 'lucide-react'
 import useMarkets from '../hooks/useMarkets'
 
@@ -103,6 +103,7 @@ function CandlesChart({ candles, symbol, timeframe }) {
 
 // ─── Analysis Card ────────────────────────────────────────────────────────────
 function AnalysisCard({ data, symbol, timeframe }) {
+  const [copied, setCopied] = useState(false)
   if (!data || data.error) return null
 
   const rec = data.recommendation || 'WAIT'
@@ -123,6 +124,22 @@ function AnalysisCard({ data, symbol, timeframe }) {
 
   const confColor = conf >= 70 ? 'text-green-400' : conf >= 50 ? 'text-yellow-400' : 'text-gray-400'
 
+  const copyAnalysis = () => {
+    const lines = [`📊 تحليل ${symbol || ''}${timeframe ? ` (${timeframe})` : ''}`.trim()]
+    lines.push(`التوصية: ${style.label}${conf ? ` · الثقة ${conf.toFixed(1)}%` : ''}`)
+    if (entry) lines.push(`الدخول: ${+entry % 1 === 0 ? entry : (+entry).toFixed(5)}`)
+    if (sl)    lines.push(`الوقف: ${+sl % 1 === 0 ? sl : (+sl).toFixed(5)}`)
+    tps.slice(0, 3).forEach((tp, i) => {
+      if (tp) lines.push(`هدف ${i + 1}: ${+tp % 1 === 0 ? tp : (+tp).toFixed(5)}`)
+    })
+    if (rr) lines.push(`R/R: 1:${(+rr).toFixed(1)}`)
+    lines.push('', 'via Qaffel AI — qaffel.com')
+    navigator.clipboard?.writeText(lines.join('\n')).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1800)
+    }).catch(() => {})
+  }
+
   return (
     <div className={`mt-2 rounded-xl border p-3 text-xs space-y-2 ${style.bg}`}>
       {/* Header */}
@@ -135,6 +152,13 @@ function AnalysisCard({ data, symbol, timeframe }) {
           {symbol && <span className="font-mono">{symbol}</span>}
           {timeframe && <span className="text-gray-500">({timeframe})</span>}
           <span className={`font-semibold ${confColor}`}>{conf.toFixed(1)}%</span>
+          <button
+            onClick={copyAnalysis}
+            title="نسخ التحليل للمشاركة"
+            className="text-gray-500 hover:text-gray-200 transition-colors p-0.5 -m-0.5"
+          >
+            {copied ? <Check size={13} className="text-green-400" /> : <Copy size={13} />}
+          </button>
         </div>
       </div>
 
@@ -433,13 +457,9 @@ export default function ChatBot() {
             {/* Messages */}
             <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-700">
 
-              {/* Empty state — تابات الفئات + شبكة الرموز */}
+              {/* Empty state — تابات الفئات + شريط رموز أفقي (مضغوط) */}
               {messages.length === 0 && (
-                <div className="space-y-3">
-                  <p className="text-center text-xs text-gray-500 pt-2">
-                    خبير تداول بمدارس ICT/SMC/Wyckoff جاهز لمساعدتك — اختر رمزاً للتحليل الفوري
-                  </p>
-
+                <div className="space-y-2">
                   <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-700">
                     {categories.map(cat => (
                       <button
@@ -456,21 +476,24 @@ export default function ChatBot() {
                     ))}
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-700">
                     {categoryMarkets.map(m => (
                       <button
                         key={m.symbol}
                         onClick={() => sendMessage(`تحليل ${m.symbol} ${quickTf}`)}
-                        className="text-xs bg-gray-800/80 hover:bg-gray-700 border border-gray-700/60 rounded-xl px-3 py-2 text-gray-300 text-right transition-colors truncate"
-                        title={m.name_ar || m.symbol}
+                        className="flex-shrink-0 text-xs bg-gray-800/80 hover:bg-gray-700 border border-gray-700/60 rounded-lg px-2.5 py-1.5 text-gray-300 transition-colors"
                       >
-                        {m.name_ar || m.symbol} <span className="text-gray-500 font-mono">{m.symbol}</span>
+                        {m.name_ar || m.symbol}
                       </button>
                     ))}
                     {categoryMarkets.length === 0 && (
-                      <p className="col-span-2 text-center text-gray-600 text-xs py-3">لا رموز بهذي الفئة</p>
+                      <p className="text-center text-gray-600 text-xs py-2 w-full">لا رموز بهذي الفئة</p>
                     )}
                   </div>
+
+                  <p className="text-center text-[11px] text-gray-600 pt-1">
+                    أو اكتب سؤالك مباشرة بالأسفل
+                  </p>
                 </div>
               )}
 
