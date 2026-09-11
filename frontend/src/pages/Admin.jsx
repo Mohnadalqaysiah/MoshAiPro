@@ -1126,7 +1126,7 @@ export default function Admin() {
                       <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
                         {activeThreadMsgs.map(m => (
                           <div key={m.id} className={`flex ${m.sender_role==='admin' ? 'justify-start' : 'justify-end'}`}>
-                            <div className={`max-w-[75%] rounded-xl px-3 py-2 text-sm ${m.sender_role==='admin' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-100'}`}>
+                            <div className={`max-w-[75%] rounded-xl px-3 py-2 text-sm whitespace-pre-wrap break-words ${m.sender_role==='admin' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-100'}`}>
                               {m.body}
                               {m.attachment_url && <SupportAttachment url={m.attachment_url} name={m.attachment_name} type={m.attachment_type} />}
                               <div className={`text-[10px] mt-1 ${m.sender_role==='admin' ? 'text-blue-200' : 'text-gray-500'}`}>
@@ -1153,12 +1153,20 @@ export default function Admin() {
                           <button onClick={() => supportFileRef.current?.click()} title="إرفاق ملف" className="text-gray-400 hover:text-white p-2 flex-shrink-0">
                             <Paperclip size={16}/>
                           </button>
-                          <input
+                          <textarea
                             value={supportReply}
                             onChange={e => setSupportReply(e.target.value)}
-                            onKeyDown={e => e.key === 'Enter' && !supportSending && sendSupportReply()}
-                            placeholder="اكتب ردك..."
-                            className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            onKeyDown={e => {
+                              if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault()
+                                if (!supportSending) sendSupportReply()
+                              }
+                            }}
+                            placeholder="اكتب ردك... (Shift+Enter لسطر جديد)"
+                            rows={1}
+                            style={{ maxHeight: '8.5rem' }}
+                            onInput={e => { e.target.style.height = 'auto'; e.target.style.height = `${Math.min(e.target.scrollHeight, 136)}px` }}
+                            className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none overflow-y-auto leading-relaxed"
                           />
                           <button onClick={sendSupportReply} disabled={supportSending || (!supportReply.trim() && !supportFile)}
                             className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white p-2.5 rounded-lg">

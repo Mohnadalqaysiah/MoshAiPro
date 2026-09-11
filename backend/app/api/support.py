@@ -163,6 +163,7 @@ async def send_my_message(
     if not body and not attachment:
         raise HTTPException(status_code=400, detail="الرسالة فارغة")
 
+    is_new_thread = _get_thread(user, db) is None
     thread = _get_or_create_thread(user, db)
     msg = SupportChatMessage(
         thread_id=thread.id, sender_role="user", sender_id=user.id,
@@ -173,6 +174,24 @@ async def send_my_message(
     now = datetime.now(timezone.utc)
     thread.last_message_at  = now
     thread.status = ChatThreadStatus.OPEN
+
+    # (2026-09-11) رسالة ترحيبية تلقائية أول ما يفتح العميل محادثة دعم جديدة
+    # (أول رسالة بس، مو كل رسالة) — رد فوري يطمّنه إن رسالته وصلت لحد ما
+    # يرد فريق الدعم فعلياً. sender_role="admin" فتظهر بنفس مكان ردود
+    # الأدمن الحقيقية بالواجهتين. النص قابل للتعديل من SiteSettings
+    # (support_welcome_message) بدون نشر كود.
+    welcome_msg = None
+    if is_new_thread:
+        welcome_text = _setting(
+            db, "support_welcome_message",
+            "أهلاً بك! 👋 وصلتنا رسالتك وسيرد عليك فريق الدعم في أقرب وقت ممكن.",
+        )
+        welcome_msg = SupportChatMessage(
+            thread_id=thread.id, sender_role="admin", sender_id=None,
+            body=welcome_text,
+        )
+        db.add(welcome_msg)
+        thread.unread_for_user += 1
 
     # (2026-09-06) كان كل رسالة دعم — حتى لو 5 رسائل متتالية بنفس الدقيقة —
     # تبعث تنبيه تلغرام منفصل للأدمن، وده كان مزعج بحق. صار في حد أقصى

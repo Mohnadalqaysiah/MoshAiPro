@@ -151,7 +151,7 @@ export default function SupportChatWidget() {
               )}
               {messages.map(m => (
                 <div key={m.id} className={`flex ${m.sender_role === 'admin' ? 'justify-start' : 'justify-end'}`}>
-                  <div className={`max-w-[80%] rounded-xl px-3 py-2 text-sm ${m.sender_role === 'admin' ? 'bg-gray-700 text-gray-100' : 'bg-blue-600 text-white'}`}>
+                  <div className={`max-w-[80%] rounded-xl px-3 py-2 text-sm whitespace-pre-wrap break-words ${m.sender_role === 'admin' ? 'bg-gray-700 text-gray-100' : 'bg-blue-600 text-white'}`}>
                     {m.body}
                     {m.attachment_url && <Attachment url={m.attachment_url} name={m.attachment_name} type={m.attachment_type} isAr={isAr} />}
                   </div>
@@ -173,12 +173,20 @@ export default function SupportChatWidget() {
                 <button onClick={() => fileRef.current?.click()} title={isAr ? 'إرفاق ملف' : 'Attach file'} className="text-gray-400 hover:text-white p-2 flex-shrink-0">
                   <Paperclip size={16} />
                 </button>
-                <input
+                <textarea
                   value={input}
                   onChange={e => setInput(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && send()}
-                  placeholder={isAr ? 'اكتب رسالتك...' : 'Type a message...'}
-                  className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault()
+                      if (!sending) send()
+                    }
+                  }}
+                  placeholder={isAr ? 'اكتب رسالتك... (Shift+Enter لسطر جديد)' : 'Type a message... (Shift+Enter for new line)'}
+                  rows={1}
+                  style={{ maxHeight: '7rem' }}
+                  onInput={e => { e.target.style.height = 'auto'; e.target.style.height = `${Math.min(e.target.scrollHeight, 112)}px` }}
+                  className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none overflow-y-auto leading-relaxed"
                 />
                 <button onClick={send} disabled={sending || (!input.trim() && !file)}
                   className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white p-2.5 rounded-lg flex-shrink-0">
