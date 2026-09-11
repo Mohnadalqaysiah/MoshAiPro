@@ -147,6 +147,28 @@ function UserModal({ user: u, onClose, onUpdate }) {
             ))}
           </div>
 
+          {/* قائمة المراقبة — أزواج التنبيهات الشخصية (فاضية = يراقب كل الأسواق) */}
+          <div className="bg-gray-800 rounded-lg px-3 py-2.5">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs text-gray-400">قائمة المراقبة (الأزواج)</span>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded ${u.notifications_enabled ? 'bg-green-900/40 text-green-400' : 'bg-gray-700 text-gray-500'}`}>
+                {u.notifications_enabled ? 'التنبيهات مفعّلة' : 'التنبيهات معطّلة'}
+              </span>
+            </div>
+            {(u.notify_watchlist || []).length === 0 ? (
+              <p className="text-xs text-gray-500">كل الأسواق (ما خصّص شي بعد)</p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {u.notify_watchlist.map(sym => (
+                  <span key={sym} className="text-[11px] font-mono bg-gray-700/60 text-gray-200 px-2 py-0.5 rounded-md">{sym}</span>
+                ))}
+              </div>
+            )}
+            {(u.notify_timeframes || []).length > 0 && (
+              <p className="text-[11px] text-gray-500 mt-1.5">الفريم: {u.notify_timeframes.join(', ')}</p>
+            )}
+          </div>
+
           {msg && (
             <div className={`flex items-center gap-2 text-sm rounded-lg px-3 py-2 ${msg.type==='ok'?'bg-green-900/30 text-green-400':'bg-red-900/30 text-red-400'}`}>
               {msg.type==='ok'?<CheckCircle size={14}/>:<AlertTriangle size={14}/>} {msg.text}

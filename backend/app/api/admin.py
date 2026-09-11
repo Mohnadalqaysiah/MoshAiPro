@@ -1306,6 +1306,9 @@ def _user_info(u: User) -> dict:
         "created_at":    u.created_at.isoformat() if u.created_at else None,
         "last_seen_at":  u.last_seen_at.isoformat() if u.last_seen_at else None,
         "is_online":     _is_online(u, now),
+        "notify_watchlist":      u.notify_watchlist or [],
+        "notify_timeframes":     u.notify_timeframes or ([u.notify_timeframe] if u.notify_timeframe else []),
+        "notifications_enabled": bool(u.notifications_enabled),
     }
 
 
