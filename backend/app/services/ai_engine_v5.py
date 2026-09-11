@@ -466,9 +466,10 @@ class MoshAIEngineV5:
 
     def _fetch_spot_price(self, symbol: str) -> tuple[float, str]:
         """
-        يجلب سعر Spot الفوري للمعادن — 5 مصادر بالتسلسل:
+        يجلب سعر Spot الفوري للمعادن — 4 مصادر بالتسلسل (كان فيها مصدر خامس،
+        yfinance XAUUSD=X/XAGUSD=X المباشر، حُذف 2026-09-10 — الرمز أصبح
+        محذوفاً نهائياً من yfinance، 404 دائم):
           0. TradingView WebSocket  (OANDA Spot — أدق مصدر، لحظي)
-          1. yfinance XAUUSD=X / XAGUSD=X (Spot مباشر — بدون حساب basis)
           2. yfinance GC=F theoretical carry basis (احتياطي — أقل دقة)
           3. @fawazahmed0/currency-api CDN  (مجاني، قد يتأخر 24h)
           4. Finnhub quote (fallback أخير)
@@ -489,31 +490,14 @@ class MoshAIEngineV5:
                 logger.info(f"   💰 TV spot [{sym_upper}]: {tv_price:.5f}")
                 return float(tv_price), "tv_spot"
             else:
-                logger.info(f"   📡 TV spot None for [{sym_upper}] (alive={tv_feed.is_alive()}) — falling to yfinance spot")
+                logger.info(f"   📡 TV spot None for [{sym_upper}] (alive={tv_feed.is_alive()}) — falling to theoretical carry basis")
         except Exception as _tv_e:
             logger.info(f"   TV spot unavailable [{sym_upper}]: {_tv_e}")
 
-        # ── 1. yfinance XAUUSD=X / XAGUSD=X — سعر Spot مباشر (بدون basis) ─
-        _YF_SPOT_SYM = {"XAUUSD": "XAUUSD=X", "XAGUSD": "XAGUSD=X"}
-        yf_spot_sym = _YF_SPOT_SYM.get(sym_upper)
-        if yf_spot_sym:
-            try:
-                import yfinance as _yf
-                ticker = _yf.Ticker(yf_spot_sym)
-                hist = ticker.history(period="1d", interval="1m")
-                if hist is not None and len(hist) > 0:
-                    price = float(hist["Close"].iloc[-1])
-                    if price > 0:
-                        logger.info(f"   💰 yfinance spot [{sym_upper}]: {price:.5f}")
-                        return round(price, 5), "yfinance_spot"
-                # fallback: .info
-                info = ticker.info
-                price = info.get("regularMarketPrice") or info.get("previousClose")
-                if price and float(price) > 0:
-                    logger.info(f"   💰 yfinance spot info [{sym_upper}]: {price:.5f}")
-                    return round(float(price), 5), "yfinance_spot"
-            except Exception as _ye:
-                logger.debug(f"   yfinance spot failed [{sym_upper}]: {_ye}")
+        # ── 1. [محذوف 2026-09-10] كان هون yfinance XAUUSD=X/XAGUSD=X — تحقّقنا
+        # مباشرة إن الرمز محذوف نهائياً من yfinance (404 "Quote not found"،
+        # ليس عطل مؤقت). كان يفشل بصمت كل مرة ويكمل للمصدر التالي، فحذفه لا
+        # يغيّر أي سلوك فعلي — فقط يوفّر استدعاء شبكة ميت ويوضّح سلسلة المصادر.
 
         # ── 2. yfinance: Spot من Futures - theoretical carry basis ──────────
         # احتياطي فقط — قد يكون غير دقيق إذا تغيرت أسعار الفائدة
@@ -529,10 +513,16 @@ class MoshAIEngineV5:
                     days = max(1, (expire_ts - _time.time()) / 86400)
                     rate = 0.0525  # US risk-free rate 2026
                     basis = futures_price * rate * (days / 365)
+                    # (2026-09-11) حادثة حقيقية: yfinance .info لرمز GC=F المستمر
+                    # بيرجّع expireDate لعقد بعيد (كان 109 يوم قدّام)، فالفورمولا
+                    # بتحسب basis~$68 — أعلى من المدى الموثّق فعلياً ($10-60،
+                    # انظر تعليق _apply_spot_basis). سقف صريح يمنع تكرار خطأ سعر
+                    # دخول بعيد كلياً عن السوق الحقيقي حتى لو input الأيام غلط.
+                    basis = max(-60.0, min(60.0, basis))
                     spot  = round(futures_price - basis, 5)
                     logger.debug(
                         f"   💰 theoretical spot [{sym_upper}]: futures={futures_price:.2f} "
-                        f"days={days:.0f} basis={basis:.2f} → spot={spot:.2f}"
+                        f"days={days:.0f} basis={basis:.2f} (capped ±60) → spot={spot:.2f}"
                     )
                     return spot, "theoretical_carry"
             except Exception as _ye:
@@ -683,6 +673,65 @@ class MoshAIEngineV5:
 
         return analysis
 
+    def _fetch_independent_check_price(self, symbol: str) -> float:
+        """
+        سعر تقاطعي مستقل لـ_validate_price_freshness فقط — يتعمّد تجاوز كاش
+        TradingView WebSocket (المصدر 0) بدل أي قيمة محفوظة سابقاً.
+
+        (2026-09-10) حادثة حقيقية: صفقة XAUUSD بسعر دخول لم يظهر بالسوق
+        الحقيقي إطلاقاً خلال 15 يوماً كاملة — رغم وجود حارس جودة السعر هذا،
+        مرّت بصمت لأن الفحص كان يعيد استخدام نفس _cached_spot_price من
+        _apply_spot_basis كطرفَي المقارنة، فالفارق = صفر دائماً بالبنية —
+        حارس لا يستطيع فعلياً يكتشف أي شيء. لازم مصدر مستقل فعلاً.
+
+        الأولوية: Finnhub OANDA spot (سعر تسعير حقيقي مستقل تماماً، لا صيغة
+        نظرية) — لو غير متاح، نرجع لـtheoretical-carry من GC=F/SI=F (مسقوف
+        الآن ±$60 بعد ما تأكّدنا إنه أنتج basis~$68 بيوم واحد بسبب
+        expireDate لعقد بعيد — أقل موثوقية من Finnhub لكن أفضل من لا شيء).
+        """
+        sym_upper = symbol.upper()
+
+        # ── محاولة أولى: Finnhub OANDA spot (سعر حقيقي، ليس صيغة محسوبة) ──
+        try:
+            if smart_data._fh_key:
+                from app.services.smart_data import FINNHUB_MAP
+                fh_sym = FINNHUB_MAP.get(sym_upper)
+                if fh_sym:
+                    import requests as _req
+                    resp = _req.get(
+                        f"{smart_data._fh_base}/quote",
+                        params={"symbol": fh_sym, "token": smart_data._fh_key},
+                        timeout=4,
+                    )
+                    data  = resp.json()
+                    price = data.get("c") or data.get("l")
+                    if price and float(price) > 0:
+                        return round(float(price), 5)
+        except Exception as e:
+            logger.debug(f"   independent check (Finnhub) failed [{sym_upper}]: {e}")
+
+        # ── احتياطي: theoretical carry من GC=F/SI=F طازج ────────────────────
+        _FUTURES_SYM = {"XAUUSD": "GC=F", "XAGUSD": "SI=F"}
+        futures_sym = _FUTURES_SYM.get(sym_upper)
+        if not futures_sym:
+            return 0.0
+        try:
+            import yfinance as _yf, time as _time
+            info = _yf.Ticker(futures_sym).info
+            futures_price = info.get("regularMarketPrice") or info.get("previousClose")
+            if not futures_price or float(futures_price) <= 0:
+                return 0.0
+            expire_ts = info.get("expireDate")
+            if expire_ts:
+                days  = max(1, (expire_ts - _time.time()) / 86400)
+                basis = float(futures_price) * 0.0525 * (days / 365)
+                basis = max(-60.0, min(60.0, basis))   # نفس السقف بـ_fetch_spot_price
+                return round(float(futures_price) - basis, 5)
+            return round(float(futures_price), 5)
+        except Exception as e:
+            logger.debug(f"   independent check (carry) failed [{sym_upper}]: {e}")
+            return 0.0
+
     def _validate_price_freshness(self, symbol: str, analysis: dict) -> dict:
         """
         ✅ حارس جودة السعر (Price Freshness Guard)
@@ -703,13 +752,18 @@ class MoshAIEngineV5:
         """
         sym_upper = symbol.upper()
 
-        # ── للمعادن: نستخدم الـ spot المحفوظ من _apply_spot_basis (لا نجلبه مرة ثانية) ──
-        # استدعاء _fetch_spot_price مرتين يُسبب تفاوتاً في الأسعار → رفض زائف
+        # ── للمعادن: تحقق مستقل حقيقي (2026-09-10 — انظر _fetch_independent_check_price) ──
         if sym_upper in self._FUTURES_SPOT_SYMBOLS:
-            live_price  = analysis.pop("_cached_spot_price", 0)
-            live_source = analysis.pop("_cached_spot_source", "spot")
-            if not live_price:
-                live_price, live_source = self._fetch_spot_price(sym_upper)
+            analysis.pop("_cached_spot_source", None)
+            live_price  = self._fetch_independent_check_price(sym_upper)
+            live_source = "independent_carry_check"
+            if live_price <= 0:
+                # المصدر المستقل غير متاح — استخدم القيمة المحفوظة كملاذ أخير
+                # بدل تجاوز الفحص بالكامل (أفضل من لا شيء، رغم أنها ليست مستقلة)
+                live_price  = analysis.pop("_cached_spot_price", 0)
+                live_source = "cached_spot_fallback"
+            else:
+                analysis.pop("_cached_spot_price", None)
             if live_price <= 0:
                 return analysis  # لا يمكن التحقق — نتجاوز الفحص
         else:
