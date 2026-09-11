@@ -27,6 +27,34 @@ settings = get_settings()
 
 # ─── Symbol Maps ──────────────────────────────────────────────────────────────
 
+def _resolve_yf_symbol(symbol: str) -> str:
+    """يحل رمز yfinance: القاموس الثابت YFINANCE_MAP أولاً (الأسرع، يغطي
+    كل الرموز المعروفة)، وإلا احتياط من جدول market_configs (لوحة الإدارة).
+
+    (2026-09-11) بلاغ حقيقي: رمز أُضيف من لوحة الأدمن (USDMYR) مع حقل
+    yf_symbol بالجدول — بس _fetch_yfinance/get_realtime_price كانا يقرآن
+    من YFINANCE_MAP الثابت بس، فضل الرمز "مضاف" بالواجهة لكن غير قابل
+    للتحليل نهائياً بدون نشر كود جديد. هالاحتياطي يخلي أي رمز يضيفه
+    الأدمن (بحقل yf_symbol معبّى) يشتغل فوراً، بدون انتظار نشر."""
+    sym_upper = symbol.upper()
+    mapped = YFINANCE_MAP.get(sym_upper)
+    if mapped:
+        return mapped
+    try:
+        from app.database import SessionLocal
+        from app.models.market_config import MarketConfig
+        db = SessionLocal()
+        try:
+            row = db.query(MarketConfig).filter(MarketConfig.symbol == sym_upper).first()
+            if row and row.yf_symbol and row.yf_symbol.strip():
+                return row.yf_symbol.strip()
+        finally:
+            db.close()
+    except Exception as e:
+        logger.debug(f"   market_configs yf_symbol lookup failed [{sym_upper}]: {e}")
+    return symbol
+
+
 YFINANCE_MAP = {
     "XAUUSD": "GC=F",       # Gold Futures
     "BTCUSD": "BTC-USD",    # Bitcoin
@@ -273,7 +301,7 @@ class SmartDataProvider:
 
     def _fetch_yfinance(self, symbol: str, timeframe: str, bars: int) -> Optional[pd.DataFrame]:
         try:
-            yf_symbol = YFINANCE_MAP.get(symbol.upper(), symbol)
+            yf_symbol = _resolve_yf_symbol(symbol)
             yf_interval = YF_INTERVAL_MAP.get(timeframe, "1h")
             yf_period = YF_PERIOD_MAP.get(timeframe, "60d")
 
@@ -577,7 +605,7 @@ class SmartDataProvider:
         if sym in self._FUTURES_SYMBOLS:
             try:
                 if YFINANCE_AVAILABLE:
-                    yf_symbol = YFINANCE_MAP.get(sym, sym)
+                    yf_symbol = _resolve_yf_symbol(sym)
                     ticker = yf.Ticker(yf_symbol)
                     hist = ticker.history(period="1d", interval="1m")
                     if hist is not None and len(hist) > 0:
@@ -630,7 +658,7 @@ class SmartDataProvider:
         # ─── 3. yfinance fallback ─────────────────────────────────────────────
         try:
             if YFINANCE_AVAILABLE:
-                yf_symbol = YFINANCE_MAP.get(sym, sym)
+                yf_symbol = _resolve_yf_symbol(sym)
                 ticker = yf.Ticker(yf_symbol)
                 hist = ticker.history(period="1d", interval="1m")
                 if hist is not None and len(hist) > 0:
