@@ -103,7 +103,6 @@ function CandlesChart({ candles, symbol, timeframe }) {
 
 // ─── Analysis Card ────────────────────────────────────────────────────────────
 function AnalysisCard({ data, symbol, timeframe }) {
-  const [copied, setCopied] = useState(false)
   if (!data || data.error) return null
 
   const rec = data.recommendation || 'WAIT'
@@ -124,22 +123,6 @@ function AnalysisCard({ data, symbol, timeframe }) {
 
   const confColor = conf >= 70 ? 'text-green-400' : conf >= 50 ? 'text-yellow-400' : 'text-gray-400'
 
-  const copyAnalysis = () => {
-    const lines = [`📊 تحليل ${symbol || ''}${timeframe ? ` (${timeframe})` : ''}`.trim()]
-    lines.push(`التوصية: ${style.label}${conf ? ` · الثقة ${conf.toFixed(1)}%` : ''}`)
-    if (entry) lines.push(`الدخول: ${+entry % 1 === 0 ? entry : (+entry).toFixed(5)}`)
-    if (sl)    lines.push(`الوقف: ${+sl % 1 === 0 ? sl : (+sl).toFixed(5)}`)
-    tps.slice(0, 3).forEach((tp, i) => {
-      if (tp) lines.push(`هدف ${i + 1}: ${+tp % 1 === 0 ? tp : (+tp).toFixed(5)}`)
-    })
-    if (rr) lines.push(`R/R: 1:${(+rr).toFixed(1)}`)
-    lines.push('', 'via Qaffel AI — qaffel.com')
-    navigator.clipboard?.writeText(lines.join('\n')).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1800)
-    }).catch(() => {})
-  }
-
   return (
     <div className={`mt-2 rounded-xl border p-3 text-xs space-y-2 ${style.bg}`}>
       {/* Header */}
@@ -152,13 +135,6 @@ function AnalysisCard({ data, symbol, timeframe }) {
           {symbol && <span className="font-mono">{symbol}</span>}
           {timeframe && <span className="text-gray-500">({timeframe})</span>}
           <span className={`font-semibold ${confColor}`}>{conf.toFixed(1)}%</span>
-          <button
-            onClick={copyAnalysis}
-            title="نسخ التحليل للمشاركة"
-            className="text-gray-500 hover:text-gray-200 transition-colors p-0.5 -m-0.5"
-          >
-            {copied ? <Check size={13} className="text-green-400" /> : <Copy size={13} />}
-          </button>
         </div>
       </div>
 
@@ -205,9 +181,31 @@ function AnalysisCard({ data, symbol, timeframe }) {
   )
 }
 
+// ─── نسخ التحليل كامل (نص الرد + الأرقام المهيكلة إن وجدت) ─────────────────────
+function buildCopyText(msg) {
+  const lines = [msg.content || '']
+  const d = msg.analysisData
+  if (d && !d.error) {
+    const recLabel = { BUY: 'شراء', SELL: 'بيع', WAIT: 'انتظار' }[d.recommendation] || d.recommendation
+    const entry = d.entry_zones?.[0]
+    const sl = d.stop_loss_zone
+    const tps = d.take_profit_zones || []
+    lines.push('')
+    if (msg.symbol) lines.push(`الرمز: ${msg.symbol}${msg.timeframe ? ` (${msg.timeframe})` : ''}`)
+    if (recLabel) lines.push(`التوصية: ${recLabel}${d.ai_confidence_score ? ` · الثقة ${(+d.ai_confidence_score).toFixed(1)}%` : ''}`)
+    if (entry) lines.push(`الدخول: ${+entry % 1 === 0 ? entry : (+entry).toFixed(5)}`)
+    if (sl)    lines.push(`الوقف: ${+sl % 1 === 0 ? sl : (+sl).toFixed(5)}`)
+    tps.slice(0, 3).forEach((tp, i) => { if (tp) lines.push(`هدف ${i + 1}: ${+tp % 1 === 0 ? tp : (+tp).toFixed(5)}`) })
+    if (d.risk_reward_ratio) lines.push(`R/R: 1:${(+d.risk_reward_ratio).toFixed(1)}`)
+  }
+  lines.push('', 'via Qaffel AI — qaffel.com')
+  return lines.join('\n')
+}
+
 // ─── Message Bubble ───────────────────────────────────────────────────────────
 function MessageBubble({ msg }) {
   const isUser = msg.role === 'user'
+  const [copied, setCopied] = useState(false)
 
   if (isUser) {
     return (
@@ -224,6 +222,13 @@ function MessageBubble({ msg }) {
     chart:   { icon: BarChart2, label: 'رسم بياني', color: 'text-cyan-400' },
     report:  { icon: FileText,  label: 'تقرير', color: 'text-amber-400' },
   }[msg.action]
+
+  const copyAll = () => {
+    navigator.clipboard?.writeText(buildCopyText(msg)).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1800)
+    }).catch(() => {})
+  }
 
   return (
     <div className="flex justify-start">
@@ -250,6 +255,15 @@ function MessageBubble({ msg }) {
             symbol={msg.symbol}
             timeframe={msg.timeframe}
           />
+        )}
+        {msg.action !== 'error' && (
+          <button
+            onClick={copyAll}
+            className="flex items-center gap-1 text-[11px] text-gray-500 hover:text-gray-300 transition-colors px-0.5"
+          >
+            {copied ? <Check size={11} className="text-green-400" /> : <Copy size={11} />}
+            {copied ? 'تم النسخ' : 'نسخ التحليل كاملاً'}
+          </button>
         )}
       </div>
     </div>
@@ -457,15 +471,15 @@ export default function ChatBot() {
             {/* Messages */}
             <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-700">
 
-              {/* Empty state — تابات الفئات + شريط رموز أفقي (مضغوط) */}
+              {/* Empty state — تابات الفئات + قائمة رموز، تلف (wrap) بدل سكرول جانبي */}
               {messages.length === 0 && (
                 <div className="space-y-2">
-                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-700">
+                  <div className="flex flex-wrap gap-1.5">
                     {categories.map(cat => (
                       <button
                         key={cat}
                         onClick={() => setActiveCategory(cat)}
-                        className={`flex-shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded-full border transition-colors ${
+                        className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border transition-colors ${
                           activeCategory === cat
                             ? 'bg-blue-600 border-blue-500 text-white'
                             : 'bg-gray-800/80 border-gray-700/60 text-gray-400 hover:text-gray-200 hover:border-gray-600'
@@ -476,12 +490,12 @@ export default function ChatBot() {
                     ))}
                   </div>
 
-                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-700">
+                  <div className="flex flex-wrap gap-1.5">
                     {categoryMarkets.map(m => (
                       <button
                         key={m.symbol}
                         onClick={() => sendMessage(`تحليل ${m.symbol} ${quickTf}`)}
-                        className="flex-shrink-0 text-xs bg-gray-800/80 hover:bg-gray-700 border border-gray-700/60 rounded-lg px-2.5 py-1.5 text-gray-300 transition-colors"
+                        className="text-xs bg-gray-800/80 hover:bg-gray-700 border border-gray-700/60 rounded-lg px-2.5 py-1.5 text-gray-300 transition-colors"
                       >
                         {m.name_ar || m.symbol}
                       </button>
