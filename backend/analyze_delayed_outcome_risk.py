@@ -45,7 +45,13 @@ async def check_signal(sig) -> dict:
         exited = exited.replace(tzinfo=timezone.utc)
 
     gap_hours = (exited - created).total_seconds() / 3600
-    bars_needed = max(30, int(gap_hours) + 10)
+    # (تصحيح) get_ohlcv بترجّع آخر N شمعة من الآن (وقت تشغيل السكربت)، مش من
+    # وقت الإشارة — لازم نطلب عدد شموع يغطي من created_at لهلق بالضبط، مو
+    # بس فجوة created→exit، وإلا الفترة المطلوبة تطلع أقدم من أول شمعة مُرجعة
+    # (بالضبط السبب اللي خلى أغلب الفحص الأول يرجع NO_DATA_IN_WINDOW).
+    now = datetime.now(timezone.utc)
+    hours_since_created = (now - created).total_seconds() / 3600
+    bars_needed = max(30, int(hours_since_created) + 10)
 
     try:
         df = await smart_data.get_ohlcv(sig.market, "1h", bars=bars_needed)
