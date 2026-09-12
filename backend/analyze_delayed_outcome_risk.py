@@ -5,15 +5,20 @@ analyze_delayed_outcome_risk.py
 "نافذة فحص واسعة تحوي كل من SL وTP" اللي أدت لتأخير اكتشاف نتائج
 بعض الصفقات ساعات طويلة بعد إغلاقها الحقيقي.
 
-لكل صفقة محسومة منذ 2026-08-18 حيث (exit_executed - created_at) > 4
-ساعات: يجيب بيانات 1h حقيقية (نفس مصدر get_ohlcv الحي — yfinance عبر
-smart_data، نفس تعيين الرموز الفعلي بالتطبيق)، يمشي شمعة-شمعة من
-created_at، ويحدد: هل السعر لمس SL وTP الاثنين بنفس النافذة؟ لو نعم
-أيهما جاء أولاً زمنياً، وهل يطابق status المسجّل؟
+(2026-09-12) v2 — يستخدم group_unique_decisions() من
+decision_grouping.py (نفس نافذة الدقيقتين المستخدمة بكل تقارير الأداء
+بالتطبيق) بدل تجميع مبسّط خاص كان يعتمد على تطابق created_at الحرفي —
+النسخة الأولى كانت ممكن تفرّق قرار واحد لعدة "قرارات" بسبب فروق
+مايكروثانية بين صفوف نفس القرار لمستخدمين مختلفين.
+
+لكل قرار فريد محسوم منذ 2026-08-18 حيث (exit_executed - created_at) >
+4 ساعات: يجيب بيانات 1h حقيقية (نفس مصدر get_ohlcv الحي)، يمشي شمعة-
+شمعة من created_at، ويحدد: هل السعر لمس SL وTP الاثنين بنفس النافذة؟
+لو نعم أيهما جاء أولاً زمنياً، وهل يطابق status المسجّل.
 
 التشغيل (قراءة فقط، آمن 100% — ما يعدّل أي شيء بقاعدة البيانات):
   docker cp analyze_delayed_outcome_risk.py moshapi_backend:/app/
-  docker exec moshapi_backend python /app/analyze_delayed_outcome_risk.py
+  docker exec moshapi_backend python /app/analyze_delayed_outcome_risk.py 2>/dev/null
 """
 import sys, asyncio
 sys.path.insert(0, "/app")
@@ -22,44 +27,25 @@ from datetime import datetime, timedelta, timezone
 from app.database import SessionLocal
 from app.models.signal import Signal, SignalStatus
 from app.services.smart_data import smart_data
+from app.services.decision_grouping import group_unique_decisions
 
 CUTOFF = datetime(2026, 8, 18, tzinfo=timezone.utc)
 DELAY_THRESHOLD_HOURS = 4
 CLOSED = {"TP1_HIT", "TP2_HIT", "SL_HIT"}
 
 
-async def check_signal(sig) -> dict:
-    entry = float(sig.entry_price or 0)
-    sl    = float(sig.stop_loss or 0)
-    tp1   = float(sig.take_profit_1 or 0)
-    tp2   = float(sig.take_profit_2 or tp1)
-    is_buy = (sig.signal_type.value if hasattr(sig.signal_type, "value") else sig.signal_type) == "BUY"
-    if not (entry and sl and tp1):
-        return {"status": "SKIP_MISSING_LEVELS"}
-
-    created = sig.created_at
-    exited  = sig.exit_executed
-    if created.tzinfo is None:
-        created = created.replace(tzinfo=timezone.utc)
-    if exited.tzinfo is None:
-        exited = exited.replace(tzinfo=timezone.utc)
-
-    gap_hours = (exited - created).total_seconds() / 3600
-    # (تصحيح) get_ohlcv بترجّع آخر N شمعة من الآن (وقت تشغيل السكربت)، مش من
-    # وقت الإشارة — لازم نطلب عدد شموع يغطي من created_at لهلق بالضبط، مو
-    # بس فجوة created→exit، وإلا الفترة المطلوبة تطلع أقدم من أول شمعة مُرجعة
-    # (بالضبط السبب اللي خلى أغلب الفحص الأول يرجع NO_DATA_IN_WINDOW).
+async def check_decision(market, entry, sl, tp1, tp2, is_buy, created, exited) -> dict:
     now = datetime.now(timezone.utc)
     hours_since_created = (now - created).total_seconds() / 3600
     bars_needed = max(30, int(hours_since_created) + 10)
 
     try:
-        df = await smart_data.get_ohlcv(sig.market, "1h", bars=bars_needed)
+        df = await smart_data.get_ohlcv(market, "1h", bars=bars_needed)
     except Exception as e:
-        return {"status": "FETCH_ERROR", "error": str(e), "gap_hours": gap_hours}
+        return {"status": "FETCH_ERROR", "error": str(e)}
 
     if df is None or df.empty:
-        return {"status": "NO_DATA", "gap_hours": gap_hours}
+        return {"status": "NO_DATA"}
 
     import pandas as _pd
     if "datetime" in df.columns:
@@ -71,7 +57,7 @@ async def check_signal(sig) -> dict:
 
     rows = [r for r in rows if created <= r[0] <= exited + timedelta(hours=1)]
     if not rows:
-        return {"status": "NO_DATA_IN_WINDOW", "gap_hours": gap_hours}
+        return {"status": "NO_DATA_IN_WINDOW"}
 
     has_tp2 = (tp2 > tp1) if is_buy else (tp2 < tp1)
 
@@ -100,21 +86,18 @@ async def check_signal(sig) -> dict:
     else:
         real_first = None
 
-    recorded = sig.status.value if hasattr(sig.status, "value") else sig.status
-    match = (real_first == recorded) if real_first else None
-
     return {
-        "status": "OK", "gap_hours": gap_hours, "both_touched": both_touched,
+        "status": "OK", "both_touched": both_touched,
         "sl_first_ts": sl_first_ts.isoformat() if sl_first_ts else None,
         "tp_first_ts": tp_first_ts.isoformat() if tp_first_ts else None,
-        "real_first": real_first, "recorded": recorded, "match": match,
+        "real_first": real_first,
     }
 
 
 async def main():
     db = SessionLocal()
     try:
-        rows = (
+        raw = (
             db.query(Signal)
             .filter(
                 Signal.status.in_([SignalStatus.TP1_HIT, SignalStatus.TP2_HIT, SignalStatus.SL_HIT]),
@@ -123,66 +106,90 @@ async def main():
             )
             .all()
         )
-        print(f"📊 صفقات محسومة منذ {CUTOFF.date()}: {len(rows)}")
+        print(f"📊 صفوف خام محسومة منذ {CUTOFF.date()}: {len(raw)}")
 
-        # فقط قرار واحد لكل (سوق+فريم+نوع+دخول+وقت إنشاء) لتجنّب تكرار نفس القرار لعدة مستخدمين
-        seen = set()
+        decisions = group_unique_decisions(raw)
+        print(f"📊 قرارات فريدة (تجميع صحيح بنافذة دقيقتين، نفس decision_grouping.py): {len(decisions)}")
+
+        # نجيب entry/sl/tp1/tp2 للصف الممثّل (rep) لكل قرار — group_unique_decisions
+        # ما يرجّعهم بالـdict، لازم نجيبهم من الصف الأصلي بـid الممثّل
+        rep_ids = [d["id"] for d in decisions]
+        rep_rows = {s.id: s for s in db.query(Signal).filter(Signal.id.in_(rep_ids)).all()}
+
         delayed = []
-        for s in rows:
-            created = s.created_at
+        for d in decisions:
+            created = d["created_at"]
+            exited  = d["exit_executed"]
+            if not created or not exited:
+                continue
             if created.tzinfo is None:
                 created = created.replace(tzinfo=timezone.utc)
-            exited = s.exit_executed
             if exited.tzinfo is None:
                 exited = exited.replace(tzinfo=timezone.utc)
-            key = (s.market, s.timeframe, str(s.signal_type), round(float(s.entry_price or 0), 6), created)
-            if key in seen:
-                continue
-            seen.add(key)
             gap_h = (exited - created).total_seconds() / 3600
             if gap_h > DELAY_THRESHOLD_HOURS:
-                delayed.append(s)
+                rep = rep_rows.get(d["id"])
+                if not rep:
+                    continue
+                delayed.append((d, rep, created, exited, gap_h))
 
-        print(f"📊 قرارات فريدة 'متأخرة' (exit - created > {DELAY_THRESHOLD_HOURS}h): {len(delayed)}\n")
+        print(f"📊 قرارات فريدة 'متأخرة' (exit - created > {DELAY_THRESHOLD_HOURS}h): {len(delayed)}  "
+              f"(إجمالي صفوف/مستخدمين متأثرين: {sum(d['user_count'] for d,_,_,_,_ in delayed)})\n")
 
         if not delayed:
-            print("✅ لا يوجد صفقات متأخرة بهذا المعيار — الخطر غير موجود عملياً بهذه الفترة.")
+            print("✅ لا يوجد قرارات متأخرة بهذا المعيار.")
             return
 
         results = []
-        for i, s in enumerate(delayed):
+        for i, (d, rep, created, exited, gap_h) in enumerate(delayed):
             if i > 0:
-                await asyncio.sleep(0.5)   # تجنّب تقييد معدل الطلبات
-            r = await check_signal(s)
-            r["id"] = s.id
-            r["market"] = s.market
-            r["timeframe"] = s.timeframe
+                await asyncio.sleep(0.5)
+            entry = float(rep.entry_price or 0)
+            sl    = float(rep.stop_loss or 0)
+            tp1   = float(rep.take_profit_1 or 0)
+            tp2   = float(rep.take_profit_2 or tp1)
+            is_buy = (rep.signal_type.value if hasattr(rep.signal_type, "value") else rep.signal_type) == "BUY"
+            if not (entry and sl and tp1):
+                r = {"status": "SKIP_MISSING_LEVELS"}
+            else:
+                r = await check_decision(rep.market, entry, sl, tp1, tp2, is_buy, created, exited)
+            r["decision_id"] = d["id"]
+            r["market"] = d["market"]
+            r["timeframe"] = d["timeframe"]
+            r["user_count"] = d["user_count"]
+            r["recorded"] = d["status"]
+            r["gap_h"] = gap_h
             results.append(r)
+
             tag = ""
             if r["status"] == "OK":
                 if r["both_touched"]:
-                    tag = "⚠️ لمست الاثنين!" + ("  ❌ MISMATCH" if r["match"] is False else "  ✅ متطابق")
+                    match = r["real_first"] == r["recorded"]
+                    tag = "⚠️ لمست الاثنين!  " + ("✅ متطابق" if match else f"❌ MISMATCH (حقيقي={r['real_first']})")
                 else:
                     tag = "✅ لمست مستوى واحد بس"
-            print(f"  #{s.id:5d} {s.market:10s} {s.timeframe:4s}  gap={r.get('gap_hours',0):.1f}h  "
-                  f"[{r['status']}]  {tag}")
+            print(f"  قرار#{d['id']:5d} {d['market']:10s} {d['timeframe']:4s}  "
+                  f"مستخدمون={d['user_count']}  gap={gap_h:.1f}h  [{r['status']}]  {tag}")
 
         ok_results = [r for r in results if r["status"] == "OK"]
         both = [r for r in ok_results if r["both_touched"]]
-        mismatches = [r for r in both if r["match"] is False]
+        mismatches = [r for r in both if r["real_first"] != r["recorded"]]
+        affected_users = sum(r["user_count"] for r in mismatches)
 
         print("\n" + "="*90)
-        print("📊 النتيجة الإجمالية — حجم الخطر الفعلي")
+        print("📊 النتيجة الإجمالية — حجم الخطر الفعلي (بعد تجميع صحيح)")
         print("="*90)
-        print(f"  إجمالي القرارات المتأخرة المفحوصة: {len(delayed)}")
+        print(f"  إجمالي القرارات الفريدة المتأخرة: {len(delayed)}")
         print(f"  تحقّقت فعلياً (بيانات متاحة): {len(ok_results)}")
-        print(f"  لمست SL وTP الاثنين بنفس النافذة: {len(both)}  "
-              f"({len(both)/len(ok_results)*100:.1f}% من المتحقَّق منها)" if ok_results else "")
-        print(f"  من هذي، النتيجة المسجّلة لا تطابق الترتيب الزمني الحقيقي (انعكاس فعلي مؤكد): {len(mismatches)}")
+        if ok_results:
+            print(f"  لمست SL وTP الاثنين بنفس النافذة: {len(both)}  ({len(both)/len(ok_results)*100:.1f}%)")
+        print(f"  قرارات فريدة معكوسة فعلياً (مؤكدة): {len(mismatches)}")
+        print(f"  عدد المستخدمين المتأثرين فعلياً (إشعار نتيجة خاطئة): {affected_users}")
         if mismatches:
-            print("\n  🚨 الحالات المعكوسة فعلياً:")
+            print("\n  🚨 القرارات المعكوسة فعلياً:")
             for r in mismatches:
-                print(f"     #{r['id']} {r['market']} — مسجّل={r['recorded']} لكن الحقيقي={r['real_first']}")
+                print(f"     قرار#{r['decision_id']} {r['market']} ({r['timeframe']}) — "
+                      f"مستخدمون={r['user_count']}  مسجّل={r['recorded']} لكن الحقيقي={r['real_first']}")
 
     finally:
         db.close()
