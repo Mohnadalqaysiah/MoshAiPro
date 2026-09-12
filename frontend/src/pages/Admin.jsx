@@ -53,6 +53,27 @@ function UserModal({ user: u, onClose, onUpdate }) {
   const [extraDays, setExtraDays] = useState(7)
   const [loading, setLoading] = useState('')
   const [msg, setMsg] = useState(null)
+  // تواصل موحّد — تيليجرام مباشر / إيميل / رسالة دعم، من نفس المكان
+  const [contactChannel, setContactChannel] = useState(u.telegram_id ? 'telegram' : 'support')
+  const [contactSubject, setContactSubject] = useState('')
+  const [contactBody, setContactBody] = useState('')
+  const [contactSending, setContactSending] = useState(false)
+  const [contactMsg, setContactMsg] = useState(null)
+  const sendContact = async () => {
+    if (!contactBody.trim()) return
+    setContactSending(true); setContactMsg(null)
+    try {
+      await axios.post(`${API}/api/v1/admin/users/${u.id}/contact`, {
+        channel: contactChannel, body: contactBody, subject: contactSubject || undefined,
+      })
+      setContactMsg({ type: 'ok', text: '✅ تم الإرسال' })
+      setContactBody(''); setContactSubject('')
+    } catch (e) {
+      setContactMsg({ type: 'err', text: e.response?.data?.detail || 'فشل الإرسال' })
+    } finally {
+      setContactSending(false)
+    }
+  }
   // Renewal state
   const [renewDays, setRenewDays]       = useState(30)
   const [renewPlan, setRenewPlan]       = useState('monthly')
@@ -167,6 +188,50 @@ function UserModal({ user: u, onClose, onUpdate }) {
             {(u.notify_timeframes || []).length > 0 && (
               <p className="text-[11px] text-gray-500 mt-1.5">الفريم: {u.notify_timeframes.join(', ')}</p>
             )}
+          </div>
+
+          {/* تواصل موحّد — قناة واحدة بدل التنقّل بين تبويبات منفصلة */}
+          <div className="rounded-2xl p-4 border border-blue-700/30 bg-gradient-to-br from-blue-950/30 to-gray-900/40">
+            <p className="text-sm text-blue-400 font-bold flex items-center gap-1.5 mb-3">
+              <MessageCircle size={14}/> تواصل مباشر مع المستخدم
+            </p>
+            <div className="flex gap-1.5 mb-3">
+              {[
+                { key: 'telegram', label: '📨 تيليجرام', disabled: !u.telegram_id },
+                { key: 'email',    label: '📧 إيميل' },
+                { key: 'support',  label: '💬 رسالة دعم' },
+              ].map(c => (
+                <button key={c.key} type="button" disabled={c.disabled}
+                  onClick={() => setContactChannel(c.key)}
+                  title={c.disabled ? 'المستخدم لم يربط تيليجرام بعد' : ''}
+                  className={`text-xs px-3 py-1.5 rounded-lg border transition disabled:opacity-40 disabled:cursor-not-allowed ${
+                    contactChannel === c.key ? 'border-blue-500 bg-blue-900/30 text-blue-300' : 'border-gray-700 text-gray-400 hover:border-gray-500 hover:text-white'
+                  }`}>
+                  {c.label}
+                </button>
+              ))}
+            </div>
+            {contactChannel === 'email' && (
+              <input value={contactSubject} onChange={e => setContactSubject(e.target.value)}
+                placeholder="عنوان الإيميل..." lang="ar"
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white mb-2 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+            )}
+            <textarea value={contactBody} onChange={e => setContactBody(e.target.value)}
+              placeholder={
+                contactChannel === 'telegram' ? 'رسالة تيليجرام مباشرة...' :
+                contactChannel === 'email' ? 'نص الإيميل...' : 'رسالة دعم — بتوصل تنبيه تيليجرام للعميل إذا مربوط...'
+              }
+              rows={3}
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white resize-none focus:outline-none focus:ring-1 focus:ring-blue-500" />
+            <div className="flex items-center justify-between mt-2">
+              {contactMsg ? (
+                <span className={`text-xs ${contactMsg.type === 'ok' ? 'text-green-400' : 'text-red-400'}`}>{contactMsg.text}</span>
+              ) : <span />}
+              <button onClick={sendContact} disabled={contactSending || !contactBody.trim()}
+                className="text-xs bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-4 py-1.5 rounded-lg font-semibold transition">
+                {contactSending ? 'جاري الإرسال...' : 'إرسال'}
+              </button>
+            </div>
           </div>
 
           {msg && (

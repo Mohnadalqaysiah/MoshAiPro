@@ -886,6 +886,76 @@ def send_email(
         return {"message": f"جاري إرسال {len(emails)} إيميل في الخلفية", "count": len(emails)}
 
 
+# ─── تواصل موحّد مع مستخدم معيّن ─────────────────────────────────────────────
+
+class ContactUserIn(BaseModel):
+    channel: str             # "telegram" | "email" | "support"
+    body: str
+    subject: Optional[str] = None   # للإيميل فقط
+
+
+@router.post("/users/{user_id}/contact")
+async def contact_user(
+    user_id: int,
+    data: ContactUserIn,
+    background: BackgroundTasks,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """(2026-09-12) تواصل موحّد مع مستخدم معيّن من لوحة الأدمن — قناة واحدة
+    من UserModal بدل التنقّل بين تبويبات منفصلة: تيليجرام مباشر، إيميل،
+    أو رسالة دعم (تفتح/تكمل محادثة الدعم الحقيقية وترسل للعميل تنبيه
+    تيليجرام بوصول رد — نفس آلية send_admin_message بـsupport.py، بس
+    تبدأ محادثة جديدة لو ما كانت موجودة أصلاً، لأنه هون الأدمن هو البادئ)."""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(404, "المستخدم غير موجود")
+    body = (data.body or "").strip()
+    if not body:
+        raise HTTPException(400, "الرسالة فارغة")
+
+    if data.channel == "telegram":
+        if not user.telegram_id:
+            raise HTTPException(400, "هذا المستخدم لم يربط حسابه بتيليجرام بعد")
+        from app.services.admin_notify import notify_user_telegram
+        background.add_task(notify_user_telegram, user.telegram_id, body)
+        return {"success": True, "channel": "telegram"}
+
+    elif data.channel == "email":
+        if not _settings.SMTP_USER or not _settings.SMTP_PASSWORD:
+            raise HTTPException(400, "SMTP غير مضبوط — أضف SMTP_USER و SMTP_PASSWORD في إعدادات البيئة")
+        subject = (data.subject or "").strip() or "رسالة من فريق Qaffel AI"
+        background.add_task(_send_one, user.email, subject, body)
+        return {"success": True, "channel": "email"}
+
+    elif data.channel == "support":
+        from app.models.support_chat import SupportChatThread, SupportChatMessage, ChatThreadStatus
+        thread = db.query(SupportChatThread).filter(SupportChatThread.user_id == user.id).first()
+        if not thread:
+            thread = SupportChatThread(user_id=user.id)
+            db.add(thread)
+            db.commit()
+            db.refresh(thread)
+        msg = SupportChatMessage(thread_id=thread.id, sender_role="admin", sender_id=admin.id, body=body)
+        db.add(msg)
+        thread.unread_for_user += 1
+        thread.last_message_at = datetime.now(timezone.utc)
+        thread.status = ChatThreadStatus.OPEN
+        db.commit()
+        if user.telegram_id:
+            from app.services.admin_notify import notify_user_telegram
+            preview = body[:200]
+            background.add_task(
+                notify_user_telegram, user.telegram_id,
+                f"💬 <b>وصلتك رسالة جديدة من الدعم الفني</b>\n{preview}\n\n"
+                f"افتح لوحة التحكم لقراءة الرسالة والرد.",
+            )
+        return {"success": True, "channel": "support", "thread_id": thread.id}
+
+    else:
+        raise HTTPException(400, "قناة غير صحيحة — telegram أو email أو support")
+
+
 # ─── Telegram Messages ────────────────────────────────────────────────────────
 
 def _get_bot_token(db: Session) -> str:
