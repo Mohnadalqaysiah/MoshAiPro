@@ -478,21 +478,36 @@ async def bot_check_outcomes(
             # فحصنا رموز كتيرة بنفس الدورة (rate limit)، وهذا كان يفسّر
             # جزئياً ليش الرصد كان يعمل صح لرمز وحيد بس (أول رمز بالدورة
             # قبل ما نوصل لحد الطلبات) ولا يعمل للباقي.
-            range_high, range_low = price, price
+            # (2026-09-11) بلاغ حقيقي: USDJPY وBTCUSD سُجّلوا SL_HIT خلال 1-2
+            # دقيقة من إنشائهم — مستحيل طبيعياً. السبب الأول: كان يُحسب أقصى/
+            # أدنى سعر لكل الشموع الـ30 (~2.5 ساعة) بدون فلترة زمنية مقابل
+            # created_at، فأي لمسة تاريخية قبل وجود الإشارة كانت تُنسب لها.
+            # أُصلح جزئياً (استبعاد ما قبل created_at، هامش 60ث للشمعة الجارية
+            # وقت الإنشاء).
+            #
+            # (2026-09-12) بلاغ حقيقي ثانٍ، أعمق: حتى بعد فلترة created_at،
+            # فحص تحقّق مستقل (analyze_delayed_outcome_risk.py) ع82 قراراً
+            # فريداً منذ 18/8 لقى 3 حالات مؤكدة (12 مستخدم متأثر) سُجّلت
+            # بعكس الحقيقة تماماً (SL_HIT مسجّل والحقيقي TP1_HIT، أو العكس).
+            # السبب: max(highs)/min(lows) عبر كامل النافذة يفحص "هل السعر
+            # لمس المستوى بأي وقت بالنافذة؟" بدون أي اعتبار للترتيب الزمني —
+            # لو الهدف تحقق فعلياً أولاً ثم لاحقاً (بنفس النافغة الطويلة، عادة
+            # بسبب فجوة فحص كبيرة) رجع السعر ولمس الستوب كمان، كان الستوب
+            # يفوز دايماً لأنه مكتوب أولاً بالـif/elif — بغض النظر مين صار
+            # فعلياً أولاً. الحل: نمشي شمعة-شمعة بالترتيب الزمني الصحيح
+            # (الأقدم للأحدث) ونتوقف عند أول شمعة يتحقق فيها أي مستوى — نفس
+            # المبدأ المستخدم أصلاً بـ_verify_signal_outcome_core (admin.py)
+            # يلي أثبتنا دقته على نفس الحالات الثلاث بالضبط.
+            new_status = None
+            has_tp2 = (tp2 > tp1) if is_buy else (tp2 < tp1)
             if range_check:
                 try:
-                    # (2026-09-11) بلاغ حقيقي: USDJPY وBTCUSD سُجّلوا SL_HIT خلال
-                    # 1-2 دقيقة من إنشائهم — مستحيل طبيعياً. السبب: range_high/
-                    # range_low كانا يُحسبان من كل الشموع الـ30 (~2.5 ساعة) بدون
-                    # أي فلترة زمنية مقابل وقت إنشاء الإشارة، فأي لمسة تاريخية
-                    # لمستوى الـSL قبل ما الإشارة توجد أصلاً كانت تُنسب لها غلطاً.
-                    # لازم نستبعد أي شمعة أقدم من created_at (هامش 60ث لتغطية
-                    # الشمعة الجارية وقت الإنشاء بالضبط، مش أكتر).
                     created = sig.created_at
                     if created and created.tzinfo is None:
                         created = created.replace(tzinfo=timezone.utc)
                     created_ts = created.timestamp() - 60 if created else None
 
+                    candles = []   # [(ts_sortable, high, low), ...] بالترتيب الزمني الصاعد
                     if market_upper in _SPOT_SYMBOLS:
                         raw_bars = await fetch_tv_history(TV_SYMBOL_MAP[market_upper], "5m", bars=30)
                         if raw_bars:
@@ -500,36 +515,49 @@ async def bot_check_outcomes(
                                 [b for b in raw_bars if float(b[0]) >= created_ts]
                                 if created_ts is not None else raw_bars
                             )
-                            if relevant:
-                                highs = [float(b[2]) for b in relevant]
-                                lows  = [float(b[3]) for b in relevant]
-                                range_high = max(price, max(highs))
-                                range_low  = min(price, min(lows))
+                            candles = sorted(
+                                ((float(b[0]), float(b[2]), float(b[3])) for b in relevant),
+                                key=lambda c: c[0],
+                            )
                     else:
                         range_df = await _smart_data.get_ohlcv(market_upper, "5m", bars=30)
                         if range_df is not None and len(range_df):
-                            relevant_df = range_df
+                            import pandas as _pd
+                            ts_col = range_df["datetime"] if "datetime" in range_df.columns else range_df.index
+                            ts_series = _pd.to_datetime(ts_col, utc=True)
+                            work = range_df.copy()
+                            work["_ts"] = ts_series.values
                             if created_ts is not None:
-                                import pandas as _pd
-                                ts_col = range_df["datetime"] if "datetime" in range_df.columns else range_df.index
-                                ts_series = _pd.to_datetime(ts_col, utc=True)
-                                mask = ts_series >= _pd.Timestamp(created_ts, unit="s", tz="UTC")
-                                relevant_df = range_df[mask.values]
-                            if len(relevant_df):
-                                range_high = max(price, float(relevant_df["high"].max()))
-                                range_low  = min(price, float(relevant_df["low"].min()))
+                                work = work[ts_series.values >= _pd.Timestamp(created_ts, unit="s", tz="UTC")]
+                            work = work.sort_values("_ts")
+                            candles = [(row["_ts"], float(row["high"]), float(row["low"])) for _, row in work.iterrows()]
+
+                    for _ts, hi, lo in candles:
+                        sl_touch  = (lo <= sl) if is_buy else (hi >= sl)
+                        tp2_touch = has_tp2 and ((hi >= tp2) if is_buy else (lo <= tp2))
+                        tp1_touch = (hi >= tp1) if is_buy else (lo <= tp1)
+                        if sl_touch:
+                            new_status = SignalStatus.SL_HIT
+                        elif tp2_touch:
+                            new_status = SignalStatus.TP2_HIT
+                        elif tp1_touch:
+                            new_status = SignalStatus.TP1_HIT
+                        if new_status:
+                            break
                 except Exception:
                     pass
 
-            new_status = None
-            if is_buy:
-                if   range_low  <= sl:  new_status = SignalStatus.SL_HIT
-                elif range_high >= tp2: new_status = SignalStatus.TP2_HIT
-                elif range_high >= tp1: new_status = SignalStatus.TP1_HIT
-            else:
-                if   range_high >= sl:  new_status = SignalStatus.SL_HIT
-                elif range_low  <= tp2: new_status = SignalStatus.TP2_HIT
-                elif range_low  <= tp1: new_status = SignalStatus.TP1_HIT
+            # فحص لحظي (range_check=False، أو ما لقينا شي بالمشي الزمني) —
+            # نفس السلوك الأصلي: يقارن السعر الحالي فقط.
+            if new_status is None:
+                if is_buy:
+                    if   price <= sl:  new_status = SignalStatus.SL_HIT
+                    elif price >= tp2: new_status = SignalStatus.TP2_HIT
+                    elif price >= tp1: new_status = SignalStatus.TP1_HIT
+                else:
+                    if   price >= sl:  new_status = SignalStatus.SL_HIT
+                    elif price <= tp2: new_status = SignalStatus.TP2_HIT
+                    elif price <= tp1: new_status = SignalStatus.TP1_HIT
 
             if new_status and new_status != sig.status:
                 is_buy  = sig.signal_type.value == "BUY"
