@@ -43,6 +43,15 @@ from app.api.admin import _verify_signal_outcome_core, _calc_points
 LOOKBACK_DAYS = 30
 APPLICABLE = {"TP1_HIT", "TP2_HIT", "SL_HIT", "STILL_ACTIVE"}
 
+# (2026-09-12) استثناء صريح — لا علاقة له بجودة _verify_signal_outcome_core:
+# #2354 XAUUSD دخوله (4307.35) كان بق حارس سعر (أُصلح commit 12daaf7) —
+# رقم لم يوجد إطلاقاً بالسوق الحقيقي، صُحِّح يدوياً لـEXPIRED عمداً لأن
+# مستوياته (SL/TP) وهمية بالكامل. التحقق هون بيفحص "هل السعر الحقيقي لمس
+# رقم الـSL المسجَّل؟" — وبالصدفة نعم (رقم عادي بمدى تداول الذهب)، فيرجّع
+# نفس النتيجة الفاسدة (-513.68) اللي صححناها أصلاً. أي صف تاني عرفنا لاحقاً
+# إن مستوياته وهمية لنفس السبب يُضاف هون.
+EXCLUDE_IDS = {2354}
+
 
 async def main():
     apply = "--apply" in sys.argv
@@ -54,7 +63,12 @@ async def main():
             .filter(Signal.status == SignalStatus.EXPIRED, Signal.created_at >= cutoff)
             .all()
         )
-        print(f"📊 صفوف EXPIRED آخر {LOOKBACK_DAYS} يوم: {len(rows)}")
+        excluded = [s for s in rows if s.id in EXCLUDE_IDS]
+        rows = [s for s in rows if s.id not in EXCLUDE_IDS]
+        print(f"📊 صفوف EXPIRED آخر {LOOKBACK_DAYS} يوم: {len(rows) + len(excluded)}")
+        if excluded:
+            print(f"⛔ مستبعدة صراحة (مستويات وهمية معروفة، راجع EXCLUDE_IDS): "
+                  f"{', '.join('#' + str(s.id) for s in excluded)}")
 
         fixed_win = fixed_loss = fixed_active = skipped_no_data = 0
         total_points_delta = 0.0
