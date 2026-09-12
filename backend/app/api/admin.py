@@ -1178,24 +1178,16 @@ def set_signal_outcome(
     return {"success": True, "signal": _signal_info(signal)}
 
 
-@router.get("/signals/{signal_id}/verify-outcome")
-async def verify_signal_outcome(
-    signal_id: int,
-    admin: User = Depends(get_admin_user),
-    db: Session = Depends(get_db),
-):
+async def _verify_signal_outcome_core(signal: Signal) -> dict:
     """(2026-09-10) يفحص الإشارة مقابل بيانات السوق التاريخية الحقيقية من
     لحظة إنشائها لهلق، ويحدد شو ضربت أولاً (الهدف ولا الستوب) — بدون ما
-    يعدّل أي شي. الأدمن يستخدمه ليصحح الإشارات القديمة العالقة يدوياً
-    (زر "طبّق" بالواجهة يستدعي PATCH /outcome بالنتيجة المكتشفة).
+    يعدّل أي شي. مستخرجة كدالة مشتركة (2026-09-12) بين الفحص الفردي
+    والفحص الجماعي (verify-outcome-bulk) بدل تكرار نفس المنطق.
 
     يفحص شمعة 5m: أول شمعة يلمس فيها مداها (high/low) مستوى SL أو TP.
     لو الاثنين بنفس الشمعة → غامض، يفترض SL أولاً (تحفّظ)."""
-    signal = db.query(Signal).filter(Signal.id == signal_id).first()
-    if not signal:
-        raise HTTPException(404, "الإشارة غير موجودة")
     if not signal.created_at:
-        raise HTTPException(400, "لا يوجد وقت إنشاء للإشارة")
+        return {"detected": "NO_DATA", "reason": "لا يوجد وقت إنشاء للإشارة"}
 
     entry = float(signal.entry_price or 0)
     sl    = float(signal.stop_loss or 0)
@@ -1203,7 +1195,7 @@ async def verify_signal_outcome(
     tp2   = float(signal.take_profit_2 or tp1)
     is_buy = (signal.signal_type.value if hasattr(signal.signal_type, "value") else signal.signal_type) == "BUY"
     if not (entry and sl and tp1):
-        raise HTTPException(400, "مستويات الإشارة ناقصة")
+        return {"detected": "NO_DATA", "reason": "مستويات الإشارة ناقصة"}
 
     # bars=1000 من 5m ≈ آخر 3.5 يوم تداول متواصل — يغطي أي إشارة حديثة
     df = await _smart_data.get_ohlcv(signal.market, "5m", bars=1000)
@@ -1260,6 +1252,71 @@ async def verify_signal_outcome(
         "market": signal.market,
         "side": "BUY" if is_buy else "SELL",
         "entry": entry, "sl": sl, "tp1": tp1,
+    }
+
+
+@router.get("/signals/{signal_id}/verify-outcome")
+async def verify_signal_outcome(
+    signal_id: int,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    signal = db.query(Signal).filter(Signal.id == signal_id).first()
+    if not signal:
+        raise HTTPException(404, "الإشارة غير موجودة")
+    return await _verify_signal_outcome_core(signal)
+
+
+class BulkVerifyIn(BaseModel):
+    signal_ids: Optional[list[int]] = None   # لو None → كل EXPIRED بآخر 30 يوم
+
+
+@router.post("/signals/verify-outcome-bulk")
+async def verify_signals_bulk(
+    data: BulkVerifyIn,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """(2026-09-12) تحقق جماعي — يفحص عدة إشارات دفعة وحدة ويرجّع نسبة
+    الرابح/الخاسر الإجمالية، بدون تعديل أي شيء (قراءة فقط، نفس منطق
+    verify-outcome الفردي). لو ما مررنا signal_ids، يفحص كل EXPIRED
+    بآخر 30 يوم (نطاق التصحيحات الأخيرة). تأخير بسيط بين كل إشارة
+    لتجنّب تقييد معدل الطلبات (yfinance) عند فحص عدد كبير دفعة وحدة."""
+    import asyncio as _asyncio
+
+    if data.signal_ids:
+        signals = db.query(Signal).filter(Signal.id.in_(data.signal_ids)).all()
+    else:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+        signals = (
+            db.query(Signal)
+            .filter(Signal.status == SignalStatus.EXPIRED, Signal.created_at >= cutoff)
+            .all()
+        )
+
+    results = []
+    for i, s in enumerate(signals):
+        if i > 0:
+            await _asyncio.sleep(0.3)
+        r = await _verify_signal_outcome_core(s)
+        results.append({
+            "id": s.id, "market": s.market, "timeframe": s.timeframe,
+            "signal_type": s.signal_type.value if hasattr(s.signal_type, "value") else s.signal_type,
+            **r,
+        })
+
+    wins    = sum(1 for r in results if r["detected"] in ("TP1_HIT", "TP2_HIT"))
+    losses  = sum(1 for r in results if r["detected"] == "SL_HIT")
+    pending = sum(1 for r in results if r["detected"] == "STILL_ACTIVE")
+    no_data = sum(1 for r in results if r["detected"] == "NO_DATA")
+    decided = wins + losses
+
+    return {
+        "results": results,
+        "total": len(results),
+        "wins": wins, "losses": losses,
+        "still_active": pending, "no_data": no_data,
+        "winrate_pct": round(wins / decided * 100, 1) if decided else None,
     }
 
 

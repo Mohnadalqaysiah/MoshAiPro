@@ -721,6 +721,20 @@ export default function Admin() {
     }
   }
 
+  // (2026-09-12) تحقق جماعي — يفحص كل EXPIRED بآخر 30 يوم دفعة وحدة
+  // ويعرض نسبة الرابح/الخاسر الإجمالية. قراءة فقط، ما يطبّق أي تصحيح
+  // تلقائياً (التطبيق يبقى فردياً عبر applyVerified لكل صف بعد المراجعة).
+  const [bulkVerify, setBulkVerify] = useState(null)   // { loading, summary, results }
+  const runBulkVerify = async () => {
+    setBulkVerify({ loading: true })
+    try {
+      const r = await axios.post(`${API}/api/v1/admin/signals/verify-outcome-bulk`, {})
+      setBulkVerify({ loading: false, ...r.data })
+    } catch (e) {
+      setBulkVerify({ loading: false, error: e.response?.data?.detail || 'خطأ بالفحص الجماعي' })
+    }
+  }
+
   const submitOutcome = async (signalId) => {
     const form = outcomeForm[signalId] || {}
     if (!form.status) return
@@ -1582,13 +1596,73 @@ export default function Admin() {
                   <TrendingUp size={20} className="text-blue-400"/>
                   إدارة الإشارات
                 </h1>
-                <button
-                  onClick={loadAdminSignals}
-                  className="flex items-center gap-2 text-xs bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg transition"
-                >
-                  <RefreshCw size={13}/> تحديث
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={runBulkVerify}
+                    disabled={bulkVerify?.loading}
+                    title="يفحص كل إشارة EXPIRED بآخر 30 يوم مقابل بيانات السوق الحقيقية — قراءة فقط"
+                    className="flex items-center gap-2 text-xs bg-purple-700 hover:bg-purple-600 disabled:opacity-50 text-white px-3 py-2 rounded-lg transition"
+                  >
+                    {bulkVerify?.loading ? '... جاري الفحص' : '🔍 تحقق من الكل (EXPIRED)'}
+                  </button>
+                  <button
+                    onClick={loadAdminSignals}
+                    className="flex items-center gap-2 text-xs bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg transition"
+                  >
+                    <RefreshCw size={13}/> تحديث
+                  </button>
+                </div>
               </div>
+
+              {bulkVerify && !bulkVerify.loading && (
+                <div className="mb-6 bg-gray-900 border border-purple-800/40 rounded-xl p-4">
+                  {bulkVerify.error ? (
+                    <p className="text-sm text-red-400">⚠️ {bulkVerify.error}</p>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm font-semibold text-purple-300">نتيجة التحقق الجماعي — {bulkVerify.total} إشارة EXPIRED (آخر 30 يوم)</h3>
+                        <button onClick={() => setBulkVerify(null)} className="text-gray-500 hover:text-white"><X size={15}/></button>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                        <div className="bg-green-900/20 border border-green-700/30 rounded-lg p-3 text-center">
+                          <div className="text-lg font-bold text-green-400">{bulkVerify.wins}</div>
+                          <div className="text-[11px] text-gray-400">رابحة</div>
+                        </div>
+                        <div className="bg-red-900/20 border border-red-700/30 rounded-lg p-3 text-center">
+                          <div className="text-lg font-bold text-red-400">{bulkVerify.losses}</div>
+                          <div className="text-[11px] text-gray-400">خاسرة</div>
+                        </div>
+                        <div className="bg-gray-800/60 rounded-lg p-3 text-center">
+                          <div className="text-lg font-bold text-yellow-400">{bulkVerify.still_active}</div>
+                          <div className="text-[11px] text-gray-400">لسا نشطة فعلياً</div>
+                        </div>
+                        <div className="bg-gray-800/60 rounded-lg p-3 text-center">
+                          <div className="text-lg font-bold text-blue-400">{bulkVerify.winrate_pct != null ? `${bulkVerify.winrate_pct}%` : '—'}</div>
+                          <div className="text-[11px] text-gray-400">نسبة النجاح</div>
+                        </div>
+                      </div>
+                      <div className="max-h-64 overflow-y-auto space-y-1">
+                        {bulkVerify.results.map(r => (
+                          <div key={r.id} className="flex items-center justify-between text-xs bg-gray-800/40 rounded-lg px-3 py-1.5">
+                            <span className="text-gray-300">#{r.id} {r.market} ({r.timeframe}) — {r.signal_type}</span>
+                            <span className={
+                              r.detected === 'SL_HIT' ? 'text-red-400' :
+                              r.detected?.includes('TP') ? 'text-green-400' :
+                              r.detected === 'STILL_ACTIVE' ? 'text-yellow-400' : 'text-gray-500'
+                            }>
+                              {r.detected === 'SL_HIT' ? '❌ ضربت الستوب' :
+                               r.detected === 'TP2_HIT' ? '🏆 هدف 2' :
+                               r.detected === 'TP1_HIT' ? '✅ هدف 1' :
+                               r.detected === 'STILL_ACTIVE' ? '⏳ لسا نشطة' : `ℹ️ ${r.reason || 'لا بيانات'}`}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
 
               {signalsLoading ? (
                 <div className="text-gray-400 text-sm flex items-center gap-2">
