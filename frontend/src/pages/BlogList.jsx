@@ -4,6 +4,7 @@ import { BLOG_POSTS } from '../data/blogPosts'
 import { BookOpen, Clock, ChevronLeft, ChevronRight, Tag } from 'lucide-react'
 import useSEO from '../hooks/useSEO'
 import useBreadcrumbSchema from '../hooks/useBreadcrumbSchema'
+import PublicLayout from '../components/PublicLayout'
 
 export default function BlogList() {
   const { lang } = useLang()
@@ -27,7 +28,7 @@ export default function BlogList() {
   const sorted = [...BLOG_POSTS].sort((a, b) => new Date(b.date) - new Date(a.date))
 
   return (
-    <div className="min-h-screen bg-[#070b14] text-white" dir={isAr ? 'rtl' : 'ltr'}>
+    <PublicLayout>
       {/* ── Header ── */}
       <div className="border-b border-white/5 bg-[#070b14]/80">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center gap-3 text-sm text-gray-500">
@@ -132,6 +133,6 @@ export default function BlogList() {
           </Link>
         </div>
       </div>
-    </div>
+    </PublicLayout>
   )
 }

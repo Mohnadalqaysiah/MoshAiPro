@@ -7,6 +7,7 @@ import useSEO from '../hooks/useSEO'
 import useArticleSchema from '../hooks/useArticleSchema'
 import useBreadcrumbSchema from '../hooks/useBreadcrumbSchema'
 import { OrderBlockDiagram, FVGDiagram, BosChochDiagram } from '../components/BlogDiagrams'
+import PublicLayout from '../components/PublicLayout'
 
 const DIAGRAMS = {
   orderblock: OrderBlockDiagram,
@@ -125,7 +126,7 @@ export default function BlogPost() {
     .slice(0, 2)
 
   return (
-    <div className="min-h-screen bg-[#070b14] text-white" dir={isAr ? 'rtl' : 'ltr'}>
+    <PublicLayout>
       {/* ── Breadcrumb ── */}
       <div className="border-b border-white/5 bg-[#070b14]/80">
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-2 text-sm text-gray-500 flex-wrap">
@@ -226,6 +227,6 @@ export default function BlogPost() {
           </div>
         )}
       </article>
-    </div>
+    </PublicLayout>
   )
 }
