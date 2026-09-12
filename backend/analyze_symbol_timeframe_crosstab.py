@@ -51,24 +51,30 @@ def main():
         print(f"{'الرمز':10s}  {'15m: n/winrate/نقاط/exp':38s}  {'باقي الفريمات: n/winrate/نقاط/exp':38s}")
         print("="*100)
 
-        qualifying = []
+        all_symbols = []
         for symbol, rows in by_symbol.items():
             tf15 = [d for d in rows if d["timeframe"] == "15m"]
             rest = [d for d in rows if d["timeframe"] != "15m"]
-            if len(tf15) < MIN_SAMPLE_15M:
-                continue
+            if not tf15:
+                continue   # هالرمز أصلاً ماله صفقات 15m، لا داعي يظهر بجدول 15m
             n15, w15, wr15, pts15, exp15 = stats(tf15)
             nr, wr_, wrr, ptsr, expr = stats(rest)
-            qualifying.append((symbol, n15, wr15, pts15, exp15, nr, wrr, ptsr, expr))
+            all_symbols.append((symbol, n15, wr15, pts15, exp15, nr, wrr, ptsr, expr))
 
-        qualifying.sort(key=lambda x: x[4])  # فرز حسب expectancy الـ15m، الأضعف أولاً
+        all_symbols.sort(key=lambda x: x[3])  # فرز حسب نقاط الـ15m (الأسوأ أولاً) — يوضّح أكبر مساهم بالخسارة
 
-        for symbol, n15, wr15, pts15, exp15, nr, wrr, ptsr, expr in qualifying:
+        qualifying = [s for s in all_symbols if s[1] >= MIN_SAMPLE_15M]
+
+        for symbol, n15, wr15, pts15, exp15, nr, wrr, ptsr, expr in all_symbols:
+            small = "" if n15 >= MIN_SAMPLE_15M else f"  ⚠️ عينة صغيرة (<{MIN_SAMPLE_15M})"
             rest_str = f"n={nr:3d} wr={wrr:5.1f}% pts={ptsr:+8.2f} exp={expr:+6.3f}" if nr else "لا توجد صفقات على فريم آخر"
-            print(f"{symbol:10s}  n={n15:3d} wr={wr15:5.1f}% pts={pts15:+8.2f} exp={exp15:+6.3f}    {rest_str}")
+            print(f"{symbol:10s}  n={n15:3d} wr={wr15:5.1f}% pts={pts15:+8.2f} exp={exp15:+6.3f}{small}    {rest_str}")
+
+        print(f"\n  (إجمالي رموز عندها أي صفقة 15m: {len(all_symbols)} — منها {len(qualifying)} بعينة ≥{MIN_SAMPLE_15M})")
 
         if not qualifying:
-            print(f"⚠️ لا يوجد أي رمز عنده ≥{MIN_SAMPLE_15M} قرار على فريم 15m — لا يمكن الفصل بثقة.")
+            print(f"⚠️ لا يوجد أي رمز عنده ≥{MIN_SAMPLE_15M} قرار على فريم 15m — لا يمكن الفصل بثقة برمز واحد لوحده.")
+            print("   راجع الجدول فوق لكل الرموز بعيّناتها الصغيرة كمؤشر أولي بس.")
             return
 
         print("\n" + "="*100)
