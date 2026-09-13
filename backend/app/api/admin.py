@@ -20,6 +20,7 @@ from app.models.market_config import MarketConfig
 from app.models.site_settings import SiteSettings
 from app.models.affiliate import Affiliate, AffiliateReferral, TIER1_RATE, TIER2_RATE, TIER2_THRESHOLD
 from app.models.signal import Signal, SignalStatus
+from app.models.feature_request import FeatureRequest
 from app.services.decision_grouping import group_unique_decisions as _group_unique_decisions
 from app.services.auth_service import get_admin_user, hash_password, verify_password
 from app.services.smart_data import smart_data as _smart_data
@@ -2483,3 +2484,30 @@ async def system_diagnostic(
 
     logger.info(f"🔬 Diagnostic complete in {elapsed_ms}ms — verdict: {diagnosis}")
     return results
+
+
+# ─── Feature Request Survey (Admin Summary) ────────────────────────────────────
+
+@router.get("/feature-requests/summary")
+def feature_requests_summary(
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """ملخص نتائج بوب أب استطلاع الميزات: عدد كل خيار + النصوص المخصصة."""
+    rows = db.query(FeatureRequest).order_by(FeatureRequest.created_at.desc()).all()
+    counts = {}
+    custom_texts = []
+    for r in rows:
+        counts[r.selected_option] = counts.get(r.selected_option, 0) + 1
+        if r.custom_text:
+            custom_texts.append({
+                "id":         r.id,
+                "user_id":    r.user_id,
+                "text":       r.custom_text,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            })
+    return {
+        "total":        len(rows),
+        "counts":       counts,
+        "custom_texts": custom_texts,
+    }

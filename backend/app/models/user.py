@@ -70,6 +70,9 @@ class User(Base):
     language              = Column(String, default="ar")
     notifications_enabled = Column(Boolean, default=True)
 
+    # Feature-request survey popup — يُعرض مرة واحدة فقط (إرسال أو تخطٍّ)
+    feature_survey_dismissed = Column(Boolean, default=False, nullable=False)
+
     # Bot Notification Preferences
     notify_watchlist      = Column(JSON,    default=list)   # ["XAUUSD","BTCUSD"]
     notify_timeframe      = Column(String,  default="1h")   # legacy single value

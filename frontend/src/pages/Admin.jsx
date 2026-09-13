@@ -9,7 +9,8 @@ import {
   DollarSign, Activity, RefreshCw, Calendar,
   X, ExternalLink, Shield, AlertTriangle, Settings, Mail, Upload, Signal, Send,
   FileText, TrendingUp as TrendUp, Bell, Sparkles,
-  ShieldCheck, UserCog, MessageCircle, UserMinus, Paperclip, Gift, ChevronRight, Menu
+  ShieldCheck, UserCog, MessageCircle, UserMinus, Paperclip, Gift, ChevronRight, Menu,
+  Lightbulb
 } from 'lucide-react'
 
 const MAX_SUPPORT_ATTACHMENT_BYTES = 1 * 1024 * 1024
@@ -841,6 +842,7 @@ export default function Admin() {
     { key:'email',      icon:Mail,          label:'البريد' },
     { key:'settings',   icon:Settings,      label:'الإعدادات' },
     { key:'diagnostic', icon:AlertTriangle, label:'تشخيص النظام' },
+    { key:'feature-survey', icon:Lightbulb, label:'استطلاع الميزات' },
   ]
 
   return (
@@ -2939,8 +2941,113 @@ export default function Admin() {
           {/* ── Diagnostic ── */}
           {tab === 'diagnostic' && <DiagnosticPanel />}
 
+          {/* ── Feature Survey ── */}
+          {tab === 'feature-survey' && <FeatureSurveyPanel />}
+
         </main>
       </div>
+    </div>
+  )
+}
+
+// ── Feature Request Survey — Admin Summary ────────────────────────────────────
+function FeatureSurveyPanel() {
+  const [data, setData]       = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError]     = useState(null)
+
+  const OPTION_LABELS = {
+    concurrent_signals_warning: 'تحذير عند أكثر من صفقة مرتبطة مفتوحة بنفس الوقت',
+    position_size_calculator:   'حاسبة تلقائية لحجم الصفقة حسب رأس المال',
+    signal_expiry_countdown:    'عداد وقت متبقي لكل إشارة قبل ما تنتهي',
+    confidence_explainer:       'شرح أوضح ليش الثقة كذا% (بيانات تاريخية حقيقية)',
+    other:                      'شيء تاني',
+  }
+
+  const load = async () => {
+    setLoading(true); setError(null)
+    try {
+      const res = await axios.get(`${API}/api/v1/admin/feature-requests/summary`)
+      setData(res.data)
+    } catch (e) {
+      setError(e.response?.data?.detail || e.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { load() }, [])
+
+  const counts = data?.counts || {}
+  const maxCount = Math.max(1, ...Object.values(counts))
+  const orderedKeys = [...Object.keys(OPTION_LABELS), ...Object.keys(counts).filter(k => !OPTION_LABELS[k])]
+
+  return (
+    <div className="space-y-6 max-w-4xl">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-bold flex items-center gap-2">
+            <Lightbulb size={20} className="text-yellow-400" /> استطلاع الميزات
+          </h1>
+          <p className="text-gray-500 text-sm mt-1">نتائج بوب أب "ساعدنا نطور المنصة لك" — إجمالي {data?.total ?? '—'} إجابة</p>
+        </div>
+        <button onClick={load} disabled={loading}
+          className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 disabled:opacity-60 text-gray-200 px-4 py-2 rounded-xl text-sm transition">
+          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> تحديث
+        </button>
+      </div>
+
+      {error && (
+        <div className="bg-red-900/30 border border-red-700 text-red-300 text-sm rounded-xl px-4 py-3">{error}</div>
+      )}
+
+      {loading && !data ? (
+        <div className="text-gray-500 text-sm">جاري التحميل...</div>
+      ) : data && (
+        <>
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-3">
+            <h2 className="text-sm font-semibold text-gray-300 mb-2">عدد الأصوات لكل خيار</h2>
+            {orderedKeys.filter(k => counts[k]).length === 0 && (
+              <p className="text-gray-500 text-sm">لا توجد إجابات بعد.</p>
+            )}
+            {orderedKeys.map(key => {
+              const n = counts[key] || 0
+              if (!n) return null
+              return (
+                <div key={key} className="space-y-1">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-300">{OPTION_LABELS[key] || key}</span>
+                    <span className="text-gray-400 font-semibold">{n}</span>
+                  </div>
+                  <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden">
+                    <div className="h-full bg-blue-600 rounded-full" style={{ width: `${(n / maxCount) * 100}%` }} />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
+            <h2 className="text-sm font-semibold text-gray-300 mb-3">
+              نصوص "شيء تاني" المخصصة ({data.custom_texts?.length || 0})
+            </h2>
+            {(!data.custom_texts || data.custom_texts.length === 0) ? (
+              <p className="text-gray-500 text-sm">لا توجد نصوص مخصصة بعد.</p>
+            ) : (
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {data.custom_texts.map(t => (
+                  <div key={t.id} className="bg-gray-800/60 border border-gray-700/50 rounded-xl px-3 py-2.5">
+                    <p className="text-sm text-gray-200">{t.text}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      مستخدم #{t.user_id} — {t.created_at ? new Date(t.created_at).toLocaleDateString('ar-SA') : ''}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </div>
   )
 }

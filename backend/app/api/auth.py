@@ -3,6 +3,7 @@ Mosh AI Pro v5 - Auth API
 Register / Login / Profile / Link Telegram
 """
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 import secrets
 import random
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query, Request
@@ -12,6 +13,7 @@ from loguru import logger
 
 from app.database import get_db
 from app.models.user import User, UserRole, PlanType
+from app.models.feature_request import FeatureRequest
 from app.models.affiliate import Affiliate, generate_affiliate_code
 from app.models.site_settings import SiteSettings
 from app.services.auth_service import (
@@ -83,6 +85,10 @@ class ContactIn(BaseModel):
 
 class VerifyEmailIn(BaseModel):
     otp: str
+
+class FeatureSurveyIn(BaseModel):
+    selected_option: str
+    custom_text: Optional[str] = None
 
 
 # OTP store: email → {otp, expires_at}
@@ -314,6 +320,39 @@ def update_trading_settings(
         "account_balance": user.account_balance,
         "risk_percent": user.risk_percent,
     }
+
+
+# ─── Feature Request Survey (Popup) ────────────────────────────────────────────
+
+@router.post("/feature-survey/submit")
+def submit_feature_survey(
+    data: FeatureSurveyIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """يحفظ إجابة الاستطلاع ويعلّم الحساب كمنتهي (ما يظهر له تاني)."""
+    if not data.selected_option.strip():
+        raise HTTPException(400, "الرجاء اختيار إجابة")
+    fr = FeatureRequest(
+        user_id=user.id,
+        selected_option=data.selected_option.strip(),
+        custom_text=(data.custom_text or "").strip() or None,
+    )
+    db.add(fr)
+    user.feature_survey_dismissed = True
+    db.commit()
+    return {"success": True}
+
+
+@router.post("/feature-survey/skip")
+def skip_feature_survey(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """يعلّم الحساب كمنتهي بدون تسجيل أي إجابة (تخطّي)."""
+    user.feature_survey_dismissed = True
+    db.commit()
+    return {"success": True}
 
 
 # ─── Forgot Password (OTP) ────────────────────────────────────────────────────
@@ -596,6 +635,7 @@ def _user_info(user: User) -> dict:
         "affiliate_code":        user.affiliate_code or "",
         "referred_by_code":      user.referred_by_code or "",
         "referral_points":       user.referral_points or 0,
+        "feature_survey_dismissed": bool(user.feature_survey_dismissed),
     }
 
 

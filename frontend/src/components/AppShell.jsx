@@ -18,6 +18,7 @@ const EmailVerifyBanner  = lazy(() => import('./EmailVerifyBanner'))
 const OnboardingTour     = lazy(() => import('./OnboardingTour'))
 const UpgradeModal       = lazy(() => import('./UpgradeModal'))
 const EmailVerifyModal   = lazy(() => import('./EmailVerifyModal'))
+const FeatureSurveyModal = lazy(() => import('./FeatureSurveyModal'))
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -452,6 +453,19 @@ export default function AppShell({ children }) {
     try { sessionStorage.setItem('verify_modal_seen', '1') } catch { /* noop */ }
   }
 
+  // (2026-09-13) استطلاع "ساعدنا نطور المنصة لك" — مرة واحدة فقط لكل حساب.
+  // المصدر الحقيقي هو user.feature_survey_dismissed (يُحدَّث بالسيرفر عند
+  // إرسال/تخطّي)، وsurveyDone محلي فقط لمنع ظهوره ثانية فوراً بنفس الجلسة
+  // قبل ما يوصل refreshUser() من الـmodal نفسه.
+  const [surveyOpen, setSurveyOpen] = useState(false)
+  const [surveyDone, setSurveyDone] = useState(false)
+  useEffect(() => {
+    if (needsVerify || trialExpired) return
+    if (!user || user.feature_survey_dismissed || surveyDone) return
+    const t = setTimeout(() => setSurveyOpen(true), 1200)
+    return () => clearTimeout(t)
+  }, [user, needsVerify, trialExpired, surveyDone])
+
   useEffect(() => { setDrawer(false) }, [location.pathname])
   useEffect(() => {
     document.body.style.overflow = drawer ? 'hidden' : ''
@@ -489,6 +503,9 @@ export default function AppShell({ children }) {
             <OnboardingTour />
             {verifyOpen && <EmailVerifyModal open onClose={closeVerify} />}
             {upgradeOpen && !verifyOpen && <UpgradeModal open onClose={closeUpgrade} reason="trial_expired" />}
+            {surveyOpen && !verifyOpen && !upgradeOpen && (
+              <FeatureSurveyModal onDone={() => { setSurveyOpen(false); setSurveyDone(true) }} />
+            )}
           </Suspense>
 
           <main className="flex-1 min-w-0 px-3 sm:px-5 py-4 sm:py-5 max-w-[1180px] w-full mx-auto">
