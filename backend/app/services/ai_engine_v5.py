@@ -793,6 +793,19 @@ class MoshAIEngineV5:
         """
         sym_upper = symbol.upper()
 
+        # (2026-09-15) هدر حصة موثّق بالأرقام: هذا الحارس وُجد ليمنع إصدار
+        # **إشارة** بسعر بائت. لما تكون التوصية WAIT فما في إشارة تُحمى
+        # أصلاً — ومع ذلك كنا نحرق طلب TwelveData بكل تحليل. سجل
+        # analysis_logs (21 يوم، ذهب): 243 WAIT من أصل 249 تحليل = 97.6%
+        # من الاستدعاءات كانت بلا أي فائدة. الخطة الحالية 8 طلبات/دقيقة
+        # و800/يوم فقط، وسجّلت 6/8 بدقيقة واحدة فعلاً.
+        # السعر المعروض للمستخدم بحالة WAIT يبقى دقيقاً — يأتي من
+        # _apply_spot_basis عبر TradingView WebSocket (بلا حصة إطلاقاً).
+        if str(analysis.get("recommendation") or "").upper() not in ("BUY", "SELL"):
+            analysis.pop("_cached_spot_price", None)
+            analysis.pop("_cached_spot_source", None)
+            return analysis
+
         # ── للمعادن: تحقق مستقل حقيقي (2026-09-10 — انظر _fetch_independent_check_price) ──
         if sym_upper in self._FUTURES_SPOT_SYMBOLS:
             analysis.pop("_cached_spot_source", None)
