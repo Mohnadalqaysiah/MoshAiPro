@@ -47,6 +47,20 @@ def _pnl_for_outcome(entry: float, exit_price: float, sl: float, tp1: float, tp2
     return round(points, 2), pnl_pct, round(ep, 5)
 
 router = APIRouter()
+
+
+def _extract_str(value, key: str) -> Optional[str]:
+    """
+    يستخرج نصاً من حقل قد يكون قاموساً (بنية محرك ICT) أو نصاً جاهزاً.
+    وُجد بعد اكتشاف أن premium_discount/wyckoff_phase كانا NULL بكل صفوف
+    جدول signals (162/162) لأنهما كانا يُقرآن كنصوص وهما ليسا كذلك.
+    """
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        v = value.get(key)
+        return str(v) if v not in (None, "") else None
+    return str(value) or None
 settings = get_settings()
 
 
@@ -254,8 +268,15 @@ async def bot_analyze(
                         take_profit_2      = float(tp2) if tp2 else None,
                         risk_reward_ratio  = float(rr) if rr else None,
                         ai_confidence      = float(conf),
-                        wyckoff_phase      = analysis.get("wyckoff_phase"),
-                        premium_discount   = analysis.get("premium_discount"),
+                        # (2026-09-15) الحقلان كانا NULL بكل الصفوف (162/162):
+                        # analysis["premium_discount"] قاموس {zone,pct,bias}
+                        # لا نص، و"wyckoff_phase" غير موجود بجذر التحليل
+                        # أصلاً (الطور تحت analysis["wyckoff"]["phase"]).
+                        # فقدنا بذلك أهم سياق ICT لتحليل الجودة لاحقاً —
+                        # المنطقة وقت الدخول هي نفسها التي تبني عليها
+                        # Rule 6 قرارها للذهب.
+                        wyckoff_phase      = _extract_str(analysis.get("wyckoff"), "phase"),
+                        premium_discount   = _extract_str(analysis.get("premium_discount"), "zone"),
                         signal_hash        = sig_hash,
                         status             = SignalStatus.ACTIVE,
                         expires_at         = expires_at,
