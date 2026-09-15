@@ -703,6 +703,11 @@ class MoshAIEngineV5:
         expireDate لعقد بعيد — أقل موثوقية من Finnhub لكن أفضل من لا شيء).
         """
         sym_upper = symbol.upper()
+        # (2026-09-15) المصدر الفعلي يُسجَّل هنا ليقرأه _validate_price_freshness.
+        # كان يطبع "independent_carry_check" دائماً أياً كان المصدر الحقيقي —
+        # تسمية ضلّلت تشخيصاً فعلياً بنفس اليوم (بدت وكأن الفحص يستخدم carry
+        # بينما كان يستخدم TwelveData).
+        self._last_independent_source = "none"
 
         # ── محاولة أولى: Finnhub OANDA spot (سعر حقيقي، ليس صيغة محسوبة) ──
         try:
@@ -719,6 +724,7 @@ class MoshAIEngineV5:
                     data  = resp.json()
                     price = data.get("c") or data.get("l")
                     if price and float(price) > 0:
+                        self._last_independent_source = "finnhub_spot"
                         return round(float(price), 5)
         except Exception as e:
             logger.debug(f"   independent check (Finnhub) failed [{sym_upper}]: {e}")
@@ -732,6 +738,7 @@ class MoshAIEngineV5:
         try:
             td_price = smart_data._try_twelvedata_price(sym_upper)
             if td_price and float(td_price) > 0:
+                self._last_independent_source = "twelvedata_spot"
                 return round(float(td_price), 5)
         except Exception as e:
             logger.debug(f"   independent check (TwelveData) failed [{sym_upper}]: {e}")
@@ -755,6 +762,7 @@ class MoshAIEngineV5:
             if not futures_price or float(futures_price) <= 0:
                 return 0.0
             expire_ts = info.get("expireDate")
+            self._last_independent_source = "theoretical_carry(NOT_independent)"
             if expire_ts:
                 days  = max(1, (expire_ts - _time.time()) / 86400)
                 basis = float(futures_price) * 0.0525 * (days / 365)
@@ -789,7 +797,7 @@ class MoshAIEngineV5:
         if sym_upper in self._FUTURES_SPOT_SYMBOLS:
             analysis.pop("_cached_spot_source", None)
             live_price  = self._fetch_independent_check_price(sym_upper)
-            live_source = "independent_carry_check"
+            live_source = getattr(self, "_last_independent_source", "unknown")
             if live_price <= 0:
                 # المصدر المستقل غير متاح — استخدم القيمة المحفوظة كملاذ أخير
                 # بدل تجاوز الفحص بالكامل (أفضل من لا شيء، رغم أنها ليست مستقلة)
