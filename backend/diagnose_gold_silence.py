@@ -43,6 +43,13 @@ async def main():
     print(f"تشخيص صمت الذهب — {datetime.now(timezone.utc).isoformat()}")
     print("=" * 96)
 
+    # ⚠️ ضروري: هذا السكربت عملية مستقلة، وSmartData.__init__ يبدأ بـ
+    # _td_enabled=False. بدون هذا السطر يقيس السكربت سلوكاً مختلفاً عن
+    # سلوك السيرفر (TwelveData مطفأ) — وهذا أنتج تشخيصاً مضللاً فعلياً
+    # بتاريخ 15/09 قبل اكتشاف السبب.
+    td_ok = smart_data.restore_twelvedata_from_settings()
+    print(f"  TwelveData (مصدر spot اللحظي): {'مفعّل ✅' if td_ok else 'غير مفعّل ⚠️'}")
+
     # ── 0) هل السوق مفتوح أصلاً؟ ─────────────────────────────────────────
     for sym in SYMBOLS:
         print(f"  is_market_open({sym}) = {smart_data.is_market_open(sym)}")
@@ -59,8 +66,14 @@ async def main():
             p = 0.0
             print(f"  ⚠️ {sym}: _fetch_independent_check_price استثناء: {e}")
         independent[sym] = p
-        print(f"  {sym}: السعر المستقل = {p}   |   أقصى فجوة مسموحة = {_MAX_PRICE_GAP_USD.get(sym)}"
-              + (f"  ({_MAX_PRICE_GAP_USD.get(sym) / p * 100:.3f}% من السعر)" if p > 0 else "  ⚠️ صفر — المصدر المستقل غير متاح"))
+        # القيمة الفعلية المستخدمة بـ_validate_price_freshness وليست القيمة
+        # الخام بالقاموس: للمعادن صارت max(الثابت، 1% من السعر) بعد إصلاح
+        # الانجراف (15/09) — طباعة الخام وحدها كانت مضللة.
+        fixed = _MAX_PRICE_GAP_USD.get(sym, 0.0)
+        effective = max(fixed, p * 0.01) if p > 0 else fixed
+        print(f"  {sym}: السعر المستقل = {p}   |   الحد الخام = {fixed}   |   "
+              f"الحد الفعلي المطبَّق = {effective:.2f}"
+              + (f"  ({effective / p * 100:.3f}% من السعر)" if p > 0 else "  ⚠️ صفر — المصدر المستقل غير متاح"))
 
     # ── 2) تشغيل التحليل الحقيقي ─────────────────────────────────────────
     for sym in SYMBOLS:

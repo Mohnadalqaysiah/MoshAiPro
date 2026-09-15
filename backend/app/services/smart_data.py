@@ -100,7 +100,10 @@ YFINANCE_MAP = {
 
 TWELVEDATA_MAP = {
     "XAUUSD": "XAU/USD",
-    "XAGUSD": "XAG/USD",
+    # XAGUSD (XAG/USD) مقصود استبعاده: اختبار حقيقي على المفتاح الحالي
+    # (15/09) رجّع 404 — "This symbol is available starting with the Grow
+    # or Venture plan". إبقاؤه بالخريطة = استدعاء شبكي فاشل مضمون بكل
+    # تحليل فضة. يُعاد عند ترقية الخطة.
     "BTCUSD": "BTC/USD",
     "ETHUSD": "ETH/USD",
     "EURUSD": "EUR/USD",
@@ -678,6 +681,50 @@ class SmartDataProvider:
         logger.info(f"TwelveData config updated: enabled={self._td_enabled}")
         # امسح الكاش لإجبار إعادة الجلب
         self._price_cache.clear()
+
+    def restore_twelvedata_from_settings(self) -> bool:
+        """
+        (2026-09-15) يستعيد إعداد TwelveData من SiteSettings ويطبّقه على الـ
+        runtime. المصدر الوحيد للحقيقة — يستدعيه main.py عند الإقلاع وأي
+        سكربت تشخيصي/صيانة.
+
+        سبب وجوده: _td_enabled يبدأ False بـ__init__، وكان يُضبط فقط لحظة
+        تغيير الإعداد من لوحة الإدارة. فكل إعادة تشغيل للـbackend كانت
+        تُطفئه بصمت، وكل سكربت مستقل (عملية جديدة) كان يعمل بـTwelveData
+        مطفأً فيقيس سلوكاً مختلفاً عن سلوك السيرفر الحقيقي — وهذا أنتج
+        تشخيصاً مضللاً فعلياً بتاريخ 15/09.
+
+        تعطيل صريح (enabled=false بالـDB) يُحترم. غياب الصف ليس قراراً —
+        هو الحالة الافتراضية المعطوبة، فوجود مفتاح يكفي.
+        """
+        try:
+            from app.database import SessionLocal
+            from app.models.site_settings import SiteSettings
+            from app.config import get_settings
+
+            db = SessionLocal()
+            try:
+                rows = {r.key: (r.value or "") for r in db.query(SiteSettings).filter(
+                    SiteSettings.key.in_(["twelvedata_api_key", "twelvedata_enabled"])).all()}
+            finally:
+                db.close()
+
+            key = rows.get("twelvedata_api_key", "").strip() or get_settings().TWELVEDATA_API_KEY
+            if "twelvedata_enabled" in rows:
+                enabled = rows["twelvedata_enabled"].strip().lower() == "true"
+            else:
+                enabled = bool(key)
+
+            if key and enabled:
+                self.update_twelvedata_config(key, True)
+                return True
+            logger.warning(
+                f"⚠️ TwelveData not enabled (key={'yes' if key else 'no'}, enabled={enabled}) — "
+                f"المعادن ستعتمد على theoretical carry الأقل دقة"
+            )
+        except Exception as e:
+            logger.warning(f"TwelveData restore failed: {e}")
+        return False
 
     def _try_twelvedata_price(self, symbol: str) -> Optional[float]:
         """استخدام TwelveData فقط عند التفعيل الصريح من الإدارة"""
