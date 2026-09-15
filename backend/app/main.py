@@ -131,6 +131,40 @@ async def lifespan(app: FastAPI):
     os.makedirs("/app/static/uploads", exist_ok=True)
     logger.success("✅ Database initialized")
 
+    # (2026-09-15) استعادة إعداد TwelveData من قاعدة البيانات عند الإقلاع.
+    # كان يُضبط فقط لحظة تغييره من لوحة الإدارة (admin.py)، بينما
+    # SmartData.__init__ يبدأ بـ_td_enabled=False — أي أن كل إعادة تشغيل
+    # للـbackend كانت تُطفئ TwelveData بصمت بينما لوحة الإدارة تعرضه
+    # "مفعّلاً" (تقرأ من DB). النتيجة: أدق مصدر spot عندنا للذهب كان
+    # معطّلاً عملياً معظم الوقت بدون أي أثر ظاهر.
+    try:
+        from app.database import SessionLocal as _SL
+        from app.services.smart_data import smart_data as _sd
+        _db = _SL()
+        try:
+            _rows = {r.key: (r.value or "") for r in _db.query(SiteSettings).filter(
+                SiteSettings.key.in_(["twelvedata_api_key", "twelvedata_enabled"])).all()}
+        finally:
+            _db.close()
+        _td_key = _rows.get("twelvedata_api_key", "").strip() or settings.TWELVEDATA_API_KEY
+        # لو الإدارة عطّلته صراحةً (false بالـDB) نحترم ذلك. أما غياب الصف
+        # نهائياً فليس قراراً — هو الحالة الافتراضية اللي خلّته مطفأً دائماً،
+        # ووجود مفتاح بـ.env هو إشارة النية الفعلية.
+        if "twelvedata_enabled" in _rows:
+            _td_on = _rows["twelvedata_enabled"].strip().lower() == "true"
+        else:
+            _td_on = bool(_td_key)
+        if _td_key and _td_on:
+            _sd.update_twelvedata_config(_td_key, True)
+            logger.success("✅ TwelveData restored from settings (live spot enabled)")
+        else:
+            logger.warning(
+                f"⚠️ TwelveData disabled at startup (key={'yes' if _td_key else 'no'}, "
+                f"enabled={_td_on}) — الذهب سيعتمد على theoretical carry الأقل دقة"
+            )
+    except Exception as _td_err:
+        logger.warning(f"TwelveData restore failed: {_td_err}")
+
     # بدء خدمة TradingView WebSocket (أسعار Spot حقيقية)
     try:
         from app.services.tv_price_feed import tv_feed

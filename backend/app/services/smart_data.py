@@ -100,6 +100,7 @@ YFINANCE_MAP = {
 
 TWELVEDATA_MAP = {
     "XAUUSD": "XAU/USD",
+    "XAGUSD": "XAG/USD",
     "BTCUSD": "BTC/USD",
     "ETHUSD": "ETH/USD",
     "EURUSD": "EUR/USD",

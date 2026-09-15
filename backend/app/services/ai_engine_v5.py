@@ -499,6 +499,19 @@ class MoshAIEngineV5:
         # ليس عطل مؤقت). كان يفشل بصمت كل مرة ويكمل للمصدر التالي، فحذفه لا
         # يغيّر أي سلوك فعلي — فقط يوفّر استدعاء شبكة ميت ويوضّح سلسلة المصادر.
 
+        # ── 1b. TwelveData XAU/USD — سعر spot حقيقي (2026-09-15) ────────────
+        # كان مدمجاً ومدفوعاً بالفعل لكنه ميت من طرفين: _try_twelvedata_price
+        # ما كان يُستدعى من أي مكان إطلاقاً، وإعداده يُطفأ بكل إعادة تشغيل.
+        # وجوده هنا — قبل theoretical carry — هو الفرق بين سعر سوق حقيقي
+        # وبين رقم محسوب من عقد آجل يبعد 104 أيام بـbasis مقصوص عند ±$60.
+        try:
+            td_price = smart_data._try_twelvedata_price(sym_upper)
+            if td_price and float(td_price) > 0:
+                logger.info(f"   💰 TwelveData spot [{sym_upper}]: {float(td_price):.5f}")
+                return float(td_price), "twelvedata_spot"
+        except Exception as _td_e:
+            logger.debug(f"   TwelveData spot unavailable [{sym_upper}]: {_td_e}")
+
         # ── 2. yfinance: Spot من Futures - theoretical carry basis ──────────
         # احتياطي فقط — قد يكون غير دقيق إذا تغيرت أسعار الفائدة
         futures_sym = _FUTURES_SYM.get(sym_upper)
@@ -710,7 +723,27 @@ class MoshAIEngineV5:
         except Exception as e:
             logger.debug(f"   independent check (Finnhub) failed [{sym_upper}]: {e}")
 
-        # ── احتياطي: theoretical carry من GC=F/SI=F طازج ────────────────────
+        # ── محاولة ثانية: TwelveData XAU/USD — spot حقيقي ومستقل فعلاً ──────
+        # (2026-09-15) Finnhub يفشل بشكل متقطع (وللفضة لا يوجد لها رمز
+        # بـFINNHUB_MAP أصلاً)، وعندها كان الفحص يسقط لصيغة carry — وهي
+        # نفسها الصيغة اللي ينتجها _apply_spot_basis، فالفجوة تطلع صفراً
+        # بالبنية والحارس يمرّر كل شيء. TwelveData مصدر مستقل حقيقي يكسر
+        # هذا الدوران.
+        try:
+            td_price = smart_data._try_twelvedata_price(sym_upper)
+            if td_price and float(td_price) > 0:
+                return round(float(td_price), 5)
+        except Exception as e:
+            logger.debug(f"   independent check (TwelveData) failed [{sym_upper}]: {e}")
+
+        # ── احتياطي أخير: theoretical carry من GC=F/SI=F طازج ───────────────
+        # ⚠️ هذا المصدر ليس مستقلاً فعلياً — نفس صيغة _apply_spot_basis.
+        # نُسجّله بوضوح حتى لا يبدو الحارس وكأنه تحقّق من شيء وهو لم يفعل.
+        logger.warning(
+            f"⚠️ Price-freshness check for [{sym_upper}] is NOT independent — "
+            f"Finnhub/TwelveData unavailable, falling back to the same theoretical "
+            f"carry formula the analysis itself used (gap will be ~0 by construction)."
+        )
         _FUTURES_SYM = {"XAUUSD": "GC=F", "XAGUSD": "SI=F"}
         futures_sym = _FUTURES_SYM.get(sym_upper)
         if not futures_sym:
@@ -784,6 +817,17 @@ class MoshAIEngineV5:
             return analysis
 
         max_gap = _MAX_PRICE_GAP_USD.get(symbol.upper(), live_price * 0.003)  # 0.3% fallback
+
+        # (2026-09-15) انجراف موثّق بالأرقام: الحد الثابت للمعادن لا يتوسّع مع
+        # ارتفاع السعر. تعليق _MAX_PRICE_GAP_USD نفسه ينص على "نرفض فقط إذا
+        # الفارق >1% من السعر"، لكن $20 كانت ~1% لما كان الذهب ~$2000 وصارت
+        # 0.465% عند $4300 — أي أصرم من المقصود بالضعف. سجل analysis_logs
+        # (21 يوم) فيه 8 رفضات بفجوات $20.40-$29.20، كلها تحت 0.7%، أي حركة
+        # ساعة عادية بالذهب (نفس التعليق يقول "الذهب يتحرك $20+ في ساعة").
+        # النسبة تجعل الحد يتوسّع مع السعر تلقائياً بدل انجراف صامت جديد.
+        if symbol.upper() in self._FUTURES_SPOT_SYMBOLS:
+            max_gap = max(max_gap, live_price * 0.01)
+
         gap = abs(analysis_price - live_price)
 
         if gap > max_gap:
