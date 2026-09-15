@@ -252,6 +252,11 @@ class SmartDataProvider:
         # TwelveData — معطّل افتراضياً، يُفعَّل من لوحة الإدارة فقط
         self._td_enabled = False
         self._td_runtime_key: str = ""
+        # كاش منفصل لأسعار TwelveData — حماية حصة (8 طلبات/دقيقة بالخطة
+        # الحالية). TradingView WebSocket هو المصدر الأساسي بلا حصة،
+        # وTwelveData احتياطي يُستدعى مرة لكل تحليل عبر حارس طزاجة السعر.
+        self._td_price_cache: dict = {}
+        self._TD_PRICE_TTL = 120  # ثانية
 
     # ─── Public: fetch OHLCV ───────────────────────────────────────────────
 
@@ -727,11 +732,32 @@ class SmartDataProvider:
         return False
 
     def _try_twelvedata_price(self, symbol: str) -> Optional[float]:
-        """استخدام TwelveData فقط عند التفعيل الصريح من الإدارة"""
+        """
+        استخدام TwelveData فقط عند التفعيل الصريح من الإدارة.
+
+        ⚠️ مصدر محدود الحصة (الخطة الحالية 8 طلبات/دقيقة) — بعكس
+        TradingView WebSocket الذي هو المصدر الأساسي المقصود (اتصال دائم
+        بلا حصة). لذلك:
+          - يُستدعى فقط بعد فشل TV (ترتيب _fetch_spot_price)
+          - وله كاش خاص هنا، لأن الدالة تُستدعى مرة لكل تحليل عبر حارس
+            طزاجة السعر، والماسح وحده يحلل الذهب ~144 مرة يومياً.
+          - رمز غير موجود بـTWELVEDATA_MAP لا يُستدعى إطلاقاً (كان يُرسل
+            الرمز كما هو فيستهلك طلباً مضموناً الفشل — الفضة مثلاً خارج
+            الخطة الحالية).
+        """
         if not (self._td_enabled and self._td_runtime_key):
             return None
+        sym_up = symbol.upper()
+        if sym_up not in TWELVEDATA_MAP:
+            return None
+
+        now_ts = datetime.utcnow().timestamp()
+        cached = self._td_price_cache.get(sym_up)
+        if cached and (now_ts - cached[1]) < self._TD_PRICE_TTL:
+            return cached[0]
+
         try:
-            td_symbol = TWELVEDATA_MAP.get(symbol.upper(), symbol)
+            td_symbol = TWELVEDATA_MAP[sym_up]
             resp = requests.get(
                 f"{self.td_base}/price",
                 params={"symbol": td_symbol, "apikey": self._td_runtime_key},
@@ -739,7 +765,16 @@ class SmartDataProvider:
             )
             data = resp.json()
             if "price" in data:
-                return float(data["price"])
+                price = float(data["price"])
+                self._td_price_cache[sym_up] = (price, now_ts)
+                logger.debug(f"   💰 TwelveData quota used [{sym_up}]: {price}")
+                return price
+            # رد بلا سعر = خطأ صريح من الـAPI (رمز خارج الخطة، حصة، مفتاح).
+            # نُسجّله مرة واحدة بوضوح بدل استهلاك صامت متكرر.
+            logger.warning(
+                f"TwelveData no price for {sym_up}: "
+                f"status={data.get('status')} code={data.get('code')} msg={data.get('message')}"
+            )
         except Exception as e:
             logger.warning(f"TwelveData price error for {symbol}: {e}")
         return None
