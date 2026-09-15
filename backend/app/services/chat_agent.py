@@ -134,7 +134,10 @@ _INTROS_WAIT      = [
 ]
 
 settings = get_settings()
-GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+GEMINI_URL = (
+    f"https://generativelanguage.googleapis.com/v1beta/models/"
+    f"{settings.GEMINI_MODEL}:generateContent"
+)
 GROQ_URL   = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_MODEL = "llama-3.3-70b-versatile"
 

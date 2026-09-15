@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     FINNHUB_API_KEY: str
     TELEGRAM_BOT_TOKEN: str
     GEMINI_API_KEY: str = ""
+    # (2026-09-15) كان اسم النموذج مكرراً بالكود بـ3 أماكن، فلما أوقفت
+    # جوجل gemini-2.0-flash صار كل تحليل يفشل بـ404 بصمت أيام. صار
+    # إعداداً واحداً قابلاً للتغيير من .env بدون إعادة نشر.
+    GEMINI_MODEL: str = "gemini-3.6-flash"
     GROQ_API_KEY: str = ""
     
     # ----- Security -----

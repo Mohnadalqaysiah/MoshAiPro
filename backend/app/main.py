@@ -261,7 +261,7 @@ async def system_status():
         "status": "running",
         "gemini": {
             "enabled": gemini_engine.enabled,
-            "model": "gemini-2.0-flash",
+            "model": settings.GEMINI_MODEL,
             "status": "🟢 فعّال" if gemini_engine.enabled else "🔴 غير مفعّل (لا يوجد API Key)",
         },
         "twelvedata": {

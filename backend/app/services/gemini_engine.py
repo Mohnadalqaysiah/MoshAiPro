@@ -12,7 +12,10 @@ from app.config import get_settings
 
 settings = get_settings()
 
-GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+GEMINI_API_URL = (
+    f"https://generativelanguage.googleapis.com/v1beta/models/"
+    f"{settings.GEMINI_MODEL}:generateContent"
+)
 
 EXPERT_SYSTEM_PROMPT = """
 أنت محلل أسواق مالية كمّي (Quantitative Market Analyst) بخبرة 15+ سنة.
