@@ -2720,9 +2720,37 @@ class MoshAIEngineV5:
         # this rule's own docstring ("Requires ALL: HTF alignment + valid
         # zone + RR ≥ 1.3").
         if sym_upper == "XAUUSD":
+            # (2026-09-15) قرار منتج صريح بعد تشخيص كامل: الذهب لم يُصدر أي
+            # إشارة منذ 04/09 (11 يوماً)، وسجل analysis_logs (249 تحليلاً /
+            # 21 يوماً) بيّن أن 27 رفضة (13%) سببها هذا الشرط وحده.
+            #
+            # الخلل البنيوي: gate_htf_aligned تتطلب اتجاهاً صريحاً موافقاً
+            # (BUY مع BULLISH أو SELL مع BEARISH)، فإذا كان HTF محايداً
+            # (RANGING) تصبح False — أي أن الذهب وحده يُمنع في السوق
+            # العرضي، بينما بقية الرموز تحتاج فقط **غياب التعارض**.
+            #
+            # التخفيف هنا لا يسمح بالتعارض الصريح: بوابة
+            # HTF_DIRECTION_CONFLICT بـ_decision_finalizer تبقى نافذة على
+            # الذهب (105 رفضة منها بالسجل) — كل ما يتغير أن RANGING لم يعد
+            # مانعاً. بقية تشديدات Rule 6 (المناطق وRR≥1.3) تبقى كما هي
+            # عمداً: تغيير واحد في كل مرة حتى يمكن عزو أي أثر لاحق.
+            #
+            # ⚠️ هذا يعكس جزئياً تشديد 18/08 الذي أُضيف بعد سلسلة خسائر
+            # موثقة على بيع الذهب (17-18/08)، ولا توجد بيانات تؤكد أن
+            # التخفيف سيحسّن النتيجة. لذلك هو إعداد قابل للعكس فوراً عبر
+            # .env بدون إعادة بناء: XAUUSD_REQUIRE_HTF_ALIGNMENT=true
             htf_aligned = analysis.get("gate_htf_aligned", False)
-            if not htf_aligned:
-                return _block("XAUUSD_REQUIRES_HTF_ALIGNMENT")
+            if settings.XAUUSD_REQUIRE_HTF_ALIGNMENT:
+                if not htf_aligned:
+                    return _block("XAUUSD_REQUIRES_HTF_ALIGNMENT")
+            elif not htf_aligned:
+                # وسم صريح للإشارات التي مرّت بفضل التخفيف وحده — يجعل
+                # تقييم القرار لاحقاً عزلاً مباشراً بدل تخمين.
+                analysis["xau_passed_by_htf_relaxation"] = True
+                logger.info(
+                    f"XAUUSD: HTF غير موافق (RANGING/محايد) لكن التخفيف مفعّل — "
+                    f"الإشارة تمر [{symbol}/{timeframe}] rec={rec}"
+                )
 
             if rec == "BUY" and "PREMIUM" in pd_raw:
                 return _block("XAUUSD_BUY_IN_PREMIUM_ZONE")
