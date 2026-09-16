@@ -863,6 +863,21 @@ class TradingChatAgent:
                 return CONCEPTS.get(key, "")
         return ""
 
+    def _platform_answer(self, msg: str) -> str:
+        """
+        (2026-09-17) أسئلة المنصة (اشتراك/تلجرام/أزواج/استراتيجيات) تُجاب
+        محلياً قبل النموذج. ثلاثة أسباب: الكلفة (هذه الأسئلة الأكثر تكراراً
+        وأقلها تنوّعاً، فلا يرتفع استهلاك الـAPI مع نمو المشتركين)،
+        والدقة (النموذج لا يعرف باقاتنا فيؤلّف جواباً معقول الشكل خاطئ
+        المضمون، والخطأ هنا يكلّف اشتراكاً)، والسرعة.
+        """
+        try:
+            from app.services.platform_kb import answer as _kb_answer
+            return _kb_answer(msg)
+        except Exception as e:
+            logger.warning(f"platform_kb failed: {e}")
+            return ""
+
     def _local_general_response(self, msg: str) -> str:
         """ردود ذكية للأسئلة العامة بدون API"""
         if any(w in msg for w in ["أفضل وقت", "متى أتداول", "أحسن وقت", "أفضل جلسة"]):
@@ -901,11 +916,19 @@ class TradingChatAgent:
                 "بالخير دايماً 🚀 — خبرني نتيجة الصفقة 😄",
             ])
         # Default
+        # (2026-09-17) كان يردّ "قولي أي زوج تبي أحلله" لأي سؤال غير معروف —
+        # فيبدو متهرّباً أمام سؤال مشروع، وهي أسوأ لحظة ممكنة: العميل يسأل
+        # لأنه عالق، والجواب يعيده لنقطة الصفر. صار يعرض ما يستطيعه فعلاً
+        # ويدعوه لإعادة الصياغة بدل أن يفترض أن سؤاله خارج الموضوع.
         return (
-            "يا صديقي، أنا مُوش — متخصص بتحليل الأسواق بمنهج ICT/SMC.\n\n"
-            "قولي أي زوج تبي أحلله:\n"
-            "مثال: *حلل الذهب على ساعة* أو *BTCUSD 4h*\n\n"
-            "أو اسألني عن مفهوم: OB، FVG، BOS، Kill Zones، Wyckoff، R/R..."
+            "أهلاً 👋 أنا **كفيل** — هنا لتحليل الأسواق ولمساعدتك في المنصة أيضاً.\n\n"
+            "أقدر أساعدك في:\n"
+            "📊 **تحليل أي زوج** — «حلل الذهب على ساعة» أو «BTCUSD 4h»\n"
+            "📚 **شرح المفاهيم** — OB · FVG · BOS · Kill Zones · Wyckoff · R/R\n"
+            "💳 **الاشتراك والباقات** — الأسعار · التجديد · كوبون الخصم\n"
+            "📱 **ربط تلجرام** ولماذا قد لا تصلك إشارات\n"
+            "⭐ **تخصيص أزواجك** وباني الاستراتيجيات\n\n"
+            "اسألني بصيغتك العادية — وإن لم أفهم سؤالك، أعد صياغته بكلمات أبسط وسأحاول 👌"
         )
 
     # ─── Fallback (no Gemini) ────────────────────────────────────────────────
@@ -1239,7 +1262,13 @@ class TradingChatAgent:
                     + self._build_analysis_context(last_analysis, sym_ctx, tf_ctx)
                 )
 
-            if self.groq_enabled:
+            # (2026-09-17) سؤال المنصة يُجاب محلياً ولا يُستدعى له النموذج
+            # إطلاقاً — إلا حين يطلب المستخدم شرح تحليل سابق (groq_ctx)،
+            # فذلك سياق حقيقي لا تُغني عنه إجابة جاهزة.
+            platform = "" if groq_ctx else self._platform_answer(user_message)
+            if platform:
+                msg = platform
+            elif self.groq_enabled:
                 raw = await self._call_groq(history, groq_ctx)
                 msg = raw.strip() if raw else (
                     self._explain_concept_local(user_message.lower())
