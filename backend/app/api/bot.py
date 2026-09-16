@@ -559,9 +559,11 @@ async def bot_check_outcomes(
                     created_ts = created.timestamp() - 60 if created else None
 
                     candles = []   # [(ts_sortable, high, low), ...] بالترتيب الزمني الصاعد
+                    earliest_ts = None   # أقدم شمعة متاحة قبل الفلترة (epoch)
                     if market_upper in _SPOT_SYMBOLS:
                         raw_bars = await fetch_tv_history(TV_SYMBOL_MAP[market_upper], "5m", bars=30)
                         if raw_bars:
+                            earliest_ts = min(float(b[0]) for b in raw_bars)
                             relevant = (
                                 [b for b in raw_bars if float(b[0]) >= created_ts]
                                 if created_ts is not None else raw_bars
@@ -586,6 +588,8 @@ async def bot_check_outcomes(
                             work = range_df.copy()
                             ts_col = work["datetime"] if "datetime" in work.columns else work.index
                             work["_ts"] = _pd.to_datetime(ts_col, utc=True)
+                            if len(work):
+                                earliest_ts = work["_ts"].min().timestamp()
                             if created_ts is not None:
                                 work = work[work["_ts"] >= _pd.Timestamp(created_ts, unit="s", tz="UTC")]
                             work = work.sort_values("_ts")
@@ -603,7 +607,27 @@ async def bot_check_outcomes(
                     # بعد بلوغ TP1 يُبقي TP1 (الهدف الأول تحقق فعلاً
                     # وقابل للجني) — وهذا هو سلوك الكود السابق نفسه، فلا
                     # يتغيّر شيء بتلك الحالة.
-                    walked = bool(candles)
+                    # (2026-09-16 #2) تراجع عن `walked = bool(candles)`.
+                    # كانت تعني "توفّرت شموع ⇒ حكمها نهائي"، وهي خاطئة:
+                    # نافذة المشي 30 شمعة 5m = ساعتان ونصف فقط، بينما عمر
+                    # الإشارة يبلغ 72 ساعة. فإشارة لمست وقفها قبل ثلاث
+                    # ساعات لا تظهر لمستها بالنافذة، فيخلص المشي إلى "لم
+                    # يُلمس شيء" ويُلغى الفحص اللحظي، فتبقى الإشارة ACTIVE
+                    # إلى الأبد. وقد حصل فعلاً: عشرات الإشارات بقيت نشطة
+                    # بينما أداة التحقق (تجلب 1000 شمعة) تؤكد أنها ضربت
+                    # الوقف — فتوقّف تسجيل النتائج وتجمّدت الإحصاءات.
+                    # الشرط الصحيح: يُحتكم للمشي وحده متى غطّى عمر الإشارة
+                    # كاملاً، أي توفّرت شمعة عند لحظة الإنشاء أو قبلها.
+                    # وإلا فالمشي رأى شريحة حديثة فقط، ويبقى الفحص اللحظي
+                    # شبكة الأمان كما كان.
+                    walked = bool(candles) and earliest_ts is not None and (
+                        created_ts is None or earliest_ts <= created_ts
+                    )
+                    if candles and not walked:
+                        logger.debug(
+                            f"↩️ {market_upper} #{sig.id}: المشي غطّى شريحة حديثة فقط "
+                            f"(أقدم شمعة بعد الإنشاء) — يبقى الفحص اللحظي فعّالاً"
+                        )
                     for _ts, hi, lo in candles:
                         sl_touch  = (lo <= sl) if is_buy else (hi >= sl)
                         tp2_touch = has_tp2 and ((hi >= tp2) if is_buy else (lo <= tp2))
