@@ -47,6 +47,18 @@ async def main():
     apply_it  = "--apply" in sys.argv
     skip_amb  = "--skip-ambiguous" in sys.argv
 
+    # (2026-09-16) --only 2521,2426: تطبيق انتقائي بأرقام محددة. أُضيف لأن
+    # الفئات وحدها لم تعد كافية للقرار: صفوف الفضة ما زالت تختلف لأن
+    # مستوياتها بُنيت على carry نظري بينما التحقق يقارنها بـTV الفوري —
+    # مرجعان مختلفان لم يُوحَّدا بعد. فبعض الصفوف جاهزة للتصحيح وبعضها
+    # ينتظر توحيد المرجع، والخلط بينها بتطبيق جماعي يفسد الاثنين.
+    only_ids = set()
+    for i, a in enumerate(sys.argv):
+        if a == "--only" and i + 1 < len(sys.argv):
+            only_ids = {int(x) for x in sys.argv[i + 1].split(",") if x.strip().isdigit()}
+    if only_ids:
+        print(f"⚠️ تطبيق انتقائي — الأرقام المحددة فقط: {sorted(only_ids)}\n")
+
     from app.database import SessionLocal
     from app.models.signal import Signal, SignalStatus
     from app.api.admin import _verify_signal_outcome_core, _calc_points
@@ -75,6 +87,8 @@ async def main():
             det = r.get("detected")
             rec = s.status.value if hasattr(s.status, "value") else s.status
             if det in (None, "NO_DATA") or det == rec:
+                continue
+            if only_ids and s.id not in only_ids:
                 continue
             if det == "STILL_ACTIVE":
                 reactivate.append((s, rec, det))
