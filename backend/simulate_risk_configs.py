@@ -86,30 +86,50 @@ def build_levels(entry, sl, tp1, tp2, is_buy, cfg):
 
 def walk(candles, entry, sl, tp1, tp2, is_buy):
     """
-    يمشي الشموع بالترتيب ويُعيد (النتيجة، مضاعف R).
+    يمشي الشموع بالترتيب ويُعيد (النتيجة، مضاعف R، غموض).
+
     نفس قواعد الإنتاج: الوقف يُنهي فوراً، والهدف الأول لا يُنهي (نكمل
     لنرى هل يُبلَغ الثاني قبل الوقف)، والتعادل داخل الشمعة يُرجَّح للوقف.
+
+    "غموض" = شمعة تحوي الوقف والهدف معاً، فالترتيب داخلها مجهول ونحكم
+    بالوقف تحفّظاً. وهذا **يُحابي الإعداد الحالي** لا الجديد: الهدف
+    الأقرب أكثر عرضة للوقوع بنفس شمعة الوقف. فالانحياز ضد ما نختبره —
+    وإن تفوّق رغمه فالتفوّق حقيقي لا صنيعة المنهج. يُعدّ ويُطبع بدل أن
+    يُفترض صغيراً.
     """
     risk = abs(entry - sl)
     has_tp2 = (tp2 > tp1) if is_buy else (tp2 < tp1)
     best = None
+    ambiguous = False
     for _ts, hi, lo in candles:
         sl_hit  = (lo <= sl) if is_buy else (hi >= sl)
         tp2_hit = has_tp2 and ((hi >= tp2) if is_buy else (lo <= tp2))
         tp1_hit = (hi >= tp1) if is_buy else (lo <= tp1)
+        if sl_hit and (tp1_hit or tp2_hit) and best is None:
+            ambiguous = True
         if sl_hit:
             if best is None:
-                return "SL", -1.0
+                return "SL", -1.0, ambiguous
             break                      # بلغ الهدف الأول ثم ارتد للوقف ⇒ يبقى ربحاً
         if tp2_hit:
-            return "TP2", round(abs(tp2 - entry) / risk, 3)
+            return "TP2", round(abs(tp2 - entry) / risk, 3), ambiguous
         if tp1_hit and best is None:
             best = ("TP1", round(abs(tp1 - entry) / risk, 3))
-    return best if best else (None, None)
+    if best:
+        return best[0], best[1], ambiguous
+    return None, None, ambiguous
 
 
 async def main():
     days = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdigit() else 30
+    # (2026-09-16) شمعة 15m افتراضاً لا 5m: تشغيل 5m غطّى 4.6–6.7 أيام فقط
+    # لمعظم الرموز، أي نظام سوق واحد — ولا يُبنى تعديل على المحرك عليه.
+    # 15m تصل ~50 يوماً بنفس عدد الشموع، فتشمل أنظمة متعددة. الثمن خشونة
+    # أكبر ⇒ غموض أكثر داخل الشمعة، وهو محسوب ومطبوع لا مُفترَض.
+    tf = "15m"
+    for i, a in enumerate(sys.argv):
+        if a == "--tf" and i + 1 < len(sys.argv):
+            tf = sys.argv[i + 1]
 
     from app.database import SessionLocal
     from app.models.signal import Signal
@@ -125,7 +145,7 @@ async def main():
         meta = {s.id: s for s in raw}
 
         print("=" * 100)
-        print(f"محاكاة إعدادات إدارة المخاطرة — آخر {days} يوماً")
+        print(f"محاكاة إعدادات إدارة المخاطرة — آخر {days} يوماً · شمعة {tf}")
         print("=" * 100)
         print(f"  قرارات فريدة بالفترة: {len(decisions)}")
         print("  الحكم من شموع السوق الحقيقية — لا من النتائج المسجّلة.\n")
@@ -141,7 +161,7 @@ async def main():
         print(f"  جلب الشموع لـ{len(by_symbol)} رمزاً...")
         for sym in by_symbol:
             try:
-                df = await _sd.get_ohlcv(sym, "5m", bars=5000)
+                df = await _sd.get_ohlcv(sym, tf, bars=5000)
                 if df is not None and len(df):
                     tcol = df["datetime"] if "datetime" in df.columns else df.index
                     ts = pd.to_datetime(tcol, utc=True)
@@ -160,7 +180,16 @@ async def main():
             await asyncio.sleep(0.25)
 
         # ── المحاكاة ──────────────────────────────────────────────────
-        results = {c["name"]: {"rows": [], "rejected": 0} for c in CONFIGS}
+        # نقطة الانتصاف الزمنية — أساس فحص ثبات كل إعداد عبر نظامَي سوق
+        stamps = sorted(
+            (meta[d["id"]].created_at for d in decisions if meta.get(d["id"]) and meta[d["id"]].created_at)
+        )
+        def _epoch(dt):
+            return (dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)).timestamp()
+
+        split_ts = _epoch(stamps[len(stamps) // 2]) if len(stamps) >= 20 else None
+
+        results = {c["name"]: {"rows": [], "rejected": 0, "ambig": 0} for c in CONFIGS}
         skipped_nodata = 0
         simulated = 0
 
@@ -209,10 +238,13 @@ async def main():
                     results[cfg["name"]]["rejected"] += 1
                     continue
                 sl, tp1, tp2 = lv
-                outcome, r = walk(window, entry, sl, tp1, tp2, is_buy)
+                outcome, r, amb = walk(window, entry, sl, tp1, tp2, is_buy)
                 if outcome is None:
                     continue          # لم تُحسم داخل أفق الإشارة
-                results[cfg["name"]]["rows"].append((sym, outcome, r))
+                if amb:
+                    results[cfg["name"]]["ambig"] += 1
+                half = "أول" if (split_ts and c_ts < split_ts) else "ثانٍ"
+                results[cfg["name"]]["rows"].append((sym, outcome, r, half))
 
         # ── التقرير ───────────────────────────────────────────────────
         print("\n" + "=" * 100)
@@ -228,8 +260,8 @@ async def main():
         print("النتائج — مرتّبة بنسبة الربح (وهي الهدف المعلن)")
         print("=" * 100)
         print(f"  {'الإعداد':<32}{'مُتداوَلة':>9}{'مستبعَدة':>10}"
-              f"{'نسبة الربح':>12}{'التوقّع':>10}{'إجمالي R':>11}")
-        print("  " + "-" * 82)
+              f"{'نسبة الربح':>12}{'التوقّع':>10}{'غموض':>7}   الثبات (نصف أول ← ثانٍ)")
+        print("  " + "-" * 104)
 
         table = []
         for cfg in CONFIGS:
@@ -238,12 +270,22 @@ async def main():
             n = len(rows_)
             if not n:
                 continue
-            wins = sum(1 for _, o, _ in rows_ if o in ("TP1", "TP2"))
-            rs = [r for _, _, r in rows_ if r is not None]
+            wins = sum(1 for _, o, _, _ in rows_ if o in ("TP1", "TP2"))
+            rs = [r for _, _, r, _ in rows_ if r is not None]
             exp = sum(rs) / len(rs) if rs else 0.0
+
+            # نسبة الربح بكل نصف زمني — الإعداد الذي ينقلب بينهما ليس
+            # تحسيناً بل ملاءمة لنظام سوق واحد.
+            halves = {}
+            for h in ("أول", "ثانٍ"):
+                sub = [x for x in rows_ if x[3] == h]
+                halves[h] = (len(sub),
+                             sum(1 for x in sub if x[1] in ("TP1", "TP2")) / len(sub) * 100
+                             if sub else None)
             table.append({
                 "name": cfg["name"], "n": n, "rejected": res["rejected"],
                 "wr": wins / n * 100, "exp": exp, "rtot": sum(rs),
+                "ambig": res["ambig"], "halves": halves,
             })
 
         base = next((t for t in table if t["name"].startswith("الحالي")), None)
@@ -254,22 +296,41 @@ async def main():
                     mark = "  ★"
                 elif t["wr"] < base["wr"] or t["exp"] < base["exp"]:
                     mark = "  ↓"
+            n1, w1 = t["halves"]["أول"]
+            n2, w2 = t["halves"]["ثانٍ"]
+            if w1 is None or w2 is None or min(n1, n2) < 10:
+                stab = f"عينة نصف صغيرة ({n1}←{n2})"
+            else:
+                gap = abs(w1 - w2)
+                sign = "✓" if gap <= 15 else "⚠"
+                stab = f"{sign} {w1:.0f}% ← {w2:.0f}%"
+                if w1 < base["wr"] or w2 < base["wr"]:
+                    stab += " (نصف دون الأساس)"
             print(f"  {t['name']:<32}{t['n']:>9}{t['rejected']:>10}"
-                  f"{t['wr']:>11.1f}%{t['exp']:>+10.2f}{t['rtot']:>+11.1f}{mark}")
+                  f"{t['wr']:>11.1f}%{t['exp']:>+10.2f}{t['ambig']:>7}   {stab}{mark}")
 
-        print("  " + "-" * 82)
+        print("  " + "-" * 104)
         print("  ★ = نسبة ربح أعلى بـ5 نقاط فأكثر بلا تضحية بالتوقّع")
         print("  ↓ = أسوأ من الحالي بأحد المقياسين")
+        print("  غموض = صفقات لمست الوقف والهدف بنفس الشمعة فرُجّح الوقف تحفّظاً.")
+        print("          الانحياز ضد الإعداد الجديد لا معه — الهدف الأقرب أكثر")
+        print("          عرضة لذلك. فتفوّقه رغم هذا الانحياز يقوّيه لا يضعفه.")
+        print("  الثبات = نسبة الربح بالنصف الأول ← الثاني. الانقلاب أو فجوة")
+        print("            تتجاوز 15 نقطة ⇒ ملاءمة لنظام سوق لا تحسين بنيوي.")
 
         # ── الأثر على الرموز المهمة ───────────────────────────────────
         print("\n" + "=" * 100)
         print("الأثر على كل رمز — نسبة الربح (الحالي ← أفضل إعداد)")
         print("=" * 100)
-        best = max(table, key=lambda x: x["wr"]) if table else None
+        # يُختار أفضل إعداد **لا يستبعد أي إشارة**: التغطية الواسعة مطلب
+        # صريح من صاحب المنتج (الذهب/الفضة/النفط/الناسداك)، وإعداد يحذف
+        # ثلثي الإشارات ليس مقارَناً عادلاً مهما علت نسبة ربحه.
+        keeps_all = [t for t in table if t["rejected"] == 0]
+        best = max(keeps_all, key=lambda x: x["wr"]) if keeps_all else None
         if base and best and best["name"] != base["name"]:
             def per_symbol(name):
                 agg = defaultdict(lambda: [0, 0])
-                for sym, o, _ in results[name]["rows"]:
+                for sym, o, _, _ in results[name]["rows"]:
                     agg[sym][0] += 1
                     if o in ("TP1", "TP2"):
                         agg[sym][1] += 1
