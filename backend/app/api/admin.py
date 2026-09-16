@@ -1298,15 +1298,20 @@ async def _verify_signal_outcome_core(signal: Signal) -> dict:
         sl_touched = (lo <= sl) if is_buy else (hi >= sl)
         tp2_touched = has_tp2 and ((hi >= tp2) if is_buy else (lo <= tp2))
         tp1_touched = (hi >= tp1) if is_buy else (lo <= tp1)
+        # (2026-09-16) نفس إصلاح bot_check_outcomes: TP1 ليس نهائياً.
+        # التوقف عند أول لمسة كان يمنع رؤية TP2 إذا جاء بشمعة لاحقة،
+        # فتُسجَّل الصفقة "هدف أول" وهي بلغت الثاني — نقص منهجي بالأرباح،
+        # وكان يصيب أداة "🔍 تحقق" نفسها فلا تُصلح الخطأ بل تعيد إنتاجه.
         if sl_touched:
-            hit_status, hit_time, hit_price = "SL_HIT", ts, sl
+            if hit_status is None:
+                hit_status, hit_time, hit_price = "SL_HIT", ts, sl
             break
         if tp2_touched:
             hit_status, hit_time, hit_price = "TP2_HIT", ts, tp2
             break
-        if tp1_touched:
+        if tp1_touched and hit_status is None:
             hit_status, hit_time, hit_price = "TP1_HIT", ts, tp1
-            break
+            # بلا break — نكمل لنرى هل يبلغ TP2 قبل SL
 
     if hit_status is None:
         return {

@@ -553,18 +553,31 @@ async def bot_check_outcomes(
                             work = work.sort_values("_ts")
                             candles = [(row["_ts"], float(row["high"]), float(row["low"])) for _, row in work.iterrows()]
 
+                    # (2026-09-16) بلاغ حقيقي: إشارة ذهب بلغت الهدف الثاني
+                    # لكنها سُجّلت "هدف أول". السبب: الحلقة كانت تتوقف عند
+                    # أول لمسة أياً كانت — فإذا لُمس TP1 بشمعة مبكرة وTP2
+                    # بشمعة لاحقة، تنكسر الحلقة عند TP1 ولا ترى TP2 أبداً.
+                    # TP2 كان يُسجَّل فقط حين يُلمس بنفس شمعة TP1 (حركة
+                    # سريعة) — أي أن الأرباح كانت تُنقَص منهجياً بالصفقات
+                    # الأبطأ.
+                    # الإصلاح: TP1 لم يعد نهائياً — نسجّله كأفضل نتيجة حتى
+                    # الآن ونُكمل. ينتهي المسح عند SL أو TP2 فقط. ولمس SL
+                    # بعد بلوغ TP1 يُبقي TP1 (الهدف الأول تحقق فعلاً
+                    # وقابل للجني) — وهذا هو سلوك الكود السابق نفسه، فلا
+                    # يتغيّر شيء بتلك الحالة.
                     for _ts, hi, lo in candles:
                         sl_touch  = (lo <= sl) if is_buy else (hi >= sl)
                         tp2_touch = has_tp2 and ((hi >= tp2) if is_buy else (lo <= tp2))
                         tp1_touch = (hi >= tp1) if is_buy else (lo <= tp1)
                         if sl_touch:
-                            new_status = SignalStatus.SL_HIT
-                        elif tp2_touch:
-                            new_status = SignalStatus.TP2_HIT
-                        elif tp1_touch:
-                            new_status = SignalStatus.TP1_HIT
-                        if new_status:
+                            new_status = new_status or SignalStatus.SL_HIT
                             break
+                        if tp2_touch:
+                            new_status = SignalStatus.TP2_HIT
+                            break
+                        if tp1_touch and new_status is None:
+                            new_status = SignalStatus.TP1_HIT
+                            # بلا break — نكمل لنرى هل يبلغ TP2 قبل SL
                 except Exception:
                     pass
 
