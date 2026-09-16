@@ -18,6 +18,7 @@ import ConfluenceModal from '../components/ConfluenceModal'
 import UpgradeModal from '../components/UpgradeModal'
 import AchievementBadges from '../components/AchievementBadges'
 import PWAInstallBanner from '../components/PWAInstallBanner'
+import WatchlistQuickCard from '../components/WatchlistQuickCard'
 import DashboardAnnouncement from '../components/DashboardAnnouncement'
 import Sparkline from '../components/Sparkline'
 
@@ -491,6 +492,14 @@ export default function Dashboard() {
 
       {/* PWA Install Banner */}
       <PWAInstallBanner />
+
+      {/* (2026-09-16) مدخل تخصيص الأزواج — شكوى دعم متكررة من مستخدمي
+          الهاتف: المسار الوحيد كان ☰ ← أسفل الدرج ← "حسابي" ← تمرير طويل،
+          بلا أي دلالة على وجود الإعداد أصلاً. يظهر تحت xl فقط لأن لوحة
+          الملف الجانبية تغطي نفس المعلومة على الشاشات الكبيرة. */}
+      <div className="xl:hidden mb-4">
+        <WatchlistQuickCard />
+      </div>
 
       {/* ── Global error banner (always visible) ── */}
       {error && (

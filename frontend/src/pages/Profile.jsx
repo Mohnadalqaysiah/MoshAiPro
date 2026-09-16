@@ -57,6 +57,22 @@ export default function Profile() {
     setDefaultedWatchlist(true)
   }, [markets, user, defaultedWatchlist])
 
+  // (2026-09-16) فتح /profile#watchlist من الداشبورد يمرّر لقسم الأزواج
+  // ويومضه لحظة — بدل أن يهبط المستخدم أعلى صفحة طويلة ويبحث يدوياً،
+  // وهي الشكوى الأساسية لمستخدمي الهاتف.
+  const [flashWatchlist, setFlashWatchlist] = useState(false)
+  useEffect(() => {
+    if (window.location.hash !== '#watchlist' || !markets.length) return
+    const el = document.getElementById('watchlist')
+    if (!el) return
+    const t = setTimeout(() => {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      setFlashWatchlist(true)
+      setTimeout(() => setFlashWatchlist(false), 2200)
+    }, 250)
+    return () => clearTimeout(t)
+  }, [markets])
+
   const copyLink = () => {
     if (!affiliate?.referral_link) return
     navigator.clipboard.writeText(affiliate.referral_link).then(() => {
@@ -319,7 +335,14 @@ export default function Profile() {
           </div>
 
           {/* Watchlist */}
-          <div>
+          {/* (2026-09-16) id + scroll-mt: مستخدم الجوال كان يحتاج 5 خطوات
+              بلا أي دلالة للوصول هنا (☰ ← أسفل الدرج ← "حسابي" ← تمرير
+              طويل). صار هناك مدخل مباشر من الداشبورد يفتح /profile#watchlist
+              ويمرّر هنا مباشرة. scroll-mt يمنع الهيدر اللاصق من تغطيته. */}
+          <div id="watchlist"
+               className={`scroll-mt-24 rounded-xl transition-all duration-500 ${
+                 flashWatchlist ? 'ring-2 ring-blue-500 bg-blue-500/5 p-3 -m-3' : ''
+               }`}>
             <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
               <label className="block text-sm text-gray-400">
                 {isAr ? 'الأزواج للمراقبة' : 'Markets to Watch'}
