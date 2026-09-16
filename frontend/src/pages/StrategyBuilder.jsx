@@ -3,6 +3,7 @@ import axios from "axios";
 import { Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import StrategyBuilderTour from "../components/StrategyBuilderTour";
+import StrategyGuide from "../components/StrategyGuide";
 import UpgradeModal from "../components/UpgradeModal";
 import {
   Search, Plus, X, ChevronDown, ChevronRight, Copy, Trash2, Power,
@@ -751,6 +752,14 @@ export default function StrategyBuilder() {
         </div>
 
         {/* ============ TAB: BUILD ============ */}
+        {/* (2026-09-17) الجولة التعريفية تُعرض مرة واحدة ثم تختفي للأبد، وهي
+            تشرح الوزن والعتبة ولا تذكر أن الإطلاق يشترط منطق المجموعات معهما.
+            هذه اللوحة دائمة، وتفحص البناء الحالي فتكشف ما يمنع إطلاقه قبل
+            الحفظ — أهمّه استحالة الإطلاق حين يكون سقف الأوزان دون العتبة. */}
+        {(activeTab === "build" || activeTab === "logic") && (
+          <StrategyGuide groups={groups} conditions={conditions} minScore={minScore} />
+        )}
+
         {activeTab === "build" && (
           <div className="grid grid-cols-1 lg:grid-cols-[270px_1fr] gap-5">
             {/* ---- library ---- */}
