@@ -157,10 +157,32 @@ async def main():
             if s is not None:
                 by_symbol[s.market.upper()].append(s)
 
+        # (2026-09-17) المعادن تُقاس بشموع TradingView الفورية. مستوياتها
+        # فورية (يزيحها _apply_spot_basis) بينما get_ohlcv يجلب لها عقوداً
+        # آجلة أعلى بالـbasis — وفارق الفضة 0.96$ مقابل وقف 0.07–0.14$، أي
+        # 7 إلى 14 ضعف الوقف. فتُحسم كل إشاراتها فور إصدارها بأثر المرجع
+        # لا بحركة السوق، وتصير نتائج المعادن بهذه المحاكاة بلا معنى.
+        # (بقية الرموز مستوياتها من get_ohlcv نفسه فالمقارنة سليمة لها.)
+        _SPOT_ADJUSTED = {"XAUUSD", "XAGUSD"}
+        from app.services.tv_price_feed import TV_SYMBOL_MAP, fetch_tv_history
+
         candle_cache = {}
         print(f"  جلب الشموع لـ{len(by_symbol)} رمزاً...")
         for sym in by_symbol:
             try:
+                if sym in _SPOT_ADJUSTED:
+                    bars = await fetch_tv_history(TV_SYMBOL_MAP[sym], tf, bars=5000)
+                    if bars:
+                        rows = sorted(((float(b[0]), float(b[2]), float(b[3])) for b in bars),
+                                      key=lambda r: r[0])
+                        candle_cache[sym] = rows
+                        span_h = (rows[-1][0] - rows[0][0]) / 3600 if len(rows) > 1 else 0
+                        print(f"    {sym:<10} {len(rows):>5} شمعة — تغطي {span_h/24:.1f} يوماً  [TV الفوري]")
+                    else:
+                        print(f"    {sym:<10} شموع الفوري غير متاحة — يُستبعد (لا سقوط للآجل)")
+                    await asyncio.sleep(0.25)
+                    continue
+
                 df = await _sd.get_ohlcv(sym, tf, bars=5000)
                 if df is not None and len(df):
                     tcol = df["datetime"] if "datetime" in df.columns else df.index
