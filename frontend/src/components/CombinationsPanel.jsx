@@ -52,7 +52,7 @@ function ComboTable({ rows, baseline, title, hint }) {
           <thead>
             <tr className="text-gray-500 border-b border-gray-700">
               {['التوليفة', 'عدد', 'نصيبها', 'نسبة الربح', 'التوقّع',
-                'الثبات', 'لو أبقيتها وحدها', 'لو حذفتها', 'رموز'].map((x) => (
+                'قبل الإصلاح', 'الثبات', 'لو أبقيتها وحدها', 'لو حذفتها', 'رموز'].map((x) => (
                 <th key={x} className="text-right pb-2 pr-3 font-medium whitespace-nowrap">{x}</th>
               ))}
             </tr>
@@ -66,6 +66,12 @@ function ComboTable({ rows, baseline, title, hint }) {
                 <td className="py-2 pr-3 text-gray-300">{num(r.winrate, 1)}%</td>
                 <td className={`py-2 pr-3 font-mono font-bold ${rColor(r.expectancy)}`} dir="ltr">
                   {R(r.expectancy)}
+                </td>
+                <td className={`py-2 pr-3 font-mono ${
+                  r.pre_fix_pct >= 60 ? 'text-red-400'
+                    : r.pre_fix_pct > 0 ? 'text-yellow-400' : 'text-green-400'
+                }`}>
+                  {num(r.pre_fix_pct, 0)}%
                 </td>
                 <td className="py-2 pr-3 whitespace-nowrap">
                   <span className={stabStyle(r.stability)} title={r.stability_note}>
@@ -185,6 +191,36 @@ export default function CombinationsPanel() {
 
       {data && (
         <div className="space-y-5">
+          {data.pre_fix?.pct > 0 && (
+            <div className={`rounded-xl p-4 border ${
+              data.pre_fix.pct > 60
+                ? 'bg-red-900/20 border-red-700/50'
+                : 'bg-yellow-900/15 border-yellow-700/40'
+            }`}>
+              <div className="flex items-start gap-2.5">
+                <ShieldAlert size={16} className="text-red-400 mt-0.5 shrink-0" />
+                <div className="text-[12px] text-red-100/85 leading-relaxed">
+                  <span className="font-semibold text-red-300">
+                    {data.pre_fix.pct}% من هذه القرارات ({data.pre_fix.n}) سُجّلت قبل
+                    إصلاح حلقة الرصد في {data.pre_fix.date}.
+                  </span>
+                  <span className="block mt-1.5">
+                    وقتها كان المشي الزمني معطّلاً، فيعود الحكم إلى «أين السعر الآن»
+                    بلا تحديد زمني — ويكفي أن يهبط السعر تحت وقف صفقة شراء لحظةً واحدة
+                    خلال أيام لتُسجَّل خسارة. <span className="font-semibold">وهذا الأثر
+                    غير محايد للاتجاه:</span> في سوق هابط تُصفّى صفقات الشراء كلها تقريباً
+                    بينما يبلغ البيع أهدافه.
+                  </span>
+                  <span className="block mt-1.5">
+                    فتوليفة بنسبة ربح <span className="font-mono">0.0%</span> على عشرات
+                    القرارات ليست اكتشافاً استراتيجياً — هي بصمة العطل.
+                    <span className="font-semibold"> ولا يكشفه فحص الثبات</span>، لأن
+                    نصفَي الفترة كليهما يقعان قبل التاريخ.
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
           <div className="bg-gray-800 border border-gray-700 rounded-2xl p-4 flex flex-wrap gap-x-6 gap-y-2 text-xs">
             <span className="text-gray-400">
               توليفات مفحوصة: <span className="text-white font-mono">{data.tested}</span>

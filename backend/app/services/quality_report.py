@@ -41,6 +41,23 @@ OVERLAP_LIFT   = 1.5    # رفع الاستقلال الذي دونه يكون �
 MIN_N_HALF     = 5      # أقل عينة بنصف زمني يجوز فحص الثبات عليها
 STAB_GAP       = 0.60   # تذبذب R بين النصفين يتجاوزه ⇒ الأثر غير ثابت
 
+# (2026-09-16) خط فاصل في مصداقية البيانات، لا مجرد تاريخ. قبله كانت
+# حلقة رصد النتائج تحمل أربعة أعطال أُصلحت كلها اليوم: المشي الزمني
+# ميت (TypeError مبتلَع)، وTP1 نهائي فلا تُرى TP2، ومرجع المعادن آجل
+# بينما مستوياتها فورية، والسعر اللحظي ينقض المشي الناجح.
+#
+# أثر العطل الأول تحديداً غير محايد للاتجاه: بسقوط المشي الزمني كان
+# الحكم يعود إلى "أين السعر الآن" بلا أي تحديد زمني — فيكفي أن يهبط
+# السعر تحت وقف صفقة شراء في أي لحظة فحص خلال أيام لتُسجَّل خسارة. وفي
+# سوق هابط تُصفّى صفقات الشراء كلها تقريباً بهذه الطريقة بينما يبلغ
+# البيع أهدافه. الشاهد العددي: توليفات بـ40 و23 و18 قراراً بنسبة ربح
+# 0.0% بالضبط (احتمالها لو كانت النسبة الحقيقية 25% هو 1 من 100,000).
+#
+# ولذلك فحص الثبات وحده لا يكفي حارساً هنا: النصفان كلاهما يقعان قبل
+# هذا التاريخ، فكان يؤكد اتساق بيانات معطوبة لا صحتها. لا بد من وسم
+# صريح للفترة نفسها.
+OUTCOME_FIX_DATE = datetime(2026, 9, 16, tzinfo=timezone.utc)
+
 
 def _utc(dt):
     if dt is None:
@@ -415,7 +432,23 @@ def build_quality_report(db, days: int = 30) -> dict:
         return "ok" if p >= 80 else ("warn" if p >= 30 else "bad")
 
     exp = overall["expectancy"]
+    pre_fix  = [d for d in closed if d.get("created") and d["created"] < OUTCOME_FIX_DATE]
+    pre_pct  = _pct(len(pre_fix), total_n)
+
     integrity = [
+        {
+            "key":    "pre_fix_data",
+            "label":  "قرارات مسجَّلة قبل إصلاح حلقة الرصد (16/09)",
+            "value":  "%s%% (%d/%d)" % (pre_pct, len(pre_fix), total_n),
+            "status": "ok" if pre_pct <= 20 else ("warn" if pre_pct <= 60 else "bad"),
+            "why":    "نتائجها سُجّلت بمنطق فيه أربعة أعطال أُصلحت ذلك اليوم — "
+                      "أهمها أن المشي الزمني كان ميتاً فيعود الحكم إلى 'أين "
+                      "السعر الآن' بلا تحديد زمني. وأثر ذلك غير محايد للاتجاه: "
+                      "صفقات الشراء تُصفّى بالوقف في سوق هابط بمجرد مرور السعر "
+                      "تحته لحظةً خلال أيام. فأي استنتاج عن الاتجاه أو الرموز "
+                      "من هذه الفترة يصف عطلاً لا استراتيجية. وفحص الثبات لا "
+                      "يكشفه: النصفان كلاهما قبل التاريخ.",
+        },
         {
             "key":    "expectancy",
             "label":  "توقّع النظام (متوسط R للقرار)",
@@ -665,7 +698,9 @@ def build_combinations(db, days: int = 30, min_n: int = MIN_N_COMBO) -> dict:
             else:
                 note = "عينة أحد النصفين أصغر من %d (%d ← %d)" % (MIN_N_HALF, n1, n2)
 
+        pre = sum(1 for d in grp if d.get("created") and d["created"] < OUTCOME_FIX_DATE)
         rows.append({
+            "pre_fix_pct": _pct(pre, s["n"]),
             "label":      " + ".join("%s: %s" % (k, v) for k, v in combo),
             "parts":      [{"lever": k, "value": v} for k, v in combo],
             "size":       len(combo),
@@ -689,11 +724,17 @@ def build_combinations(db, days: int = 30, min_n: int = MIN_N_COMBO) -> dict:
 
     rows.sort(key=lambda r: r["expectancy"], reverse=True)
 
+    pre_all = sum(1 for d in closed if d.get("created") and d["created"] < OUTCOME_FIX_DATE)
     return {
         "window_days":  days,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "min_n":        min_n,
         "min_symbols":  MIN_SYMS_COMBO,
+        "pre_fix": {
+            "n":   pre_all,
+            "pct": _pct(pre_all, total_n),
+            "date": OUTCOME_FIX_DATE.date().isoformat(),
+        },
         "baseline": {
             "n":          base["n"],
             "expectancy": base["expectancy"],
