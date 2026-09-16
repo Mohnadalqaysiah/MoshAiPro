@@ -140,6 +140,18 @@ const DEFAULT_PLANS = [
     featuresAr: ['كل مزايا الأسبوعي', 'أولوية الدعم الفني', 'تقارير أسبوعية مفصّلة', 'وصول مبكر للمزايا الجديدة', 'توفير 46% مقارنة بالأسبوعي'],
     featuresEn: ['All Weekly Features', 'Priority Support', 'Detailed Weekly Reports', 'Early Access to New Features', 'Save 46% vs Weekly'],
   },
+  {
+    key: 'yearly',
+    nameAr: 'السنوية',
+    nameEn: 'Yearly',
+    price: 179.9,
+    periodAr: '/ سنة',
+    periodEn: '/ year',
+    popular: false,
+    bestValue: true,
+    featuresAr: ['كل مزايا الشهري', 'أفضل قيمة — شهران مجاناً', 'سعر مثبَّت طوال السنة', 'أولوية الدعم الفني', 'وصول مبكر للمزايا الجديدة'],
+    featuresEn: ['All Monthly Features', 'Best value — two months free', 'Price locked for the year', 'Priority Support', 'Early Access to New Features'],
+  },
 ]
 
 export default function Pricing() {
@@ -185,6 +197,41 @@ export default function Pricing() {
   const [publishableKey, setPublishableKey]     = useState('')
   const [intentLoading, setIntentLoading]       = useState(false)
 
+  // ── كوبون الخصم ────────────────────────────────────────────────
+  // couponApplied هو المصدر الوحيد للسعر المعروض بعد التحقق. لا يُحسب
+  // الخصم بالواجهة إطلاقاً: الرقم يأتي من الخادم وهو من يحصّله فعلاً،
+  // فالحساب هنا يخلق فرصة اختلاف بين ما يراه المستخدم وما يُخصم منه.
+  const [couponInput, setCouponInput]     = useState('')
+  const [couponApplied, setCouponApplied] = useState(null)
+  const [couponError, setCouponError]     = useState('')
+  const [couponBusy, setCouponBusy]       = useState(false)
+
+  const applyCoupon = async () => {
+    const code = couponInput.trim()
+    if (!code) return
+    setCouponBusy(true); setCouponError(''); setCouponApplied(null)
+    try {
+      const r = await axios.post(`${API}/api/v1/subscription/validate-coupon`, {
+        plan: selected, code,
+      })
+      if (r.data.valid) setCouponApplied(r.data)
+      else setCouponError(r.data.error || (isAr ? 'رمز غير صحيح' : 'Invalid code'))
+    } catch (err) {
+      setCouponError(err.response?.data?.detail || (isAr ? 'تعذّر التحقق من الرمز' : 'Could not verify code'))
+    } finally {
+      setCouponBusy(false)
+    }
+  }
+
+  const clearCoupon = () => { setCouponApplied(null); setCouponError(''); setCouponInput('') }
+
+  // تغيير الباقة يُبطل الكوبون: قد لا يسري عليها، وإبقاء سعر مخفَّض
+  // لباقة أخرى يعرض رقماً لن يُحصَّل.
+  useEffect(() => { setCouponApplied(null); setCouponError('') }, [selected])
+
+  const couponCode  = couponApplied?.code || null
+  const effectivePrice = couponApplied ? couponApplied.price_after : undefined
+
   useEffect(() => {
     axios.get(`${API}/api/v1/subscription/plans`)
       .then(r => {
@@ -221,7 +268,8 @@ export default function Pricing() {
     setLoading(true); setError('')
     try {
       await axios.post(`${API}/api/v1/subscription/pay`, {
-        plan: selected, tx_id: txId.trim(), network
+        plan: selected, tx_id: txId.trim(), network,
+        coupon_code: couponCode,
       })
       setStep('done')
     } catch (err) {
@@ -234,7 +282,8 @@ export default function Pricing() {
   const startCardPayment = async (planKey) => {
     setIntentLoading(true); setError(''); setClientSecret(''); setPublishableKey('')
     try {
-      const r = await axios.post(`${API}/api/v1/subscription/stripe/payment-intent`, { plan: planKey })
+      const r = await axios.post(`${API}/api/v1/subscription/stripe/payment-intent`,
+        { plan: planKey, coupon_code: couponCode })
       setClientSecret(r.data.client_secret)
       setPublishableKey(r.data.publishable_key)
     } catch (err) {
@@ -258,7 +307,9 @@ export default function Pricing() {
       await new Promise(res => setTimeout(res, 1200))
       try {
         const r = await axios.get(`${API}/api/v1/subscription/status`)
-        if (r.data.plan === selected) break
+        // السنوية تُخزَّن على المستخدم كـmonthly (راجع models/payment.py)،
+        // فمقارنتها بـselected لا تتحقق أبداً ويعلق الاستطلاع حتى ينتهي.
+        if (r.data.plan === (selected === 'yearly' ? 'monthly' : selected)) break
       } catch { /* استمر بالاستطلاع */ }
     }
     setStep('done')
@@ -271,6 +322,7 @@ export default function Pricing() {
     try {
       await axios.post(`${API}/api/v1/subscription/spaceremit/verify`, {
         plan: selected, spaceremit_code: spaceremitCode,
+        coupon_code: couponCode,
       })
       setStep('done')
     } catch (err) {
@@ -294,7 +346,7 @@ export default function Pricing() {
       await new Promise(res => setTimeout(res, 1200))
       try {
         const r = await axios.get(`${API}/api/v1/subscription/status`)
-        if (r.data.plan === selected) { setStep('done'); return }
+        if (r.data.plan === (selected === 'yearly' ? 'monthly' : selected)) { setStep('done'); return }
       } catch { /* استمر بالاستطلاع */ }
     }
     setError(isAr
@@ -333,7 +385,7 @@ export default function Pricing() {
           {step === 'plan' && (
             <>
               {/* Plans Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 {PLANS.map(p => {
                   const isSelected = selected === p.key
                   const features = isAr ? p.featuresAr : p.featuresEn
@@ -352,6 +404,14 @@ export default function Pricing() {
                         boxShadow: '0 20px 45px rgba(124,58,237,0.25)',
                       } : undefined}
                     >
+                      {/* Best-value badge (السنوية) */}
+                      {p.bestValue && !p.popular && (
+                        <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-emerald-600 text-white text-xs font-bold px-4 py-1 rounded-full flex items-center gap-1.5 shadow-lg">
+                          <Star size={10} fill="white" />
+                          {isAr ? 'أفضل قيمة' : 'Best value'}
+                        </div>
+                      )}
+
                       {/* Popular badge */}
                       {p.popular && (
                         <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 q-cta text-white text-xs font-bold px-4 py-1 rounded-full flex items-center gap-1.5 shadow-lg">
@@ -413,13 +473,58 @@ export default function Pricing() {
                   </Link>
                 </div>
               ) : (
+                <>
+                {/* ── كوبون الخصم ─────────────────────────────── */}
+                <div className="q-glass rounded-2xl p-4 mb-4">
+                  {couponApplied ? (
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <div className="text-sm">
+                        <span className="text-emerald-400 font-bold">
+                          {couponApplied.code}
+                        </span>
+                        <span className="text-gray-400">
+                          {' '}— {isAr ? 'خصم' : 'discount'} {couponApplied.discount_percent}%
+                        </span>
+                        <span className="text-gray-500 mr-2">
+                          (${couponApplied.price_before} → ${couponApplied.price_after})
+                        </span>
+                      </div>
+                      <button onClick={clearCoupon}
+                        className="text-xs text-gray-400 hover:text-white underline">
+                        {isAr ? 'إزالة' : 'Remove'}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <input
+                        value={couponInput}
+                        onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                        onKeyDown={(e) => e.key === 'Enter' && applyCoupon()}
+                        placeholder={isAr ? 'رمز الخصم (اختياري)' : 'Discount code (optional)'}
+                        className="flex-1 min-w-[160px] bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm placeholder-gray-500 focus:outline-none focus:border-white/25"
+                        dir="ltr"
+                      />
+                      <button onClick={applyCoupon} disabled={couponBusy || !couponInput.trim()}
+                        className="px-4 py-2.5 rounded-xl text-sm font-semibold bg-white/10 hover:bg-white/15 disabled:opacity-40 text-white transition">
+                        {couponBusy ? (isAr ? '...' : '...') : (isAr ? 'تطبيق' : 'Apply')}
+                      </button>
+                    </div>
+                  )}
+                  {couponError && (
+                    <div className="flex items-center gap-1.5 text-red-400 text-xs mt-2">
+                      <AlertCircle size={12} /> {couponError}
+                    </div>
+                  )}
+                </div>
+
                 <button
                   onClick={goToPay}
                   className="w-full q-cta text-white font-bold py-4 rounded-2xl text-base flex items-center justify-center gap-2 transition-all hover:scale-[1.02] shadow-xl"
                 >
                   <Zap size={18} />
-                  {t.proceedBtn(plan?.price)}
+                  {t.proceedBtn(effectivePrice ?? plan?.price)}
                 </button>
+                </>
               )}
             </>
           )}
@@ -430,7 +535,18 @@ export default function Pricing() {
               <p className="text-gray-400 text-sm mb-6">
                 {t.planLabel}: <span className="text-white font-medium">{planName}</span>
                 {' · '}
-                {t.amountLabel}: <span className="text-emerald-400 font-bold">${plan?.price}</span>
+                {t.amountLabel}:{' '}
+                {couponApplied ? (
+                  <>
+                    <span className="text-gray-500 line-through">${plan?.price}</span>{' '}
+                    <span className="text-emerald-400 font-bold">${couponApplied.price_after}</span>{' '}
+                    <span className="text-[11px] text-emerald-300/80">
+                      ({couponApplied.code} −{couponApplied.discount_percent}%)
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-emerald-400 font-bold">${plan?.price}</span>
+                )}
               </p>
 
               {error && (
@@ -498,10 +614,10 @@ export default function Pricing() {
                       <div className="bg-gray-800/60 border border-gray-700/50 rounded-xl p-4 mb-2">
                         <SpaceremitCheckout
                           publicKey={spaceremitPublicKey}
-                          amount={plan?.price}
+                          amount={effectivePrice ?? plan?.price}
                           buyerName={user?.full_name || user?.name || ''}
                           buyerEmail={user?.email || ''}
-                          notes={`uid=${user?.id};plan=${selected}`}
+                          notes={`uid=${user?.id};plan=${selected}${couponCode ? `;coupon=${couponCode}` : ''}`}
                           onSuccess={onSpaceremitSuccess}
                           onError={(msg) => setError(msg)}
                           onAuthClosed={onSpaceremitAuthClosed}

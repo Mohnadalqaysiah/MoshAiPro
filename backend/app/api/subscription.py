@@ -18,6 +18,7 @@ from app.models.payment import Payment, PaymentStatus, PaymentPlan
 from app.models.site_settings import SiteSettings
 from app.services.auth_service import get_current_user, check_subscription
 from app.services.subscription_service import activate_subscription_payment
+from app.services.coupon_service import find_coupon
 from app.config import get_settings
 
 router  = APIRouter()
@@ -43,7 +44,19 @@ PLANS = {
         "features_en": ["All Weekly Features", "Priority Support", "Detailed Weekly Reports", "Early Access to New Features", "Save 46%"],
         "popular":     True,
     },
+    "yearly": {
+        "name":        "السنوية",
+        "name_en":     "Yearly",
+        "price_usd":   179.9,
+        "days":        365,
+        "features":    ["كل مزايا الشهري", "أفضل قيمة — شهران مجاناً", "سعر مثبَّت طوال السنة", "أولوية الدعم الفني", "وصول مبكر للمزايا الجديدة"],
+        "features_en": ["All Monthly Features", "Best value — two months free", "Price locked for the year", "Priority Support", "Early Access to New Features"],
+        "best_value":  True,
+    },
 }
+
+# مفاتيح الباقات بترتيب العرض — مصدر واحد بدل تكرار الصفوف بكل حلقة
+PLAN_KEYS = tuple(PLANS.keys())
 
 USDT_WALLET = getattr(settings, "USDT_WALLET_ADDRESS", "TQoS5Z...")  # يُعيَّن في .env
 USDT_NETWORK = getattr(settings, "USDT_NETWORK", "TRC20")
@@ -52,18 +65,21 @@ USDT_NETWORK = getattr(settings, "USDT_NETWORK", "TRC20")
 # ─── Schemas ──────────────────────────────────────────────────────────────────
 
 class PaymentIn(BaseModel):
-    plan:    str    # weekly | monthly
+    plan:    str    # weekly | monthly | yearly
     tx_id:   str    # Binance TxID
     network: str = "TRC20"
+    coupon_code: Optional[str] = None
 
 
 class StripeCheckoutIn(BaseModel):
-    plan: str    # weekly | monthly
+    plan: str    # weekly | monthly | yearly
+    coupon_code: Optional[str] = None
 
 
 class SpaceremitVerifyIn(BaseModel):
-    plan:            str    # weekly | monthly
+    plan:            str    # weekly | monthly | yearly
     spaceremit_code: str    # SP_payment_code returned by the client-side widget
+    coupon_code:     Optional[str] = None
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -73,7 +89,7 @@ def _resolve_plans(db: Session) -> dict:
     db_settings = {r.key: r.value for r in db.query(SiteSettings).all()}
 
     plans = copy.deepcopy(PLANS)
-    for plan_key in ("weekly", "monthly"):
+    for plan_key in PLAN_KEYS:
         # Price override
         price_val = db_settings.get(f"plan_{plan_key}_price")
         if price_val:
@@ -112,6 +128,24 @@ def _resolve_plans(db: Session) -> dict:
                 pass
 
     return plans
+
+
+def _priced(db: Session, plan_key: str, coupon_code: Optional[str],
+            user_id: Optional[int]) -> tuple[dict, float, object]:
+    """
+    (معلومات الباقة، السعر النهائي، الكوبون) — نقطة التسعير الوحيدة لكل
+    مسارات الدفع. رمز غير صالح يرفع 400 بدل تمريره بالسعر الكامل: المستخدم
+    أدخل رمزاً ويتوقّع خصمه، فالخصم الصامت الفاشل بيعٌ بسعر لم يوافق عليه.
+    """
+    from app.services.coupon_service import price_for
+    plans = _resolve_plans(db)
+    if plan_key not in plans:
+        raise HTTPException(400, "باقة غير صحيحة")
+    plan_info = plans[plan_key]
+    final, coupon, err = price_for(db, plan_info, plan_key, coupon_code, user_id)
+    if err:
+        raise HTTPException(400, err)
+    return plan_info, final, coupon
 
 
 def _setting(db: Session, key: str, fallback: str) -> str:
@@ -200,21 +234,24 @@ def submit_payment(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    if data.plan not in PLANS:
-        raise HTTPException(400, "باقة غير صحيحة")
-
     # هل TxID مستخدم؟
     if db.query(Payment).filter(Payment.tx_id == data.tx_id).first():
         raise HTTPException(400, "رقم المعاملة مستخدم مسبقاً")
 
-    plan_info = PLANS[data.plan]
+    # (2026-09-16) كان PLANS[...] الثابت هنا بينما بقية المسارات تستخدم
+    # _resolve_plans — أي أن تعديل السعر من لوحة الإدارة كان يسري على
+    # الدفع بالبطاقة ولا يسري على USDT. وُحِّد عبر _priced.
+    plan_info, final_price, coupon = _priced(db, data.plan, data.coupon_code, user.id)
+
     payment = Payment(
         user_id    = user.id,
         plan       = PaymentPlan(data.plan),
-        amount_usd = plan_info["price_usd"],
+        amount_usd = final_price,
         network    = data.network,
         tx_id      = data.tx_id.strip(),
         status     = PaymentStatus.PENDING,
+        coupon_code      = coupon.code if coupon else None,
+        discount_percent = coupon.discount_percent if coupon else None,
     )
     db.add(payment)
     db.commit()
@@ -224,13 +261,18 @@ def submit_payment(
 
     # ── تنبيه الأدمن عبر Telegram ────────────────────────────────────────
     from app.services.admin_notify import notify_admin_telegram
-    _plan_name = {"weekly": "أسبوعية ($7)", "monthly": "شهرية ($30)"}.get(data.plan, data.plan)
+    _plan_name = plan_info.get("name") or data.plan
+    _coupon_line = (
+        f"🏷️ كوبون: <code>{coupon.code}</code> (−{coupon.discount_percent:g}% من "
+        f"${plan_info['price_usd']:g})\n" if coupon else ""
+    )
     _msg = (
         f"💳 <b>طلب دفع جديد!</b>\n"
         f"━━━━━━━━━━━━━━━\n"
         f"📧 المستخدم: <code>{user.email}</code>\n"
         f"📦 الباقة: {_plan_name}\n"
-        f"💰 المبلغ: ${plan_info['price_usd']} USDT\n"
+        f"{_coupon_line}"
+        f"💰 المبلغ: ${final_price:g} USDT\n"
         f"🌐 الشبكة: {data.network}\n"
         f"🔑 TxID: <code>{data.tx_id}</code>\n"
         f"🆔 Payment ID: {payment.id}"
@@ -250,14 +292,11 @@ def create_stripe_checkout(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    if data.plan not in PLANS:
-        raise HTTPException(400, "باقة غير صحيحة")
-
     cfg = _stripe_config(db)
     if not cfg["enabled"] or not cfg["secret_key"]:
         raise HTTPException(500, "الدفع بالبطاقة غير متاح حالياً")
 
-    plan_info = _resolve_plans(db)[data.plan]
+    plan_info, final_price, coupon = _priced(db, data.plan, data.coupon_code, user.id)
 
     try:
         session = stripe.checkout.Session.create(
@@ -267,7 +306,7 @@ def create_stripe_checkout(
                 "price_data": {
                     "currency": "usd",
                     "product_data": {"name": f"Qaffel AI — {plan_info['name_en']} Plan"},
-                    "unit_amount": int(round(plan_info["price_usd"] * 100)),
+                    "unit_amount": int(round(final_price * 100)),
                 },
                 "quantity": 1,
             }],
@@ -275,7 +314,8 @@ def create_stripe_checkout(
             cancel_url=cfg["cancel_url"],
             client_reference_id=str(user.id),
             customer_email=user.email,
-            metadata={"user_id": str(user.id), "plan": data.plan},
+            metadata={"user_id": str(user.id), "plan": data.plan,
+                      "coupon": coupon.code if coupon else ""},
             api_key=cfg["secret_key"],
         )
     except Exception as e:
@@ -293,23 +333,21 @@ def create_stripe_payment_intent(
 ):
     """إنشاء PaymentIntent لعرض نموذج بطاقة مدمج داخل الصفحة (Stripe Elements)
     بدون تحويل المستخدم لصفحة Stripe المستضافة."""
-    if data.plan not in PLANS:
-        raise HTTPException(400, "باقة غير صحيحة")
-
     cfg = _stripe_config(db)
     if not cfg["enabled"] or not cfg["secret_key"]:
         raise HTTPException(500, "الدفع بالبطاقة غير متاح حالياً")
 
-    plan_info = _resolve_plans(db)[data.plan]
+    plan_info, final_price, coupon = _priced(db, data.plan, data.coupon_code, user.id)
 
     try:
         intent = stripe.PaymentIntent.create(
-            amount=int(round(plan_info["price_usd"] * 100)),
+            amount=int(round(final_price * 100)),
             currency="usd",
             automatic_payment_methods={"enabled": True},
             receipt_email=user.email,
             description=f"Qaffel AI — {plan_info['name_en']} Plan",
-            metadata={"user_id": str(user.id), "plan": data.plan},
+            metadata={"user_id": str(user.id), "plan": data.plan,
+                      "coupon": coupon.code if coupon else ""},
             api_key=cfg["secret_key"],
         )
     except Exception as e:
@@ -345,6 +383,8 @@ async def stripe_webhook(
             db, background_tasks,
             user_id=metadata.get("user_id"), plan_key=metadata.get("plan"),
             tx_id=session["id"], payment_intent_id=session.get("payment_intent"),
+            coupon_code=metadata.get("coupon") or None,
+            amount_cents=session.get("amount_total"),
         )
 
     elif event["type"] == "payment_intent.succeeded":
@@ -355,6 +395,8 @@ async def stripe_webhook(
             db, background_tasks,
             user_id=metadata.get("user_id"), plan_key=metadata.get("plan"),
             tx_id=intent["id"], payment_intent_id=intent["id"],
+            coupon_code=metadata.get("coupon") or None,
+            amount_cents=intent.get("amount_received") or intent.get("amount"),
         )
 
     return {"received": True}
@@ -364,6 +406,8 @@ def _finalize_stripe_payment(
     db: Session, background_tasks: BackgroundTasks,
     user_id: Optional[str], plan_key: Optional[str],
     tx_id: str, payment_intent_id: Optional[str],
+    coupon_code: Optional[str] = None,
+    amount_cents: Optional[int] = None,
 ) -> None:
     """Shared activation logic for both the hosted-Checkout and embedded
     PaymentIntent flows — idempotent on `tx_id` since Stripe may retry events."""
@@ -376,10 +420,19 @@ def _finalize_stripe_payment(
 
     plan_info = _resolve_plans(db)[plan_key]
 
+    # (2026-09-16) المبلغ يُؤخذ مما حصّلته Stripe فعلاً لا من سعر الباقة:
+    # مع الكوبون يختلفان، وتسجيل السعر المعلن كان سيضخّم الإيراد بالتقارير
+    # ويحسب عمولة المسوّق على مبلغ لم يُقبض.
+    charged = (round(amount_cents / 100.0, 2)
+               if amount_cents is not None else float(plan_info["price_usd"]))
+    _coupon = find_coupon(db, coupon_code) if coupon_code else None
+
     payment = Payment(
         user_id     = int(user_id),
         plan        = PaymentPlan(plan_key),
-        amount_usd  = plan_info["price_usd"],
+        amount_usd  = charged,
+        coupon_code      = _coupon.code if _coupon else None,
+        discount_percent = _coupon.discount_percent if _coupon else None,
         network     = "stripe",
         provider    = "stripe",
         tx_id       = tx_id,
@@ -395,13 +448,15 @@ def _finalize_stripe_payment(
     if user:
         logger.info(f"💳 Stripe payment completed: user={user.email} plan={plan_key} tx={tx_id}")
         from app.services.admin_notify import notify_admin_telegram
-        _plan_name = {"weekly": "أسبوعية", "monthly": "شهرية"}.get(plan_key, plan_key)
+        _plan_name = plan_info.get("name") or plan_key
         _msg = (
             f"💳 <b>دفعة Stripe جديدة (مفعّلة تلقائياً)!</b>\n"
             f"━━━━━━━━━━━━━━━\n"
             f"📧 المستخدم: <code>{user.email}</code>\n"
             f"📦 الباقة: {_plan_name}\n"
-            f"💰 المبلغ: ${plan_info['price_usd']}\n"
+            f"💰 المبلغ: ${charged:g}"
+            + (f" (كوبون {_coupon.code} −{_coupon.discount_percent:g}%)" if _coupon else "")
+            + "\n"
             f"🆔 Payment ID: {payment.id}"
         )
         background_tasks.add_task(notify_admin_telegram, _msg)
@@ -421,6 +476,7 @@ def _fetch_spaceremit_payment_info(secret_key: str, payment_id: str) -> dict:
 def _finalize_spaceremit_payment(
     db: Session, background_tasks: BackgroundTasks,
     user_id: int, plan_key: str, info: dict,
+    coupon_code: Optional[str] = None,
 ) -> Payment:
     """منطق تفعيل مشترك بين /spaceremit/verify (يستدعيه الفرونت) والـwebhook
     (يستدعيه Spaceremit من طرف السيرفر) — idempotent على tx_id لأن كلاهما
@@ -432,10 +488,21 @@ def _finalize_spaceremit_payment(
         return existing
 
     plan_info = _resolve_plans(db)[plan_key]
+
+    # نفس مبدأ Stripe: المبلغ من الدفعة المحصَّلة لا من سعر الباقة المعلن،
+    # وإلا ضُخّم الإيراد وحُسبت عمولة المسوّق على مبلغ لم يُقبض.
+    try:
+        charged = round(float(info.get("total_amount") or plan_info["price_usd"]), 2)
+    except (TypeError, ValueError):
+        charged = float(plan_info["price_usd"])
+    _coupon = find_coupon(db, coupon_code) if coupon_code else None
+
     payment = Payment(
         user_id     = user_id,
         plan        = PaymentPlan(plan_key),
-        amount_usd  = plan_info["price_usd"],
+        amount_usd  = charged,
+        coupon_code      = _coupon.code if _coupon else None,
+        discount_percent = _coupon.discount_percent if _coupon else None,
         network     = "spaceremit",
         provider    = "spaceremit",
         tx_id       = tx_id,
@@ -451,13 +518,15 @@ def _finalize_spaceremit_payment(
     if user:
         logger.info(f"💳 Spaceremit payment finalized: user={user.email} plan={plan_key} tx={tx_id}")
         from app.services.admin_notify import notify_admin_telegram
-        _plan_name = {"weekly": "أسبوعية", "monthly": "شهرية"}.get(plan_key, plan_key)
+        _plan_name = plan_info.get("name") or plan_key
         _msg = (
             f"💳 <b>دفعة Spaceremit جديدة (مفعّلة تلقائياً)!</b>\n"
             f"━━━━━━━━━━━━━━━\n"
             f"📧 المستخدم: <code>{user.email}</code>\n"
             f"📦 الباقة: {_plan_name}\n"
-            f"💰 المبلغ: ${plan_info['price_usd']}\n"
+            f"💰 المبلغ: ${charged:g}"
+            + (f" (كوبون {_coupon.code} −{_coupon.discount_percent:g}%)" if _coupon else "")
+            + "\n"
             f"🆔 Payment ID: {payment.id}"
         )
         background_tasks.add_task(notify_admin_telegram, _msg)
@@ -465,7 +534,8 @@ def _finalize_spaceremit_payment(
     return payment
 
 
-def _validate_spaceremit_info(info: dict, plan_key: str, cfg: dict, db: Session) -> Optional[str]:
+def _validate_spaceremit_info(info: dict, plan_key: str, cfg: dict, db: Session,
+                              expected_price: Optional[float] = None) -> Optional[str]:
     """يرجّع رسالة الخطأ لو الدفعة غير صالحة للتفعيل، أو None لو صالحة."""
     tx_id      = info.get("id")
     status_tag = info.get("status_tag")
@@ -479,8 +549,11 @@ def _validate_spaceremit_info(info: dict, plan_key: str, cfg: dict, db: Session)
         paid_amount = float(info.get("total_amount", 0))
     except (TypeError, ValueError):
         paid_amount = 0.0
+    # (2026-09-16) المقارنة بالسعر بعد الخصم. لولا ذلك لرُفضت كل دفعة
+    # بكوبون: العميل يدفع المخفَّض والخادم ينتظر المعلن.
     plan_info = _resolve_plans(db)[plan_key]
-    if paid_amount + 0.01 < plan_info["price_usd"]:
+    expected = float(expected_price if expected_price is not None else plan_info["price_usd"])
+    if paid_amount + 0.01 < expected:
         return "المبلغ المدفوع غير مطابق للباقة"
     return None
 
@@ -495,8 +568,7 @@ def verify_spaceremit_payment(
     """يُستدعى من الفرونت‌إند بعد SP_SUCCESSFUL_PAYMENT(code) — لا نثق بالكود القادم
     من العميل مباشرة، نتحقق منه من طرف السيرفر عبر payment_info قبل تفعيل الاشتراك.
     هذا هو مسار التفعيل الأساسي والفوري؛ الـwebhook بالأسفل شبكة أمان إضافية."""
-    if data.plan not in PLANS:
-        raise HTTPException(400, "باقة غير صحيحة")
+    plan_info, expected_price, coupon = _priced(db, data.plan, data.coupon_code, user.id)
 
     cfg = _spaceremit_config(db)
     if not cfg["enabled"] or not cfg["secret_key"]:
@@ -512,11 +584,14 @@ def verify_spaceremit_payment(
         raise HTTPException(400, payload.get("message") or "فشل التحقق من الدفع")
 
     info = payload.get("data") or {}
-    err  = _validate_spaceremit_info(info, data.plan, cfg, db)
+    err  = _validate_spaceremit_info(info, data.plan, cfg, db, expected_price)
     if err:
         raise HTTPException(400, err)
 
-    payment = _finalize_spaceremit_payment(db, background_tasks, user.id, data.plan, info)
+    payment = _finalize_spaceremit_payment(
+        db, background_tasks, user.id, data.plan, info,
+        coupon_code=coupon.code if coupon else None,
+    )
     return {"success": True, "payment_id": payment.id}
 
 
@@ -563,11 +638,24 @@ async def spaceremit_webhook(
         logger.warning(f"⚠️ Spaceremit webhook: could not resolve user/plan from notes={notes!r}")
         return {"received": True}
 
-    if _validate_spaceremit_info(info, plan_key, cfg, db):
+    # (2026-09-16) الكوبون يصل عبر notes مثل uid/plan. بدونه يرفض الويبهوك
+    # كل دفعة مخفَّضة: المبلغ المحصَّل أقل من السعر المعلن. والاعتماد على
+    # notes هنا مقبول لأن الرمز يُتحقَّق منه بـvalidate_coupon كأي مسار
+    # آخر، والكوبونات رموز عامة أصلاً — والمسار الأساسي للتفعيل هو
+    # /spaceremit/verify الموثَّق، وهذا شبكة أمان.
+    from app.services.coupon_service import validate_coupon, apply_discount
+    _cp_code = fields.get("coupon") or None
+    _cp, _ = validate_coupon(db, _cp_code, plan_key, int(user_id_raw) if user_id_raw.isdigit() else None)
+    _expected = apply_discount(_resolve_plans(db)[plan_key]["price_usd"], _cp)
+
+    if _validate_spaceremit_info(info, plan_key, cfg, db, _expected):
         return {"received": True}
 
     try:
-        _finalize_spaceremit_payment(db, background_tasks, int(user_id_raw), plan_key, info)
+        _finalize_spaceremit_payment(
+            db, background_tasks, int(user_id_raw), plan_key, info,
+            coupon_code=_cp.code if _cp else None,
+        )
     except Exception as e:
         logger.error(f"❌ Spaceremit webhook finalize error: {e}")
 
@@ -598,4 +686,48 @@ def _payment_info(p: Payment) -> dict:
         "status":     p.status,
         "admin_note": p.admin_note,
         "created_at": p.created_at.isoformat() if p.created_at else None,
+    }
+
+
+class CouponCheckIn(BaseModel):
+    plan: str
+    code: str
+
+
+@router.post("/validate-coupon")
+def validate_coupon_endpoint(
+    data: CouponCheckIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    معاينة الخصم قبل الدفع. لا يُنشئ شيئاً ولا يحجز الكوبون — العدّاد يزيد
+    عند اعتماد الدفعة وحده، وإلا لأمكن استنفاد كوبون محدود بالضغط على زر
+    التحقق مراراً.
+
+    يُعيد 200 مع valid=false لا 400: رمز خاطئ حالة متوقعة بواجهة إدخال،
+    والخطأ يُعرض في مكانه بالنموذج لا كفشل طلب.
+    """
+    from app.services.coupon_service import validate_coupon, apply_discount
+
+    plans = _resolve_plans(db)
+    if data.plan not in plans:
+        raise HTTPException(400, "باقة غير صحيحة")
+
+    plan_info = plans[data.plan]
+    base      = float(plan_info["price_usd"])
+    coupon, err = validate_coupon(db, data.code, data.plan, user.id)
+
+    if err or not coupon:
+        return {"valid": False, "error": err or "رمز الخصم غير صحيح",
+                "price_before": base, "price_after": base}
+
+    after = apply_discount(base, coupon)
+    return {
+        "valid":            True,
+        "code":             coupon.code,
+        "discount_percent": coupon.discount_percent,
+        "price_before":     base,
+        "price_after":      after,
+        "saved":            round(base - after, 2),
     }

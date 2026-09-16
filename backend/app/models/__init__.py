@@ -19,6 +19,7 @@ from app.models.strategy import (
 from app.models.support_chat import SupportChatThread, SupportChatMessage, ChatThreadStatus
 from app.models.feature_request import FeatureRequest
 from app.models.signal_delivery import SignalDelivery
+from app.models.coupon import Coupon, CouponRedemption
 
 __all__ = [
     "User", "UserRole", "PlanType",
@@ -35,4 +36,5 @@ __all__ = [
     "SupportChatThread", "SupportChatMessage", "ChatThreadStatus",
     "FeatureRequest",
     "SignalDelivery",
+    "Coupon", "CouponRedemption",
 ]

@@ -18,6 +18,16 @@ class PaymentStatus(str, enum.Enum):
 class PaymentPlan(str, enum.Enum):
     WEEKLY  = "weekly"
     MONTHLY = "monthly"
+    # (2026-09-16) السنوية باقة دفع لا باقة مستخدم. المقابل على users.plan
+    # يبقى MONTHLY بمدة 365 يوماً عمداً: PlanType.WEEKLY/MONTHLY مكتوبان
+    # يدوياً كـ"الباقات المدفوعة" في ~25 موضعاً بثمانية ملفات (bot.py
+    # فلتر المشتركين، signals.py، chat.py حدود الرسائل، auth.py،
+    # affiliate.py، إحصاءات admin.py). فإضافة PlanType.YEARLY كانت
+    # ستُسقط المشترك السنوي صامتاً من كل تلك الفحوص — أي يدفع ولا تصله
+    # إشارة. الثمن أن شارة الباقة تقول "monthly" لمن اشترك سنوياً،
+    # وتاريخ الانتهاء يظهر صحيحاً. تُصلَح الشارة بتوحيد الفحوص في ثابت
+    # PAID_PLANS واحد، وهو تعديل مستقل لا يُخلط بإطلاق السنوية.
+    YEARLY  = "yearly"
 
 
 class Payment(Base):
@@ -33,6 +43,13 @@ class Payment(Base):
 
     provider    = Column(String, default="usdt", nullable=False)  # "usdt" | "stripe"
     stripe_payment_intent = Column(String, nullable=True)
+
+    # (2026-09-16) الكوبون يُسجَّل على الدفعة نفسها لا على المستخدم:
+    # السعر المخفَّض يُثبَّت لحظة الإنشاء، فلا يتغيّر إن عُدِّل الكوبون أو
+    # أُلغي قبل الاعتماد. وبدونه لا سبيل لتدقيق سبب اختلاف amount_usd عن
+    # سعر الباقة المعلن.
+    coupon_code      = Column(String, nullable=True)
+    discount_percent = Column(Float, nullable=True)
 
     status      = Column(SAEnum(PaymentStatus), default=PaymentStatus.PENDING)
     admin_note  = Column(String, nullable=True)

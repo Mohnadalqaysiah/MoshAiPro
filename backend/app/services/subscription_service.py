@@ -44,22 +44,44 @@ def activate_subscription_payment(
     if not user:
         return None
 
-    days = (
-        _get_plan_days(db, "weekly", 7)
-        if payment.plan == PaymentPlan.WEEKLY
-        else _get_plan_days(db, "monthly", 30)
-    )
+    _DEFAULT_DAYS = {
+        PaymentPlan.WEEKLY:  ("weekly", 7),
+        PaymentPlan.MONTHLY: ("monthly", 30),
+        PaymentPlan.YEARLY:  ("yearly", 365),
+    }
+    _key, _fallback = _DEFAULT_DAYS.get(payment.plan, ("monthly", 30))
+    days = _get_plan_days(db, _key, _fallback)
+
     if user.subscription_ends_at and user.subscription_ends_at > now:
         user.subscription_ends_at += timedelta(days=days)
     else:
         user.subscription_ends_at = now + timedelta(days=days)
 
-    user.plan      = PlanType(payment.plan.value)
+    # (2026-09-16) السنوية تُخزَّن على المستخدم كـMONTHLY بمدة 365 يوماً.
+    # PlanType("yearly") كان سيرفع ValueError لأن PlanType لا يحوي YEARLY —
+    # وإضافتها هناك تُسقط المشترك السنوي من ~25 فحصاً مكتوباً يدوياً بصيغة
+    # `plan in [WEEKLY, MONTHLY]` عبر ثمانية ملفات (فلتر مشتركي البوت،
+    # صلاحية الإشارات، حدود الشات...) أي يدفع ولا تصله إشارة. المدة هي ما
+    # يحدد الاشتراك فعلاً، والباقة وسم. راجع models/payment.py.
+    _plan_value = "monthly" if payment.plan == PaymentPlan.YEARLY else payment.plan.value
+    user.plan      = PlanType(_plan_value)
     user.is_active = True
     logger.info(
         f"✅ Payment activated: user={user.email} plan={payment.plan} "
         f"days={days} provider={payment.provider}"
     )
+
+    # ── تسجيل استخدام الكوبون ─────────────────────────────────────
+    # هنا لا عند إنشاء الدفعة: العدّاد يقيس المستخدَم فعلاً لا المحجوز.
+    if getattr(payment, "coupon_code", None):
+        from app.services.coupon_service import redeem
+        _pct  = float(payment.discount_percent or 0)
+        _paid = float(payment.amount_usd or 0)
+        redeem(
+            db, payment.coupon_code, user.id, payment.id, payment.plan.value,
+            price_before=round(_paid / (1 - _pct / 100.0), 2) if 0 < _pct < 100 else _paid,
+            price_after=_paid,
+        )
 
     # ── Affiliate commission ──────────────────────────────────────
     if user.referred_by_code:

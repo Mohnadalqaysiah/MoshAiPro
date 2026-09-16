@@ -6,6 +6,7 @@ import Logo from '../components/Logo'
 import QualityReportPanel from '../components/QualityReportPanel'
 import CombinationsPanel from '../components/CombinationsPanel'
 import OnlineUsersModal from '../components/OnlineUsersModal'
+import CouponsPanel from '../components/CouponsPanel'
 import {
   Users, CreditCard, BarChart2, CheckCircle, XCircle, Clock,
   Search, Plus, Trash2, ToggleLeft, ToggleRight, TrendingUp,
@@ -13,7 +14,7 @@ import {
   X, ExternalLink, Shield, AlertTriangle, Settings, Mail, Upload, Signal, Send,
   FileText, TrendingUp as TrendUp, Bell, Sparkles,
   ShieldCheck, UserCog, MessageCircle, UserMinus, Paperclip, Gift, ChevronRight, Menu,
-  Lightbulb
+  Lightbulb, Ticket
 } from 'lucide-react'
 
 const MAX_SUPPORT_ATTACHMENT_BYTES = 1 * 1024 * 1024
@@ -855,6 +856,7 @@ export default function Admin() {
     { key:'team',       icon:UserCog,       label:'الفريق' },
     { key:'support',    icon:MessageCircle, label:'الدعم' },
     { key:'payments',   icon:CreditCard,    label:'المدفوعات' },
+    { key:'coupons',    icon:Ticket,        label:'كوبونات الخصم' },
     { key:'markets',    icon:BarChart2,     label:'الأسواق' },
     { key:'signals',    icon:TrendingUp,    label:'الإشارات' },
     { key:'reports',    icon:FileText,      label:'تقارير الأداء' },
@@ -3039,6 +3041,8 @@ export default function Admin() {
           )}
 
           {/* ── Diagnostic ── */}
+          {tab === 'coupons' && <CouponsPanel />}
+
           {tab === 'diagnostic' && <DiagnosticPanel />}
 
           {showOnline && <OnlineUsersModal onClose={() => setShowOnline(false)} />}

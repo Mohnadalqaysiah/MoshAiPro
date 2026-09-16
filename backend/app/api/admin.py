@@ -2724,3 +2724,182 @@ def list_online_users(
         "by_plan":     by_plan,
         "users":       out,
     }
+
+
+# ══════════════════════════════════════════════════════════════════════
+# كوبونات الخصم — إدارة كاملة من اللوحة
+# ══════════════════════════════════════════════════════════════════════
+class CouponIn(BaseModel):
+    code:             str
+    discount_percent: float
+    is_active:        bool = True
+    max_uses:         Optional[int] = None      # None = بلا حد
+    per_user_limit:   int = 1                   # 0 = بلا حد
+    expires_at:       Optional[str] = None      # ISO
+    plans:            Optional[list] = None     # None/[] = كل الباقات
+    note:             Optional[str] = None
+
+
+def _coupon_info(c) -> dict:
+    return {
+        "id":               c.id,
+        "code":             c.code,
+        "discount_percent": c.discount_percent,
+        "is_active":        c.is_active,
+        "max_uses":         c.max_uses,
+        "used_count":       c.used_count or 0,
+        "per_user_limit":   c.per_user_limit,
+        "expires_at":       c.expires_at.isoformat() if c.expires_at else None,
+        "plans":            c.plans or [],
+        "note":             c.note,
+        "created_at":       c.created_at.isoformat() if c.created_at else None,
+    }
+
+
+def _parse_expiry(raw: Optional[str]):
+    if not raw or not str(raw).strip():
+        return None
+    try:
+        dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    except ValueError:
+        raise HTTPException(400, "صيغة تاريخ الانتهاء غير صحيحة")
+
+
+@router.get("/coupons")
+def list_coupons(
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    from app.models.coupon import Coupon
+    rows = db.query(Coupon).order_by(Coupon.created_at.desc()).all()
+    return {"total": len(rows), "coupons": [_coupon_info(c) for c in rows]}
+
+
+@router.post("/coupons")
+def create_coupon(
+    data: CouponIn,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    from app.models.coupon import Coupon
+    from app.services.coupon_service import normalize_code
+
+    code = normalize_code(data.code)
+    if not code:
+        raise HTTPException(400, "الرمز مطلوب")
+    if not (0 < data.discount_percent <= 100):
+        raise HTTPException(400, "نسبة الخصم يجب أن تكون بين 1 و100")
+    if db.query(Coupon).filter(Coupon.code == code).first():
+        raise HTTPException(400, "هذا الرمز موجود مسبقاً")
+
+    c = Coupon(
+        code             = code,
+        discount_percent = float(data.discount_percent),
+        is_active        = bool(data.is_active),
+        max_uses         = data.max_uses,
+        per_user_limit   = max(0, int(data.per_user_limit or 0)),
+        expires_at       = _parse_expiry(data.expires_at),
+        plans            = data.plans or None,
+        note             = data.note,
+        created_by       = admin.id,
+    )
+    db.add(c)
+    db.commit()
+    db.refresh(c)
+    logger.info(f"[COUPON] أُنشئ {c.code} −{c.discount_percent:g}% بواسطة {admin.email}")
+    return {"success": True, "coupon": _coupon_info(c)}
+
+
+@router.patch("/coupons/{coupon_id}")
+def update_coupon(
+    coupon_id: int,
+    data: CouponIn,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    from app.models.coupon import Coupon
+    from app.services.coupon_service import normalize_code
+
+    c = db.query(Coupon).filter(Coupon.id == coupon_id).first()
+    if not c:
+        raise HTTPException(404, "الكوبون غير موجود")
+    if not (0 < data.discount_percent <= 100):
+        raise HTTPException(400, "نسبة الخصم يجب أن تكون بين 1 و100")
+
+    new_code = normalize_code(data.code)
+    if new_code and new_code != c.code:
+        if db.query(Coupon).filter(Coupon.code == new_code).first():
+            raise HTTPException(400, "هذا الرمز موجود مسبقاً")
+        c.code = new_code
+
+    c.discount_percent = float(data.discount_percent)
+    c.is_active        = bool(data.is_active)
+    c.max_uses         = data.max_uses
+    c.per_user_limit   = max(0, int(data.per_user_limit or 0))
+    c.expires_at       = _parse_expiry(data.expires_at)
+    c.plans            = data.plans or None
+    c.note             = data.note
+    db.commit()
+    db.refresh(c)
+    # used_count لا يُعدَّل من هنا عمداً: هو سجل وقائع لا إعداد، وتصفيره
+    # يدوياً يفصله عن coupon_redemptions فيصير الرقمان متناقضين.
+    logger.info(f"[COUPON] عُدّل {c.code} بواسطة {admin.email}")
+    return {"success": True, "coupon": _coupon_info(c)}
+
+
+@router.delete("/coupons/{coupon_id}")
+def delete_coupon(
+    coupon_id: int,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    from app.models.coupon import Coupon
+    c = db.query(Coupon).filter(Coupon.id == coupon_id).first()
+    if not c:
+        raise HTTPException(404, "الكوبون غير موجود")
+    if (c.used_count or 0) > 0:
+        # الحذف يُسقط سجلات الاستخدام معه (CASCADE) فتضيع محاسبة خصومات
+        # مُنحت فعلاً. الإيقاف يحقق الغرض نفسه ويُبقي الأثر.
+        raise HTTPException(
+            400,
+            f"استُخدم هذا الكوبون {c.used_count} مرة — أوقفه بدل حذفه "
+            f"حتى يبقى سجل الخصومات الممنوحة."
+        )
+    db.delete(c)
+    db.commit()
+    logger.info(f"[COUPON] حُذف {c.code} بواسطة {admin.email}")
+    return {"success": True}
+
+
+@router.get("/coupons/{coupon_id}/redemptions")
+def coupon_redemptions(
+    coupon_id: int,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    from app.models.coupon import CouponRedemption
+    rows = (
+        db.query(CouponRedemption, User)
+          .outerjoin(User, User.id == CouponRedemption.user_id)
+          .filter(CouponRedemption.coupon_id == coupon_id)
+          .order_by(CouponRedemption.created_at.desc())
+          .all()
+    )
+    return {
+        "total": len(rows),
+        "redemptions": [
+            {
+                "id":           r.id,
+                "user_id":      r.user_id,
+                "email":        u.email if u else None,
+                "full_name":    (u.full_name if u else None) or "",
+                "payment_id":   r.payment_id,
+                "plan":         r.plan,
+                "price_before": r.price_before,
+                "price_after":  r.price_after,
+                "created_at":   r.created_at.isoformat() if r.created_at else None,
+            }
+            for r, u in rows
+        ],
+    }
