@@ -18,6 +18,7 @@ from app.models.strategy import (
 )
 from app.models.support_chat import SupportChatThread, SupportChatMessage, ChatThreadStatus
 from app.models.feature_request import FeatureRequest
+from app.models.signal_delivery import SignalDelivery
 
 __all__ = [
     "User", "UserRole", "PlanType",
@@ -33,4 +34,5 @@ __all__ = [
     "StrategyStatus", "GroupLogic",
     "SupportChatThread", "SupportChatMessage", "ChatThreadStatus",
     "FeatureRequest",
+    "SignalDelivery",
 ]

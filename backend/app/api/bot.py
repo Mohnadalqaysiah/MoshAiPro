@@ -867,6 +867,54 @@ def bot_mark_broadcast(
     return {"success": True}
 
 
+@router.post("/record-deliveries/{signal_id}")
+def bot_record_deliveries(
+    signal_id: int,
+    deliveries: list = Body(..., embed=True),
+    _: bool = Depends(verify_bot),
+    db: Session = Depends(get_db),
+):
+    """
+    (2026-09-16) يسجّل من استلم الإشارة فعلاً ومتى — دفعة واحدة لكل
+    إشارة، لا طلب لكل مستلم (البث يصل ~60 مشتركاً، فالطلب المنفرد كان
+    سيعني 60 رحلة شبكة لكل إشارة).
+
+    قبل هذا لم يكن هناك أي سجل: الحلقة ترسل ثم تزيد عدّاداً محلياً
+    وتعلّم broadcast_sent=True فقط. فعمود "المستخدمون" بلوحة الإدارة
+    كان يعدّ صفوف Signal (من أُنشئت لحسابه) لا المستلمين.
+
+    كل عنصر: {telegram_id, ok, variant, error}
+    """
+    from app.models.signal_delivery import SignalDelivery
+
+    sig = db.query(Signal).filter(Signal.id == signal_id).first()
+    if not sig:
+        raise HTTPException(404, "Signal not found")
+
+    tids = [str(d.get("telegram_id")) for d in deliveries if d.get("telegram_id")]
+    users = {}
+    if tids:
+        for u in db.query(User).filter(User.telegram_id.in_(tids)).all():
+            users[str(u.telegram_id)] = u.id
+
+    saved = 0
+    for d in deliveries:
+        tid = str(d.get("telegram_id") or "") or None
+        if not tid:
+            continue
+        db.add(SignalDelivery(
+            signal_id   = signal_id,
+            user_id     = users.get(tid),
+            telegram_id = tid,
+            variant     = str(d.get("variant") or "full")[:20],
+            ok          = bool(d.get("ok", True)),
+            error       = (str(d.get("error"))[:300] if d.get("error") else None),
+        ))
+        saved += 1
+    db.commit()
+    return {"success": True, "saved": saved}
+
+
 @router.post("/mark-result-broadcast/{signal_id}")
 def bot_mark_result_broadcast(
     signal_id: int,

@@ -495,6 +495,23 @@ export default function Admin() {
   const [signalsLoading, setSignalsLoading] = useState(false)
   const [outcomeForm, setOutcomeForm] = useState({})
   const [openOutcome, setOpenOutcome] = useState(null)
+  // (2026-09-16) كشف المستلمين — لم يكن هناك أي طريقة لمعرفة من استلم
+  // إشارة: البوت كان يبث ثم يزيد عدّاداً محلياً فقط.
+  const [deliveries, setDeliveries] = useState(null)
+  const [deliveriesLoading, setDeliveriesLoading] = useState(false)
+
+  const loadDeliveries = async (signalId) => {
+    setDeliveriesLoading(true)
+    setDeliveries({ signal_id: signalId, recipients: [] })
+    try {
+      const r = await axios.get(`${API}/api/v1/admin/signals/${signalId}/deliveries`)
+      setDeliveries(r.data)
+    } catch (e) {
+      setDeliveries({ signal_id: signalId, recipients: [], error: e.response?.data?.detail || e.message })
+    } finally {
+      setDeliveriesLoading(false)
+    }
+  }
 
   // Support chat state
   const [supportThreads, setSupportThreads]   = useState([])
@@ -847,6 +864,67 @@ export default function Admin() {
 
   return (
     <div className="min-h-screen bg-gray-950 text-white" dir="rtl">
+      {deliveries && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/70"
+             onClick={() => setDeliveries(null)}>
+          <div onClick={e => e.stopPropagation()}
+               className="relative w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col bg-gray-900 border border-gray-700 rounded-2xl">
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-800">
+              <div>
+                <h3 className="font-bold text-white">مستلمو الإشارة #{deliveries.signal_id}</h3>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {deliveriesLoading ? 'جاري التحميل...' : (
+                    <>وصلت لـ <span className="text-green-400 font-semibold">{deliveries.delivered ?? 0}</span>
+                    {(deliveries.failed ?? 0) > 0 && <> · فشل <span className="text-red-400 font-semibold">{deliveries.failed}</span></>}</>
+                  )}
+                </p>
+              </div>
+              <button onClick={() => setDeliveries(null)} className="text-gray-400 hover:text-white p-1">
+                <X size={18}/>
+              </button>
+            </div>
+            <div className="overflow-y-auto px-5 py-3">
+              {deliveries.error && (
+                <p className="text-red-400 text-sm">{deliveries.error}</p>
+              )}
+              {!deliveriesLoading && !deliveries.error && (deliveries.recipients || []).length === 0 && (
+                <p className="text-gray-500 text-sm py-6 text-center">
+                  لا يوجد سجل تسليم لهذه الإشارة — سجل التسليم بدأ من 16/09،
+                  والإشارات الأقدم بُثّت قبل وجوده.
+                </p>
+              )}
+              <div className="space-y-1.5">
+                {(deliveries.recipients || []).map((r, i) => (
+                  <div key={i} className="flex items-center justify-between gap-3 bg-gray-800/50 rounded-lg px-3 py-2">
+                    <div className="min-w-0">
+                      <div className="text-sm text-gray-200 truncate">
+                        {r.full_name || r.email || `تيليجرام ${r.telegram_id}`}
+                      </div>
+                      <div className="text-[11px] text-gray-500 truncate">
+                        {r.email} {r.telegram_id && `· TG ${r.telegram_id}`}
+                      </div>
+                    </div>
+                    <div className="text-left shrink-0">
+                      <div className="flex items-center gap-1.5 justify-end">
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                          r.variant === 'full' ? 'bg-green-900/40 text-green-300' : 'bg-yellow-900/40 text-yellow-300'
+                        }`}>{r.variant === 'full' ? 'كاملة' : 'مموّهة'}</span>
+                        {r.ok
+                          ? <CheckCircle size={13} className="text-green-400"/>
+                          : <span title={r.error}><XCircle size={13} className="text-red-400"/></span>}
+                      </div>
+                      <div className="text-[11px] text-gray-500 font-mono mt-0.5">
+                        {r.sent_at ? `${r.sent_at.slice(11,19)} · ${r.sent_at.slice(0,10)}` : ''}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {selectedUser && (
         <UserModal
           user={selectedUser}
@@ -1751,6 +1829,7 @@ export default function Admin() {
                         <th className="pb-2 text-right font-medium">SL</th>
                         <th className="pb-2 text-right font-medium">TP1</th>
                         <th className="pb-2 text-right font-medium">النقاط</th>
+                        <th className="pb-2 text-right font-medium">وصلت لـ</th>
                         <th className="pb-2 text-right font-medium">التاريخ</th>
                         <th className="pb-2 text-right font-medium">النتيجة</th>
                       </tr>
@@ -1793,6 +1872,21 @@ export default function Admin() {
                               <td className="py-2 text-green-400 font-mono">{s.take_profit_1?.toFixed(5) ?? '-'}</td>
                               <td className={`py-2 font-semibold font-mono ${ptColor(s.points_earned)}`}>
                                 {s.points_earned != null ? (s.points_earned > 0 ? '+' : '') + s.points_earned : '—'}
+                              </td>
+                              <td className="py-2">
+                                {s.delivered_count > 0 ? (
+                                  <button
+                                    onClick={() => loadDeliveries(s.id)}
+                                    className="flex items-center gap-1 text-xs bg-blue-900/40 hover:bg-blue-900/70 text-blue-300 px-2 py-0.5 rounded transition-colors"
+                                    title="اعرض من استلم هذه الإشارة">
+                                    <Users size={11}/> {s.delivered_count}
+                                    {s.failed_count > 0 && (
+                                      <span className="text-red-400" title={`${s.failed_count} فشل إرسال`}>
+                                        /{s.failed_count}✕
+                                      </span>
+                                    )}
+                                  </button>
+                                ) : <span className="text-gray-600 text-xs">—</span>}
                               </td>
                               <td className="py-2 text-gray-500 font-mono whitespace-nowrap" title={s.created_at ? `${s.created_at} (UTC)` : ''}>
                                 {s.created_at ? `${s.created_at.slice(0, 10)} ${s.created_at.slice(11, 16)}` : '-'}

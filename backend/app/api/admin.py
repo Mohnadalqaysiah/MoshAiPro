@@ -1132,9 +1132,64 @@ def admin_list_signals(
             pass
     total = q.count()
     signals = q.order_by(Signal.created_at.desc()).offset(offset).limit(limit).all()
+
+    # (2026-09-16) عدد المستلمين الحقيقي من سجل التسليم. قبله كان الجدول
+    # يعرض صفاً لكل Signal ويُفهم عدد الصفوف كأنه عدد المستلمين — وهو
+    # ليس كذلك: الصفوف تُنشأ لمن أُنشئت الإشارة لحسابه (غالباً حساب
+    # الماسح)، بينما البث الفعلي يصل لعشرات المشتركين بلا أي أثر محفوظ.
+    from app.models.signal_delivery import SignalDelivery
+    ids = [s.id for s in signals]
+    delivered, failed = {}, {}
+    if ids:
+        rows = (db.query(SignalDelivery.signal_id, SignalDelivery.ok,
+                         func.count(SignalDelivery.id))
+                  .filter(SignalDelivery.signal_id.in_(ids))
+                  .group_by(SignalDelivery.signal_id, SignalDelivery.ok).all())
+        for sid, ok, cnt in rows:
+            (delivered if ok else failed)[sid] = cnt
+
+    out = []
+    for s in signals:
+        info = _signal_info(s)
+        info["delivered_count"] = delivered.get(s.id, 0)
+        info["failed_count"]    = failed.get(s.id, 0)
+        out.append(info)
+    return {"total": total, "signals": out}
+
+
+@router.get("/signals/{signal_id}/deliveries")
+def admin_signal_deliveries(
+    signal_id: int,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """من استلم هذه الإشارة بالضبط ومتى — الكشف الذي كان غائباً تماماً."""
+    from app.models.signal_delivery import SignalDelivery
+
+    rows = (db.query(SignalDelivery)
+              .filter(SignalDelivery.signal_id == signal_id)
+              .order_by(SignalDelivery.sent_at.asc()).all())
+    user_ids = [r.user_id for r in rows if r.user_id]
+    users = {}
+    if user_ids:
+        for u in db.query(User).filter(User.id.in_(user_ids)).all():
+            users[u.id] = {"email": u.email, "full_name": u.full_name or ""}
+
     return {
-        "total": total,
-        "signals": [_signal_info(s) for s in signals],
+        "signal_id": signal_id,
+        "total":     len(rows),
+        "delivered": sum(1 for r in rows if r.ok),
+        "failed":    sum(1 for r in rows if not r.ok),
+        "recipients": [{
+            "user_id":     r.user_id,
+            "email":       users.get(r.user_id, {}).get("email", ""),
+            "full_name":   users.get(r.user_id, {}).get("full_name", ""),
+            "telegram_id": r.telegram_id,
+            "variant":     r.variant,
+            "ok":          r.ok,
+            "error":       r.error,
+            "sent_at":     r.sent_at.isoformat() if r.sent_at else None,
+        } for r in rows],
     }
 
 

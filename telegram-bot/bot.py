@@ -1213,6 +1213,13 @@ async def broadcast_new_signals(app: Application):
                     owner_tid = str(sig.get("owner_telegram_id") or "")
 
                     sent = 0
+                    # (2026-09-16) سجل التسليم: كان البث يزيد عدّاداً محلياً
+                    # فقط بلا أي أثر دائم لمن استلم — فبدت الإشارة وكأنها
+                    # وصلت لشخص واحد بلوحة الإدارة (وهي تعدّ صفوف Signal)
+                    # بينما البث الحقيقي ~60 مشتركاً. نجمع هنا ونرسل دفعة
+                    # واحدة بعد الحلقة، ونسجّل الفشل أيضاً لأنه يكشف من
+                    # حظر البوت أو صار chat_id لديه غير صالح.
+                    deliveries = []
                     for tid in all_subs:
                         # مستخدم بدون watchlist → يستلم كل شيء
                         # مستخدم بـ watchlist → يستلم فقط أزواجه
@@ -1232,18 +1239,33 @@ async def broadcast_new_signals(app: Application):
 
                         msg = msg_full if unlocked else msg_masked
                         kb  = kb_full  if unlocked else kb_masked
+                        variant = "full" if unlocked else "masked"
                         try:
                             await app.bot.send_message(
                                 chat_id=int(tid), text=msg,
                                 parse_mode="Markdown", reply_markup=kb,
                             )
                             sent += 1
+                            deliveries.append({"telegram_id": tid, "ok": True,
+                                               "variant": variant})
                         except Exception as _e:
                             logger.warning(f"فشل إرسال إلى {tid}: {_e}")
+                            deliveries.append({"telegram_id": tid, "ok": False,
+                                               "variant": variant, "error": str(_e)})
                         await asyncio.sleep(0.05)  # rate limit
 
                     await _post(f"/api/v1/bot/mark-broadcast/{sig['id']}")
-                    logger.info(f"✅ إشارة #{sig['id']} [{market}] بُثّت لـ {sent} مشترك")
+                    if deliveries:
+                        try:
+                            await _post(f"/api/v1/bot/record-deliveries/{sig['id']}",
+                                        json={"deliveries": deliveries})
+                        except Exception as _re:
+                            logger.warning(f"تعذّر حفظ سجل التسليم لـ#{sig['id']}: {_re}")
+                    failed = len(deliveries) - sent
+                    logger.info(
+                        f"✅ إشارة #{sig['id']} [{market}] بُثّت لـ {sent} مشترك"
+                        + (f" (فشل {failed})" if failed else "")
+                    )
 
         except Exception as e:
             logger.error(f"broadcast_new_signals: {e}", exc_info=True)
