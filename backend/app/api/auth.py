@@ -482,6 +482,8 @@ def link_telegram(
 
     user.telegram_id = data.telegram_id
     user.telegram_username = data.telegram_username
+    if not user.telegram_linked_at:
+        user.telegram_linked_at = datetime.now(timezone.utc)
     db.commit()
     return {"success": True, "message": "تم ربط حساب Telegram بنجاح"}
 
@@ -579,6 +581,8 @@ def bot_verify_link(data: BotVerifyIn, db: Session = Depends(get_db)):
     user.telegram_id       = data.telegram_id
     user.telegram_username = data.telegram_username
     user.telegram_link_token = None  # invalidate after use
+    if not user.telegram_linked_at:
+        user.telegram_linked_at = datetime.now(timezone.utc)
     db.commit()
 
     logger.info(f"✅ Telegram linked: {user.email} ↔ @{data.telegram_username}")

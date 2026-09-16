@@ -32,6 +32,13 @@ class User(Base):
     # Telegram link (optional)
     telegram_id  = Column(String, unique=True, index=True, nullable=True)
     telegram_username = Column(String, nullable=True)
+    # (2026-09-16) وقت الربط — لم يكن مسجّلاً، فكان قياس أثر أي تحسين على
+    # الربط مستحيلاً: المتاح فقط "مرتبط الآن أم لا"، ومقارنة نسب الربط بين
+    # فترات تسجيل مختلفة منحازة بنيوياً (من سجّل أمس أمامه يوم ليربط، ومن
+    # سجّل قبل شهر أمامه 30 يوماً) فتُظهر انحداراً وهمياً حتى لو كانت
+    # النسبة ثابتة. بوجوده يصير القياس الصحيح ممكناً: نسبة من ربط خلال
+    # أول 24/48 ساعة من التسجيل، وهي مقارنة عادلة بين الأفواج.
+    telegram_linked_at = Column(DateTime(timezone=True), nullable=True)
 
     # Plan & Subscription
     plan               = Column(SAEnum(PlanType), default=PlanType.TRIAL, nullable=False)
