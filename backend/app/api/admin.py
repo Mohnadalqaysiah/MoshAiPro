@@ -2664,3 +2664,63 @@ async def diagnostics_combinations(
     from app.services.quality_report import build_combinations
     days = max(1, min(int(days or 30), 365))
     return build_combinations(db, days=days, min_n=min_n)
+
+
+@router.get("/online-users")
+def list_online_users(
+    window_sec: int = _ONLINE_WINDOW_SEC,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """
+    من المتواجد على المنصة الآن — القائمة لا العدد فقط.
+
+    المسار "/online-users" لا "/users/online" عمداً: الأخير يصطدم بـ
+    "/users/{user_id}" المعرَّف قبله، فتحاول FastAPI تحويل "online" إلى
+    int وتردّ 422.
+
+    ⚠️ معنى "متصل" هنا محدد: أرسل طلباً موثّقاً خلال آخر window_sec ثانية،
+    لأن last_seen_at يُحدَّث بـget_current_user وحدها (auth_service.py).
+    فمن يفتح الصفحة ويتركها بلا تفاعل يسقط من القائمة رغم بقائه أمامها،
+    ومن يستخدم بوت تلغرام فقط لا يظهر إطلاقاً — البوت لا يمرّ بهذا المسار.
+    الرقم أدنى من الحضور الحقيقي لا أعلى، وهو التحيّز المفضّل هنا.
+    """
+    now    = datetime.now(timezone.utc)
+    window = max(60, min(int(window_sec or _ONLINE_WINDOW_SEC), 86400))
+    cutoff = now - timedelta(seconds=window)
+
+    users = (
+        db.query(User)
+          .filter(User.last_seen_at.isnot(None), User.last_seen_at > cutoff)
+          .order_by(User.last_seen_at.desc())
+          .all()
+    )
+
+    out = []
+    for u in users:
+        seen = u.last_seen_at
+        if seen and seen.tzinfo is None:
+            seen = seen.replace(tzinfo=timezone.utc)
+        out.append({
+            "id":            u.id,
+            "email":         u.email,
+            "full_name":     u.full_name or "",
+            "plan":          u.plan,
+            "role":          u.role,
+            "telegram_id":   u.telegram_id,
+            "telegram_username": u.telegram_username,
+            "last_seen_at":  seen.isoformat() if seen else None,
+            "seconds_ago":   int((now - seen).total_seconds()) if seen else None,
+        })
+
+    by_plan = {}
+    for u in out:
+        by_plan[u["plan"]] = by_plan.get(u["plan"], 0) + 1
+
+    return {
+        "count":       len(out),
+        "window_sec":  window,
+        "generated_at": now.isoformat(),
+        "by_plan":     by_plan,
+        "users":       out,
+    }

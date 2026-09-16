@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import Logo from '../components/Logo'
 import QualityReportPanel from '../components/QualityReportPanel'
 import CombinationsPanel from '../components/CombinationsPanel'
+import OnlineUsersModal from '../components/OnlineUsersModal'
 import {
   Users, CreditCard, BarChart2, CheckCircle, XCircle, Clock,
   Search, Plus, Trash2, ToggleLeft, ToggleRight, TrendingUp,
@@ -412,6 +413,7 @@ export default function Admin() {
   const [stats, setStats]     = useState(null)
   const [users, setUsers]     = useState([])
   const [onlineCount, setOnlineCount] = useState(0)
+  const [showOnline, setShowOnline]   = useState(false)
   const [team, setTeam]           = useState([])
   const [teamLoading, setTeamLoading] = useState(false)
   const [teamSearch, setTeamSearch]   = useState('')
@@ -1037,11 +1039,13 @@ export default function Admin() {
               <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
                 <h1 className="text-xl font-bold">
                   المستخدمون <span className="text-sm text-gray-500 font-normal">({filteredUsers.length})</span>
-                  {onlineCount > 0 && (
-                    <span className="mr-3 inline-flex items-center gap-1.5 text-xs bg-green-900/30 text-green-400 border border-green-700/40 px-2 py-1 rounded-full align-middle">
-                      <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" /> {onlineCount} متصل الآن
-                    </span>
-                  )}
+                  <button onClick={() => setShowOnline(true)}
+                    title="عرض قائمة المتصلين"
+                    className="mr-3 inline-flex items-center gap-1.5 text-xs bg-green-900/30 text-green-400 border border-green-700/40 hover:bg-green-900/50 hover:border-green-600 px-2 py-1 rounded-full align-middle transition">
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                    {onlineCount} متصل الآن
+                    <ChevronRight size={11} className="rotate-180" />
+                  </button>
                 </h1>
                 <div className="flex items-center gap-2 flex-wrap">
                   {/* Plan filter */}
@@ -3036,6 +3040,8 @@ export default function Admin() {
 
           {/* ── Diagnostic ── */}
           {tab === 'diagnostic' && <DiagnosticPanel />}
+
+          {showOnline && <OnlineUsersModal onClose={() => setShowOnline(false)} />}
 
           {/* ── Feature Survey ── */}
           {tab === 'feature-survey' && <FeatureSurveyPanel />}
