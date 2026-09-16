@@ -82,8 +82,11 @@ async def main():
 
         if df is not None and len(df):
             import pandas as pd
-            ts = pd.to_datetime(df["datetime"] if "datetime" in df.columns else df.index, utc=True)
-            work = df.copy(); work["_ts"] = ts.values
+            # بلا .values — تجريد المنطقة الزمنية يجعل المقارنة ترمي
+            # TypeError (نفس العطل المكتشف بحلقة الرصد اليوم).
+            work = df.copy()
+            ts_col = work["datetime"] if "datetime" in work.columns else work.index
+            work["_ts"] = pd.to_datetime(ts_col, utc=True)
             work = work[work["_ts"] >= (created - timedelta(minutes=10))].sort_values("_ts")
             shown = 0
             for _, r in work.iterrows():

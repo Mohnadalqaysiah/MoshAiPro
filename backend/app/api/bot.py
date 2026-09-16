@@ -544,12 +544,20 @@ async def bot_check_outcomes(
                         range_df = await _smart_data.get_ohlcv(market_upper, "5m", bars=30)
                         if range_df is not None and len(range_df):
                             import pandas as _pd
-                            ts_col = range_df["datetime"] if "datetime" in range_df.columns else range_df.index
-                            ts_series = _pd.to_datetime(ts_col, utc=True)
+                            # (2026-09-16) كان هنا `.values` — وهو يجرّد المنطقة
+                            # الزمنية فيصير العمود tz-naive، فترمي المقارنة مع
+                            # Timestamp الواعي بالمنطقة TypeError. والكتلة كلها
+                            # ملفوفة بـexcept Exception فتُبتلع بصمت: candles
+                            # تبقى فارغة، ويسقط الرصد للفحص بالسعر اللحظي فقط.
+                            # النتيجة: المشي الزمني (إصلاح d21985f) لم يعمل
+                            # إطلاقاً لأي رمز يمرّ من فرع yfinance — الكريبتو
+                            # والمؤشرات والفوركس كلها. نُبقي العمود واعياً
+                            # بالمنطقة بلا .values.
                             work = range_df.copy()
-                            work["_ts"] = ts_series.values
+                            ts_col = work["datetime"] if "datetime" in work.columns else work.index
+                            work["_ts"] = _pd.to_datetime(ts_col, utc=True)
                             if created_ts is not None:
-                                work = work[ts_series.values >= _pd.Timestamp(created_ts, unit="s", tz="UTC")]
+                                work = work[work["_ts"] >= _pd.Timestamp(created_ts, unit="s", tz="UTC")]
                             work = work.sort_values("_ts")
                             candles = [(row["_ts"], float(row["high"]), float(row["low"])) for _, row in work.iterrows()]
 
@@ -578,8 +586,16 @@ async def bot_check_outcomes(
                         if tp1_touch and new_status is None:
                             new_status = SignalStatus.TP1_HIT
                             # بلا break — نكمل لنرى هل يبلغ TP2 قبل SL
-                except Exception:
-                    pass
+                except Exception as _walk_err:
+                    # (2026-09-16) كان `pass` صامتاً — وهو ما أخفى عطل المنطقة
+                    # الزمنية أعلاه لأيام: المشي الزمني كان يرمي استثناءً بكل
+                    # مرة لرموز yfinance، فيُبتلع، فيسقط الرصد للسعر اللحظي
+                    # بلا أي أثر. السقوط للفحص اللحظي يبقى سلوكاً مقبولاً
+                    # (أفضل من لا رصد)، لكن يجب ألا يكون صامتاً.
+                    logger.warning(
+                        f"⚠️ المشي الزمني فشل لـ{market_upper} #{sig.id} — "
+                        f"سقوط للفحص بالسعر اللحظي: {type(_walk_err).__name__}: {_walk_err}"
+                    )
 
             # فحص لحظي (range_check=False، أو ما لقينا شي بالمشي الزمني) —
             # نفس السلوك الأصلي: يقارن السعر الحالي فقط.
