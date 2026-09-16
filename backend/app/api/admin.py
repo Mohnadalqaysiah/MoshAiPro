@@ -2641,3 +2641,26 @@ async def diagnostics_quality(
     from app.services.quality_report import build_quality_report
     days = max(1, min(int(days or 30), 365))
     return build_quality_report(db, days=days)
+
+
+@router.get("/diagnostics/combinations")
+async def diagnostics_combinations(
+    days: int = 30,
+    min_n: int = 12,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """
+    تقاطع الروافع لا كل رافعة وحدها. التقرير المنفرد يقول "الشراء يخسر"
+    ولا يقول أين — أكلّه أم تقاطع محدد منه؟ والفرق حاسم: الخلل بتقاطع
+    يُصلَح، أما "الشراء كله" فكبحُ نصف الإنتاج.
+
+    يفحص كل توليفة ثنائية وثلاثية من (اتجاه/ثقة/وقف/RR/فريم) — وكلها
+    معلومة وقت الإصدار فتصلح شروطاً. حارس مشدَّد فوق التقرير المنفرد
+    لأن كثرة المقارنات تُظهر توليفات ممتازة بالصدفة وحدها.
+
+    قراءة محضة.
+    """
+    from app.services.quality_report import build_combinations
+    days = max(1, min(int(days or 30), 365))
+    return build_combinations(db, days=days, min_n=min_n)

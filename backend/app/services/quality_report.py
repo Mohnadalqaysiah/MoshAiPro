@@ -345,8 +345,8 @@ def _recommendations(levers: dict, labels: dict, total_r: float,
     return recs
 
 
-# ── نقطة الدخول ────────────────────────────────────────────────────────
-def build_quality_report(db, days: int = 30) -> dict:
+# ── بناء القرارات المُثراة (مشترك بين التقريرين) ────────────────────────
+def _enriched_decisions(db, days: int) -> list:
     from app.models.signal import Signal
     from app.services.decision_grouping import verified_unique_decisions
 
@@ -383,7 +383,12 @@ def build_quality_report(db, days: int = 30) -> dict:
             "duration_min": ((exited - created).total_seconds() / 60.0
                              if (created and exited and exited >= created) else None),
         })
+    return enriched
 
+
+# ── نقطة الدخول ────────────────────────────────────────────────────────
+def build_quality_report(db, days: int = 30) -> dict:
+    enriched     = _enriched_decisions(db, days)
     closed       = [d for d in enriched if d["status"] in CLOSED]
     total_points = round(sum(float(d["points"] or 0) for d in closed), 2)
     total_n      = len(closed)
@@ -577,4 +582,126 @@ def build_quality_report(db, days: int = 30) -> dict:
                 key=lambda x: x["created"] or datetime.min.replace(tzinfo=timezone.utc),
             )
         ],
+    }
+
+
+# ══════════════════════════════════════════════════════════════════════
+# تقرير التوليفات — تقاطع الروافع لا كل رافعة وحدها
+# ══════════════════════════════════════════════════════════════════════
+# (2026-09-16) الدافع واقعة محددة: تبيّن أن الشراء يخسر (-0.38R على 151
+# قراراً بـ90 يوماً، والفجوة عن البيع 0.67R ثابتة عبر نافذتين مستقلتين
+# و34 رمزاً). والتقرير المنفرد يقول "الشراء يخسر" ولا يقول أين — أكلّه،
+# أم الشراء بوقف ضيق، أم بثقة متوسطة؟ والفرق حاسم عملياً: خلل بتقاطع
+# محدد يُصلَح، أما "الشراء كله" فيعني كبح نصف الإنتاج وهو قرار ثقيل لا
+# يُتخذ بلا تفصيل.
+#
+# الخطر المعروف هنا اسمه صراحةً: فحص مئات التوليفات على 200 قرار يضمن
+# رياضياً ظهور توليفات تبدو ممتازة بمحض الصدفة (مشكلة المقارنات
+# المتعددة). ولذلك يُشدَّد الحارس هنا فوق ما بالتقرير المنفرد: عينة
+# أكبر، وتنوّع رموز إلزامي، وفحص الثبات معروض بجانب كل صف — ولا يُبنى
+# قرار على توليفة غير مستقرة مهما بدا توقّعها.
+MIN_N_COMBO   = 12   # أعلى من MIN_N_SUGGEST: التوليفات أكثر عدداً فأسهل خداعاً
+MIN_SYMS_COMBO = 3   # توليفة برمز أو رمزين حكمٌ على الرمز لا على الشروط
+
+
+def _combo_levers(d: dict) -> list:
+    """الروافع المعلومة وقت الإصدار فقط — ما عداها لا يصلح شرطاً."""
+    return [
+        ("الاتجاه",      d["signal_type"]),
+        ("الثقة",        _bucket(d.get("ai_confidence"), CONF_EDGES)),
+        ("مسافة الوقف",  _bucket(d.get("sl_pct"), SL_EDGES)),
+        ("R/R",          _bucket(d.get("risk_reward_ratio"), RR_EDGES)),
+        ("الفريم",       d["timeframe"]),
+    ]
+
+
+def build_combinations(db, days: int = 30, min_n: int = MIN_N_COMBO) -> dict:
+    from itertools import combinations
+
+    enriched = _enriched_decisions(db, days)
+    closed   = [d for d in enriched if d["status"] in CLOSED]
+    base     = _summarize(closed)
+    total_n  = len(closed)
+    min_n    = max(int(min_n or MIN_N_COMBO), MIN_N_COMBO)
+
+    stamps   = sorted(d["created"] for d in closed if d.get("created"))
+    split_ts = stamps[len(stamps) // 2] if len(stamps) >= 2 * MIN_N_HALF else None
+
+    # فهرسة كل قرار بمفاتيح روافعه، ثم تجميع كل توليفة ثنائية وثلاثية
+    buckets = defaultdict(list)
+    for d in closed:
+        parts = _combo_levers(d)
+        for size in (2, 3):
+            for combo in combinations(parts, size):
+                buckets[combo].append(d)
+
+    rows = []
+    for combo, grp in buckets.items():
+        if len(grp) < min_n:
+            continue
+        s = _summarize(grp)
+        if s["symbols"] < MIN_SYMS_COMBO or s["top_share"] > MAX_SYM_SHARE:
+            continue
+        if s["expectancy"] is None:
+            continue
+
+        rest    = [d for d in closed if d["id"] not in s["_ids"]]
+        rest_s  = _summarize(rest)
+
+        stability, note = "غير قابلة للفحص", ""
+        if split_ts is not None:
+            e1, n1 = _half(grp, split_ts, True)
+            e2, n2 = _half(grp, split_ts, False)
+            if n1 >= MIN_N_HALF and n2 >= MIN_N_HALF and e1 is not None and e2 is not None:
+                if (e1 < 0) != (e2 < 0):
+                    stability = "غير مستقرة"
+                    note = "انقلبت %+.2fR ← %+.2fR" % (e1, e2)
+                elif abs(e1 - e2) > STAB_GAP:
+                    stability = "متفاوتة الشدة"
+                    note = "%+.2fR ← %+.2fR — الاتجاه مؤكَّد والمقدار تقريبي" % (e1, e2)
+                else:
+                    stability = "مستقرة"
+                    note = "%+.2fR ← %+.2fR" % (e1, e2)
+            else:
+                note = "عينة أحد النصفين أصغر من %d (%d ← %d)" % (MIN_N_HALF, n1, n2)
+
+        rows.append({
+            "label":      " + ".join("%s: %s" % (k, v) for k, v in combo),
+            "parts":      [{"lever": k, "value": v} for k, v in combo],
+            "size":       len(combo),
+            "n":          s["n"],
+            "wins":       s["wins"],
+            "losses":     s["losses"],
+            "winrate":    s["winrate"],
+            "expectancy": s["expectancy"],
+            "r_total":    s["r_total"],
+            "points":     s["points"],
+            "symbols":    s["symbols"],
+            "top_symbol": s["top_symbol"],
+            "top_share":  s["top_share"],
+            "share_pct":  _pct(s["n"], total_n),
+            "stability":  stability,
+            "stability_note": note,
+            # الرقمان اللذان يُتخذ القرار عليهما فعلاً:
+            "keep_only":  {"n": s["n"], "expectancy": s["expectancy"]},
+            "if_removed": {"n": rest_s["n"], "expectancy": rest_s["expectancy"]},
+        })
+
+    rows.sort(key=lambda r: r["expectancy"], reverse=True)
+
+    return {
+        "window_days":  days,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "min_n":        min_n,
+        "min_symbols":  MIN_SYMS_COMBO,
+        "baseline": {
+            "n":          base["n"],
+            "expectancy": base["expectancy"],
+            "winrate":    base["winrate"],
+            "r_total":    base["r_total"],
+        },
+        "tested":  len(buckets),
+        "passed":  len(rows),
+        "best":    rows[:15],
+        "worst":   list(reversed(rows[-15:])) if len(rows) > 15 else [],
     }

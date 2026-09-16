@@ -4,6 +4,7 @@ import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
 import Logo from '../components/Logo'
 import QualityReportPanel from '../components/QualityReportPanel'
+import CombinationsPanel from '../components/CombinationsPanel'
 import {
   Users, CreditCard, BarChart2, CheckCircle, XCircle, Clock,
   Search, Plus, Trash2, ToggleLeft, ToggleRight, TrendingUp,
@@ -3542,6 +3543,7 @@ function DiagnosticPanel() {
       <div className="flex items-center gap-1.5 bg-gray-900 border border-gray-800 rounded-xl p-1 w-fit">
         {[
           { k: 'quality',  label: 'تقرير الجودة' },
+          { k: 'combos',   label: 'تقاطع الروافع' },
           { k: 'pipeline', label: 'تشخيص الـpipeline' },
         ].map(t => (
           <button key={t.k} onClick={() => setSub(t.k)}
@@ -3553,6 +3555,7 @@ function DiagnosticPanel() {
         ))}
       </div>
       {sub === 'quality'  && <QualityReportPanel />}
+      {sub === 'combos'   && <CombinationsPanel />}
       {sub === 'pipeline' && <PipelineDiagnosticPanel />}
     </div>
   )
