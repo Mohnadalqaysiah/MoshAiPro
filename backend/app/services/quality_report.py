@@ -5,23 +5,17 @@ quality_report.py — تقرير جودة القرارات (قراءة محضة)
 ("لماذا لا تُولَّد إشارات الآن؟"). هذا يفحص السجل التاريخي:
 "هل ما نقيسه صحيح، وأي شرط يستحق التشديد أو التخفيف؟"
 
-مبادئ ثلاثة تحكم هذا الملف، كلها مستخلَصة من أخطاء وقعت فعلاً بهذا
-المشروع لا من اعتبارات نظرية:
+مبادئ تحكم هذا الملف، كلها مستخلَصة من أخطاء وقعت فعلاً لا من اعتبارات
+نظرية — وثلاثة منها اكتُشفت بأول تشغيل حقيقي للتقرير نفسه (16/09):
 
  1) القرار الفريد لا الصف. نفس القرار يُحفظ صفاً لكل مستخدم استلمه،
     فالعدّ الخام يضخّم كل شيء بمعامل عدد المستخدمين. المرجع الموحّد
     هو decision_grouping.verified_unique_decisions.
 
- 2) لا اقتراح بلا حارس تضليل. الاقتراح "احذف كذا" يبدو مقنعاً دائماً
-    لأن أي شريحة أسوأ من المتوسط موجودة حتماً. سابقاً بهذه الجلسة كاد
-    تحليل مسافة الوقف يُفقد رمزاً رابحاً لأن الشريحة كان يهيمن عليها
-    رمز واحد، والحكم كان يقع على الرمز لا على الرافعة. لذلك كل شريحة
-    تحمل hhi ونصيب الرمز المهيمن، وتُوسم confounded ولا تتحول لاقتراح
-    إن تجاوزت العتبة أو قلّت عينتها.
+ 2) الحكم بـR لا بالنقاط. النقاط ليست عملة موحّدة — راجع _r_multiple.
 
- 3) الفرق بين "مقاس" و"قابل للتداول". قرار أُغلق قبل أن يُبثّ تُحتسب
-    نقاطه بالتقارير ولم يستطع أي مشترك تداوله. الرقم الذي يُعرض
-    للمشتركين يجب أن يكون الثاني. يُحسب هنا صراحةً كفارق.
+ 3) لا اقتراح بلا حارس تضليل: عينة كافية، وتركّز رموز منخفض، وتداخل
+    الفرضيات مُعلن.
 
 لا شبكة، لا كتابة، لا مسّ للمحرك — كله من قاعدة البيانات.
 """
@@ -29,7 +23,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Optional
+from typing import Callable, Optional
 
 WIN    = {"TP1_HIT", "TP2_HIT"}
 LOSS   = {"SL_HIT"}
@@ -38,9 +32,11 @@ CLOSED = WIN | LOSS
 # عتبات الحارس — محافِظة عمداً. الخطأ باتجاه "لا اقتراح" يُصلحه جمع
 # بيانات أكثر؛ والخطأ باتجاه اقتراح مضلِّل يُنفَّذ على الاستراتيجية ولا
 # يُكتشف إلا بعد أسابيع من الضرر.
-MIN_N_SUGGEST = 10     # أقل عينة يجوز بناء اقتراح عليها
-MIN_N_SHOW    = 3      # أقل عينة تُقرأ أصلاً
-MAX_SYM_SHARE = 0.60   # نصيب رمز واحد يتجاوزه ⇒ الحكم على الرمز لا الرافعة
+MIN_N_SUGGEST  = 10     # أقل عينة يجوز بناء اقتراح عليها
+MIN_N_SHOW     = 3      # أقل عينة تُقرأ أصلاً
+MAX_SYM_SHARE  = 0.60   # نصيب رمز واحد يتجاوزه ⇒ الحكم على الرمز لا الرافعة
+MAX_TOP2_SHARE = 0.75   # ونصيب رمزين — الثغرة التي كان hhi يُحسب لها ولا يُستخدم
+EXP_MARGIN     = 0.25   # أقل انحراف بـR عن خط الأساس يستحق فرضية
 
 
 def _utc(dt):
@@ -85,21 +81,53 @@ def _session(hour_utc: Optional[int]) -> str:
     return "متأخرة (21–24)"
 
 
+# ── مضاعف R: المقياس الوحيد القابل للجمع عبر الرموز ────────────────────
+# (2026-09-16) اكتُشف بأول تشغيل حقيقي أن النقاط ليست عملة موحّدة:
+# _calc_points يعطي مضاعفاً مختلفاً لكل فئة، فحركة 1% تساوي ~360 نقطة
+# على الذهب، ~200 على ناسداك، ~100 على الكريبتو، ~1.5 على سهم أمريكي،
+# ~0.3 على الغاز — فارق يبلغ 1200 ضعفاً. فأي مجموع نقاط عابر للرموز
+# متوسط مرجّح بأوزان اعتباطية لا علاقة لها بجودة القرار، وضبط
+# الاستراتيجية عليه يضبطها على المضاعف لا على الأداء. ولا يكفي تنبيه
+# القارئ: كان لا بد من مقياس بديل يُحكم به فعلاً.
+# مضاعف R (العائد ÷ المخاطرة) لا يعتمد على سعر الأصل إطلاقاً — الوقف
+# = −1R لأي رمز كان. ومتوسطه (التوقّع) هو الرقم الذي يُضبط عليه أي نظام
+# تداول: موجب ⇒ رابح على المدى، سالب ⇒ خاسر مهما بدت النقاط.
+# النقاط تبقى معروضة لأنها لغة التقارير المعتادة، لكن الحكم يُبنى على R.
+def _r_multiple(entry, sl, tp1, tp2, status) -> Optional[float]:
+    try:
+        entry, sl = float(entry), float(sl)
+        risk = abs(entry - sl)
+        if risk <= 0:
+            return None
+        if status == "SL_HIT":
+            return -1.0
+        if status == "TP2_HIT" and tp2 is not None:
+            return round(abs(float(tp2) - entry) / risk, 3)
+        if status == "TP1_HIT" and tp1 is not None:
+            return round(abs(float(tp1) - entry) / risk, 3)
+    except (TypeError, ValueError):
+        return None
+    return None
+
+
 # ── نواة التجميع ───────────────────────────────────────────────────────
 def _summarize(rows: list) -> dict:
-    """ملخّص مجموعة قرارات: عدد، ربح/خسارة، نقاط، وهيمنة الرموز."""
+    """ملخّص مجموعة قرارات: عدد، ربح/خسارة، R، نقاط، وتركّز الرموز."""
     n      = len(rows)
     wins   = sum(1 for r in rows if r["status"] in WIN)
     losses = sum(1 for r in rows if r["status"] in LOSS)
     pts    = sum(float(r["points"] or 0) for r in rows)
 
+    rs      = [r["r"] for r in rows if r.get("r") is not None]
+    r_total = sum(rs)
+
     by_sym = defaultdict(int)
     for r in rows:
         by_sym[r["market"]] += 1
-    top_sym, top_cnt = "—", 0
-    if by_sym:
-        top_sym, top_cnt = max(by_sym.items(), key=lambda kv: kv[1])
-    # مؤشر هيرفندال: 1.0 = رمز واحد فقط، وكلما قلّ زاد التنوّع
+    ranked = sorted(by_sym.items(), key=lambda kv: -kv[1])
+    top_sym, top_cnt = (ranked[0] if ranked else ("—", 0))
+    top2_cnt = sum(c for _, c in ranked[:2])
+    # مؤشر هيرفندال: 1.0 = رمز واحد، وكلما قلّ زاد التنوّع
     hhi = sum((c / n) ** 2 for c in by_sym.values()) if n else 0.0
 
     decided = wins + losses
@@ -110,15 +138,21 @@ def _summarize(rows: list) -> dict:
         "winrate":    _pct(wins, decided),
         "points":     round(pts, 2),
         "avg_points": round(pts / n, 2) if n else 0.0,
+        "r_total":    round(r_total, 2),
+        "expectancy": round(r_total / len(rs), 3) if rs else None,
+        "r_known":    len(rs),
         "top_symbol": top_sym,
         "top_share":  round(top_cnt / n, 3) if n else 0.0,
+        "top2_share": round(top2_cnt / n, 3) if n else 0.0,
+        "top2_names": " + ".join(nm for nm, _ in ranked[:2]),
         "symbols":    len(by_sym),
         "hhi":        round(hhi, 3),
+        "_ids":       {r["id"] for r in rows},
     }
 
 
-def _lever(rows: list, keyfn: Callable, total_points: float,
-           order: Optional[list] = None) -> list:
+def _lever(rows: list, keyfn: Callable, total_points: float, total_r: float,
+           lever_key: str = "", order: Optional[list] = None) -> list:
     """يشرّح القرارات حسب رافعة واحدة ويَسِم كل شريحة بحكم الحارس."""
     groups = defaultdict(list)
     for r in rows:
@@ -128,17 +162,27 @@ def _lever(rows: list, keyfn: Callable, total_points: float,
     for value, grp in groups.items():
         s = _summarize(grp)
         s["value"] = value
-        # الأثر المضاد: كم تصير نقاط الفترة لو أُزيلت هذه الشريحة بالكامل؟
+        # الأثر المضاد: كم تصير الفترة لو أُزيلت هذه الشريحة بالكامل؟
         s["points_without"] = round(total_points - s["points"], 2)
+        s["r_without"]      = round(total_r - s["r_total"], 2)
 
         reasons = []
         if s["n"] < MIN_N_SUGGEST:
             reasons.append("العينة %d < %d" % (s["n"], MIN_N_SUGGEST))
-        if s["top_share"] > MAX_SYM_SHARE and s["n"] >= MIN_N_SHOW:
-            reasons.append(
-                "%d%% منها %s — الحكم يقع على الرمز لا على الرافعة"
-                % (int(s["top_share"] * 100), s["top_symbol"])
-            )
+
+        # (2026-09-16) حين تكون الرافعة هي الرمز نفسه، هيمنة الرمز تعريف
+        # لا تضليل — وإطلاق الإنذار عليها كان يَسِم كل صف بجدول الرموز
+        # فيُعطّل الجدول بالكامل. التركّز يُفحص فقط للروافع الأخرى.
+        if lever_key != "symbol" and s["n"] >= MIN_N_SHOW:
+            if s["top_share"] > MAX_SYM_SHARE:
+                reasons.append("%d%% منها %s — الحكم يقع على الرمز لا على الرافعة"
+                               % (int(s["top_share"] * 100), s["top_symbol"]))
+            elif s["top2_share"] > MAX_TOP2_SHARE and s["symbols"] > 1:
+                # رمز واحد قد لا يتجاوز العتبة بينما رمزان يشكّلان الشريحة
+                # كلها عملياً. hhi كان يُحسب ولا يُستخدم — هذه هي الثغرة.
+                reasons.append("%d%% منها %s — رمزان يشكّلان الشريحة فعلياً"
+                               % (int(s["top2_share"] * 100), s["top2_names"]))
+
         s["confounded"]       = bool(reasons)
         s["confound_reasons"] = reasons
         out.append(s)
@@ -147,52 +191,86 @@ def _lever(rows: list, keyfn: Callable, total_points: float,
         idx = {v: i for i, v in enumerate(order)}
         out.sort(key=lambda x: idx.get(x["value"], 999))
     else:
-        out.sort(key=lambda x: x["points"])
+        out.sort(key=lambda x: (x["expectancy"] if x["expectancy"] is not None else 99))
     return out
 
 
-def _recommendations(levers: dict, labels: dict,
-                     total_points: float, total_n: int) -> list:
+def _recommendations(levers: dict, labels: dict, total_r: float,
+                     total_n: int, baseline_exp: Optional[float]) -> list:
     """
-    يحوّل الشرائح إلى اقتراحات — فقط ما نجا من الحارس.
-    لا يقترح تعديلاً على المحرك؛ يقترح فرضية للاختبار مع أثرها المقاس.
+    يحوّل الشرائح إلى فرضيات — فقط ما نجا من الحارس، والحكم بـR لا بالنقاط.
+    المقارنة نسبية بخط أساس النظام نفسه: شريحة سالبة داخل نظام سالب ليست
+    استثناءً يُحذف، والعبرة بمقدار انحرافها عن باقي القرارات.
     """
-    overall_avg = round(total_points / total_n, 2) if total_n else 0.0
+    if baseline_exp is None:
+        return []
+
     recs = []
     for lever_key, buckets in levers.items():
         for b in buckets:
-            if b["confounded"] or b["n"] < MIN_N_SUGGEST:
+            if b["confounded"] or b["n"] < MIN_N_SUGGEST or b["expectancy"] is None:
                 continue
+            exp   = b["expectancy"]
             share = (b["n"] / total_n) if total_n else 0.0
+            delta = exp - baseline_exp
 
-            if b["points"] < 0 and b["avg_points"] <= -3 and share >= 0.05:
+            if delta <= -EXP_MARGIN and exp < 0 and share >= 0.05:
                 recs.append({
-                    "action":   "تشديد",
-                    "lever":    labels.get(lever_key, lever_key),
-                    "value":    b["value"],
-                    "n":        b["n"],
-                    "winrate":  b["winrate"],
-                    "points":   b["points"],
-                    "effect":   "نقاط الفترة تصير %+.2f بدل %+.2f"
-                                % (b["points_without"], total_points),
-                    "strength": "قوية" if b["n"] >= 25 else "مبدئية",
-                    "caveat":   "أثر مقاس على الماضي لا وعد بالمستقبل — يُختبر قبل التثبيت.",
+                    "action":     "تشديد",
+                    "lever":      labels.get(lever_key, lever_key),
+                    "lever_key":  lever_key,
+                    "value":      b["value"],
+                    "n":          b["n"],
+                    "winrate":    b["winrate"],
+                    "expectancy": exp,
+                    "points":     b["points"],
+                    "effect":     "توقّع %+.2fR مقابل %+.2fR عاماً — حذفها يرفع "
+                                  "إجمالي الفترة إلى %+.2fR بدل %+.2fR"
+                                  % (exp, baseline_exp, b["r_without"], total_r),
+                    "strength":   "قوية" if b["n"] >= 25 else "مبدئية",
+                    "caveat":     "أثر مقاس على الماضي لا وعد بالمستقبل — يُختبر قبل التثبيت.",
+                    "_ids":       b["_ids"],
                 })
-            elif b["avg_points"] >= 10 and b["winrate"] >= 55 and share <= 0.25:
+            elif delta >= EXP_MARGIN and exp > 0.2 and share <= 0.25:
                 recs.append({
-                    "action":   "تخفيف",
-                    "lever":    labels.get(lever_key, lever_key),
-                    "value":    b["value"],
-                    "n":        b["n"],
-                    "winrate":  b["winrate"],
-                    "points":   b["points"],
-                    "effect":   "متوسط %+.2f نقطة/قرار مقابل %+.2f عاماً — نصيبها %.0f%% فقط"
-                                % (b["avg_points"], overall_avg, share * 100),
-                    "strength": "قوية" if b["n"] >= 25 else "مبدئية",
-                    "caveat":   "التخفيف يزيد العدد لا الجودة بالضرورة — الشريحة الجديدة "
-                                "قد لا تشبه القديمة. يُقاس بعد التطبيق.",
+                    "action":     "تخفيف",
+                    "lever":      labels.get(lever_key, lever_key),
+                    "lever_key":  lever_key,
+                    "value":      b["value"],
+                    "n":          b["n"],
+                    "winrate":    b["winrate"],
+                    "expectancy": exp,
+                    "points":     b["points"],
+                    "effect":     "توقّع %+.2fR مقابل %+.2fR عاماً — ونصيبها "
+                                  "%.0f%% فقط من القرارات"
+                                  % (exp, baseline_exp, share * 100),
+                    "strength":   "قوية" if b["n"] >= 25 else "مبدئية",
+                    "caveat":     "التخفيف يزيد العدد لا الجودة بالضرورة — الشريحة "
+                                  "الجديدة قد لا تشبه القديمة. يُقاس بعد التطبيق.",
+                    "_ids":       b["_ids"],
                 })
-    recs.sort(key=lambda r: (r["action"] != "تشديد", -abs(r["points"])))
+
+    # (2026-09-16) تداخل الفرضيات. رافعات مختلفة قد تصف نفس الصفقات: أول
+    # تشغيل حقيقي أعطى ثلاث فرضيات (وقف 0.30–0.50% ن=25، جلسة آسيا ن=30،
+    # R/R 2.5–3.0 ن=30) من أصل 107 قرار — والعرض يوحي بأن آثارها تُجمع.
+    # لا تُجمع إن كانت نفس الصفقات موصوفة ثلاث مرات. يُقاس ويُعلَن.
+    for i, a in enumerate(recs):
+        overlaps = []
+        for j, b in enumerate(recs):
+            if i == j:
+                continue
+            inter = len(a["_ids"] & b["_ids"])
+            if not inter:
+                continue
+            sh = inter / min(len(a["_ids"]), len(b["_ids"]))
+            if sh >= 0.5:
+                overlaps.append("%s: %s (%d%% نفس الصفقات)"
+                                % (b["lever"], b["value"], int(sh * 100)))
+        a["overlaps"] = overlaps
+
+    recs.sort(key=lambda r: (r["action"] != "تشديد", r["expectancy"]))
+    for r in recs:
+        r.pop("_ids", None)
     return recs
 
 
@@ -226,6 +304,8 @@ def build_quality_report(db, days: int = 30) -> dict:
             "exited":       exited,
             "broadcast":    bool(s.broadcast_sent),
             "sl_pct":       (abs(entry - sl) / entry * 100) if entry else None,
+            "r":            _r_multiple(s.entry_price, s.stop_loss,
+                                        s.take_profit_1, s.take_profit_2, d["status"]),
             "killzone":     s.killzone or None,
             "wyckoff":      s.wyckoff_phase or None,
             "zone":         s.premium_discount or None,
@@ -237,12 +317,13 @@ def build_quality_report(db, days: int = 30) -> dict:
     total_points = round(sum(float(d["points"] or 0) for d in closed), 2)
     total_n      = len(closed)
     overall      = _summarize(closed)
+    total_r      = overall["r_total"]
 
     # ── الفارق بين المقاس والقابل للتداول ──────────────────────────────
-    unsent       = [d for d in closed if not d["broadcast"]]
-    tradable     = [d for d in closed if d["broadcast"]]
-    t            = _summarize(tradable)
-    unsent_pts   = round(sum(float(d["points"] or 0) for d in unsent), 2)
+    unsent     = [d for d in closed if not d["broadcast"]]
+    tradable   = [d for d in closed if d["broadcast"]]
+    t          = _summarize(tradable)
+    unsent_pts = round(sum(float(d["points"] or 0) for d in unsent), 2)
 
     # ── سلامة الأرقام ──────────────────────────────────────────────────
     conflicts = [d for d in enriched if d.get("status_conflict")]
@@ -252,11 +333,23 @@ def build_quality_report(db, days: int = 30) -> dict:
         return {"have": have, "total": total_n, "pct": _pct(have, total_n)}
 
     cov_kz, cov_wy, cov_zn = coverage("killzone"), coverage("wyckoff"), coverage("zone")
+    r_cov = _pct(overall["r_known"], total_n)
 
     def cov_status(p: float) -> str:
         return "ok" if p >= 80 else ("warn" if p >= 30 else "bad")
 
+    exp = overall["expectancy"]
     integrity = [
+        {
+            "key":    "expectancy",
+            "label":  "توقّع النظام (متوسط R للقرار)",
+            "value":  ("%+.3fR" % exp) if exp is not None else "—",
+            "status": "ok" if (exp or 0) >= 0.15 else ("warn" if (exp or 0) > 0 else "bad"),
+            "why":    "الرقم الوحيد الذي يحسم ربحية النظام: موجب ⇒ رابح على المدى، "
+                      "وقرب الصفر ⇒ تعادل لا يصمد أمام السبريد والانزلاق. "
+                      "النقاط قد تبدو كبيرة وهو سالب، لأن مضاعف النقاط يختلف "
+                      "بين الرموز حتى 1200 ضعفاً.",
+        },
         {
             "key":    "unbroadcast",
             "label":  "قرارات مُغلقة لم تُبثّ قط",
@@ -275,19 +368,28 @@ def build_quality_report(db, days: int = 30) -> dict:
                       "يعني أن الرصد غير حتمي، فلا يُعتمد على أي منهما.",
         },
         {
+            "key":    "r_coverage",
+            "label":  "تغطية حساب R",
+            "value":  "%s%% (%d/%d)" % (r_cov, overall["r_known"], total_n),
+            "status": cov_status(r_cov),
+            "why":    "القرار بلا مستويات سليمة (وقف = دخول مثلاً) لا يُحسب له R "
+                      "ويسقط من كل حكم — النقص هنا يعني أن التوقّع مبني على جزء.",
+        },
+        {
             "key":    "coverage_killzone",
             "label":  "تغطية حقل الجلسة (killzone)",
             "value":  "%s%% (%d/%d)" % (cov_kz["pct"], cov_kz["have"], cov_kz["total"]),
             "status": cov_status(cov_kz["pct"]),
-            "why":    "لا يمكن تحليل رافعة لا تُسجَّل. النقص يعني أن تشريح "
-                      "الجلسة مبني على جزء من البيانات لا كلها.",
+            "why":    "لا تُحلَّل رافعة لا تُسجَّل. صفر تغطية ⇒ الحقل لا يُملأ إطلاقاً "
+                      "عند الإنشاء، وجدول Killzone بلا معنى حتى يُصلَح.",
         },
         {
             "key":    "coverage_wyckoff",
             "label":  "تغطية حقل Wyckoff",
             "value":  "%s%% (%d/%d)" % (cov_wy["pct"], cov_wy["have"], cov_wy["total"]),
             "status": cov_status(cov_wy["pct"]),
-            "why":    "نفس السبب — أُصلح التقاطه مؤخراً، فالصفوف الأقدم فارغة بالضرورة.",
+            "why":    "أُصلح التقاطه مؤخراً، فالصفوف الأقدم فارغة بالضرورة — "
+                      "النسبة سترتفع مع تراكم القرارات الجديدة وحدها.",
         },
         {
             "key":    "coverage_zone",
@@ -301,29 +403,32 @@ def build_quality_report(db, days: int = 30) -> dict:
             "label":  "حجم العينة بالفترة",
             "value":  "%d قراراً مغلقاً من %d" % (total_n, len(enriched)),
             "status": "ok" if total_n >= 100 else ("warn" if total_n >= 40 else "bad"),
-            "why":    "دون ~40 قراراً لا تُميَّز المهارة من الحظ، وأي اقتراح "
-                      "مبني عليها يقارب التخمين.",
+            "why":    "دون ~40 قراراً لا تُميَّز المهارة من الحظ. ومع تقسيمها على "
+                      "11 رافعة تصغر كل شريحة، فمعظمها سيُوسم 'عينة صغيرة' — "
+                      "وهذا سلوك صحيح لا قصور.",
         },
     ]
 
     # ── الروافع ────────────────────────────────────────────────────────
+    def L(key, keyfn, order=None):
+        return _lever(closed, keyfn, total_points, total_r, lever_key=key, order=order)
+
     levers = {
-        "symbol":     _lever(closed, lambda d: d["market"], total_points),
-        "timeframe":  _lever(closed, lambda d: d["timeframe"], total_points),
-        "direction":  _lever(closed, lambda d: d["signal_type"], total_points),
-        "confidence": _lever(closed, lambda d: _bucket(d.get("ai_confidence"), CONF_EDGES),
-                             total_points, [l for _, l in CONF_EDGES]),
-        "rr":         _lever(closed, lambda d: _bucket(d.get("risk_reward_ratio"), RR_EDGES),
-                             total_points, [l for _, l in RR_EDGES]),
-        "stop":       _lever(closed, lambda d: _bucket(d.get("sl_pct"), SL_EDGES),
-                             total_points, [l for _, l in SL_EDGES]),
-        "duration":   _lever(closed, lambda d: _bucket(d.get("duration_min"), DUR_EDGES),
-                             total_points, [l for _, l in DUR_EDGES]),
-        "session":    _lever(closed, lambda d: _session(d["created"].hour if d["created"] else None),
-                             total_points),
-        "killzone":   _lever(closed, lambda d: d.get("killzone") or "غير مسجّل", total_points),
-        "wyckoff":    _lever(closed, lambda d: d.get("wyckoff") or "غير مسجّل", total_points),
-        "zone":       _lever(closed, lambda d: d.get("zone") or "غير مسجّل", total_points),
+        "symbol":     L("symbol",     lambda d: d["market"]),
+        "timeframe":  L("timeframe",  lambda d: d["timeframe"]),
+        "direction":  L("direction",  lambda d: d["signal_type"]),
+        "confidence": L("confidence", lambda d: _bucket(d.get("ai_confidence"), CONF_EDGES),
+                        [l for _, l in CONF_EDGES]),
+        "rr":         L("rr",         lambda d: _bucket(d.get("risk_reward_ratio"), RR_EDGES),
+                        [l for _, l in RR_EDGES]),
+        "stop":       L("stop",       lambda d: _bucket(d.get("sl_pct"), SL_EDGES),
+                        [l for _, l in SL_EDGES]),
+        "duration":   L("duration",   lambda d: _bucket(d.get("duration_min"), DUR_EDGES),
+                        [l for _, l in DUR_EDGES]),
+        "session":    L("session",    lambda d: _session(d["created"].hour if d["created"] else None)),
+        "killzone":   L("killzone",   lambda d: d.get("killzone") or "غير مسجّل"),
+        "wyckoff":    L("wyckoff",    lambda d: d.get("wyckoff") or "غير مسجّل"),
+        "zone":       L("zone",       lambda d: d.get("zone") or "غير مسجّل"),
     }
 
     labels = {
@@ -337,12 +442,21 @@ def build_quality_report(db, days: int = 30) -> dict:
     # شرطاً، وارتباطها بالربح فيه شقّ حسابي (الهدف الأبعد يستغرق وقتاً
     # أطول بالضرورة) لا استراتيجي. تبقى معروضة للتشخيص فقط.
     suggestable = {k: v for k, v in levers.items() if k != "duration"}
-    recs = _recommendations(suggestable, labels, total_points, total_n)
+    recs = _recommendations(suggestable, labels, total_r, total_n, overall["expectancy"])
+
+    for buckets in levers.values():
+        for b in buckets:
+            b.pop("_ids", None)
 
     return {
         "window_days":  days,
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "thresholds":   {"min_n_suggest": MIN_N_SUGGEST, "max_symbol_share": MAX_SYM_SHARE},
+        "thresholds":   {
+            "min_n_suggest":   MIN_N_SUGGEST,
+            "max_symbol_share": MAX_SYM_SHARE,
+            "max_top2_share":  MAX_TOP2_SHARE,
+            "exp_margin":      EXP_MARGIN,
+        },
         "headline": {
             "decisions_total":  len(enriched),
             "decisions_closed": total_n,
@@ -350,11 +464,15 @@ def build_quality_report(db, days: int = 30) -> dict:
             "winrate":          overall["winrate"],
             "points":           total_points,
             "avg_points":       overall["avg_points"],
+            "expectancy":       overall["expectancy"],
+            "r_total":          total_r,
             "tradable": {
                 "decisions":  t["n"],
                 "winrate":    t["winrate"],
                 "points":     t["points"],
                 "avg_points": t["avg_points"],
+                "expectancy": t["expectancy"],
+                "r_total":    t["r_total"],
             },
             "measurement_gap": {
                 "decisions": len(unsent),
@@ -373,6 +491,7 @@ def build_quality_report(db, days: int = 30) -> dict:
                 "timeframe":  d["timeframe"],
                 "status":     d["status"],
                 "points":     round(float(d["points"] or 0), 2),
+                "r":          d["r"],
                 "age_min":    round(d["duration_min"], 1) if d["duration_min"] is not None else None,
                 "created_at": d["created"].isoformat() if d["created"] else None,
             }

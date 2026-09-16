@@ -106,6 +106,33 @@ export default function QualityReportPanel() {
       {data && (
         <div className="space-y-5">
 
+          {/* ── التوقّع أولاً: الرقم الذي يحسم الربحية ─────────── */}
+          <div className={`rounded-2xl p-5 border ${
+            (h.expectancy ?? 0) >= 0.15 ? 'border-green-700/50 bg-green-900/10'
+              : (h.expectancy ?? 0) > 0 ? 'border-yellow-700/50 bg-yellow-900/10'
+              : 'border-red-700/50 bg-red-900/10'
+          }`}>
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <span className="text-xs text-gray-400">توقّع النظام</span>
+              <span className={`text-3xl font-bold ${
+                (h.expectancy ?? 0) > 0 ? 'text-green-400' : 'text-red-400'
+              }`} dir="ltr">
+                {h.expectancy === null || h.expectancy === undefined
+                  ? '—' : `${h.expectancy >= 0 ? '+' : ''}${num(h.expectancy, 3)}R`}
+              </span>
+              <span className="text-xs text-gray-400">
+                لكل قرار · إجمالي {signed(h.r_total)}R · نسبة ربح {num(h.winrate, 1)}%
+              </span>
+            </div>
+            <p className="text-[11px] text-gray-400 mt-2 leading-relaxed max-w-3xl">
+              العائد مقسوماً على المخاطرة — الوقف <span className="font-mono">−1R</span> لأي رمز كان.
+              هذا الرقم وحده يحسم ربحية النظام، لأن النقاط ليست عملة موحّدة:
+              حركة 1% تساوي ~360 نقطة على الذهب و~0.3 على الغاز، ففارق المضاعف
+              بين الرموز يبلغ 1200 ضعفاً وأي مجموع نقاط عابر للرموز متوسط
+              مرجّح بأوزان اعتباطية.
+            </p>
+          </div>
+
           {/* ── المقاس مقابل القابل للتداول ────────────────────── */}
           <div className="grid md:grid-cols-3 gap-4">
             <div className="bg-gray-800 border border-gray-700 rounded-2xl p-5">
@@ -114,6 +141,7 @@ export default function QualityReportPanel() {
               <div className="text-xs text-gray-400 mt-1">
                 {h.decisions_closed} قراراً مغلقاً · نسبة ربح {num(h.winrate, 1)}%
               </div>
+              <div className="text-[11px] text-gray-500 mt-2">نقاط — لا تُقارَن بين الرموز</div>
             </div>
 
             <div className="bg-gray-800 border border-blue-700/50 rounded-2xl p-5">
@@ -124,7 +152,11 @@ export default function QualityReportPanel() {
                 {signed(h.tradable.points)}
               </div>
               <div className="text-xs text-gray-400 mt-1">
-                {h.tradable.decisions} قراراً وصل المشتركين · نسبة ربح {num(h.tradable.winrate, 1)}%
+                {h.tradable.decisions} قراراً وصل المشتركين · توقّع{' '}
+                <span dir="ltr">
+                  {h.tradable.expectancy === null || h.tradable.expectancy === undefined
+                    ? '—' : `${h.tradable.expectancy >= 0 ? '+' : ''}${num(h.tradable.expectancy, 3)}R`}
+                </span>
               </div>
               <div className="text-[11px] text-blue-300/70 mt-2 leading-relaxed">
                 هذا وحده ما يصحّ عرضه على المشتركين — الباقي أُغلق قبل أن يصل أحداً.
@@ -212,7 +244,8 @@ export default function QualityReportPanel() {
                           {r.lever}: {r.value}
                         </span>
                         <span className="text-[11px] text-gray-500">
-                          ن={r.n} · ربح {num(r.winrate, 1)}% · {signed(r.points)} نقطة
+                          ن={r.n} · ربح {num(r.winrate, 1)}% · توقّع{' '}
+                          <span dir="ltr">{r.expectancy >= 0 ? '+' : ''}{num(r.expectancy, 2)}R</span>
                         </span>
                         <span className={`text-[11px] px-1.5 py-0.5 rounded ${
                           r.strength === 'قوية'
@@ -221,6 +254,13 @@ export default function QualityReportPanel() {
                         }`}>دلالة {r.strength}</span>
                       </div>
                       <div className="text-xs text-gray-300">{r.effect}</div>
+                      {(r.overlaps || []).length > 0 && (
+                        <div className="text-[11px] text-yellow-300/90 mt-1.5 bg-yellow-900/15 border border-yellow-700/40 rounded-lg px-2 py-1.5 leading-relaxed">
+                          ⚠ تصف نفس الصفقات تقريباً: {r.overlaps.join(' · ')} —
+                          آثارها <span className="font-semibold">لا تُجمع</span>،
+                          ونفّذ واحدة ثم أعد القياس.
+                        </div>
+                      )}
                       <div className="text-[11px] text-gray-500 mt-1 italic">{r.caveat}</div>
                     </div>
                   </div>
@@ -259,8 +299,8 @@ export default function QualityReportPanel() {
               <table className="w-full text-xs">
                 <thead>
                   <tr className="text-gray-500 border-b border-gray-700">
-                    {['القيمة', 'عدد', 'ربح', 'خسارة', 'نسبة الربح', 'النقاط',
-                      'نقاط/قرار', 'النقاط لو حُذفت', 'رموز', 'الحكم'].map((x) => (
+                    {['القيمة', 'عدد', 'ربح', 'خسارة', 'نسبة الربح', 'التوقّع (R)',
+                      'إجمالي R', 'R لو حُذفت', 'النقاط', 'رموز', 'الحكم'].map((x) => (
                       <th key={x} className="text-right pb-2 pr-3 font-medium whitespace-nowrap">{x}</th>
                     ))}
                   </tr>
@@ -273,13 +313,19 @@ export default function QualityReportPanel() {
                       <td className="py-2 pr-3 text-green-400">{b.wins}</td>
                       <td className="py-2 pr-3 text-red-400">{b.losses}</td>
                       <td className="py-2 pr-3 text-gray-300">{num(b.winrate, 1)}%</td>
-                      <td className={`py-2 pr-3 font-mono font-semibold ${ptsColor(b.points)}`}>
+                      <td className={`py-2 pr-3 font-mono font-bold ${ptsColor(b.expectancy)}`} dir="ltr">
+                        {b.expectancy === null || b.expectancy === undefined
+                          ? '—' : `${b.expectancy >= 0 ? '+' : ''}${num(b.expectancy, 2)}R`}
+                      </td>
+                      <td className={`py-2 pr-3 font-mono ${ptsColor(b.r_total)}`} dir="ltr">
+                        {signed(b.r_total, 1)}
+                      </td>
+                      <td className="py-2 pr-3 font-mono text-gray-400" dir="ltr">
+                        {signed(b.r_without, 1)}
+                      </td>
+                      <td className={`py-2 pr-3 font-mono text-[11px] ${ptsColor(b.points)}`}>
                         {signed(b.points)}
                       </td>
-                      <td className={`py-2 pr-3 font-mono ${ptsColor(b.avg_points)}`}>
-                        {signed(b.avg_points)}
-                      </td>
-                      <td className="py-2 pr-3 font-mono text-gray-400">{signed(b.points_without)}</td>
                       <td className="py-2 pr-3 text-gray-500">{b.symbols}</td>
                       <td className="py-2 pr-3 max-w-[260px]">
                         {b.confounded ? (
