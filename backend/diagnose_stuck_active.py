@@ -96,7 +96,8 @@ async def main():
                     detail = f"{type(e).__name__}: {e}"
             else:
                 try:
-                    info = await _sd.get_realtime_price_with_meta(sig.market)
+                    # الدالة متزامنة — بلا await (نفس العطل المكتشف بالإنتاج)
+                    info = _sd.get_realtime_price_with_meta(sig.market)
                     if info and info.get("price"):
                         price, src = float(info["price"]), info.get("source", "?")
                 except Exception as e:

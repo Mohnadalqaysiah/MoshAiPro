@@ -477,28 +477,45 @@ async def bot_check_outcomes(
             if not _smart_data.is_market_open(sig.market):
                 continue
 
-            # ── لأي رمز عنده Spot حقيقي حي عبر TradingView: استخدمه ────────
-            if market_upper in _SPOT_SYMBOLS:
-                try:
-                    from app.services.tv_price_feed import tv_feed
+            # ── السعر اللحظي ───────────────────────────────────────────────
+            # (2026-09-16 #3) فُصل مصدر السعر اللحظي عن مصدر شموع المشي.
+            # كان _SPOT_SYMBOLS يحكم الاثنين معاً، فلمّا قُصر على المعادن
+            # لتصحيح مرجع الشموع، انتقلت بقية الرموز قسراً لمسار السعر
+            # العام — وهو ليس ما قُصد. القاعدتان مستقلتان:
+            #   • مرجع الشموع يجب أن يطابق مرجع بناء المستويات (معادن فقط).
+            #   • مصدر السعر اللحظي يُختار بالإتاحة والكلفة: كاش TV مجاني
+            #     ومحدَّث، وأي مسار آخر طلبُ شبكة لكل رمز كل 90 ثانية.
+            price = None
+            try:
+                from app.services.tv_price_feed import tv_feed
+                if market_upper in TV_SYMBOL_MAP:
                     tv_p = tv_feed.get_price_sync(market_upper)
                     if tv_p and float(tv_p) > 0:
                         price = float(tv_p)
-                    elif market_upper in _METALS_ONLY:
-                        # fallback: theoretical carry — معادن فقط، mosh_ai_engine_v5
-                        # مستورد بالأعلى (سطر 15) بشكل عام؛ الاستيراد المحلي هون كان
-                        # يحجبه لبقية الدالة كلها ويسبب UnboundLocalError صامت.
-                        price_raw, _ = mosh_ai_engine_v5._fetch_spot_price(market_upper)
-                        price = float(price_raw) if price_raw > 0 else None
-                    else:
-                        # كاش TV فارغ/منتهي لرمز غير معدني — نرجع لمصدر عام
-                        price_info = await _smart_data.get_realtime_price_with_meta(sig.market)
-                        price = float(price_info["price"]) if price_info and price_info.get("price") else None
-                except Exception:
-                    price = None
-            else:
-                price_info = await _smart_data.get_realtime_price_with_meta(sig.market)
-                price = float(price_info["price"]) if price_info and price_info.get("price") else None
+                if price is None and market_upper in _METALS_ONLY:
+                    # fallback: theoretical carry — معادن فقط، mosh_ai_engine_v5
+                    # مستورد بالأعلى (سطر 15) بشكل عام؛ الاستيراد المحلي هون كان
+                    # يحجبه لبقية الدالة كلها ويسبب UnboundLocalError صامت.
+                    price_raw, _ = mosh_ai_engine_v5._fetch_spot_price(market_upper)
+                    price = float(price_raw) if price_raw > 0 else None
+                if price is None:
+                    # (2026-09-16 #3) كان هنا `await` — والدالة متزامنة تُعيد
+                    # dict، فيرمي await عليها TypeError يبتلعه except الحلقة
+                    # فتُتخطّى الإشارة بصمت. كل مواضع الاستدعاء الأخرى
+                    # بالمشروع (markets.py, main.py, ai_engine_v5, chat_agent)
+                    # تستدعيها بلا await — هذان الموضعان وحدهما كانا خطأً.
+                    # الأثر: الرصد التلقائي ميت لكل رمز يمرّ من هنا. كان
+                    # محصوراً بالرموز خارج TradingView (ADAUSD, DOGEUSD,
+                    # XPTUSD, COPPER, NATGAS, NFLX, الأسهم الخليجية) وظلّ
+                    # مخفياً لأنها قليلة؛ ثم عمّ كل الرموز بتغيير اليوم.
+                    price_info = _smart_data.get_realtime_price_with_meta(sig.market)
+                    price = float(price_info["price"]) if price_info and price_info.get("price") else None
+            except Exception as _px_err:
+                logger.warning(
+                    f"⚠️ تعذّر جلب السعر اللحظي لـ{market_upper} #{sig.id}: "
+                    f"{type(_px_err).__name__}: {_px_err}"
+                )
+                price = None
 
             if not price:
                 continue
