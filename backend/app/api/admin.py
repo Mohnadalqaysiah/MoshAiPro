@@ -1323,12 +1323,38 @@ async def _verify_signal_outcome_core(signal: Signal) -> dict:
     if not (entry and sl and tp1):
         return {"detected": "NO_DATA", "reason": "مستويات الإشارة ناقصة"}
 
-    # bars=1000 من 5m ≈ آخر 3.5 يوم تداول متواصل — يغطي أي إشارة حديثة
-    df = await _smart_data.get_ohlcv(signal.market, "5m", bars=1000)
+    # (2026-09-16) عطل مصدر بيانات مكتشف بشموع #2446: مستويات الذهب والفضة
+    # فورية (بعد خصم الـbasis بـ_apply_spot_basis)، بينما get_ohlcv يجلب
+    # لهما عقوداً آجلة (GC=F / SI=F) أعلى بالـbasis — ~$0.96 للفضة و~$60
+    # للذهب. فكانت المقارنة تتم بين مستويات فورية وشموع آجلة، فتبدو
+    # مستويات البيع ملموسة وهي لم تُلمس. الدليل العددي: #2446 دخولها
+    # 63.5455 بينما شموع SI=F قبل إصدارها تُظهر 63.92-64.06 — فارق لا
+    # يفسّره تحرّك سوق داخل نفس الدقائق.
+    # حلقة الرصد التلقائي كانت سليمة هنا: تستخدم fetch_tv_history على
+    # OANDA:XAUUSD/XAGUSD الفورية، أي نفس مرجع المستويات. نطابقها.
+    import pandas as _pd
+    df = None
+    try:
+        from app.services.tv_price_feed import TV_SYMBOL_MAP, fetch_tv_history
+        tv_sym = TV_SYMBOL_MAP.get(signal.market.upper())
+        if tv_sym:
+            bars = await fetch_tv_history(tv_sym, "5m", bars=1000)
+            if bars:
+                df = _pd.DataFrame(
+                    [(b[0], b[2], b[3]) for b in bars],
+                    columns=["_ts_raw", "high", "low"],
+                )
+                df["datetime"] = _pd.to_datetime(df["_ts_raw"], unit="s", utc=True)
+    except Exception as _tv_e:
+        logger.warning(f"verify: تعذّر جلب شموع TV لـ{signal.market}: {_tv_e}")
+
+    if df is None or df.empty:
+        # رموز خارج TV_SYMBOL_MAP: مستوياتها أصلاً بمرجع get_ohlcv نفسه
+        # (لا يُطبَّق عليها basis) فالمقارنة سليمة.
+        df = await _smart_data.get_ohlcv(signal.market, "5m", bars=1000)
     if df is None or df.empty:
         return {"detected": "NO_DATA", "reason": "تعذّر جلب بيانات السوق التاريخية لهذا الرمز"}
 
-    import pandas as _pd
     created = signal.created_at
     if created.tzinfo is None:
         created = created.replace(tzinfo=timezone.utc)
