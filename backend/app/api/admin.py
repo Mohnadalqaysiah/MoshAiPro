@@ -2616,3 +2616,28 @@ def feature_requests_summary(
         "counts":       counts,
         "custom_texts": custom_texts,
     }
+
+
+# ══════════════════════════════════════════════════════════════════════
+# تقرير جودة القرارات — رفيق /diagnostic لا بديله
+# ══════════════════════════════════════════════════════════════════════
+@router.get("/diagnostics/quality")
+async def diagnostics_quality(
+    days: int = 30,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """
+    تشريح السجل التاريخي للقرارات: سلامة الأرقام، ثم أثر كل رافعة
+    (رمز/فريم/ثقة/RR/وقف/جلسة/Wyckoff/منطقة/مدة) مع حارس تضليل يمنع
+    تحويل شريحة صغيرة أو مهيمَن عليها برمز واحد إلى اقتراح.
+
+    /diagnostic يجيب "لماذا لا تُولَّد إشارات الآن؟" — سؤال لحظي عن
+    الـpipeline. هذا يجيب "هل ما نقيسه صحيح وأي شرط يستحق التعديل؟" —
+    سؤال تاريخي عن النتائج. الاثنان لازمان ولا يغني أحدهما عن الآخر.
+
+    قراءة محضة: لا كتابة، ولا طلب شبكة، ولا مسّ للمحرك.
+    """
+    from app.services.quality_report import build_quality_report
+    days = max(1, min(int(days or 30), 365))
+    return build_quality_report(db, days=days)

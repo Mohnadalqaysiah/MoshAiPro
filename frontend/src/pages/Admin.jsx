@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
 import Logo from '../components/Logo'
+import QualityReportPanel from '../components/QualityReportPanel'
 import {
   Users, CreditCard, BarChart2, CheckCircle, XCircle, Clock,
   Search, Plus, Trash2, ToggleLeft, ToggleRight, TrendingUp,
@@ -3147,7 +3148,8 @@ function FeatureSurveyPanel() {
 }
 
 // ── System Diagnostic Panel ───────────────────────────────────────────────────
-function DiagnosticPanel() {
+// تشخيص الـpipeline الحيّ — "لماذا لا تُولَّد إشارات الآن؟"
+function PipelineDiagnosticPanel() {
   const [data, setData]       = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
@@ -3523,6 +3525,35 @@ function RedemptionTiersAdmin({ saveSetting, siteSettings, settingEdits, setSett
           {settingSaving===key ? <RefreshCw size={11} className="animate-spin"/> : <CheckCircle size={11}/>} حفظ المستويات
         </button>
       </div>
+    </div>
+  )
+}
+
+
+// ── غلاف التشخيص: سؤالان مختلفان تحت سقف واحد ────────────────────────
+// الحيّ يجيب "لماذا لا تُولَّد إشارات الآن؟" — لحظي، يفحص الـpipeline.
+// الجودة يجيب "هل ما نقيسه صحيح وأي شرط يستحق التعديل؟" — تاريخي،
+// يفحص النتائج المسجّلة. فُصلا لأن خلطهما يخفي أن الأول لا يقول شيئاً
+// عن صحة الأرقام، والثاني لا يقول شيئاً عن سبب الصمت.
+function DiagnosticPanel() {
+  const [sub, setSub] = useState('quality')
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center gap-1.5 bg-gray-900 border border-gray-800 rounded-xl p-1 w-fit">
+        {[
+          { k: 'quality',  label: 'تقرير الجودة' },
+          { k: 'pipeline', label: 'تشخيص الـpipeline' },
+        ].map(t => (
+          <button key={t.k} onClick={() => setSub(t.k)}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${
+              sub === t.k ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-200'
+            }`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {sub === 'quality'  && <QualityReportPanel />}
+      {sub === 'pipeline' && <PipelineDiagnosticPanel />}
     </div>
   )
 }
