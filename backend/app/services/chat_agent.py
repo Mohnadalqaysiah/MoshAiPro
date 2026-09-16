@@ -1238,6 +1238,24 @@ class TradingChatAgent:
             history.append({"role": "assistant", "content": msg})
             return reply
 
+        # ── أسئلة المنصة: تُحسم هنا قبل أي تفريع ────────────────────────────
+        # (2026-09-17 #2) كانت تُفحص داخل فرع «لا تحليل ولا رمز» فلا تصلها
+        # أكثر الحالات. بلاغ حقيقي: «الباقات» أنتجت تحليل BTCUSD، و«كيف
+        # اشترك» أنتجت الردّ الافتراضي. السببان:
+        #   • «الباقات» صنّفها كاشف النيّة طلبَ تحليل، فمضت للمحرك ولم تمرّ
+        #     بالفحص أصلاً.
+        #   • «كيف اشترك» تحوي «كيف» فعُدّت طلب شرح، ومع وجود تحليل سابق
+        #     امتلأ groq_ctx فأُلغي الفحص بشرط كتبتُه بنفسي.
+        # فموضع الفحص كان الخطأ لا محتواه. الآن يسبق كل شيء.
+        #
+        # والحارس: يُتخطّى إن ذُكر رمز صراحةً أو طُلب شارت — فـ«سعر البتكوين»
+        # سؤال سوق لا سؤال باقات، و«سعر» وحدها لا تكفي للتفريق.
+        if not intent["symbol_explicit"] and not intent["is_chart"]:
+            platform_msg = self._platform_answer(user_message)
+            if platform_msg:
+                history.append({"role": "assistant", "content": platform_msg})
+                return {"action": "text", "message": platform_msg}
+
         # ══════════════════════════════════════════════════════════════════════
         # القاعدة الأساسية:
         #   التحليل والإشارة  → المحرك المحلي دائماً (موثوق، منسق، ثابت)
@@ -1279,13 +1297,8 @@ class TradingChatAgent:
                     + self._build_analysis_context(last_analysis, sym_ctx, tf_ctx)
                 )
 
-            # (2026-09-17) سؤال المنصة يُجاب محلياً ولا يُستدعى له النموذج
-            # إطلاقاً — إلا حين يطلب المستخدم شرح تحليل سابق (groq_ctx)،
-            # فذلك سياق حقيقي لا تُغني عنه إجابة جاهزة.
-            platform = "" if groq_ctx else self._platform_answer(user_message)
-            if platform:
-                msg = platform
-            elif self.groq_enabled:
+            # أسئلة المنصة حُسمت أعلاه قبل أي تفريع — لا حاجة لفحصها هنا.
+            if self.groq_enabled:
                 raw = await self._call_groq(history, groq_ctx)
                 msg = raw.strip() if raw else (
                     self._explain_concept_local(user_message.lower())
