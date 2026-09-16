@@ -1332,11 +1332,20 @@ async def _verify_signal_outcome_core(signal: Signal) -> dict:
     # يفسّره تحرّك سوق داخل نفس الدقائق.
     # حلقة الرصد التلقائي كانت سليمة هنا: تستخدم fetch_tv_history على
     # OANDA:XAUUSD/XAGUSD الفورية، أي نفس مرجع المستويات. نطابقها.
+    # (تصحيح لاحق نفس اليوم) القاعدة ليست "كل رمز بـTV_SYMBOL_MAP" —
+    # هذا وسّع الإصلاح أكثر من اللازم فأنتج العطل نفسه معكوساً: مستويات
+    # SP500/NAS100/BTCUSD مبنية على مرجع get_ohlcv (ES=F, NQ=F, BTC-USD)
+    # ولا يُطبَّق عليها basis، بينما TV يعطي مؤشراً نقدياً (SP:SPX) أو
+    # بورصة أخرى (BINANCE) — فظهرت مخالفات كاذبة جديدة (#2370، #2306).
+    # المعيار الصحيح: الرموز التي يزيح _apply_spot_basis مستوياتها فقط،
+    # وهي _FUTURES_SPOT_SYMBOLS = {XAUUSD, XAGUSD} لا غير.
     import pandas as _pd
+    _SPOT_ADJUSTED = {"XAUUSD", "XAGUSD"}
     df = None
     try:
         from app.services.tv_price_feed import TV_SYMBOL_MAP, fetch_tv_history
-        tv_sym = TV_SYMBOL_MAP.get(signal.market.upper())
+        tv_sym = TV_SYMBOL_MAP.get(signal.market.upper()) \
+                 if signal.market.upper() in _SPOT_ADJUSTED else None
         if tv_sym:
             bars = await fetch_tv_history(tv_sym, "5m", bars=1000)
             if bars:
