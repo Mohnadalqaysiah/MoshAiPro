@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
 import useMarkets from '../hooks/useMarkets'
 import { User, Mail, Phone, Lock, Save, CheckCircle, AlertCircle, TrendingUp, Bell, Calculator, Gift, Copy, ExternalLink, Users, DollarSign } from 'lucide-react'
+
+import { subscriptionCta } from '../utils/subscriptionCta'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const TIMEFRAMES = ['15m','30m','1h','4h','1day']
@@ -188,22 +191,59 @@ export default function Profile() {
     <div dir={isAr ? 'rtl' : 'ltr'} className="max-w-2xl mx-auto space-y-6">
       <h1 className="text-xl font-bold text-white">{isAr ? 'حسابي' : 'My Account'}</h1>
 
-      {/* Plan info */}
-      <div className="bg-gray-800 border border-gray-700 rounded-xl p-4 flex items-center gap-4">
-        <div className="w-12 h-12 bg-blue-600/20 rounded-xl flex items-center justify-center">
-          <User className="text-blue-400" size={22} />
-        </div>
-        <div>
-          <p className="font-medium text-white">{user?.full_name || user?.email}</p>
-          <p className="text-sm text-gray-400">{user?.email}</p>
-          <p className="text-xs mt-1">
-            {isAr ? 'الخطة:' : 'Plan:'} <span className={`font-semibold ${planColors[user?.plan] || 'text-gray-400'}`}>{planLabels[user?.plan] || user?.plan}</span>
-            {user?.days_left != null && (
-              <span className="text-gray-500 mr-2">· {user.days_left} {isAr ? 'يوم متبقي' : 'days left'}</span>
-            )}
-          </p>
-        </div>
-      </div>
+      {/* Plan info + مسار الدفع
+          (2026-09-17) صفحة الحساب كانت بلا أي رابط للأسعار، وزر البطاقة
+          الجانبية يوجّه إليها المشترك المدفوع — فيصل طريقاً مسدوداً.
+          راجع utils/subscriptionCta. */}
+      {(() => {
+        const cta = subscriptionCta(user, isAr)
+        const urgent = cta.tone === 'urgent'
+        return (
+          <div className={`bg-gray-800 border rounded-xl p-4 ${
+            urgent ? 'border-amber-500/60' : 'border-gray-700'
+          }`}>
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-blue-600/20 rounded-xl flex items-center justify-center shrink-0">
+                <User className="text-blue-400" size={22} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-medium text-white truncate">{user?.full_name || user?.email}</p>
+                <p className="text-sm text-gray-400 truncate">{user?.email}</p>
+                <p className="text-xs mt-1">
+                  {isAr ? 'الخطة:' : 'Plan:'}{' '}
+                  <span className={`font-semibold ${planColors[user?.plan] || 'text-gray-400'}`}>
+                    {planLabels[user?.plan] || user?.plan}
+                  </span>
+                  {user?.days_left != null && (
+                    <span className={`mr-2 ${urgent ? 'text-amber-400 font-semibold' : 'text-gray-500'}`}>
+                      · {user.days_left} {isAr ? 'يوم متبقي' : 'days left'}
+                    </span>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap mt-4">
+              <Link to={cta.to}
+                className={`flex-1 min-w-[160px] text-center py-2.5 rounded-xl font-bold text-sm transition ${
+                  urgent
+                    ? 'bg-amber-500 hover:bg-amber-400 text-black'
+                    : cta.tone === 'muted'
+                    ? 'bg-white/10 hover:bg-white/15 text-gray-200'
+                    : 'bg-blue-600 hover:bg-blue-500 text-white'
+                }`}>
+                {cta.to === '/profile' ? (isAr ? 'عرض الباقات' : 'View plans') : cta.label}
+              </Link>
+              {cta.to === '/profile' && (
+                <Link to="/pricing"
+                  className="flex-1 min-w-[160px] text-center py-2.5 rounded-xl font-bold text-sm bg-blue-600 hover:bg-blue-500 text-white transition">
+                  {isAr ? 'تجديد مبكر' : 'Renew early'}
+                </Link>
+              )}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* ── Personal Info ── */}
       <div className="bg-gray-800 border border-gray-700 rounded-xl p-6">

@@ -17,6 +17,7 @@ const TelegramLinkBanner = lazy(() => import('./TelegramLinkBanner'))
 const EmailVerifyBanner  = lazy(() => import('./EmailVerifyBanner'))
 const OnboardingTour     = lazy(() => import('./OnboardingTour'))
 const UpgradeModal       = lazy(() => import('./UpgradeModal'))
+import { subscriptionCta } from '../utils/subscriptionCta'
 const EmailVerifyModal   = lazy(() => import('./EmailVerifyModal'))
 const FeatureSurveyModal = lazy(() => import('./FeatureSurveyModal'))
 
@@ -400,9 +401,31 @@ function ProfilePanel({ isAr }) {
             <div className="rounded-xl bg-black/20 py-2"><b className="block text-white">{user.trial_chat_left ?? 0}</b><small className="text-[11px] text-gray-400">{isAr ? 'رسالة شات' : 'chat messages'}</small></div>
           </div>
         )}
-        <Link to={isTrial ? '/pricing' : '/profile'} className="mt-3 block text-center py-2.5 rounded-xl q-cta text-white font-bold text-sm">
-          {isTrial ? (isAr ? 'ترقية الاشتراك' : 'Upgrade') : (isAr ? 'إدارة الحساب' : 'Manage account')}
-        </Link>
+        {/* (2026-09-17) كان `isTrial ? '/pricing' : '/profile'` — فالمشترك
+            المدفوع بلا أي طريق للتجديد من داخل حسابه. راجع utils/subscriptionCta */}
+        {(() => {
+          const cta = subscriptionCta(user, isAr)
+          return (
+            <>
+              <Link to={cta.to}
+                className={`mt-3 block text-center py-2.5 rounded-xl font-bold text-sm ${
+                  cta.tone === 'urgent'
+                    ? 'bg-amber-500 hover:bg-amber-400 text-black'
+                    : cta.tone === 'muted'
+                    ? 'bg-white/10 hover:bg-white/15 text-gray-200'
+                    : 'q-cta text-white'
+                }`}>
+                {cta.label}
+              </Link>
+              {cta.secondary && (
+                <Link to={cta.secondary.to}
+                  className="mt-2 block text-center text-[11px] text-gray-400 hover:text-[var(--q-acc3)]">
+                  {cta.secondary.label}
+                </Link>
+              )}
+            </>
+          )
+        })()}
       </div>
 
       <PerformanceMini isAr={isAr} />
