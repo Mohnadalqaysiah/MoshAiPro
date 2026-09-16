@@ -43,21 +43,31 @@ TARGETS  = [0.5, 0.75, 1.0, 1.5, 2.0, 2.5, 3.0]
 
 
 def excursion(candles, entry, sl, is_buy):
-    """(MFE بمضاعف R، MAE بمضاعف R، هل لُمس الوقف) — التحرّك المواتي
-    داخل شمعة الوقف لا يُحتسب (ترتيبها الداخلي مجهول)."""
+    """
+    (MFE بمضاعف R، MAE بمضاعف R، رقم الشمعة التي لُمس عندها الوقف أو None)
+
+    التحرّك المواتي داخل شمعة الوقف لا يُحتسب (ترتيبها الداخلي مجهول).
+
+    (2026-09-17) يُعاد رقم شمعة الوقف لا مجرد "هل لُمس": الصيغة الأولى
+    جعلت الحكم يقول "الاتجاه خاطئ" لكل MFE منخفض، وهو خلط. الوقف
+    الملموس بأول شمعة يعني أن الصفقة لم تُعطَ فرصة — وقفها داخل ضجيج
+    الدقائق الأولى — لا أن قراءة الاتجاه كانت خاطئة. والقراران مختلفان:
+    الأول يُصلَح بتوسيع الوقف، والثاني بمراجعة التحليل. والخلط بينهما
+    يقود لإيقاف رمز سليم الاتجاه.
+    """
     risk = abs(entry - sl)
     if risk <= 0:
         return None, None, None
     mfe = mae = 0.0
-    for _ts, hi, lo in candles:
+    for i, (_ts, hi, lo) in enumerate(candles, start=1):
         sl_hit = (lo <= sl) if is_buy else (hi >= sl)
         if sl_hit:
-            return round(mfe / risk, 3), round(max(mae, risk) / risk, 3), True
+            return round(mfe / risk, 3), round(max(mae, risk) / risk, 3), i
         fav = (hi - entry) if is_buy else (entry - lo)
         adv = (entry - lo) if is_buy else (hi - entry)
         mfe = max(mfe, fav)
         mae = max(mae, adv)
-    return round(mfe / risk, 3), round(mae / risk, 3), False
+    return round(mfe / risk, 3), round(mae / risk, 3), None
 
 
 async def main():
@@ -89,16 +99,39 @@ async def main():
             print("  لا قرارات بهذه الفترة.")
             return
 
-        df = await _sd.get_ohlcv(symbol, "5m", bars=5000)
-        if df is None or not len(df):
-            print("  تعذّر جلب الشموع.")
-            return
-        tcol = df["datetime"] if "datetime" in df.columns else df.index
-        ts = pd.to_datetime(tcol, utc=True)
-        rows = sorted(((t.timestamp(), float(h), float(l))
-                       for t, h, l in zip(ts, df["high"], df["low"])), key=lambda r: r[0])
+        # (2026-09-17) المعادن تُقاس بشموع TradingView الفورية لا بـget_ohlcv.
+        # التشغيل الأول لهذه الأداة ارتكب العطل الموثّق نفسه: مستويات
+        # الذهب والفضة فورية (يزيحها _apply_spot_basis)، بينما get_ohlcv
+        # يجلب لهما عقوداً آجلة (SI=F/GC=F) أعلى بالـbasis. وفارق الفضة
+        # وقتها 0.96$ بينما مسافة وقفها 0.07–0.14$ — أي 7 إلى 14 ضعف
+        # الوقف. فبدت كل إشارات البيع ملموسة الوقف فوراً بـMFE=0.00،
+        # وهو أثر المرجع لا أثر السوق. راجع DECISIONS.md.
+        _SPOT_ADJUSTED = {"XAUUSD", "XAGUSD"}
+        rows, src = [], ""
+        if symbol in _SPOT_ADJUSTED:
+            from app.services.tv_price_feed import TV_SYMBOL_MAP, fetch_tv_history
+            bars = await fetch_tv_history(TV_SYMBOL_MAP[symbol], "5m", bars=5000)
+            if bars:
+                rows = sorted(((float(b[0]), float(b[2]), float(b[3])) for b in bars),
+                              key=lambda r: r[0])
+                src = "TradingView الفوري — " + TV_SYMBOL_MAP[symbol]
+            if not rows:
+                print("  شموع الفوري (TV) غير متاحة لهذا المعدن — الامتناع عن")
+                print("  الحكم بدل قياسه بالعقود الآجلة (مرجع مختلف يُبطل النتيجة).")
+                return
+        else:
+            df = await _sd.get_ohlcv(symbol, "5m", bars=5000)
+            if df is None or not len(df):
+                print("  تعذّر جلب الشموع.")
+                return
+            tcol = df["datetime"] if "datetime" in df.columns else df.index
+            ts = pd.to_datetime(tcol, utc=True)
+            rows = sorted(((t.timestamp(), float(h), float(l))
+                           for t, h, l in zip(ts, df["high"], df["low"])), key=lambda r: r[0])
+            src = "get_ohlcv — نفس مرجع بناء المستويات"
         span = (rows[-1][0] - rows[0][0]) / 86400
-        print(f"  شموع متاحة: {len(rows)} — تغطي {span:.1f} يوماً\n")
+        print(f"  شموع متاحة: {len(rows)} — تغطي {span:.1f} يوماً")
+        print("  المرجع: " + src + chr(10))
 
         print("-" * 96)
         print(f"  {'#':<6}{'نوع':<6}{'فريم':<6}{'وقف%':>7}{'هدف مُصدَر':>11}"
@@ -138,7 +171,7 @@ async def main():
                 skipped += 1
                 continue
 
-            mfe, mae, hit_sl = excursion(window, entry, sl, is_buy)
+            mfe, mae, sl_bar = excursion(window, entry, sl, is_buy)
             if mfe is None:
                 skipped += 1
                 continue
@@ -147,17 +180,22 @@ async def main():
             sl_pct = risk / entry * 100
 
             if mfe >= tp1_r:
-                verdict = "بلغ الهدف المُصدَر"
+                verdict, cat = "بلغ الهدف المُصدَر", "reached"
+            elif sl_bar is not None and sl_bar <= 3:
+                # ≤3 شموع 5m = أول ربع ساعة ⇒ الوقف داخل الضجيج
+                verdict = f"⛔ الوقف بأول {sl_bar} شمعة — لم تُعطَ فرصة"
+                cat = "no_chance"
             elif mfe >= 1.0:
-                verdict = f"⚠ بلغ {mfe:.1f}R — الاتجاه سليم والهدف بعيد"
+                verdict, cat = f"⚠ بلغ {mfe:.1f}R — الاتجاه سليم والهدف بعيد", "far_target"
             elif mfe >= 0.5:
-                verdict = f"تحرّك {mfe:.1f}R فقط"
+                verdict, cat = f"تحرّك {mfe:.1f}R فقط", "weak"
             else:
-                verdict = "✗ لم يتحرّك لصالحها — الاتجاه خاطئ"
+                verdict, cat = "✗ لم يتحرّك لصالحها — الاتجاه خاطئ", "wrong_dir"
 
             print(f"  {s.id:<6}{'شراء' if is_buy else 'بيع':<6}{s.timeframe:<6}"
                   f"{sl_pct:>6.3f}%{tp1_r:>10.2f}R{mfe:>7.2f}R{mae:>7.2f}R  {verdict}")
-            recs.append({"mfe": mfe, "tp1_r": tp1_r, "sl_pct": sl_pct, "is_buy": is_buy})
+            recs.append({"mfe": mfe, "tp1_r": tp1_r, "sl_pct": sl_pct,
+                         "is_buy": is_buy, "cat": cat, "sl_bar": sl_bar})
 
         n = len(recs)
         print("-" * 96)
@@ -167,18 +205,21 @@ async def main():
             return
 
         # ── التشخيص الأساسي ──────────────────────────────────────────
-        wrong_dir = sum(1 for r in recs if r["mfe"] < 0.5)
-        right_far = sum(1 for r in recs if r["mfe"] >= 1.0 and r["mfe"] < r["tp1_r"])
-        reached   = sum(1 for r in recs if r["mfe"] >= r["tp1_r"])
+        cnt = lambda c: sum(1 for r in recs if r["cat"] == c)
+        reached, no_chance = cnt("reached"), cnt("no_chance")
+        far_target, weak, wrong_dir = cnt("far_target"), cnt("weak"), cnt("wrong_dir")
 
         print("\n" + "=" * 96)
-        print("التشخيص")
+        print("التشخيص — كل فئة تقود لقرار مختلف")
         print("=" * 96)
         print(f"  بلغت هدفها المُصدَر            : {reached:>3}  ({reached/n*100:.0f}%)")
-        print(f"  الاتجاه سليم والهدف بعيد      : {right_far:>3}  ({right_far/n*100:.0f}%)"
+        print(f"  الوقف بأول ربع ساعة           : {no_chance:>3}  ({no_chance/n*100:.0f}%)"
+              f"   ← وقف داخل الضجيج، يُصلحه توسيعه")
+        print(f"  الاتجاه سليم والهدف بعيد      : {far_target:>3}  ({far_target/n*100:.0f}%)"
               f"   ← يُصلحه تقريب الهدف")
+        print(f"  تحرّك ضعيف (0.5–1R)           : {weak:>3}  ({weak/n*100:.0f}%)")
         print(f"  لم تتحرّك لصالحها إطلاقاً       : {wrong_dir:>3}  ({wrong_dir/n*100:.0f}%)"
-              f"   ← لا يُصلحه الهدف")
+              f"   ← لا يُصلحه الهدف ولا الوقف")
 
         med_tp1 = sorted(r["tp1_r"] for r in recs)[n // 2]
         med_mfe = sorted(r["mfe"] for r in recs)[n // 2]
