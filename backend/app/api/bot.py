@@ -277,6 +277,14 @@ async def bot_analyze(
                         # Rule 6 قرارها للذهب.
                         wyckoff_phase      = _extract_str(analysis.get("wyckoff"), "phase"),
                         premium_discount   = _extract_str(analysis.get("premium_discount"), "zone"),
+                        # (2026-09-16) نفس العطل بالضبط، مرة ثالثة: تقرير
+                        # الجودة أظهر تغطية 0% لـkillzone على 200 قرار —
+                        # الحقل موجود بالجدول ولم يُكتب إليه سطر واحد منذ
+                        # إنشائه. الجلسة من أهم روافع ICT (المحرك يحسبها
+                        # ويستخدمها بـget_kill_zone ويبني عليها الثقة)،
+                        # وكنا نحلّل أثرها على عمود فارغ. المفتاح بجذر
+                        # التحليل "kill_zone" والقيمة تحت "active_session".
+                        killzone           = _extract_str(analysis.get("kill_zone"), "active_session"),
                         signal_hash        = sig_hash,
                         status             = SignalStatus.ACTIVE,
                         expires_at         = expires_at,

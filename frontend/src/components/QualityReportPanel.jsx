@@ -254,6 +254,22 @@ export default function QualityReportPanel() {
                         }`}>دلالة {r.strength}</span>
                       </div>
                       <div className="text-xs text-gray-300">{r.effect}</div>
+                      {r.stability && (
+                        <div className={`text-[11px] mt-1.5 rounded-lg px-2 py-1.5 leading-relaxed border ${
+                          r.stability === 'مستقرة'
+                            ? 'text-green-300/90 bg-green-900/15 border-green-700/40'
+                            : r.stability === 'غير مستقرة'
+                            ? 'text-red-300/90 bg-red-900/15 border-red-700/40'
+                            : 'text-gray-400 bg-gray-900/40 border-gray-700'
+                        }`}>
+                          {r.stability === 'مستقرة' ? '✓' : r.stability === 'غير مستقرة' ? '⛔' : '○'}{' '}
+                          <span className="font-semibold">{r.stability}</span> — {r.stability_note}
+                          {r.stability === 'غير مستقرة' && (
+                            <> · <span className="font-semibold">لا تنفّذها</span>؛ الأرجح أنها حالة
+                            سوق مؤقتة، وتفصيل النظام عليها ينقلب ضدك بأول انعكاس.</>
+                          )}
+                        </div>
+                      )}
                       {(r.overlaps || []).length > 0 && (
                         <div className="text-[11px] text-yellow-300/90 mt-1.5 bg-yellow-900/15 border border-yellow-700/40 rounded-lg px-2 py-1.5 leading-relaxed">
                           ⚠ تصف نفس الصفقات تقريباً: {r.overlaps.join(' · ')} —
@@ -300,7 +316,7 @@ export default function QualityReportPanel() {
                 <thead>
                   <tr className="text-gray-500 border-b border-gray-700">
                     {['القيمة', 'عدد', 'ربح', 'خسارة', 'نسبة الربح', 'التوقّع (R)',
-                      'إجمالي R', 'R لو حُذفت', 'النقاط', 'رموز', 'الحكم'].map((x) => (
+                      'الثبات بين النصفين', 'إجمالي R', 'R لو حُذفت', 'النقاط', 'رموز', 'الحكم'].map((x) => (
                       <th key={x} className="text-right pb-2 pr-3 font-medium whitespace-nowrap">{x}</th>
                     ))}
                   </tr>
@@ -316,6 +332,15 @@ export default function QualityReportPanel() {
                       <td className={`py-2 pr-3 font-mono font-bold ${ptsColor(b.expectancy)}`} dir="ltr">
                         {b.expectancy === null || b.expectancy === undefined
                           ? '—' : `${b.expectancy >= 0 ? '+' : ''}${num(b.expectancy, 2)}R`}
+                      </td>
+                      <td className="py-2 pr-3 whitespace-nowrap">
+                        <span className={
+                          b.stability === 'مستقرة' ? 'text-green-400'
+                            : b.stability === 'غير مستقرة' ? 'text-red-400' : 'text-gray-500'
+                        } title={b.stability_note}>
+                          {b.stability === 'مستقرة' ? '✓' : b.stability === 'غير مستقرة' ? '⛔' : '○'}{' '}
+                          {b.stability_note || b.stability}
+                        </span>
                       </td>
                       <td className={`py-2 pr-3 font-mono ${ptsColor(b.r_total)}`} dir="ltr">
                         {signed(b.r_total, 1)}

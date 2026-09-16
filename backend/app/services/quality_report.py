@@ -38,6 +38,8 @@ MAX_SYM_SHARE  = 0.60   # نصيب رمز واحد يتجاوزه ⇒ الحكم
 MAX_TOP2_SHARE = 0.75   # ونصيب رمزين — الثغرة التي كان hhi يُحسب لها ولا يُستخدم
 EXP_MARGIN     = 0.25   # أقل انحراف بـR عن خط الأساس يستحق فرضية
 OVERLAP_LIFT   = 1.5    # رفع الاستقلال الذي دونه يكون التقاطع صدفة لا ترابطاً
+MIN_N_HALF     = 5      # أقل عينة بنصف زمني يجوز فحص الثبات عليها
+STAB_GAP       = 0.60   # تذبذب R بين النصفين يتجاوزه ⇒ الأثر غير ثابت
 
 
 def _utc(dt):
@@ -152,8 +154,16 @@ def _summarize(rows: list) -> dict:
     }
 
 
+def _half(grp: list, split_ts, first: bool):
+    """توقّع الشريحة في نصف زمني واحد، وعدد قراراتها فيه."""
+    sel = [r for r in grp
+           if r.get("created") and ((r["created"] < split_ts) == first)]
+    rs = [r["r"] for r in sel if r.get("r") is not None]
+    return (round(sum(rs) / len(rs), 3) if rs else None), len(sel)
+
+
 def _lever(rows: list, keyfn: Callable, total_points: float, total_r: float,
-           lever_key: str = "", order: Optional[list] = None) -> list:
+           lever_key: str = "", order: Optional[list] = None, split_ts=None) -> list:
     """يشرّح القرارات حسب رافعة واحدة ويَسِم كل شريحة بحكم الحارس."""
     groups = defaultdict(list)
     for r in rows:
@@ -166,6 +176,42 @@ def _lever(rows: list, keyfn: Callable, total_points: float, total_r: float,
         # الأثر المضاد: كم تصير الفترة لو أُزيلت هذه الشريحة بالكامل؟
         s["points_without"] = round(total_points - s["points"], 2)
         s["r_without"]      = round(total_r - s["r_total"], 2)
+
+        # ── ثبات زمني: هل تصمد الشريحة في نصفَي الفترة؟ ─────────────
+        # (2026-09-16) أضخم رقم بأول تقرير 30 يوماً كان فجوة BUY/SELL
+        # (−0.21R مقابل +0.46R على 200 قرار). ولا يجوز التصرف بناءً
+        # عليه: ثلاثون يوماً في سوق هابط تجعل البيع يربح والشراء يخسر
+        # بلا أي علاقة بجودة التحليل، فإلغاء الشراء حينها تفصيلٌ على
+        # نظام سابق ينقلب ضدنا بأول انعكاس. الفحص الحاسم: هل يصمد
+        # الأثر في نصفَي الفترة كليهما؟ صامد ⇒ بنيوي. ظاهر في نصف
+        # واحد ⇒ السوق لا نحن. عُمّم على كل رافعة لأن السبب عام.
+        if split_ts is not None:
+            e1, n1 = _half(grp, split_ts, True)
+            e2, n2 = _half(grp, split_ts, False)
+            s["exp_first"], s["n_first"]   = e1, n1
+            s["exp_second"], s["n_second"] = e2, n2
+            if n1 >= MIN_N_HALF and n2 >= MIN_N_HALF and e1 is not None and e2 is not None:
+                flipped = (e1 < 0) != (e2 < 0)
+                gap     = abs(e1 - e2)
+                if flipped:
+                    s["stability"] = "غير مستقرة"
+                    s["stability_note"] = ("انقلبت الإشارة بين النصفين "
+                                           "(%+.2fR ← %+.2fR) — الأرجح أنها السوق لا الرافعة"
+                                           % (e1, e2))
+                elif gap > STAB_GAP:
+                    s["stability"] = "غير مستقرة"
+                    s["stability_note"] = ("تذبذب %+.2fR ← %+.2fR بين النصفين — "
+                                           "الأثر غير ثابت" % (e1, e2))
+                else:
+                    s["stability"] = "مستقرة"
+                    s["stability_note"] = "%+.2fR ← %+.2fR — صامدة في النصفين" % (e1, e2)
+            else:
+                s["stability"] = "غير قابلة للفحص"
+                s["stability_note"] = ("عينة أحد النصفين أصغر من %d (%d ← %d)"
+                                       % (MIN_N_HALF, n1, n2))
+        else:
+            s["stability"] = "غير قابلة للفحص"
+            s["stability_note"] = ""
 
         reasons = []
         if s["n"] < MIN_N_SUGGEST:
@@ -229,6 +275,8 @@ def _recommendations(levers: dict, labels: dict, total_r: float,
                                   "إجمالي الفترة إلى %+.2fR بدل %+.2fR"
                                   % (exp, baseline_exp, b["r_without"], total_r),
                     "strength":   "قوية" if b["n"] >= 25 else "مبدئية",
+                    "stability":  b.get("stability"),
+                    "stability_note": b.get("stability_note"),
                     "caveat":     "أثر مقاس على الماضي لا وعد بالمستقبل — يُختبر قبل التثبيت.",
                     "_ids":       b["_ids"],
                 })
@@ -246,6 +294,8 @@ def _recommendations(levers: dict, labels: dict, total_r: float,
                                   "%.0f%% فقط من القرارات"
                                   % (exp, baseline_exp, share * 100),
                     "strength":   "قوية" if b["n"] >= 25 else "مبدئية",
+                    "stability":  b.get("stability"),
+                    "stability_note": b.get("stability_note"),
                     "caveat":     "التخفيف يزيد العدد لا الجودة بالضرورة — الشريحة "
                                   "الجديدة قد لا تشبه القديمة. يُقاس بعد التطبيق.",
                     "_ids":       b["_ids"],
@@ -423,8 +473,13 @@ def build_quality_report(db, days: int = 30) -> dict:
     ]
 
     # ── الروافع ────────────────────────────────────────────────────────
+    # نقطة انتصاف الفترة زمنياً — أساس فحص الثبات لكل شريحة
+    stamps   = sorted(d["created"] for d in closed if d.get("created"))
+    split_ts = stamps[len(stamps) // 2] if len(stamps) >= 2 * MIN_N_HALF else None
+
     def L(key, keyfn, order=None):
-        return _lever(closed, keyfn, total_points, total_r, lever_key=key, order=order)
+        return _lever(closed, keyfn, total_points, total_r,
+                      lever_key=key, order=order, split_ts=split_ts)
 
     levers = {
         "symbol":     L("symbol",     lambda d: d["market"]),
@@ -464,6 +519,7 @@ def build_quality_report(db, days: int = 30) -> dict:
     return {
         "window_days":  days,
         "generated_at": datetime.now(timezone.utc).isoformat(),
+        "split_at":     split_ts.isoformat() if split_ts else None,
         "thresholds":   {
             "min_n_suggest":   MIN_N_SUGGEST,
             "max_symbol_share": MAX_SYM_SHARE,
