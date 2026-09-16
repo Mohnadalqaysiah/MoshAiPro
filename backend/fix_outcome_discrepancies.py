@@ -35,6 +35,16 @@ sys.path.insert(0, "/app")
 from datetime import datetime, timedelta, timezone
 from loguru import logger
 
+# (2026-09-16) صار يُقرأ من سطر الأوامر: --days N. الدافع أن تقرير
+# الجودة على 90 يوماً أظهر أن أسوأ رمز (XAUUSD: -0.45R على 65 قراراً،
+# 63 منها بالنصف الأقدم) يقع خارج نافذة الـ10 أيام التي صُحّحت — أي أن
+# أهم أرقامنا مبنية على فترة نعرف أنها مقيسة بأدوات معطوبة.
+#
+# ⚠️ قيد صلب لا تتجاوزه النافذة: _verify_signal_outcome_core تجلب 1000
+# شمعة 5m = ~3.5 أيام فقط، وفيها حارس صريح يعيد NO_DATA إن كانت أقدم
+# شمعة متاحة بعد لحظة إنشاء الإشارة. فتوسيع --days لا يوسّع التغطية
+# الفعلية؛ الصفوف الأقدم تُستبعد بالامتناع لا بالتخمين (وهو السلوك
+# الصحيح). الغرض من التوسيع هنا قياس التغطية الحقيقية لا افتراضها.
 LOOKBACK_DAYS = 10
 CLOSED = {"TP1_HIT", "TP2_HIT", "SL_HIT"}
 
@@ -52,6 +62,11 @@ async def main():
     # مستوياتها بُنيت على carry نظري بينما التحقق يقارنها بـTV الفوري —
     # مرجعان مختلفان لم يُوحَّدا بعد. فبعض الصفوف جاهزة للتصحيح وبعضها
     # ينتظر توحيد المرجع، والخلط بينها بتطبيق جماعي يفسد الاثنين.
+    lookback = LOOKBACK_DAYS
+    for i, a in enumerate(sys.argv):
+        if a == "--days" and i + 1 < len(sys.argv) and sys.argv[i + 1].isdigit():
+            lookback = int(sys.argv[i + 1])
+
     only_ids = set()
     for i, a in enumerate(sys.argv):
         if a == "--only" and i + 1 < len(sys.argv):
@@ -65,7 +80,7 @@ async def main():
 
     db = SessionLocal()
     try:
-        cutoff = datetime.now(timezone.utc) - timedelta(days=LOOKBACK_DAYS)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=lookback)
         rows = (db.query(Signal)
                   .filter(Signal.created_at >= cutoff)
                   .order_by(Signal.created_at.desc()).all())
@@ -82,12 +97,24 @@ async def main():
             try:
                 r = await _verify_signal_outcome_core(s)
             except Exception as e:
+                verdicts["فشل"] += 1
                 print(f"  #{s.id} فشل التحقق: {e}")
                 continue
             det = r.get("detected")
             rec = s.status.value if hasattr(s.status, "value") else s.status
-            if det in (None, "NO_DATA") or det == rec:
+            if det in (None, "NO_DATA"):
+                verdicts["لا بيانات"] += 1
+                created_ = s.created_at
+                if created_ and created_.tzinfo is None:
+                    created_ = created_.replace(tzinfo=timezone.utc)
+                age_d = (now_ - created_).total_seconds() / 86400 if created_ else 999
+                key = "< 4 أيام" if age_d < 4 else ("4–10 أيام" if age_d < 10 else "> 10 أيام")
+                nodata_by_age[key] += 1
                 continue
+            if det == rec:
+                verdicts["مطابق"] += 1
+                continue
+            verdicts["مخالف"] += 1
             if only_ids and s.id not in only_ids:
                 continue
             if det == "STILL_ACTIVE":
@@ -140,6 +167,21 @@ async def main():
                         s.profit_loss_percentage = pnl_pct
                         s.outcome_verified = True
                         logger.info(f"[OUTCOME-FIX] #{s.id} {s.market} {rec}({old_pts}) -> {det}({pts:+.2f})")
+
+        print("\n" + "=" * 92)
+        print("تغطية الفحص — ما أمكن الحكم عليه فعلاً")
+        print("=" * 92)
+        for k, v in verdicts.items():
+            print(f"  {k}: {v}")
+        judged = verdicts["مطابق"] + verdicts["مخالف"]
+        total_ = max(len(closed), 1)
+        print(f"\n  نسبة القابل للحكم: {judged}/{total_} ({judged/total_*100:.1f}%)")
+        if verdicts["لا بيانات"]:
+            print("\n  توزيع 'لا بيانات' بحسب عمر الإشارة:")
+            for k, v in nodata_by_age.items():
+                print(f"    {k}: {v}")
+            print("  ⇒ الامتناع هنا سلوك صحيح: الشموع المتاحة لا تعود لوقت")
+            print("    الإنشاء، والحكم بها كان سيقيس نافذة زمنية أخرى تماماً.")
 
         do_fix(high_conf, "عالية الثقة — بلوغ هدف أبعد (واقعة موجبة)")
         do_fix(ambiguous, "أقل يقيناً — ربح مسجّل ← وقف (غموض داخل الشمعة ممكن)",
