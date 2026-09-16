@@ -1358,7 +1358,17 @@ async def _verify_signal_outcome_core(signal: Signal) -> dict:
         logger.warning(f"verify: تعذّر جلب شموع TV لـ{signal.market}: {_tv_e}")
 
     if df is None or df.empty:
-        # رموز خارج TV_SYMBOL_MAP: مستوياتها أصلاً بمرجع get_ohlcv نفسه
+        # (2026-09-16) للمعادن: لا سقوط للآجل إطلاقاً. تشخيص اليوم أثبت
+        # عددياً أن مستوياتها فورية (دخول الذهب #2507 يبعد 0.26 عن الفوري
+        # و40.24 عن الآجل)، فمقارنتها بالآجل تعطي حكماً باطلاً. وقد حدث
+        # فعلاً: TV ردّ HTTP 429 أثناء تشغيل التصحيح فسقط للآجل بصمت.
+        # الامتناع عن الحكم أسلم من حكم مبني على مرجع خاطئ.
+        if signal.market.upper() in _SPOT_ADJUSTED:
+            return {"detected": "NO_DATA",
+                    "reason": "شموع الفوري (TV) غير متاحة الآن لهذا المعدن — "
+                              "الامتناع عن الحكم بدل مقارنته بالعقود الآجلة "
+                              "(مرجع مختلف يعطي نتيجة باطلة). أعد المحاولة لاحقاً."}
+        # رموز خارج المعادن: مستوياتها أصلاً بمرجع get_ohlcv نفسه
         # (لا يُطبَّق عليها basis) فالمقارنة سليمة.
         df = await _smart_data.get_ohlcv(signal.market, "5m", bars=1000)
     if df is None or df.empty:
