@@ -191,6 +191,13 @@ def _lever(rows: list, keyfn: Callable, total_points: float, total_r: float,
             s["exp_first"], s["n_first"]   = e1, n1
             s["exp_second"], s["n_second"] = e2, n2
             if n1 >= MIN_N_HALF and n2 >= MIN_N_HALF and e1 is not None and e2 is not None:
+                # (2026-09-16 #2) الصيغة الأولى جمعت حالتين مختلفتين جذرياً
+                # تحت وسم واحد "غير مستقرة" مع نصيحة "لا تنفّذها". وقد
+                # أنتجت نصيحة ضارة فعلاً: شريحة الثقة 55–65% (−0.22R ←
+                # −1.00R) وُسمت بأنها "حالة سوق مؤقتة" — وهي سالبة في
+                # النصفين كليهما، أي أن اتجاهها مؤكَّد تماماً ولم يتفاوت
+                # إلا مقداره. الانقلاب وحده هو ما يُبطل الفرضية؛ أما تفاوت
+                # الشدة مع ثبات الإشارة فيُضعف تقدير الأثر لا صحته.
                 flipped = (e1 < 0) != (e2 < 0)
                 gap     = abs(e1 - e2)
                 if flipped:
@@ -199,9 +206,10 @@ def _lever(rows: list, keyfn: Callable, total_points: float, total_r: float,
                                            "(%+.2fR ← %+.2fR) — الأرجح أنها السوق لا الرافعة"
                                            % (e1, e2))
                 elif gap > STAB_GAP:
-                    s["stability"] = "غير مستقرة"
-                    s["stability_note"] = ("تذبذب %+.2fR ← %+.2fR بين النصفين — "
-                                           "الأثر غير ثابت" % (e1, e2))
+                    s["stability"] = "متفاوتة الشدة"
+                    s["stability_note"] = ("%+.2fR ← %+.2fR — الاتجاه مؤكَّد في النصفين "
+                                           "والمتفاوت مقداره؛ الأثر حقيقي وتقديره تقريبي"
+                                           % (e1, e2))
                 else:
                     s["stability"] = "مستقرة"
                     s["stability_note"] = "%+.2fR ← %+.2fR — صامدة في النصفين" % (e1, e2)

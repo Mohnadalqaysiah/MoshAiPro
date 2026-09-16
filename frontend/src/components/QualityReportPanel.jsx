@@ -258,11 +258,15 @@ export default function QualityReportPanel() {
                         <div className={`text-[11px] mt-1.5 rounded-lg px-2 py-1.5 leading-relaxed border ${
                           r.stability === 'مستقرة'
                             ? 'text-green-300/90 bg-green-900/15 border-green-700/40'
+                            : r.stability === 'متفاوتة الشدة'
+                            ? 'text-yellow-300/90 bg-yellow-900/15 border-yellow-700/40'
                             : r.stability === 'غير مستقرة'
                             ? 'text-red-300/90 bg-red-900/15 border-red-700/40'
                             : 'text-gray-400 bg-gray-900/40 border-gray-700'
                         }`}>
-                          {r.stability === 'مستقرة' ? '✓' : r.stability === 'غير مستقرة' ? '⛔' : '○'}{' '}
+                          {r.stability === 'مستقرة' ? '✓'
+                            : r.stability === 'متفاوتة الشدة' ? '≈'
+                            : r.stability === 'غير مستقرة' ? '⛔' : '○'}{' '}
                           <span className="font-semibold">{r.stability}</span> — {r.stability_note}
                           {r.stability === 'غير مستقرة' && (
                             <> · <span className="font-semibold">لا تنفّذها</span>؛ الأرجح أنها حالة
@@ -336,9 +340,12 @@ export default function QualityReportPanel() {
                       <td className="py-2 pr-3 whitespace-nowrap">
                         <span className={
                           b.stability === 'مستقرة' ? 'text-green-400'
+                            : b.stability === 'متفاوتة الشدة' ? 'text-yellow-400'
                             : b.stability === 'غير مستقرة' ? 'text-red-400' : 'text-gray-500'
                         } title={b.stability_note}>
-                          {b.stability === 'مستقرة' ? '✓' : b.stability === 'غير مستقرة' ? '⛔' : '○'}{' '}
+                          {b.stability === 'مستقرة' ? '✓'
+                            : b.stability === 'متفاوتة الشدة' ? '≈'
+                            : b.stability === 'غير مستقرة' ? '⛔' : '○'}{' '}
                           {b.stability_note || b.stability}
                         </span>
                       </td>
