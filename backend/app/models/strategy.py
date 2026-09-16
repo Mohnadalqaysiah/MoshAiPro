@@ -123,6 +123,12 @@ class StrategyTriggerEvent(Base):
     score     = Column(Integer, default=0)
     triggered = Column(Boolean, default=False, index=True)
     matched_json = Column(JSON, nullable=True)   # snapshot of per-condition results
+    # (2026-09-17) سبب عدم الإطلاق وتفصيل المجموعات. بلاغ حقيقي: عتبة على
+    # 50 وسجلّ يعرض "Score 54" مراراً بلا إطلاق فبدا عطلاً — والسبب أن
+    # الإطلاق يشترط منطق المجموعات **مع** العتبة، وكان السجل يعرض العتبة
+    # وحدها. تخزين السبب لحظة التقييم هو الطريق الوحيد لعرضه لاحقاً:
+    # إعادة حسابه من الحدث مستحيلة لأن حالة السوق تغيّرت.
+    diagnostics_json = Column(JSON, nullable=True)
 
     price          = Column(Float, nullable=True)
     telegram_sent  = Column(Boolean, default=False)

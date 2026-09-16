@@ -495,6 +495,10 @@ export default function StrategyBuilder() {
             id: e.id,
             time: e.createdAt ? new Date(e.createdAt).toLocaleTimeString("ar-EG") : "",
             msg: `${e.symbol} — Score ${e.score}${e.triggered ? " — ✓ TRIGGERED" : ""}${e.telegramSent ? " — Telegram Alert Sent ✓" : ""}`,
+            // (2026-09-17) سبب عدم الإطلاق. عرض الدرجة وحدها كان يُوهم بعطل:
+            // درجة 54 وعتبة 50 بلا إطلاق تبدو خللاً، والسبب أن الإطلاق يشترط
+            // منطق المجموعات معها. الرقم بلا شرطه إخفاءٌ بصيغة إظهار.
+            reason: e.triggered ? null : (e.diagnostics?.block_reason || null),
           })),
           lastScan: r.data.events?.[0]?.createdAt ? new Date(r.data.events[0].createdAt).toLocaleTimeString("ar-EG") : null,
         });
@@ -1298,9 +1302,16 @@ export default function StrategyBuilder() {
               )}
               <div className="flex flex-col gap-2 max-h-[420px] overflow-auto scroll-thin">
                 {monitor.events.map((e) => (
-                  <div key={e.id} style={{ background: C.surfaceHi, border: `1px solid ${C.borderSoft}` }} className="rounded-lg px-3 py-2 flex items-center justify-between fade-in">
-                    <span style={{ fontSize: 12.5 }}>{e.msg}</span>
-                    <span style={{ color: C.muted, fontFamily: FM, fontSize: 10.5 }}>{e.time}</span>
+                  <div key={e.id} style={{ background: C.surfaceHi, border: `1px solid ${C.borderSoft}` }} className="rounded-lg px-3 py-2 fade-in">
+                    <div className="flex items-center justify-between gap-2">
+                      <span style={{ fontSize: 12.5 }}>{e.msg}</span>
+                      <span style={{ color: C.muted, fontFamily: FM, fontSize: 10.5 }}>{e.time}</span>
+                    </div>
+                    {e.reason && (
+                      <div style={{ color: C.gold, fontSize: 11, lineHeight: 1.6, marginTop: 4 }}>
+                        ⚠ {e.reason}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

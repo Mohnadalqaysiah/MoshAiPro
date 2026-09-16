@@ -113,6 +113,14 @@ async def strategy_checker():
                             score=result["score"], triggered=result["triggered"],
                             matched_json=result["matched"], price=result["price"],
                             telegram_sent=telegram_sent,
+                            diagnostics_json={
+                                "block_reason":  result.get("block_reason"),
+                                "groups_passed": result.get("groups_passed"),
+                                "score_ok":      result.get("score_ok"),
+                                "min_score":     result.get("min_score"),
+                                "groups":        result.get("groups_detail"),
+                                "unsupported":   result.get("unsupported"),
+                            },
                         ))
                 db.commit()
             finally:

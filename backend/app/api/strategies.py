@@ -394,6 +394,7 @@ def list_events(strategy_id: int, limit: int = 20, db: Session = Depends(get_db)
             {
                 "id": e.id, "symbol": e.symbol, "timeframe": e.timeframe, "score": e.score,
                 "triggered": e.triggered, "price": e.price, "telegramSent": e.telegram_sent,
+                "diagnostics": e.diagnostics_json,
                 "createdAt": e.created_at.isoformat() if e.created_at else None,
             }
             for e in events

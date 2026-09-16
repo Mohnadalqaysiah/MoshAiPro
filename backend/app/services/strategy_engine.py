@@ -274,24 +274,67 @@ def evaluate_strategy(groups: List, conditions: List, analyses: Dict[str, Dict],
         if any(c.group_id == g.id and c.id not in unsupported_ids for c in enabled)
     ]
     groups_passed = True
+    groups_detail = []
     for g in groups_with_members:
         members = [c for c in enabled if c.group_id == g.id and c.id not in unsupported_ids]
         hits = sum(1 for c in members if hit_by_id.get(c.id))
-        if g.logic.value == "AND":
+        logic = g.logic.value
+        if logic == "AND":
             ok = hits == len(members)
-        elif g.logic.value == "OR":
+            need = len(members)
+        elif logic == "OR":
             ok = hits > 0
+            need = 1
         else:  # AT_LEAST
-            ok = hits >= (g.at_least or 1)
+            need = g.at_least or 1
+            ok = hits >= need
+        groups_detail.append({
+            "id": g.id, "name": getattr(g, "name", None) or f"#{g.id}",
+            "logic": logic, "hits": hits, "members": len(members),
+            "need": need, "passed": ok,
+            "missing": [c.label for c in members if not hit_by_id.get(c.id)],
+        })
         if not ok:
             groups_passed = False
 
     matched = [{"id": c.id, "label": c.label, "hit": hit_by_id.get(c.id, False)} for c in enabled]
-    triggered = bool(groups_passed and score >= min_score and len(enabled) > 0)
+    score_ok = score >= min_score
+    triggered = bool(groups_passed and score_ok and len(enabled) > 0)
+
+    # (2026-09-17) سبب عدم الإطلاق يُحسب ويُخزَّن، لا يُترك للمستخدم ليخمّنه.
+    # بلاغ حقيقي: عتبة مضبوطة على 50 وسجلّ يعرض "Score 54" مراراً بلا إطلاق،
+    # فبدا الأمر عطلاً. والسبب أن الإطلاق يشترط أمرين لا واحداً — منطق
+    # المجموعات **و** العتبة — وكان السجل يعرض الثاني فقط. فحين يتحقق
+    # المعروض ولا يقع الإطلاق، يبدو النظام معطلاً وهو يعمل بالضبط كما
+    # عُرّف. عرض الرقم دون شرطه إخفاءٌ بصيغة إظهار.
+    block_reason = None
+    if not enabled:
+        block_reason = "لا شروط مفعّلة بهذه الاستراتيجية"
+    elif not groups_passed:
+        failed = [g for g in groups_detail if not g["passed"]]
+        parts = []
+        for g in failed:
+            lg = {"AND": "الكل", "OR": "واحد على الأقل"}.get(g["logic"],
+                                                            f"{g['need']} على الأقل")
+            miss = ("، ينقص: " + "، ".join(g["missing"][:3])) if g["missing"] else ""
+            parts.append(f"{g['name']} ({lg}) — تحقّق {g['hits']} من {g['members']}{miss}")
+        detail = " · ".join(parts)
+        if score_ok:
+            block_reason = (f"الدرجة كافية ({score} ≥ {min_score}) "
+                            f"لكن منطق المجموعات لم يكتمل: {detail}")
+        else:
+            block_reason = (f"الدرجة {score} دون العتبة {min_score}، "
+                            f"ومنطق المجموعات لم يكتمل: {detail}")
+    elif not score_ok:
+        block_reason = f"منطق المجموعات مكتمل لكن الدرجة {score} دون العتبة {min_score}"
 
     return {
         "score": score,
+        "score_ok": score_ok,
+        "min_score": min_score,
         "groups_passed": groups_passed,
+        "groups_detail": groups_detail,
+        "block_reason": block_reason,
         "matched": matched,
         "unsupported": unsupported,
         "triggered": triggered,
