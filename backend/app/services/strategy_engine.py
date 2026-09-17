@@ -144,12 +144,57 @@ def _ext_killzone(a: Dict, value: Optional[str]) -> Optional[bool]:
     return bool(kz.get("is_kill_zone"))
 
 
+# نوافذ الجلسات الكاملة بتوقيت UTC — وهي متداخلة بطبيعتها، فالسوق لا
+# يسلّم من جلسة لأخرى بقطع.
+_SESSION_WINDOWS = {
+    "ASIA":     [(0, 9), (23, 24)],   # طوكيو/سيدني
+    "LONDON":   [(7, 16)],
+    "NEW_YORK": [(12, 21)],
+}
+
+
 def _session_match(a: Dict, needle: str) -> Optional[bool]:
-    kz = a.get("kill_zone") or {}
-    session = kz.get("active_session")
-    if session is None:
+    """
+    هل نحن داخل الجلسة المطلوبة؟
+
+    (2026-09-17) بلاغ حقيقي: استراتيجية بمجموعة «واحد على الأقل» تضم
+    لندن ونيويورك وآسيا معاً سجّلت «تحقّق 0 من 3» الساعة 09:36 UTC —
+    أي أن الجلسات الثلاث فشلت مجتمعةً في وقت لندن.
+
+    السبب: كانت تُطابق `kill_zone.active_session`، وهو لا يحمل اسم
+    الجلسة بل اسم **نافذة الـkill zone** الضيقة: لندن 07–09 و11–13،
+    نيويورك 13:30–15:30، آسيا 00–04. وما عداها «Inter-Session» — أي
+    **12 ساعة من 24 بلا أي جلسة**، والفجوات 04–07 و09–11 و16–23.
+
+    والشرط اسمه «London Session» لا «London Kill Zone»، وللـkill zones
+    شرط منفصل بالمكتبة (`killzones`). فالتسمية كانت تَعِد بالجلسة
+    وتُنفّذ نافذة ضيقة — وهو وعد مكسور لا إعداد متحفّظ: المستخدم يستبعد
+    ساعات يظنها مشمولة.
+
+    يُقرأ الوقت من لقطة التحليل متى توفّر، لا من `now`، حتى يوافق الحكم
+    اللحظة التي قُيّم فيها التحليل فعلاً.
+    """
+    windows = _SESSION_WINDOWS.get(needle.upper())
+    if not windows:
         return None
-    return needle.upper() in str(session).upper()
+
+    kz = a.get("kill_zone") or {}
+    hour = None
+    raw = kz.get("current_time_utc")          # بصيغة "HH:MM UTC"
+    if raw:
+        try:
+            hh, mm = str(raw).split(" ")[0].split(":")
+            hour = int(hh) + int(mm) / 60.0
+        except (ValueError, IndexError):
+            hour = None
+    if hour is None:
+        if not kz:
+            return None                        # لا بيانات ⇒ لا حكم
+        from datetime import datetime, timezone as _tz
+        now = datetime.now(_tz.utc)
+        hour = now.hour + now.minute / 60.0
+
+    return any(start <= hour < end for start, end in windows)
 
 
 # ─── Classic indicator extractors (from ict_engine's `indicators` dict) ───
