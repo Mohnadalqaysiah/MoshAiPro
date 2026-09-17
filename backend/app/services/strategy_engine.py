@@ -135,6 +135,34 @@ def _ext_premium_discount(a: Dict, value: Optional[str]) -> Optional[bool]:
     return zone != "EQUILIBRIUM"
 
 
+def _ext_direction(a: Dict, value: Optional[str]) -> Optional[bool]:
+    """
+    اتجاه الصفقة كما قرّره المحرك (BUY / SELL / WAIT).
+
+    (2026-09-17) أُضيف بعد سؤال محقّ: «كيف تكون للشراء ووصلتني إشارات
+    بيع؟». والسبب أن قراري الاستراتيجية والاتجاه **منفصلان تماماً**:
+    شروط المستخدم تقرّر **هل** يُرسَل تنبيه، ومستويات المحرك تقرّر
+    **باتجاه أي جهة** — ولا تتحدثان. فشرط مثل «منطقة خصم» يرجّح الشراء
+    سياقياً ولا يمنع المحرك من حساب مستويات بيع على فريم أصغر.
+
+    وبلا هذا الشرط لا يملك المستخدم أي وسيلة لتقييد الاتجاه، فيتلقى
+    الجهتين مهما ضبط شروطه — وهو ما لا يمكن استنتاجه من الواجهة.
+
+    القيم: شراء/buy/long أو بيع/sell/short. وبلا قيمة: أي اتجاه محسوم
+    (أي ليس WAIT).
+    """
+    rec = (a.get("recommendation") or "").upper()
+    if not rec:
+        return None
+    v = (value or "").strip()
+    vu = v.upper()
+    if any(w in vu for w in ("BUY", "LONG")) or any(w in v for w in ("شراء", "صعود")):
+        return rec == "BUY"
+    if any(w in vu for w in ("SELL", "SHORT")) or any(w in v for w in ("بيع", "هبوط")):
+        return rec == "SELL"
+    return rec in ("BUY", "SELL")
+
+
 def _ext_killzone(a: Dict, value: Optional[str]) -> Optional[bool]:
     kz = a.get("kill_zone") or {}
     if "is_kill_zone" not in kz:
@@ -256,6 +284,7 @@ SUPPORTED_CONDITION_TYPES = {
     "eql":       _ext_equal_lows,
     "premium":   _ext_premium_discount,
     "killzone":  _ext_killzone,
+    "direction": _ext_direction,
     # Sessions & Time
     "london":    lambda a, v: _session_match(a, "LONDON"),
     "newyork":   lambda a, v: _session_match(a, "NEW_YORK"),
