@@ -346,20 +346,59 @@ def build_telegram_message(strategy, eval_result: Dict, symbol: str, timeframe: 
     """Mirrors the frontend's tgTemplate builder, using real evaluation data."""
     levels = analysis.get("levels") or {}
     rec = analysis.get("recommendation") or "WAIT"
-    direction_line = "🟢 LONG" if rec == "BUY" else ("🔴 SHORT" if rec == "SELL" else "⚪ WAIT")
+
+    # (2026-09-17) الاتجاه كان يُؤخذ من توصية المحرك وحدها، فتصل رسائل
+    # مكتوب عليها "⚪ WAIT" ومعها دخول ووقف وهدف تصف صفقة شراء أو بيع
+    # صريحة. بلاغ حقيقي: نُفّذت اثنتان منها على حساب تجريبي وبلغتا الهدف
+    # بينما الرسالة تقول "انتظار" — فالمستخدم نفّذ صواباً رغم الرسالة لا
+    # بسببها. والتناقض ليس تجميلياً: رسالة تحمل مستويات اتجاهية ولا تسمّي
+    # اتجاهها تدفع لتخمينه، وتخمينه خطأً يعكس الصفقة.
+    #
+    # القاعدة: متى وُجدت مستويات فالاتجاه يُقرأ منها — الوقف تحت الدخول
+    # شراء وفوقه بيع، بلا لبس. وتوصية المحرك تُذكر بجانبها متى خالفتها،
+    # لأن الاستراتيجية أطلقت بشروط المستخدم لا بشروط المحرك، وإخفاء
+    # الاختلاف يوهم باتفاق لا وجود له.
+    entry_v = levels.get("entry")
+    sl_v    = levels.get("stop_loss")
+    dir_from_levels = None
+    if entry_v is not None and sl_v is not None:
+        try:
+            dir_from_levels = "BUY" if float(sl_v) < float(entry_v) else "SELL"
+        except (TypeError, ValueError):
+            dir_from_levels = None
+
+    shown = dir_from_levels or rec
+    direction_line = "🟢 LONG" if shown == "BUY" else ("🔴 SHORT" if shown == "SELL" else "⚪ WAIT")
 
     lines = ["━━━━━━━━━━━━━━", "🔥 STRATEGY TRIGGERED", "", f"{strategy.name}", f"{symbol}", f"{timeframe}", "",
               "Direction:", direction_line]
-    if strategy.tg_send_entry and levels.get("entry") is not None:
-        lines += ["", "Entry:", f"{levels.get('entry')}"]
-    if strategy.tg_send_sl and levels.get("stop_loss") is not None:
-        lines += ["", "Stop Loss:", f"{levels.get('stop_loss')}"]
+    if dir_from_levels and rec != dir_from_levels:
+        lines += [f"(الاتجاه من مستويات الصفقة — محرّك التحليل يرى: {rec})"]
+
+    if strategy.tg_send_entry and entry_v is not None:
+        lines += ["", "Entry:", f"{entry_v}"]
+    if strategy.tg_send_sl and sl_v is not None:
+        lines += ["", "Stop Loss:", f"{sl_v}"]
     if strategy.tg_send_tp and levels.get("tp1") is not None:
         lines += ["", "Take Profit:", f"{levels.get('tp1')}"]
     if strategy.tg_send_rr and levels.get("risk_reward") is not None:
         lines += ["", "RR:", f"1:{levels.get('risk_reward')}"]
+
+    # (2026-09-17) غياب المستويات كان صامتاً تماماً، فتصل رسالتان
+    # متطابقتان لنفس الاستراتيجية والرمز إحداهما بمستويات والأخرى بلا —
+    # بلا ما يفسّر الفرق. والسبب أن المحرك يمسحها عمداً حين ينحرف سعر
+    # التحليل عن السوق فوق الحد المسموح (راجع rejection_reason
+    # بـai_engine_v5)، وهو رفضُ سلامةٍ يجب أن يُقال لا أن يُحذف بصمت:
+    # الصمت يجعل المستخدم يظن أن الإعداد معطّل، أو يستنتج مستويات من عنده.
+    if strategy.tg_send_entry and entry_v is None:
+        lines += ["", "⚠️ المستويات غير متاحة لهذا التقييم",
+                  "(سعر التحليل انحرف عن السوق فوق الحد المسموح — "
+                  "لم تُعرض مستويات قد تكون قديمة)"]
+
     if strategy.tg_send_confidence:
-        lines += ["", "Confidence:", f"{eval_result['score']}%"]
+        # درجة الاستراتيجية لا ثقة المحرك — كانت تُسمّى Confidence فتُقرأ
+        # على أنها تقييم المحرك للإشارة، وهما رقمان مختلفان تماماً.
+        lines += ["", f"Score (شروطك): {eval_result['score']}%"]
     if strategy.tg_send_conditions:
         lines += ["", "Signals:"]
         for m in eval_result["matched"][:6]:
