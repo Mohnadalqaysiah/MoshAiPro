@@ -453,10 +453,31 @@ def build_telegram_message(strategy, eval_result: Dict, symbol: str, timeframe: 
         lines += ["", "Entry:", f"{entry_v}"]
     if strategy.tg_send_sl and sl_v is not None:
         lines += ["", "Stop Loss:", f"{sl_v}"]
-    if strategy.tg_send_tp and levels.get("tp1") is not None:
-        lines += ["", "Take Profit:", f"{levels.get('tp1')}"]
-    if strategy.tg_send_rr and levels.get("risk_reward") is not None:
-        lines += ["", "RR:", f"1:{levels.get('risk_reward')}"]
+    tp1_v = levels.get("tp1")
+    tp2_v = levels.get("tp2")
+    if strategy.tg_send_tp and tp1_v is not None:
+        lines += ["", "Take Profit:", f"{tp1_v}"]
+        if tp2_v is not None and tp2_v != tp1_v:
+            lines += ["TP2:", f"{tp2_v}"]
+
+    # (2026-09-17) الـR/R كان يُؤخذ من levels["risk_reward"] وهو محسوب على
+    # **الهدف الثاني**، بينما السطر المعروض فوقه هو **الهدف الأول**. فوصلت
+    # رسالة بـ"Take Profit 1.14725" و"RR 1:2.0" بينما الأرقام نفسها تعطي
+    # 1:1.00 — رقمان بنفس الرسالة يتناقضان.
+    #
+    # القاعدة المعتمدة: كل رقم بالرسالة يجب أن يكون **مشتقّاً من أرقامها
+    # الأخرى**. فمن يتحقق بالحاسبة يجب أن يصل لنفس النتيجة، وإلا فقد الثقة
+    # بكل الأرقام لا بهذا وحده. فيُحسب R/R هنا من الدخول والوقف والهدف
+    # المعروضين، ولا يُقتبس من حقل يصف هدفاً آخر.
+    if strategy.tg_send_rr and entry_v is not None and sl_v is not None and tp1_v is not None:
+        try:
+            _risk = abs(float(entry_v) - float(sl_v))
+            if _risk > 0:
+                lines += ["", "RR:", f"1:{round(abs(float(tp1_v) - float(entry_v)) / _risk, 2)}"]
+                if tp2_v is not None and tp2_v != tp1_v:
+                    lines[-1] += f"   (حتى TP2: 1:{round(abs(float(tp2_v) - float(entry_v)) / _risk, 2)})"
+        except (TypeError, ValueError, ZeroDivisionError):
+            pass
 
     # (2026-09-17) غياب المستويات كان صامتاً تماماً، فتصل رسالتان
     # متطابقتان لنفس الاستراتيجية والرمز إحداهما بمستويات والأخرى بلا —
