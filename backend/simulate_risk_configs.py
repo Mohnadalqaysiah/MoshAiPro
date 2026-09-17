@@ -50,7 +50,7 @@ from collections import defaultdict
 # be_at = عتبة التأمين بمضاعف R. متى بلغ السعر هذه المسافة في صالح
 #         الصفقة، انتقل الوقف إلى سعر الدخول. None = بلا تأمين.
 CONFIGS = [
-    {"name": "الأساس (هدف 1R/2R، بلا تأمين)", "min_sl_pct": None, "mode": None, "tp1_r": 1.0, "tp2_r": 2.0, "be_at": None},
+    {"name": "الأساس (هدف 1R/2R، بلا تأمين)", "min_sl_pct": None, "mode": None, "tp1_r": 1.0, "tp2_r": 2.0, "be_at": None, "baseline": True},
     {"name": "تأمين عند 0.25R",                "min_sl_pct": None, "mode": None, "tp1_r": 1.0, "tp2_r": 2.0, "be_at": 0.25},
     {"name": "تأمين عند 0.40R",                "min_sl_pct": None, "mode": None, "tp1_r": 1.0, "tp2_r": 2.0, "be_at": 0.40},
     {"name": "تأمين عند 0.50R",                "min_sl_pct": None, "mode": None, "tp1_r": 1.0, "tp2_r": 2.0, "be_at": 0.50},
@@ -334,9 +334,10 @@ async def main():
                 "name": cfg["name"], "n": n, "rejected": res["rejected"],
                 "wr": wins / n * 100, "exp": exp, "rtot": sum(rs),
                 "ambig": res["ambig"], "halves": halves, "be": be, "sl": sls,
+                "baseline": bool(cfg.get("baseline")),
             })
 
-        base = next((t for t in table if t["name"].startswith("الحالي")), None)
+        base = next((t for t in table if t.get("baseline")), None) or (table[0] if table else None)
         for t in sorted(table, key=lambda x: -x["wr"]):
             mark = ""
             if base and t is not base:
@@ -352,7 +353,7 @@ async def main():
                 gap = abs(w1 - w2)
                 sign = "✓" if gap <= 15 else "⚠"
                 stab = f"{sign} {w1:.0f}% ← {w2:.0f}%"
-                if w1 < base["wr"] or w2 < base["wr"]:
+                if base and (w1 < base["wr"] or w2 < base["wr"]):
                     stab += " (نصف دون الأساس)"
             wins_n = round(t['wr'] * t['n'] / 100)
             print(f"  {t['name']:<30}{t['n']:>6}{wins_n:>6}{t['be']:>7}{t['sl']:>7}"
