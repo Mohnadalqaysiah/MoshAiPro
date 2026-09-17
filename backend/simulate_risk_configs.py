@@ -43,16 +43,20 @@ from collections import defaultdict
 #              "reject" = تُستبعد الإشارة كلياً إن كان وقفها أضيق
 #              الفرق جوهري: الأول يحتفظ بالتغطية، والثاني يقلّصها.
 # tp1_r/tp2_r: موضع الهدف بمضاعف المخاطرة (None = إبقاء الهدف الأصلي)
+# (2026-09-17) أُعيد تركيز الإعدادات على سؤال **عتبة التأمين**: متى
+# يُنقل الوقف إلى الدخول؟ سؤال التسعير (هدف 1R) حُسم وطُبّق، فصار هو
+# خط الأساس هنا لا "الحالي القديم".
+#
+# be_at = عتبة التأمين بمضاعف R. متى بلغ السعر هذه المسافة في صالح
+#         الصفقة، انتقل الوقف إلى سعر الدخول. None = بلا تأمين.
 CONFIGS = [
-    {"name": "الحالي (بلا تغيير)",              "min_sl_pct": None, "mode": None,     "tp1_r": None, "tp2_r": None},
-    {"name": "توسيع الوقف ≥0.30%",              "min_sl_pct": 0.30, "mode": "floor",  "tp1_r": None, "tp2_r": None},
-    {"name": "توسيع الوقف ≥0.50%",              "min_sl_pct": 0.50, "mode": "floor",  "tp1_r": None, "tp2_r": None},
-    {"name": "استبعاد ما وقفه <0.30%",          "min_sl_pct": 0.30, "mode": "reject", "tp1_r": None, "tp2_r": None},
-    {"name": "استبعاد ما وقفه <0.50%",          "min_sl_pct": 0.50, "mode": "reject", "tp1_r": None, "tp2_r": None},
-    {"name": "هدف أول عند 1.0R فقط",            "min_sl_pct": None, "mode": None,     "tp1_r": 1.0,  "tp2_r": 2.0},
-    {"name": "وقف ≥0.50% + هدف أول 1.0R",       "min_sl_pct": 0.50, "mode": "floor",  "tp1_r": 1.0,  "tp2_r": 2.0},
-    {"name": "وقف ≥0.50% + هدف أول 1.5R",       "min_sl_pct": 0.50, "mode": "floor",  "tp1_r": 1.5,  "tp2_r": 3.0},
-    {"name": "استبعاد <0.50% + هدف أول 1.0R",   "min_sl_pct": 0.50, "mode": "reject", "tp1_r": 1.0,  "tp2_r": 2.0},
+    {"name": "الأساس (هدف 1R/2R، بلا تأمين)", "min_sl_pct": None, "mode": None, "tp1_r": 1.0, "tp2_r": 2.0, "be_at": None},
+    {"name": "تأمين عند 0.25R",                "min_sl_pct": None, "mode": None, "tp1_r": 1.0, "tp2_r": 2.0, "be_at": 0.25},
+    {"name": "تأمين عند 0.40R",                "min_sl_pct": None, "mode": None, "tp1_r": 1.0, "tp2_r": 2.0, "be_at": 0.40},
+    {"name": "تأمين عند 0.50R",                "min_sl_pct": None, "mode": None, "tp1_r": 1.0, "tp2_r": 2.0, "be_at": 0.50},
+    {"name": "تأمين عند 0.60R",                "min_sl_pct": None, "mode": None, "tp1_r": 1.0, "tp2_r": 2.0, "be_at": 0.60},
+    {"name": "تأمين عند 0.75R",                "min_sl_pct": None, "mode": None, "tp1_r": 1.0, "tp2_r": 2.0, "be_at": 0.75},
+    {"name": "الوضع القديم (أهداف ATR)",       "min_sl_pct": None, "mode": None, "tp1_r": None, "tp2_r": None, "be_at": None},
 ]
 
 TF_HOURS = {"1m": 2, "5m": 4, "15m": 8, "30m": 12, "1h": 24, "4h": 72, "1d": 168, "1w": 336}
@@ -84,37 +88,47 @@ def build_levels(entry, sl, tp1, tp2, is_buy, cfg):
     return sl, tp1, tp2
 
 
-def walk(candles, entry, sl, tp1, tp2, is_buy):
+def walk(candles, entry, sl, tp1, tp2, is_buy, be_at=None):
     """
-    يمشي الشموع بالترتيب ويُعيد (النتيجة، مضاعف R، غموض).
+    يمشي الشموع ويُعيد (النتيجة، مضاعف R، غموض).
 
-    نفس قواعد الإنتاج: الوقف يُنهي فوراً، والهدف الأول لا يُنهي (نكمل
-    لنرى هل يُبلَغ الثاني قبل الوقف)، والتعادل داخل الشمعة يُرجَّح للوقف.
+    النتائج: "SL" · "BE" (أُغلقت عند الدخول بعد التأمين) · "TP1" · "TP2".
 
-    "غموض" = شمعة تحوي الوقف والهدف معاً، فالترتيب داخلها مجهول ونحكم
-    بالوقف تحفّظاً. وهذا **يُحابي الإعداد الحالي** لا الجديد: الهدف
-    الأقرب أكثر عرضة للوقوع بنفس شمعة الوقف. فالانحياز ضد ما نختبره —
-    وإن تفوّق رغمه فالتفوّق حقيقي لا صنيعة المنهج. يُعدّ ويُطبع بدل أن
-    يُفترض صغيراً.
+    ترتيب الفحص داخل الشمعة **متحفّظ عمداً**: يُفحص الوقف أولاً بالوقف
+    **السائد قبل هذه الشمعة**، ثم الأهداف، ثم يُسلَّح التأمين ليسري من
+    الشمعة **التالية**. فلا نمنح التأمين أثراً داخل الشمعة التي بلغ فيها
+    عتبته — وترتيبها الداخلي مجهول، وافتراض أن الارتفاع سبق الهبوط
+    يضخّم فائدة التأمين بلا سند. الانحياز ضد ما نختبره لا معه.
     """
     risk = abs(entry - sl)
     has_tp2 = (tp2 > tp1) if is_buy else (tp2 < tp1)
     best = None
     ambiguous = False
+    armed = False          # هل انتقل الوقف إلى الدخول؟
+
     for _ts, hi, lo in candles:
-        sl_hit  = (lo <= sl) if is_buy else (hi >= sl)
+        eff_sl = entry if armed else sl
+        sl_hit  = (lo <= eff_sl) if is_buy else (hi >= eff_sl)
         tp2_hit = has_tp2 and ((hi >= tp2) if is_buy else (lo <= tp2))
         tp1_hit = (hi >= tp1) if is_buy else (lo <= tp1)
+
         if sl_hit and (tp1_hit or tp2_hit) and best is None:
             ambiguous = True
         if sl_hit:
             if best is None:
-                return "SL", -1.0, ambiguous
-            break                      # بلغ الهدف الأول ثم ارتد للوقف ⇒ يبقى ربحاً
+                return ("BE" if armed else "SL"), (0.0 if armed else -1.0), ambiguous
+            break                      # بلغ الهدف الأول ثم ارتد ⇒ يبقى ربحاً
         if tp2_hit:
             return "TP2", round(abs(tp2 - entry) / risk, 3), ambiguous
         if tp1_hit and best is None:
             best = ("TP1", round(abs(tp1 - entry) / risk, 3))
+
+        # التسليح بعد الفحص — يسري من الشمعة التالية
+        if be_at is not None and not armed and risk > 0:
+            fav = (hi - entry) if is_buy else (entry - lo)
+            if fav / risk >= be_at:
+                armed = True
+
     if best:
         return best[0], best[1], ambiguous
     return None, None, ambiguous
@@ -260,7 +274,7 @@ async def main():
                     results[cfg["name"]]["rejected"] += 1
                     continue
                 sl, tp1, tp2 = lv
-                outcome, r, amb = walk(window, entry, sl, tp1, tp2, is_buy)
+                outcome, r, amb = walk(window, entry, sl, tp1, tp2, is_buy, cfg.get("be_at"))
                 if outcome is None:
                     continue          # لم تُحسم داخل أفق الإشارة
                 if amb:
@@ -281,8 +295,8 @@ async def main():
         print("\n" + "=" * 100)
         print("النتائج — مرتّبة بنسبة الربح (وهي الهدف المعلن)")
         print("=" * 100)
-        print(f"  {'الإعداد':<32}{'مُتداوَلة':>9}{'مستبعَدة':>10}"
-              f"{'نسبة الربح':>12}{'التوقّع':>10}{'غموض':>7}   الثبات (نصف أول ← ثانٍ)")
+        print(f"  {'الإعداد':<30}{'عدد':>6}{'ربح':>6}{'تأمين':>7}{'خسارة':>7}"
+              f"{'نسبة الربح':>12}{'التوقّع':>10}   الثبات (نصف أول ← ثانٍ)")
         print("  " + "-" * 104)
 
         table = []
@@ -293,6 +307,8 @@ async def main():
             if not n:
                 continue
             wins = sum(1 for _, o, _, _ in rows_ if o in ("TP1", "TP2"))
+            be   = sum(1 for _, o, _, _ in rows_ if o == "BE")
+            sls  = sum(1 for _, o, _, _ in rows_ if o == "SL")
             rs = [r for _, _, r, _ in rows_ if r is not None]
             exp = sum(rs) / len(rs) if rs else 0.0
 
@@ -307,7 +323,7 @@ async def main():
             table.append({
                 "name": cfg["name"], "n": n, "rejected": res["rejected"],
                 "wr": wins / n * 100, "exp": exp, "rtot": sum(rs),
-                "ambig": res["ambig"], "halves": halves,
+                "ambig": res["ambig"], "halves": halves, "be": be, "sl": sls,
             })
 
         base = next((t for t in table if t["name"].startswith("الحالي")), None)
@@ -328,12 +344,15 @@ async def main():
                 stab = f"{sign} {w1:.0f}% ← {w2:.0f}%"
                 if w1 < base["wr"] or w2 < base["wr"]:
                     stab += " (نصف دون الأساس)"
-            print(f"  {t['name']:<32}{t['n']:>9}{t['rejected']:>10}"
-                  f"{t['wr']:>11.1f}%{t['exp']:>+10.2f}{t['ambig']:>7}   {stab}{mark}")
+            wins_n = round(t['wr'] * t['n'] / 100)
+            print(f"  {t['name']:<30}{t['n']:>6}{wins_n:>6}{t['be']:>7}{t['sl']:>7}"
+                  f"{t['wr']:>11.1f}%{t['exp']:>+10.2f}   {stab}{mark}")
 
         print("  " + "-" * 104)
         print("  ★ = نسبة ربح أعلى بـ5 نقاط فأكثر بلا تضحية بالتوقّع")
         print("  ↓ = أسوأ من الحالي بأحد المقياسين")
+        print("  تأمين = صفقات بلغت عتبة التأمين ثم ارتدّت، فأُغلقت عند الدخول")
+        print("           بدل الوقف — أي أنها كانت ستُسجَّل خسارة بلا التأمين.")
         print("  غموض = صفقات لمست الوقف والهدف بنفس الشمعة فرُجّح الوقف تحفّظاً.")
         print("          الانحياز ضد الإعداد الجديد لا معه — الهدف الأقرب أكثر")
         print("          عرضة لذلك. فتفوّقه رغم هذا الانحياز يقوّيه لا يضعفه.")
