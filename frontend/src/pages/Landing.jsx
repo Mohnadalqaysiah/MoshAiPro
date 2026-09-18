@@ -410,6 +410,7 @@ export default function Landing() {
               { slug: 'smart-money-concepts-smc-guide', ar: 'دليل Smart Money Concepts', en: 'Smart Money Concepts Guide' },
               { slug: 'order-blocks-explained',          ar: 'شرح Order Blocks',           en: 'Order Blocks Explained' },
               { slug: 'fvg-fair-value-gap-trading',       ar: 'شرح FVG',                    en: 'FVG Explained' },
+              { slug: 'build-your-own-trading-strategy', ar: 'ابنِ استراتيجيتك بدون برمجة', en: 'Build Your Own Strategy' },
             ].map(a => (
               <Link key={a.slug} to={isAr ? `/blog/${a.slug}` : `/en/blog/${a.slug}`}
                 className="text-sm q-glass hover:text-white px-4 py-1.5 rounded-full transition-colors" style={{ color: 'var(--q-acc3)' }}>

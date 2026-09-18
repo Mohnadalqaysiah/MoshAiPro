@@ -526,4 +526,64 @@
     <priority>0.9</priority>
   </url>
 
+  <!-- مقالة باني الاستراتيجيات: بناء استراتيجية تداول بدون برمجة (عربي + English) -->
+  <url>
+    <loc>https://qaffel.com/blog/build-your-own-trading-strategy</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/build-your-own-trading-strategy" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/build-your-own-trading-strategy" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/build-your-own-trading-strategy" />
+    <lastmod>2026-09-18</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://qaffel.com/en/blog/build-your-own-trading-strategy</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/build-your-own-trading-strategy" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/build-your-own-trading-strategy" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/build-your-own-trading-strategy" />
+    <lastmod>2026-09-18</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- مقالة باني الاستراتيجيات: أخطاء شائعة تمنع الاستراتيجية من التنبيه (عربي + English) -->
+  <url>
+    <loc>https://qaffel.com/blog/trading-strategy-mistakes</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/trading-strategy-mistakes" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/trading-strategy-mistakes" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/trading-strategy-mistakes" />
+    <lastmod>2026-09-18</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://qaffel.com/en/blog/trading-strategy-mistakes</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/trading-strategy-mistakes" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/trading-strategy-mistakes" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/trading-strategy-mistakes" />
+    <lastmod>2026-09-18</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- مقالة باني الاستراتيجيات: أتمتة استراتيجية ICT على تلجرام (عربي + English) -->
+  <url>
+    <loc>https://qaffel.com/blog/ict-strategy-automation</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/ict-strategy-automation" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/ict-strategy-automation" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/ict-strategy-automation" />
+    <lastmod>2026-09-18</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://qaffel.com/en/blog/ict-strategy-automation</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/ict-strategy-automation" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/ict-strategy-automation" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/ict-strategy-automation" />
+    <lastmod>2026-09-18</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
 </urlset>
