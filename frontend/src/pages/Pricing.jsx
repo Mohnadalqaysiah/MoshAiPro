@@ -314,6 +314,11 @@ export default function Pricing() {
     } catch (err) {
       setError(err.response?.data?.detail || (isAr ? 'تعذّر تأكيد الدفع، حاول مرة أخرى' : 'Could not confirm payment, please try again'))
       setStep('pay')
+      // طلب PayPal يُحصَّل مرة واحدة فقط — إعادة استخدام نفس order_id بعد
+      // فشل capture-order (مهما كان السبب) يفشل ثانية دائماً. نجهّز طلباً
+      // جديداً فوراً ليصير الزر المعروض قابلاً للاستخدام عند إعادة المحاولة
+      // بدل ما يبقى معلَّقاً على طلب ميت بصمت.
+      startCardPayment(selected)
       throw err
     }
   }

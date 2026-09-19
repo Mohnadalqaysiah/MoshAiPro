@@ -124,6 +124,27 @@ Advanced Card Payments على الحساب، نفس الكود يتحقق من `
 لطلب تفعيل "Advanced Credit and Debit Card Payments" على الحساب —
 راجع developer.paypal.com/dashboard/applications/live.
 
+**⚠️ بلاغ حقيقي 19/09 — عطل كان يسحب المال بلا تفعيل اشتراك:**
+`capture-order` أرجع "هذا الطلب لا يخصّك" لمستخدم يدفع بحسابه هو. السبب:
+PayPal تُعيد `custom_id` على كائن **الـcapture نفسه**
+(`purchase_units[0].payments.captures[0].custom_id`) بردّ التحصيل، لا
+بالضرورة على غلاف `purchase_unit` (`purchase_units[0].custom_id`) الذي
+كان الكود يقرأه وحده. فالتحقق يفشل **دائماً** رغم صحة الملكية — و**المال
+يُسحب فعلياً عند PayPal قبل الرفض**، لأن الرفض يقع بعد نجاح `/capture`
+لا قبله. **الأصل الموثوق هو كائن الـcapture، لا غلاف purchase_unit.**
+تصحيح للفهم السابق: صيغة `custom_id` بحد ذاتها سليمة (`u{id}|{plan}|{coupon}`)،
+والعطل بمكان القراءة فقط لا بالتوليد.
+
+**أُصلح فوراً** (`capture.get("custom_id") or pu.get("custom_id")`)،
+وأُضيفت أداة `paypal_reconcile_order.py` لاسترجاع أي طلب سُحب ماله فعلاً
+قبل الإصلاح ولم يُفعَّل — تستعلم PayPal مباشرة بـorder_id وتُفعّل
+idempotent فقط لو COMPLETED فعلاً وغير مسجَّل مسبقاً.
+
+**وأُصلح عطل ثانٍ مرتبط:** إعادة محاولة الدفع بعد فشل `capture-order`
+كانت تُبقي نفس `order_id` المُستهلَك (PayPal تُحصِّل الطلب مرة واحدة
+فقط) — فيفشل أي إعادة محاولة **دائماً** بصمت. صار يُطلب طلب جديد فوراً
+عند أي فشل تأكيد.
+
 **تحديث 19/09 (نفس اليوم):** زر PayPal الافتراضي بلا `fundingSource`
 يعرض عدة أزرار مكدّسة (PayPal + Venmo + Pay Later حسب الأهلية) — طلب
 صاحب المنتج **زراً واحداً بس "Debit or Credit Card"**. صار

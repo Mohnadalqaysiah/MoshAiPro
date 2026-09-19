@@ -879,11 +879,18 @@ def capture_paypal_order(
         raise HTTPException(400, "تعذّر تأكيد الدفع")
     capture = captures[0]
 
-    owner_id, plan_key, cp_code = _parse_paypal_custom_id(pu.get("custom_id") or "")
+    # (2026-09-19) بلاغ حقيقي: "هذا الطلب لا يخصّك" رغم أن العملية للمستخدم
+    # نفسه — PayPal تُعيد custom_id على كائن الـcapture نفسه
+    # (purchase_units[0].payments.captures[0].custom_id)، لا بالضرورة على
+    # غلاف purchase_unit (purchase_units[0].custom_id) بردّ الـcapture. كان
+    # الكود يقرأ الغلاف فقط فيجده فارغاً، فيفشل التحقق دائماً — والمال كان
+    # يُسحب فعلياً من PayPal بينما نرفض تفعيل الاشتراك. الأصل هو الـcapture.
+    custom_id = capture.get("custom_id") or pu.get("custom_id") or ""
+    owner_id, plan_key, cp_code = _parse_paypal_custom_id(custom_id)
     if owner_id != user.id or plan_key not in PLANS:
         logger.warning(
             f"⚠️ PayPal capture ownership mismatch: order={data.order_id} "
-            f"custom_id={pu.get('custom_id')!r} auth_user={user.id}"
+            f"capture={capture.get('id')} custom_id={custom_id!r} auth_user={user.id}"
         )
         raise HTTPException(403, "هذا الطلب لا يخصّك")
 
