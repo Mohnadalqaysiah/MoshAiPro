@@ -35,9 +35,12 @@ export default function PayPalInlineCheckout({
   const [mode, setMode]             = useState('loading')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError]           = useState('')
+  const [applePayAvailable, setApplePayAvailable] = useState(false)
   const cardFieldsRef     = useRef(null)
   const buttonsContainerRef = useRef(null)
   const buttonsInstanceRef  = useRef(null)
+  const applePayContainerRef = useRef(null)
+  const applePayInstanceRef  = useRef(null)
 
   useEffect(() => {
     if (!orderId || !clientId) return
@@ -53,6 +56,32 @@ export default function PayPalInlineCheckout({
         } catch {
           setError(isAr ? 'تعذّر تأكيد الدفع، حاول مرة أخرى' : 'Could not confirm payment, try again')
           setSubmitting(false)
+        }
+      }
+
+      // ── Apple Pay — إضافي، مستقل عن الطريقة الأساسية بالأسفل ───────
+      // يفحص أهليته بنفسه (جهاز/متصفح Apple + بطاقة محفوظة بـWallet +
+      // تفعيل الحساب) ولا يعرض شيئاً لو غير مؤهَّل — بلا أي شرط إضافي
+      // منّا، وبلا أثر على الطريقة الأساسية إن فشل أو لم يُدعَم.
+      if (paypal.Buttons && applePayContainerRef.current) {
+        try {
+          const applePay = paypal.Buttons({
+            fundingSource: paypal.FUNDING.APPLEPAY,
+            style: { height: 45 },
+            createOrder: () => Promise.resolve(orderId),
+            onApprove: handleApprove,
+            onError: (err) => {
+              console.error('apple pay error', err)
+              setError(isAr ? 'تعذّر إتمام الدفع عبر Apple Pay' : 'Apple Pay payment failed')
+            },
+          })
+          if (applePay.isEligible()) {
+            applePay.render(applePayContainerRef.current)
+            applePayInstanceRef.current = applePay
+            if (!cancelled) setApplePayAvailable(true)
+          }
+        } catch (e) {
+          console.warn('apple pay unavailable', e)
         }
       }
 
@@ -118,6 +147,9 @@ export default function PayPalInlineCheckout({
       if (buttonsInstanceRef.current?.close) {
         try { buttonsInstanceRef.current.close() } catch { /* تجاهل — العنصر قد يكون أُزيل أصلاً */ }
       }
+      if (applePayInstanceRef.current?.close) {
+        try { applePayInstanceRef.current.close() } catch { /* تجاهل */ }
+      }
     }
   }, [orderId, clientId])
 
@@ -148,6 +180,18 @@ export default function PayPalInlineCheckout({
           {isAr ? 'تعذّر تحميل نموذج الدفع، حاول لاحقاً أو جرّب طريقة أخرى بالأسفل' : 'Could not load the payment form, try again or use another method below'}
         </p>
       )}
+
+      {/* Apple Pay — إضافي فوق الطريقة الأساسية، يظهر فقط لو مؤهّل فعلاً
+          (جهاز Apple ببطاقة محفوظة + تفعيل الحساب). الحاوية تبقى بالـDOM
+          دائماً لنفس سبب حاوية زر PayPal (راجع الملاحظة تحت) */}
+      <div className={applePayAvailable && mode !== 'error' ? 'mb-3' : 'hidden'}>
+        <div ref={applePayContainerRef} />
+        <div className="flex items-center gap-3 my-3">
+          <div className="flex-1 h-px bg-white/10" />
+          <span className="text-[11px] text-gray-500">{isAr ? 'أو بالبطاقة' : 'or by card'}</span>
+          <div className="flex-1 h-px bg-white/10" />
+        </div>
+      </div>
 
       <div className={mode === 'buttons' ? undefined : 'hidden'}>
         <div ref={buttonsContainerRef} />
