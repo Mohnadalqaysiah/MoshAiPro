@@ -81,6 +81,11 @@ export default function PayPalInlineCheckout({
       }
 
       // ── بديل مؤقت: زر PayPal القياسي (يبيّن شعار PayPal) ──────────
+      // buttonsContainerRef.current يجب أن يكون موجوداً دائماً بالـDOM
+      // (لا مشروطاً بـmode==='buttons') — هذا الكولباك غير متزامن (بعد
+      // تحميل السكربت)، فلو الحاوية كانت تُرسَم فقط عند mode==='buttons'
+      // لبقيت null دائماً هنا (لسّا لم نبدّل mode بعد) ورمى استثناء صامت
+      // يسقط لرسالة "تعذّر التحميل" — وهو بالضبط ما حدث بالإنتاج.
       if (paypal.Buttons && buttonsContainerRef.current) {
         buttonsInstanceRef.current = paypal.Buttons({
           style: { layout: 'vertical', shape: 'rect', height: 45 },
@@ -124,17 +129,20 @@ export default function PayPalInlineCheckout({
 
   if (!orderId || !clientId) return null
 
-  if (mode === 'error') {
-    return (
-      <p className="text-red-400 text-sm text-center py-4">
-        {isAr ? 'تعذّر تحميل نموذج الدفع، حاول لاحقاً أو جرّب طريقة أخرى بالأسفل' : 'Could not load the payment form, try again or use another method below'}
-      </p>
-    )
-  }
+  // ملاحظة بنيوية: حاوية أزرار PayPal (buttonsContainerRef) تبقى بالـDOM
+  // دائماً (بـ`hidden` لا بإزالتها من الشجرة) — الـeffect غير متزامن، فلو
+  // كانت مشروطة بـmode==='buttons' لصار ref.current = null وقت محاولة
+  // الرسم فيها (لأن mode لسّا 'loading' حينها)، ويرمي استثناء صامت.
 
-  if (mode === 'buttons') {
-    return (
-      <div>
+  return (
+    <div>
+      {mode === 'error' && (
+        <p className="text-red-400 text-sm text-center py-4">
+          {isAr ? 'تعذّر تحميل نموذج الدفع، حاول لاحقاً أو جرّب طريقة أخرى بالأسفل' : 'Could not load the payment form, try again or use another method below'}
+        </p>
+      )}
+
+      <div className={mode === 'buttons' ? undefined : 'hidden'}>
         <div ref={buttonsContainerRef} />
         {error && <p className="text-red-400 text-xs mt-3 text-center">{error}</p>}
         <p className="text-xs text-gray-500 text-center mt-3 flex items-center justify-center gap-1">
@@ -142,57 +150,55 @@ export default function PayPalInlineCheckout({
           {isAr ? 'دفع آمن ومشفّر بالكامل' : 'Fully secure & encrypted'}
         </p>
       </div>
-    )
-  }
 
-  return (
-    <form onSubmit={handleFieldsSubmit}>
-      <div className="space-y-3">
-        <div>
-          <label className="block text-xs text-gray-400 mb-1">{isAr ? 'الاسم على البطاقة' : 'Name on card'}</label>
-          <div id="card-name-field" className="bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 min-h-[42px]" />
-        </div>
-        <div>
-          <label className="block text-xs text-gray-400 mb-1">{isAr ? 'رقم البطاقة' : 'Card number'}</label>
-          <div id="card-number-field" className="bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 min-h-[42px]" />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
+      <form onSubmit={handleFieldsSubmit} className={mode === 'error' || mode === 'buttons' ? 'hidden' : undefined}>
+        <div className="space-y-3">
           <div>
-            <label className="block text-xs text-gray-400 mb-1">{isAr ? 'تاريخ الانتهاء' : 'Expiry'}</label>
-            <div id="card-expiry-field" className="bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 min-h-[42px]" />
+            <label className="block text-xs text-gray-400 mb-1">{isAr ? 'الاسم على البطاقة' : 'Name on card'}</label>
+            <div id="card-name-field" className="bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 min-h-[42px]" />
           </div>
           <div>
-            <label className="block text-xs text-gray-400 mb-1">CVV</label>
-            <div id="card-cvv-field" className="bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 min-h-[42px]" />
+            <label className="block text-xs text-gray-400 mb-1">{isAr ? 'رقم البطاقة' : 'Card number'}</label>
+            <div id="card-number-field" className="bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 min-h-[42px]" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">{isAr ? 'تاريخ الانتهاء' : 'Expiry'}</label>
+              <div id="card-expiry-field" className="bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 min-h-[42px]" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">CVV</label>
+              <div id="card-cvv-field" className="bg-black/30 border border-white/10 rounded-xl px-3 py-2.5 min-h-[42px]" />
+            </div>
           </div>
         </div>
-      </div>
 
-      {mode === 'loading' && (
-        <div className="flex items-center justify-center gap-2 py-4 text-gray-400 text-sm">
-          <Loader2 size={16} className="animate-spin" />
-          {isAr ? 'جاري تجهيز نموذج الدفع...' : 'Preparing payment form...'}
-        </div>
-      )}
-
-      {error && <p className="text-red-400 text-xs mt-3">{error}</p>}
-
-      <button
-        type="submit"
-        disabled={mode !== 'fields' || submitting}
-        className="w-full mt-5 flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 disabled:opacity-60 text-white font-bold py-3.5 rounded-xl text-sm transition"
-      >
-        {submitting ? (
-          <><Loader2 size={16} className="animate-spin" /> {payingLabel}</>
-        ) : (
-          payBtnLabel
+        {mode === 'loading' && (
+          <div className="flex items-center justify-center gap-2 py-4 text-gray-400 text-sm">
+            <Loader2 size={16} className="animate-spin" />
+            {isAr ? 'جاري تجهيز نموذج الدفع...' : 'Preparing payment form...'}
+          </div>
         )}
-      </button>
 
-      <p className="text-xs text-gray-500 text-center mt-3 flex items-center justify-center gap-1">
-        <Shield size={11} className="text-green-400" />
-        {isAr ? 'دفع آمن ومشفّر بالكامل' : 'Fully secure & encrypted'}
-      </p>
-    </form>
+        {error && <p className="text-red-400 text-xs mt-3">{error}</p>}
+
+        <button
+          type="submit"
+          disabled={mode !== 'fields' || submitting}
+          className="w-full mt-5 flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 disabled:opacity-60 text-white font-bold py-3.5 rounded-xl text-sm transition"
+        >
+          {submitting ? (
+            <><Loader2 size={16} className="animate-spin" /> {payingLabel}</>
+          ) : (
+            payBtnLabel
+          )}
+        </button>
+
+        <p className="text-xs text-gray-500 text-center mt-3 flex items-center justify-center gap-1">
+          <Shield size={11} className="text-green-400" />
+          {isAr ? 'دفع آمن ومشفّر بالكامل' : 'Fully secure & encrypted'}
+        </p>
+      </form>
+    </div>
   )
 }
