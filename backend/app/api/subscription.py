@@ -82,6 +82,15 @@ class SpaceremitVerifyIn(BaseModel):
     coupon_code:     Optional[str] = None
 
 
+class PayPalOrderIn(BaseModel):
+    plan: str    # weekly | monthly | yearly
+    coupon_code: Optional[str] = None
+
+
+class PayPalCaptureIn(BaseModel):
+    order_id: str
+
+
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 def _resolve_plans(db: Session) -> dict:
@@ -168,6 +177,120 @@ def _stripe_config(db: Session) -> dict:
     }
 
 
+def _paypal_config(db: Session) -> dict:
+    """
+    "الدفع بالبطاقة" بالواجهة — بلا أي اسم معالج ظاهر للعميل. يُعالَج
+    بالخلفية عبر PayPal Advanced Card Payments (حقول بطاقة مستضافة بلا
+    شعار PayPal)، بنفس منطق DB-أولاً-ثم-env المتّبع بـStripe/Spaceremit.
+    المفاتيح تُدار من لوحة الإدارة عادةً — راجع Admin.jsx قسم PayPal.
+    """
+    test_mode = _setting(db, "paypal_test_mode", "false").strip().lower() == "true"
+    prefix = "paypal_test_" if test_mode else "paypal_"
+    env_client = settings.PAYPAL_TEST_CLIENT_ID if test_mode else settings.PAYPAL_CLIENT_ID
+    env_secret = settings.PAYPAL_TEST_SECRET_KEY if test_mode else settings.PAYPAL_SECRET_KEY
+    env_webhook = settings.PAYPAL_TEST_WEBHOOK_ID if test_mode else settings.PAYPAL_WEBHOOK_ID
+    return {
+        "enabled":    _setting(db, "paypal_enabled", "false").strip().lower() == "true",
+        "test_mode":  test_mode,
+        "client_id":  _setting(db, f"{prefix}client_id", env_client),
+        "secret_key": _setting(db, f"{prefix}secret_key", env_secret),
+        "webhook_id": _setting(db, f"{prefix}webhook_id", env_webhook),
+        "base_url":   "https://api-m.sandbox.paypal.com" if test_mode else "https://api-m.paypal.com",
+    }
+
+
+# كاش توكن OAuth بالذاكرة — صالح عادة ~9 ساعات (PayPal ترجعه بـexpires_in)،
+# فطلبه بكل استدعاء تحميل شبكة بلا داعٍ. لا يحتاج قفل: نفس القيمة تُكتب
+# بأسوأ الأحوال مرتين بتزامن نادر، بلا ضرر.
+_paypal_token_cache: dict = {}
+
+
+def _paypal_access_token(cfg: dict) -> str:
+    cache_key = (cfg["client_id"], cfg["base_url"])
+    now = datetime.now(timezone.utc).timestamp()
+    cached = _paypal_token_cache.get(cache_key)
+    if cached and cached["expires_at"] > now + 60:
+        return cached["token"]
+
+    resp = requests.post(
+        f"{cfg['base_url']}/v1/oauth2/token",
+        auth=(cfg["client_id"], cfg["secret_key"]),
+        data={"grant_type": "client_credentials"},
+        timeout=15,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    _paypal_token_cache[cache_key] = {
+        "token": data["access_token"],
+        "expires_at": now + int(data.get("expires_in", 3000)),
+    }
+    return data["access_token"]
+
+
+def _paypal_custom_id(user_id: int, plan_key: str, coupon_code: Optional[str]) -> str:
+    return f"u{user_id}|{plan_key}|{coupon_code or ''}"
+
+
+def _parse_paypal_custom_id(custom_id: str):
+    """يعيد (user_id, plan_key, coupon_code) أو (None, None, None) لو الصيغة غير متوقَّعة."""
+    try:
+        owner_raw, plan_key, cp_code = (custom_id.split("|") + ["", ""])[:3]
+        return int(owner_raw.lstrip("u")), plan_key, (cp_code or None)
+    except Exception:
+        return None, None, None
+
+
+def _finalize_paypal_payment(
+    db: Session, background_tasks: BackgroundTasks,
+    user_id: int, plan_key: str, capture_id: str, charged: float,
+    coupon_code: Optional[str] = None,
+) -> Payment:
+    """idempotent على capture_id — نفس مبدأ Stripe/Spaceremit: إعادة محاولة
+    الفرونت بعد انقطاع شبكة، أو وصول الويبهوك بعد /capture-order، لا يجب
+    أن يُفعِّل الاشتراك مرتين."""
+    existing = db.query(Payment).filter(Payment.tx_id == capture_id).first()
+    if existing:
+        return existing
+
+    plan_info = _resolve_plans(db)[plan_key]
+    _coupon = find_coupon(db, coupon_code) if coupon_code else None
+
+    payment = Payment(
+        user_id     = user_id,
+        plan        = PaymentPlan(plan_key),
+        amount_usd  = charged,
+        coupon_code      = _coupon.code if _coupon else None,
+        discount_percent = _coupon.discount_percent if _coupon else None,
+        network     = "paypal",
+        provider    = "paypal",
+        tx_id       = capture_id,
+        status      = PaymentStatus.APPROVED,
+    )
+    db.add(payment)
+    db.flush()
+
+    user = activate_subscription_payment(db, payment, background_tasks)
+    db.commit()
+
+    if user:
+        logger.info(f"💳 PayPal payment completed: user={user.email} plan={plan_key} tx={capture_id}")
+        from app.services.admin_notify import notify_admin_telegram
+        _plan_name = plan_info.get("name") or plan_key
+        _msg = (
+            f"💳 <b>دفعة بطاقة جديدة (مفعّلة تلقائياً)!</b>\n"
+            f"━━━━━━━━━━━━━━━\n"
+            f"📧 المستخدم: <code>{user.email}</code>\n"
+            f"📦 الباقة: {_plan_name}\n"
+            f"💰 المبلغ: ${charged:g}"
+            + (f" (كوبون {_coupon.code} −{_coupon.discount_percent:g}%)" if _coupon else "")
+            + "\n"
+            f"🆔 Payment ID: {payment.id}"
+        )
+        background_tasks.add_task(notify_admin_telegram, _msg)
+
+    return payment
+
+
 SPACEREMIT_API_URL      = "https://spaceremit.com/api/v2/payment_info/"
 SPACEREMIT_ACCEPTED_TAGS = {"A", "B", "D", "E"}  # Completed / Pending / Holding / Needs Review — funds committed
 
@@ -195,7 +318,8 @@ def get_plans(db: Session = Depends(get_db)):
     db_settings = {r.key: r.value for r in db.query(SiteSettings).all()}
     wallet = db_settings.get("usdt_wallet") or USDT_WALLET
     plans  = _resolve_plans(db)
-    stripe_cfg = _stripe_config(db)
+    paypal_cfg = _paypal_config(db)
+    paypal_ready = paypal_cfg["enabled"] and bool(paypal_cfg["client_id"]) and bool(paypal_cfg["secret_key"])
     spaceremit_cfg = _spaceremit_config(db)
     spaceremit_ready = spaceremit_cfg["enabled"] and bool(spaceremit_cfg["secret_key"]) and bool(spaceremit_cfg["public_key"])
 
@@ -204,7 +328,10 @@ def get_plans(db: Session = Depends(get_db)):
         "wallet": wallet,
         "network": USDT_NETWORK,
         "note": "أرسل المبلغ بالضبط بالـ USDT ثم أدخل رقم المعاملة (TxID) للتحقق",
-        "card_payment_enabled": stripe_cfg["enabled"] and bool(stripe_cfg["secret_key"]),
+        # (2026-09-19) "الدفع بالبطاقة" بالواجهة عام بلا اسم معالج — كان
+        # مصدره Stripe، صار PayPal Advanced Card Payments (حقول بطاقة بلا
+        # شعار). Stripe يبقى بالكود بلا حذف (dormant) لو احتجناه لاحقاً.
+        "card_payment_enabled": paypal_ready,
         "spaceremit_enabled": spaceremit_ready,
         "spaceremit_public_key": spaceremit_cfg["public_key"] if spaceremit_ready else "",
     }
@@ -658,6 +785,170 @@ async def spaceremit_webhook(
         )
     except Exception as e:
         logger.error(f"❌ Spaceremit webhook finalize error: {e}")
+
+    return {"received": True}
+
+
+@router.post("/paypal/create-order")
+def create_paypal_order(
+    data: PayPalOrderIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """يُنشئ Order بـPayPal بسعر من نقطة التسعير الموحّدة (_priced) — نفس
+    قاعدة الكوبونات المطبَّقة على كل مسار دفع آخر. الفرونت يستخدم order_id
+    مع حقول البطاقة المستضافة (بلا شعار PayPal)، ثم يستدعي /capture-order."""
+    cfg = _paypal_config(db)
+    if not cfg["enabled"] or not cfg["client_id"] or not cfg["secret_key"]:
+        raise HTTPException(500, "الدفع بالبطاقة غير متاح حالياً")
+
+    plan_info, final_price, coupon = _priced(db, data.plan, data.coupon_code, user.id)
+
+    try:
+        token = _paypal_access_token(cfg)
+        resp = requests.post(
+            f"{cfg['base_url']}/v2/checkout/orders",
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            json={
+                "intent": "CAPTURE",
+                "purchase_units": [{
+                    "amount": {"currency_code": "USD", "value": f"{final_price:.2f}"},
+                    "custom_id": _paypal_custom_id(user.id, data.plan, coupon.code if coupon else None),
+                    "description": f"Qaffel AI — {plan_info['name_en']} Plan",
+                }],
+            },
+            timeout=15,
+        )
+        resp.raise_for_status()
+        order = resp.json()
+    except Exception as e:
+        logger.error(f"❌ PayPal create order error: {e}")
+        raise HTTPException(500, "تعذّر تجهيز الدفع بالبطاقة، حاول لاحقاً")
+
+    return {"order_id": order["id"], "client_id": cfg["client_id"]}
+
+
+@router.post("/paypal/capture-order")
+def capture_paypal_order(
+    data: PayPalCaptureIn,
+    background_tasks: BackgroundTasks,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """يُستدعى من الفرونت فور نجاح CardFields.submit() — التفعيل الفعلي
+    يتم هنا مباشرة (نفس مبدأ /spaceremit/verify)، لا بانتظار الويبهوك.
+    لا نثق بـorder_id وحده: نتحقق إن custom_id المرفَق بالطلب (مُثبَّت
+    وقت الإنشاء من طرف الخادم) يخصّ نفس المستخدم المصادَق عليه قبل أي
+    تفعيل — وإلا لأمكن لأي مستخدم تمرير order_id شخص آخر."""
+    cfg = _paypal_config(db)
+    if not cfg["enabled"] or not cfg["client_id"] or not cfg["secret_key"]:
+        raise HTTPException(500, "الدفع بالبطاقة غير متاح حالياً")
+
+    try:
+        token = _paypal_access_token(cfg)
+        resp = requests.post(
+            f"{cfg['base_url']}/v2/checkout/orders/{data.order_id}/capture",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+                "PayPal-Request-Id": f"capture-{data.order_id}",  # مفتاح idempotency لدى PayPal نفسها
+            },
+            timeout=20,
+        )
+    except Exception as e:
+        logger.error(f"❌ PayPal capture request error: {e}")
+        raise HTTPException(502, "تعذّر تأكيد الدفع، حاول لاحقاً")
+
+    if resp.status_code not in (200, 201):
+        logger.warning(f"⚠️ PayPal capture failed order={data.order_id}: {resp.status_code} {resp.text}")
+        raise HTTPException(400, "فشل تنفيذ الدفع — تحقق من بيانات البطاقة")
+
+    result = resp.json()
+    if result.get("status") != "COMPLETED":
+        raise HTTPException(400, "لم يكتمل الدفع بعد، حاول مرة أخرى")
+
+    pu = (result.get("purchase_units") or [{}])[0]
+    captures = ((pu.get("payments") or {}).get("captures") or [])
+    if not captures:
+        raise HTTPException(400, "تعذّر تأكيد الدفع")
+    capture = captures[0]
+
+    owner_id, plan_key, cp_code = _parse_paypal_custom_id(pu.get("custom_id") or "")
+    if owner_id != user.id or plan_key not in PLANS:
+        logger.warning(
+            f"⚠️ PayPal capture ownership mismatch: order={data.order_id} "
+            f"custom_id={pu.get('custom_id')!r} auth_user={user.id}"
+        )
+        raise HTTPException(403, "هذا الطلب لا يخصّك")
+
+    charged = float(((capture.get("amount") or {}).get("value")) or 0)
+
+    payment = _finalize_paypal_payment(
+        db, background_tasks, user.id, plan_key, capture["id"], charged,
+        coupon_code=cp_code,
+    )
+    return {"success": True, "payment_id": payment.id}
+
+
+@router.post("/paypal/webhook")
+async def paypal_webhook(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
+    """شبكة أمان فقط — التفعيل الفعلي عبر /paypal/capture-order أعلاه.
+    لا نثق بجسم الويبهوك بلا تحقق توقيع من PayPal نفسها؛ بلا webhook_id
+    مُعدّ من الداشبورد نتجاهله بأمان بدل تفعيل بلا تحقق. الرد دائماً 200
+    لتفادي إعادة محاولات PayPal اللانهائية على حالات نتجاهلها عمداً."""
+    try:
+        body = await request.json()
+    except Exception:
+        return {"received": True}
+
+    if body.get("event_type") != "PAYMENT.CAPTURE.COMPLETED":
+        return {"received": True}
+
+    cfg = _paypal_config(db)
+    if not cfg["webhook_id"] or not cfg["client_id"] or not cfg["secret_key"]:
+        return {"received": True}
+
+    try:
+        token = _paypal_access_token(cfg)
+        verify_resp = requests.post(
+            f"{cfg['base_url']}/v1/notifications/verify-webhook-signature",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "transmission_id":   request.headers.get("paypal-transmission-id", ""),
+                "transmission_time": request.headers.get("paypal-transmission-time", ""),
+                "cert_url":          request.headers.get("paypal-cert-url", ""),
+                "auth_algo":         request.headers.get("paypal-auth-algo", ""),
+                "transmission_sig":  request.headers.get("paypal-transmission-sig", ""),
+                "webhook_id":        cfg["webhook_id"],
+                "webhook_event":     body,
+            },
+            timeout=15,
+        )
+        if verify_resp.json().get("verification_status") != "SUCCESS":
+            logger.warning("⚠️ PayPal webhook signature verification failed")
+            return {"received": True}
+    except Exception as e:
+        logger.error(f"❌ PayPal webhook verify error: {e}")
+        return {"received": True}
+
+    resource   = body.get("resource") or {}
+    capture_id = resource.get("id")
+    owner_id, plan_key, cp_code = _parse_paypal_custom_id(resource.get("custom_id") or "")
+    if not capture_id or owner_id is None or plan_key not in PLANS:
+        return {"received": True}
+
+    charged = float(((resource.get("amount") or {}).get("value")) or 0)
+    try:
+        _finalize_paypal_payment(
+            db, background_tasks, owner_id, plan_key, capture_id, charged,
+            coupon_code=cp_code,
+        )
+    except Exception as e:
+        logger.error(f"❌ PayPal webhook finalize error: {e}")
 
     return {"received": True}
 

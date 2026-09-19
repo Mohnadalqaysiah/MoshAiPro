@@ -8,7 +8,7 @@ import PublicLayout from '../components/PublicLayout'
 import useSEO from '../hooks/useSEO'
 import useBreadcrumbSchema from '../hooks/useBreadcrumbSchema'
 import useFAQSchema from '../hooks/useFAQSchema'
-import StripeInlineCheckout from '../components/StripeInlineCheckout'
+import PayPalInlineCheckout from '../components/PayPalInlineCheckout'
 import SpaceremitCheckout from '../components/SpaceremitCheckout'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -55,7 +55,7 @@ const T = {
     orDivider: 'أو ادفع يدوياً بـ USDT',
     cryptoToggle: 'الدفع بعملة رقمية (USDT) بدلاً من ذلك',
     stripeInstant: 'تفعيل فوري تلقائي — بدون مغادرة الصفحة',
-    secureBadge: 'دفع آمن ومشفّر بالكامل — مدعوم من Stripe',
+    secureBadge: 'دفع آمن ومشفّر بالكامل',
     cardLoading: 'جاري تجهيز نموذج الدفع...',
     spaceremitTitle: 'طرق دفع محلية',
     spaceremitToggle: 'الدفع عبر Spaceremit بدلاً من ذلك',
@@ -99,7 +99,7 @@ const T = {
     orDivider: 'Or pay manually with USDT',
     cryptoToggle: 'Pay with crypto (USDT) instead',
     stripeInstant: 'Instant automatic activation — no page redirect',
-    secureBadge: 'Fully secure & encrypted — powered by Stripe',
+    secureBadge: 'Fully secure & encrypted',
     cardLoading: 'Preparing payment form...',
     spaceremitTitle: 'Local payment methods',
     spaceremitToggle: 'Pay via Spaceremit instead',
@@ -192,9 +192,11 @@ export default function Pricing() {
   const [spaceremitAuthLink, setSpaceremitAuthLink] = useState('')  // fallback link if the auth popup was blocked
   const hasPrimaryMethod = cardPaymentEnabled || spaceremitEnabled
 
-  // Stripe Elements — نموذج بطاقة مدمج داخل الصفحة
-  const [clientSecret, setClientSecret]         = useState('')
-  const [publishableKey, setPublishableKey]     = useState('')
+  // "الدفع بالبطاقة" — نموذج مدمج داخل الصفحة بلا أي اسم معالج ظاهر،
+  // يُعالَج بالخلفية عبر PayPal Advanced Card Payments (راجع DECISIONS.md
+  // 2026-09-19). Stripe يبقى بالكود بلا حذف (dormant)، غير مستخدَم هنا.
+  const [paypalOrderId, setPaypalOrderId]       = useState('')
+  const [paypalClientId, setPaypalClientId]     = useState('')
   const [intentLoading, setIntentLoading]       = useState(false)
 
   // ── كوبون الخصم ────────────────────────────────────────────────
@@ -280,12 +282,12 @@ export default function Pricing() {
   }
 
   const startCardPayment = async (planKey) => {
-    setIntentLoading(true); setError(''); setClientSecret(''); setPublishableKey('')
+    setIntentLoading(true); setError(''); setPaypalOrderId(''); setPaypalClientId('')
     try {
-      const r = await axios.post(`${API}/api/v1/subscription/stripe/payment-intent`,
+      const r = await axios.post(`${API}/api/v1/subscription/paypal/create-order`,
         { plan: planKey, coupon_code: couponCode })
-      setClientSecret(r.data.client_secret)
-      setPublishableKey(r.data.publishable_key)
+      setPaypalOrderId(r.data.order_id)
+      setPaypalClientId(r.data.client_id)
     } catch (err) {
       setError(err.response?.data?.detail || (isAr ? 'تعذّر تجهيز الدفع بالبطاقة. جرّب USDT بالأسفل.' : 'Could not start card payment. Try USDT below.'))
     } finally {
@@ -298,21 +300,22 @@ export default function Pricing() {
     if (cardPaymentEnabled) startCardPayment(selected)
   }
 
-  const onStripeSuccess = async () => {
+  // يُستدعى فور نجاح CardFields.submit() بالمكوّن. بخلاف Stripe/Spaceremit،
+  // التفعيل هنا متزامن تماماً: /paypal/capture-order يتحقق الملكية ويسجّل
+  // الدفعة ويفعّل الاشتراك بنفس الطلب — فردّه الناجح دليل كافٍ بلا استطلاع.
+  const onPayPalSuccess = async () => {
     setPaidVia('card')
     setStep('activating')
-    // الويبهوك يفعّل الاشتراك بشكل غير متزامن — نستطلع الحالة لثوانٍ قليلة
-    // كي تظهر شاشة النجاح بمجرد اكتمال التفعيل الفعلي، لا قبله.
-    for (let i = 0; i < 8; i++) {
-      await new Promise(res => setTimeout(res, 1200))
-      try {
-        const r = await axios.get(`${API}/api/v1/subscription/status`)
-        // السنوية تُخزَّن على المستخدم كـmonthly (راجع models/payment.py)،
-        // فمقارنتها بـselected لا تتحقق أبداً ويعلق الاستطلاع حتى ينتهي.
-        if (r.data.plan === (selected === 'yearly' ? 'monthly' : selected)) break
-      } catch { /* استمر بالاستطلاع */ }
+    try {
+      await axios.post(`${API}/api/v1/subscription/paypal/capture-order`, {
+        order_id: paypalOrderId,
+      })
+      setStep('done')
+    } catch (err) {
+      setError(err.response?.data?.detail || (isAr ? 'تعذّر تأكيد الدفع، حاول مرة أخرى' : 'Could not confirm payment, please try again'))
+      setStep('pay')
+      throw err
     }
-    setStep('done')
   }
 
   const onSpaceremitSuccess = async (spaceremitCode) => {
@@ -556,7 +559,8 @@ export default function Pricing() {
                 </div>
               )}
 
-              {/* Card payment — primary, inline (Stripe Elements — no redirect) */}
+              {/* "الدفع بالبطاقة" — أساسي، مدمج بالصفحة بلا تحويل ولا اسم
+                  معالج ظاهر (PayPal Advanced Card Payments بالخلفية) */}
               {cardPaymentEnabled && (
                 <>
                   <div className="flex items-center gap-2 mb-3">
@@ -577,13 +581,13 @@ export default function Pricing() {
                         <Loader2 size={16} className="animate-spin" /> {t.cardLoading}
                       </div>
                     )}
-                    {!intentLoading && clientSecret && (
-                      <StripeInlineCheckout
-                        clientSecret={clientSecret}
-                        publishableKey={publishableKey}
+                    {!intentLoading && paypalOrderId && (
+                      <PayPalInlineCheckout
+                        orderId={paypalOrderId}
+                        clientId={paypalClientId}
                         payBtnLabel={t.stripeBtn(plan?.price)}
                         payingLabel={t.stripePaying}
-                        onSuccess={onStripeSuccess}
+                        onSuccess={onPayPalSuccess}
                         isAr={isAr}
                       />
                     )}

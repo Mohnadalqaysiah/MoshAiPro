@@ -441,6 +441,8 @@ export default function Admin() {
   const [showStripeWebhook, setShowStripeWebhook] = useState(false)
   const [showSpaceremitSecret, setShowSpaceremitSecret] = useState(false)
   const [showSpaceremitTestSecret, setShowSpaceremitTestSecret] = useState(false)
+  const [showPaypalSecret, setShowPaypalSecret] = useState(false)
+  const [showPaypalTestSecret, setShowPaypalTestSecret] = useState(false)
 
   const [adminProfile, setAdminProfile] = useState({ current_password:'', new_email:'', new_password:'' })
   const [adminProfileSaving, setAdminProfileSaving] = useState(false)
@@ -2566,6 +2568,156 @@ export default function Admin() {
                           </button>
                         </div>
                         {siteSettings['spaceremit_test_secret_key']?.value && (
+                          <p className="mt-2 text-xs text-green-400 flex items-center gap-1"><CheckCircle size={11}/> مخزَّن في قاعدة البيانات · يُستخدم حالياً</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* ── PayPal — "الدفع بالبطاقة" (sensitive) ──────────────
+                        بلا أي اسم معالج ظاهر للعميل بالواجهة — حقول بطاقة
+                        مستضافة بلا شعار PayPal (Advanced Card Payments).
+                        يحتاج تفعيل هذه الخاصية من لوحة PayPal Developer
+                        قبل ما تشتغل — راجع developer.paypal.com/dashboard */}
+                    <div className="bg-gray-900 border border-blue-900/40 rounded-xl p-4 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <label className="block text-sm text-gray-300 font-medium">تفعيل "الدفع بالبطاقة" (PayPal)</label>
+                          <p className="text-xs text-gray-500">نموذج بطاقة عادي بلا أي شعار PayPal — يعالَج بالخلفية عبر PayPal</p>
+                        </div>
+                        <button
+                          onClick={() => saveSetting('paypal_enabled', (siteSettings['paypal_enabled']?.value ?? 'false') === 'true' ? 'false' : 'true')}
+                          disabled={settingSaving === 'paypal_enabled'}
+                          className={`w-11 h-6 rounded-full flex items-center px-0.5 transition-colors flex-shrink-0 ${
+                            (siteSettings['paypal_enabled']?.value ?? 'false') === 'true'
+                              ? 'bg-green-600 justify-end'
+                              : 'bg-gray-700 justify-start'
+                          }`}
+                        >
+                          <span className="w-5 h-5 rounded-full bg-white" />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <label className="block text-sm text-gray-300 font-medium">وضع الاختبار (Sandbox)</label>
+                          <p className="text-xs text-gray-500">يستخدم مفاتيح الاختبار بالأسفل وبيئة PayPal Sandbox — جرّبها قبل التفعيل الفعلي</p>
+                        </div>
+                        <button
+                          onClick={() => saveSetting('paypal_test_mode', (siteSettings['paypal_test_mode']?.value ?? 'false') === 'true' ? 'false' : 'true')}
+                          disabled={settingSaving === 'paypal_test_mode'}
+                          className={`w-11 h-6 rounded-full flex items-center px-0.5 transition-colors flex-shrink-0 ${
+                            (siteSettings['paypal_test_mode']?.value ?? 'false') === 'true'
+                              ? 'bg-green-600 justify-end'
+                              : 'bg-gray-700 justify-start'
+                          }`}
+                        >
+                          <span className="w-5 h-5 rounded-full bg-white" />
+                        </button>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm text-gray-300 font-medium mb-1">PayPal Client ID</label>
+                        <p className="text-xs text-gray-500 mb-2">من developer.paypal.com/dashboard/applications/live — Client ID (غير سرّي)</p>
+                        <div className="flex gap-2">
+                          <input type="text"
+                            value={settingEdits['paypal_client_id'] ?? ''}
+                            onChange={e => setSettingEdits(s => ({...s, paypal_client_id: e.target.value}))}
+                            placeholder="AeA1QIZ..."
+                            className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            dir="ltr" />
+                          <button disabled={settingSaving === 'paypal_client_id'} onClick={() => saveSetting('paypal_client_id')}
+                            className="flex items-center gap-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition">
+                            {settingSaving === 'paypal_client_id' ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle size={13}/>} حفظ
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm text-gray-300 font-medium mb-1">PayPal Secret</label>
+                        <p className="text-xs text-gray-500 mb-2">من نفس صفحة التطبيق · يُخزَّن في قاعدة البيانات ويُلغي قيمة .env</p>
+                        <div className="flex gap-2">
+                          <div className="relative flex-1">
+                            <input
+                              type={showPaypalSecret ? 'text' : 'password'}
+                              value={settingEdits['paypal_secret_key'] ?? ''}
+                              onChange={e => setSettingEdits(s => ({...s, paypal_secret_key: e.target.value}))}
+                              placeholder="Secret"
+                              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:ring-1 focus:ring-blue-500 pr-10"
+                              dir="ltr"
+                            />
+                            <button type="button" onClick={() => setShowPaypalSecret(v => !v)}
+                              className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200 text-xs px-1">
+                              {showPaypalSecret ? '🙈' : '👁'}
+                            </button>
+                          </div>
+                          <button disabled={settingSaving === 'paypal_secret_key'} onClick={() => saveSetting('paypal_secret_key')}
+                            className="flex items-center gap-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition">
+                            {settingSaving === 'paypal_secret_key' ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle size={13}/>} حفظ
+                          </button>
+                        </div>
+                        {siteSettings['paypal_secret_key']?.value && (
+                          <p className="mt-2 text-xs text-green-400 flex items-center gap-1"><CheckCircle size={11}/> مخزَّن في قاعدة البيانات · يُستخدم حالياً</p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-sm text-gray-300 font-medium mb-1">PayPal Webhook ID (اختياري)</label>
+                        <p className="text-xs text-gray-500 mb-2">شبكة أمان إضافية فقط — التفعيل الفعلي لا ينتظره. من Webhooks بلوحة PayPal</p>
+                        <div className="flex gap-2">
+                          <input type="text"
+                            value={settingEdits['paypal_webhook_id'] ?? ''}
+                            onChange={e => setSettingEdits(s => ({...s, paypal_webhook_id: e.target.value}))}
+                            placeholder="WH-..."
+                            className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            dir="ltr" />
+                          <button disabled={settingSaving === 'paypal_webhook_id'} onClick={() => saveSetting('paypal_webhook_id')}
+                            className="flex items-center gap-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition">
+                            {settingSaving === 'paypal_webhook_id' ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle size={13}/>} حفظ
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm text-gray-300 font-medium mb-1">PayPal Test Client ID</label>
+                        <p className="text-xs text-gray-500 mb-2">يُستخدم فقط عند تفعيل وضع الاختبار بالأعلى — من تطبيق Sandbox</p>
+                        <div className="flex gap-2">
+                          <input type="text"
+                            value={settingEdits['paypal_test_client_id'] ?? ''}
+                            onChange={e => setSettingEdits(s => ({...s, paypal_test_client_id: e.target.value}))}
+                            placeholder="AeTEST..."
+                            className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            dir="ltr" />
+                          <button disabled={settingSaving === 'paypal_test_client_id'} onClick={() => saveSetting('paypal_test_client_id')}
+                            className="flex items-center gap-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition">
+                            {settingSaving === 'paypal_test_client_id' ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle size={13}/>} حفظ
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm text-gray-300 font-medium mb-1">PayPal Test Secret</label>
+                        <p className="text-xs text-gray-500 mb-2">يُستخدم فقط عند تفعيل وضع الاختبار بالأعلى</p>
+                        <div className="flex gap-2">
+                          <div className="relative flex-1">
+                            <input
+                              type={showPaypalTestSecret ? 'text' : 'password'}
+                              value={settingEdits['paypal_test_secret_key'] ?? ''}
+                              onChange={e => setSettingEdits(s => ({...s, paypal_test_secret_key: e.target.value}))}
+                              placeholder="Test Secret"
+                              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:ring-1 focus:ring-blue-500 pr-10"
+                              dir="ltr"
+                            />
+                            <button type="button" onClick={() => setShowPaypalTestSecret(v => !v)}
+                              className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200 text-xs px-1">
+                              {showPaypalTestSecret ? '🙈' : '👁'}
+                            </button>
+                          </div>
+                          <button disabled={settingSaving === 'paypal_test_secret_key'} onClick={() => saveSetting('paypal_test_secret_key')}
+                            className="flex items-center gap-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition">
+                            {settingSaving === 'paypal_test_secret_key' ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle size={13}/>} حفظ
+                          </button>
+                        </div>
+                        {siteSettings['paypal_test_secret_key']?.value && (
                           <p className="mt-2 text-xs text-green-400 flex items-center gap-1"><CheckCircle size={11}/> مخزَّن في قاعدة البيانات · يُستخدم حالياً</p>
                         )}
                       </div>

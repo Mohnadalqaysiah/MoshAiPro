@@ -121,6 +121,17 @@ class Settings(BaseSettings):
     SPACEREMIT_TEST_PUBLIC_KEY: str = ""
     SPACEREMIT_TEST_SECRET_KEY: str = ""
 
+    # ----- PayPal (Advanced Card Payments — no PayPal branding shown to the
+    # customer; renders as a plain "Pay by Card" form, processed via PayPal
+    # server-side). المفاتيح تُدخَل عادةً من لوحة الإدارة (SiteSettings)
+    # لا من هنا — هذي مجرد احتياط لو أراد أحد ضبطها بالبيئة بدل الداشبورد.
+    PAYPAL_CLIENT_ID: str = ""
+    PAYPAL_SECRET_KEY: str = ""
+    PAYPAL_WEBHOOK_ID: str = ""
+    PAYPAL_TEST_CLIENT_ID: str = ""
+    PAYPAL_TEST_SECRET_KEY: str = ""
+    PAYPAL_TEST_WEBHOOK_ID: str = ""
+
     class Config:
         env_file = ".env"
         case_sensitive = True
