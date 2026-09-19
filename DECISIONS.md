@@ -124,6 +124,14 @@ Advanced Card Payments على الحساب، نفس الكود يتحقق من `
 لطلب تفعيل "Advanced Credit and Debit Card Payments" على الحساب —
 راجع developer.paypal.com/dashboard/applications/live.
 
+**تحديث 19/09 (نفس اليوم):** زر PayPal الافتراضي بلا `fundingSource`
+يعرض عدة أزرار مكدّسة (PayPal + Venmo + Pay Later حسب الأهلية) — طلب
+صاحب المنتج **زراً واحداً بس "Debit or Credit Card"**. صار
+`fundingSource: paypal.FUNDING.CARD` مع رجوع للافتراضي لو هذا المصدر
+تحديداً غير مؤهَّل (نادر). وأُضيف `shipping_preference: NO_SHIPPING`
+لطلب الإنشاء بالخادم — اشتراك رقمي بلا شحن، فلا داعي يُطلَب عنوان شحن
+من العميل (بيانات البطاقة/الفوترة تبقى مطلوبة، PayPal تفرضها لأي بطاقة).
+
 ---
 
 ## الحالة الراهنة (2026-09-18)

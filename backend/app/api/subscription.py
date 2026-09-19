@@ -816,6 +816,12 @@ def create_paypal_order(
                     "custom_id": _paypal_custom_id(user.id, data.plan, coupon.code if coupon else None),
                     "description": f"Qaffel AI — {plan_info['name_en']} Plan",
                 }],
+                # اشتراك رقمي بلا شحن — يمنع PayPal من طلب عنوان شحن أصلاً
+                # (لا يمنع بيانات الفوترة/البطاقة، مطلوبة لمعالجة أي بطاقة).
+                "application_context": {
+                    "shipping_preference": "NO_SHIPPING",
+                    "user_action": "PAY_NOW",
+                },
             },
             timeout=15,
         )

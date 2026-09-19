@@ -87,15 +87,22 @@ export default function PayPalInlineCheckout({
       // لبقيت null دائماً هنا (لسّا لم نبدّل mode بعد) ورمى استثناء صامت
       // يسقط لرسالة "تعذّر التحميل" — وهو بالضبط ما حدث بالإنتاج.
       if (paypal.Buttons && buttonsContainerRef.current) {
-        buttonsInstanceRef.current = paypal.Buttons({
-          style: { layout: 'vertical', shape: 'rect', height: 45 },
+        const btnOpts = {
+          style: { layout: 'vertical', shape: 'rect', height: 45, label: 'pay' },
           createOrder: () => Promise.resolve(orderId),
           onApprove: handleApprove,
           onError: (err) => {
             console.error('paypal buttons error', err)
             setError(isAr ? 'تعذّر إتمام الدفع، حاول مرة أخرى' : 'Payment failed, try again')
           },
-        })
+        }
+
+        // زر واحد فقط — "Debit or Credit Card" — بلا زر PayPal الأزرق ولا
+        // Venmo/Pay Later مكدّسين تحته (السلوك الافتراضي لو لم يُحدَّد
+        // fundingSource). لو هذا المصدر تحديداً غير مؤهَّل (نادر) نرجع
+        // للسلوك الافتراضي بدل تعطيل الدفع كلياً.
+        const cardOnly = paypal.Buttons({ ...btnOpts, fundingSource: paypal.FUNDING.CARD })
+        buttonsInstanceRef.current = cardOnly.isEligible() ? cardOnly : paypal.Buttons(btnOpts)
         buttonsInstanceRef.current.render(buttonsContainerRef.current)
         if (!cancelled) setMode('buttons')
       } else if (!cancelled) {
