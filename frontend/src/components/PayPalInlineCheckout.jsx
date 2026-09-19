@@ -2,16 +2,20 @@ import { useEffect, useRef, useState } from 'react'
 import { loadScript } from '@paypal/paypal-js'
 import { Shield, Loader2 } from 'lucide-react'
 
-// نموذج "الدفع بالبطاقة" — رقم/تاريخ/CVV بلا أي شعار أو اسم معالج ظاهر
-// للعميل، بنفس مكان ومظهر نموذج البطاقة السابق بالضبط. يُعالَج بالخلفية
-// عبر PayPal Advanced Card Payments (حقول بطاقة مستضافة). نُعيد استخدام
-// نفس promise لتحميل السكربت لكل client_id حتى لا يعاد تحميله بكل رسم.
+// نموذج "الدفع بالبطاقة". المسار المفضَّل: حقول بطاقة مستضافة بلا أي
+// شعار (PayPal Advanced Card Payments) — يحتاج تفعيل/أهلية خاصة من
+// PayPal على الحساب (راجع DECISIONS.md 2026-09-19). **حالياً الحساب غير
+// مؤهّل** فيسقط تلقائياً (`cardFields.isEligible() === false`) لزر
+// PayPal القياسي (يبيّن شعار PayPal، يقبل بطاقات بلا حساب عبر خيار
+// "Debit or Credit Card") كحل مؤقت يعمل بلا شرط أهلية. **لا حاجة لأي
+// نشر إضافي لاحقاً:** فور موافقة PayPal على الحساب يتحول تلقائياً
+// لحقول البطاقة بلا شعار بمجرد ما isEligible() يرجّع true.
 const _sdkPromiseCache = new Map()
 function getPayPalSdk(clientId) {
   if (!_sdkPromiseCache.has(clientId)) {
     _sdkPromiseCache.set(clientId, loadScript({
       'client-id': clientId,
-      components: 'card-fields',
+      components: 'buttons,card-fields',
       currency: 'USD',
       intent: 'capture',
     }))
@@ -27,57 +31,85 @@ const FIELD_STYLE = {
 export default function PayPalInlineCheckout({
   orderId, clientId, payBtnLabel, payingLabel, onSuccess, isAr,
 }) {
-  const [ready, setReady]           = useState(false)
-  const [eligible, setEligible]     = useState(true)
-  const [loadError, setLoadError]   = useState(false)
+  // 'loading' | 'fields' (بلا شعار) | 'buttons' (زر PayPal القياسي، مؤقت) | 'error'
+  const [mode, setMode]             = useState('loading')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError]           = useState('')
-  const cardFieldsRef = useRef(null)
+  const cardFieldsRef     = useRef(null)
+  const buttonsContainerRef = useRef(null)
+  const buttonsInstanceRef  = useRef(null)
 
   useEffect(() => {
     if (!orderId || !clientId) return
     let cancelled = false
-    setReady(false)
+    setMode('loading'); setError('')
 
     getPayPalSdk(clientId).then((paypal) => {
-      if (cancelled || !paypal?.CardFields) { setLoadError(true); return }
+      if (cancelled || !paypal) { setMode('error'); return }
 
-      const cardFields = paypal.CardFields({
-        style: FIELD_STYLE,
-        createOrder: () => Promise.resolve(orderId),
-        onApprove: async () => {
-          try {
-            await onSuccess()
-          } catch {
-            setError(isAr ? 'تعذّر تأكيد الدفع، حاول مرة أخرى' : 'Could not confirm payment, try again')
-            setSubmitting(false)
-          }
-        },
-        onError: (err) => {
-          console.error('card fields error', err)
-          setError(isAr ? 'بيانات البطاقة غير صحيحة أو تعذّر إتمام الدفع' : 'Invalid card details or payment failed')
+      const handleApprove = async () => {
+        try {
+          await onSuccess()
+        } catch {
+          setError(isAr ? 'تعذّر تأكيد الدفع، حاول مرة أخرى' : 'Could not confirm payment, try again')
           setSubmitting(false)
-        },
-      })
+        }
+      }
 
-      if (!cardFields.isEligible()) { setEligible(false); return }
+      // ── المسار المفضَّل: حقول بطاقة بلا شعار ──────────────────────
+      if (paypal.CardFields) {
+        const cardFields = paypal.CardFields({
+          style: FIELD_STYLE,
+          createOrder: () => Promise.resolve(orderId),
+          onApprove: handleApprove,
+          onError: (err) => {
+            console.error('card fields error', err)
+            setError(isAr ? 'بيانات البطاقة غير صحيحة أو تعذّر إتمام الدفع' : 'Invalid card details or payment failed')
+            setSubmitting(false)
+          },
+        })
 
-      cardFields.NameField().render('#card-name-field')
-      cardFields.NumberField().render('#card-number-field')
-      cardFields.ExpiryField().render('#card-expiry-field')
-      cardFields.CVVField().render('#card-cvv-field')
+        if (cardFields.isEligible()) {
+          cardFields.NameField().render('#card-name-field')
+          cardFields.NumberField().render('#card-number-field')
+          cardFields.ExpiryField().render('#card-expiry-field')
+          cardFields.CVVField().render('#card-cvv-field')
+          cardFieldsRef.current = cardFields
+          if (!cancelled) setMode('fields')
+          return
+        }
+      }
 
-      cardFieldsRef.current = cardFields
-      if (!cancelled) setReady(true)
+      // ── بديل مؤقت: زر PayPal القياسي (يبيّن شعار PayPal) ──────────
+      if (paypal.Buttons && buttonsContainerRef.current) {
+        buttonsInstanceRef.current = paypal.Buttons({
+          style: { layout: 'vertical', shape: 'rect', height: 45 },
+          createOrder: () => Promise.resolve(orderId),
+          onApprove: handleApprove,
+          onError: (err) => {
+            console.error('paypal buttons error', err)
+            setError(isAr ? 'تعذّر إتمام الدفع، حاول مرة أخرى' : 'Payment failed, try again')
+          },
+        })
+        buttonsInstanceRef.current.render(buttonsContainerRef.current)
+        if (!cancelled) setMode('buttons')
+      } else if (!cancelled) {
+        setMode('error')
+      }
     }).catch((e) => {
       console.error('payment sdk load error', e)
-      if (!cancelled) setLoadError(true)
+      if (!cancelled) setMode('error')
     })
 
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+      if (buttonsInstanceRef.current?.close) {
+        try { buttonsInstanceRef.current.close() } catch { /* تجاهل — العنصر قد يكون أُزيل أصلاً */ }
+      }
+    }
   }, [orderId, clientId])
 
-  const handleSubmit = async (e) => {
+  const handleFieldsSubmit = async (e) => {
     e.preventDefault()
     if (!cardFieldsRef.current) return
     setSubmitting(true); setError('')
@@ -92,7 +124,7 @@ export default function PayPalInlineCheckout({
 
   if (!orderId || !clientId) return null
 
-  if (loadError) {
+  if (mode === 'error') {
     return (
       <p className="text-red-400 text-sm text-center py-4">
         {isAr ? 'تعذّر تحميل نموذج الدفع، حاول لاحقاً أو جرّب طريقة أخرى بالأسفل' : 'Could not load the payment form, try again or use another method below'}
@@ -100,16 +132,21 @@ export default function PayPalInlineCheckout({
     )
   }
 
-  if (!eligible) {
+  if (mode === 'buttons') {
     return (
-      <p className="text-amber-400 text-sm text-center py-4">
-        {isAr ? 'الدفع بالبطاقة غير متاح حالياً، جرّب طريقة أخرى بالأسفل' : 'Card payment is unavailable right now, try another method below'}
-      </p>
+      <div>
+        <div ref={buttonsContainerRef} />
+        {error && <p className="text-red-400 text-xs mt-3 text-center">{error}</p>}
+        <p className="text-xs text-gray-500 text-center mt-3 flex items-center justify-center gap-1">
+          <Shield size={11} className="text-green-400" />
+          {isAr ? 'دفع آمن ومشفّر بالكامل' : 'Fully secure & encrypted'}
+        </p>
+      </div>
     )
   }
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={handleFieldsSubmit}>
       <div className="space-y-3">
         <div>
           <label className="block text-xs text-gray-400 mb-1">{isAr ? 'الاسم على البطاقة' : 'Name on card'}</label>
@@ -131,7 +168,7 @@ export default function PayPalInlineCheckout({
         </div>
       </div>
 
-      {!ready && (
+      {mode === 'loading' && (
         <div className="flex items-center justify-center gap-2 py-4 text-gray-400 text-sm">
           <Loader2 size={16} className="animate-spin" />
           {isAr ? 'جاري تجهيز نموذج الدفع...' : 'Preparing payment form...'}
@@ -142,7 +179,7 @@ export default function PayPalInlineCheckout({
 
       <button
         type="submit"
-        disabled={!ready || submitting}
+        disabled={mode !== 'fields' || submitting}
         className="w-full mt-5 flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 disabled:opacity-60 text-white font-bold py-3.5 rounded-xl text-sm transition"
       >
         {submitting ? (
