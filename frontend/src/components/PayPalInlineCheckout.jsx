@@ -36,6 +36,11 @@ export default function PayPalInlineCheckout({
   const [submitting, setSubmitting] = useState(false)
   const [error, setError]           = useState('')
   const [applePayAvailable, setApplePayAvailable] = useState(false)
+  // تشخيص مؤقت يظهر على الشاشة مباشرة (بلا أدوات مطوّر) — يُفعَّل فقط
+  // بإضافة ?ppdebug=1 للرابط. راجع DECISIONS.md 20/09 — لتشخيص Apple Pay
+  // بلا وصول لـConsole على آيفون بلا ماك متاح.
+  const debugOn = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('ppdebug') === '1'
+  const [debugInfo, setDebugInfo] = useState(null)
   const cardFieldsRef     = useRef(null)
   const buttonsContainerRef = useRef(null)
   const buttonsInstanceRef  = useRef(null)
@@ -63,6 +68,19 @@ export default function PayPalInlineCheckout({
       // يفحص أهليته بنفسه (جهاز/متصفح Apple + بطاقة محفوظة بـWallet +
       // تفعيل الحساب) ولا يعرض شيئاً لو غير مؤهَّل — بلا أي شرط إضافي
       // منّا، وبلا أثر على الطريقة الأساسية إن فشل أو لم يُدعَم.
+      const dbg = {
+        hasApplePaySession: typeof window !== 'undefined' && !!window.ApplePaySession,
+        canMakePayments: null,
+        applePayEligible: null,
+        cardFieldsEligible: null,
+        error: null,
+      }
+      try {
+        if (dbg.hasApplePaySession) {
+          dbg.canMakePayments = window.ApplePaySession.canMakePayments()
+        }
+      } catch (e) { dbg.error = `canMakePayments: ${e.message}` }
+
       if (paypal.Buttons && applePayContainerRef.current) {
         try {
           const applePay = paypal.Buttons({
@@ -75,13 +93,15 @@ export default function PayPalInlineCheckout({
               setError(isAr ? 'تعذّر إتمام الدفع عبر Apple Pay' : 'Apple Pay payment failed')
             },
           })
-          if (applePay.isEligible()) {
+          dbg.applePayEligible = applePay.isEligible()
+          if (dbg.applePayEligible) {
             applePay.render(applePayContainerRef.current)
             applePayInstanceRef.current = applePay
             if (!cancelled) setApplePayAvailable(true)
           }
         } catch (e) {
           console.warn('apple pay unavailable', e)
+          dbg.error = `applePay: ${e.message}`
         }
       }
 
@@ -98,16 +118,18 @@ export default function PayPalInlineCheckout({
           },
         })
 
-        if (cardFields.isEligible()) {
+        dbg.cardFieldsEligible = cardFields.isEligible()
+        if (dbg.cardFieldsEligible) {
           cardFields.NameField().render('#card-name-field')
           cardFields.NumberField().render('#card-number-field')
           cardFields.ExpiryField().render('#card-expiry-field')
           cardFields.CVVField().render('#card-cvv-field')
           cardFieldsRef.current = cardFields
-          if (!cancelled) setMode('fields')
+          if (!cancelled) { setMode('fields'); setDebugInfo(dbg) }
           return
         }
       }
+      if (!cancelled) setDebugInfo(dbg)
 
       // ── بديل مؤقت: زر PayPal القياسي (يبيّن شعار PayPal) ──────────
       // buttonsContainerRef.current يجب أن يكون موجوداً دائماً بالـDOM
@@ -175,6 +197,16 @@ export default function PayPalInlineCheckout({
 
   return (
     <div>
+      {debugOn && debugInfo && (
+        <div className="mb-3 p-2.5 rounded-lg bg-black/60 border border-yellow-600/40 text-[10px] text-yellow-300 font-mono leading-relaxed" dir="ltr">
+          window.ApplePaySession: {String(debugInfo.hasApplePaySession)}<br />
+          canMakePayments(): {String(debugInfo.canMakePayments)}<br />
+          applePay isEligible(): {String(debugInfo.applePayEligible)}<br />
+          cardFields isEligible(): {String(debugInfo.cardFieldsEligible)}<br />
+          error: {String(debugInfo.error)}
+        </div>
+      )}
+
       {mode === 'error' && (
         <p className="text-red-400 text-sm text-center py-4">
           {isAr ? 'تعذّر تحميل نموذج الدفع، حاول لاحقاً أو جرّب طريقة أخرى بالأسفل' : 'Could not load the payment form, try again or use another method below'}
