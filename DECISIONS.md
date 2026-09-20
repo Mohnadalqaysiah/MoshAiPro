@@ -170,6 +170,21 @@ idempotent فقط لو COMPLETED فعلاً وغير مسجَّل مسبقاً.
 لم يُتحقَّق من تفعيل الحساب لخاصية Apple Pay على لوحة PayPal مسبقاً —
 نفس أسلوب "جرّب حياً بدل التخمين" المتّبع بكل قرارات PayPal اليوم.
 
+**تحديث 20/09 — قياس حاسم من جهاز حقيقي (لوحة تشخيص `?ppdebug=1`،
+راجع `paypal_reconcile_order.py` بنفس الروح):** آيفون Safari، بطاقة
+فعّالة مؤكَّدة بـWallet تعمل بمواقع أخرى:
+
+```
+window.ApplePaySession: true   canMakePayments(): true   ← الجهاز سليم 100%
+applePay isEligible(): false   cardFields isEligible(): false
+error: null                    ← لا استثناء، PayPal رجعت "لا" بوضوح
+```
+
+**يحسم نهائياً:** لا علاقة للجهاز ولا المتصفح ولا الكود — **PayPal لم
+تُفعّل Apple Pay ولا Advanced Card Payments على الحساب التجاري بعد**،
+نفس السبب لكلتا الميزتين. لا إجراء كود متبقٍ؛ ينتظر فقط موافقة PayPal
+الداخلية (أو سؤال دعمهم صراحة عن Apple Pay كخاصية منفصلة عن الكروت).
+
 ---
 
 ## الحالة الراهنة (2026-09-18)
