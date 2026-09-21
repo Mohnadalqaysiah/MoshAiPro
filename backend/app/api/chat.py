@@ -19,6 +19,7 @@ router = APIRouter()
 class ChatRequest(BaseModel):
     message: str
     session_id: str = ""
+    lang: str = "ar"  # لغة واجهة الموقع — تُوجّه لغة ردود النموذج فقط
 
 
 @router.post("/message")
@@ -60,7 +61,7 @@ async def chat_message(
 
     session_id = req.session_id or str(uuid.uuid4())
     try:
-        response = await trading_agent.chat(session_id, req.message)
+        response = await trading_agent.chat(session_id, req.message, lang=req.lang)
 
         # Deduct trial credit
         if user.plan == PlanType.TRIAL:

@@ -15,6 +15,7 @@ import {
 import PublicChatBot from '../components/PublicChatBot'
 import DemoSection from '../components/DemoSection'
 import StrategyBuilderDemo from '../components/StrategyBuilderDemo'
+import MarketsShowcase from '../components/MarketsShowcase'
 import AffiliateSection from '../components/AffiliateSection'
 import PublicPerformance from '../components/PublicPerformance'
 import Logo from '../components/Logo'
@@ -340,29 +341,8 @@ export default function Landing() {
                 : 'AI-powered ICT/SMC analysis for the world\'s top financial markets in seconds'}
             </p>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[
-              { symbol: 'XAUUSD', name: isAr ? 'الذهب' : 'Gold', icon: '🥇', color: 'from-yellow-900/30 to-yellow-800/10', border: 'border-yellow-700/30', tag: isAr ? 'الأكثر تداولاً' : 'Most Traded' },
-              { symbol: 'BTCUSD', name: isAr ? 'البيتكوين' : 'Bitcoin', icon: '₿', color: 'from-orange-900/30 to-orange-800/10', border: 'border-orange-700/30', tag: '' },
-              { symbol: 'EURUSD', name: isAr ? 'يورو/دولار' : 'EUR/USD', icon: '€', color: 'from-blue-900/30 to-blue-800/10', border: 'border-blue-700/30', tag: '' },
-              { symbol: 'GBPUSD', name: isAr ? 'جنيه/دولار' : 'GBP/USD', icon: '£', color: 'from-purple-900/30 to-purple-800/10', border: 'border-purple-700/30', tag: '' },
-              { symbol: 'USDJPY', name: isAr ? 'دولار/ين' : 'USD/JPY', icon: '¥', color: 'from-red-900/30 to-red-800/10', border: 'border-red-700/30', tag: '' },
-              { symbol: 'ETHUSD', name: isAr ? 'إثيريوم' : 'Ethereum', icon: 'Ξ', color: 'from-indigo-900/30 to-indigo-800/10', border: 'border-indigo-700/30', tag: '' },
-              { symbol: 'USOIL', name: isAr ? 'النفط الخام' : 'Crude Oil', icon: '🛢', color: 'from-gray-800/60 to-gray-700/20', border: 'border-gray-600/30', tag: '' },
-              { symbol: 'NAS100', name: isAr ? 'ناسداك' : 'NASDAQ', icon: '📈', color: 'from-teal-900/30 to-teal-800/10', border: 'border-teal-700/30', tag: isAr ? 'قريباً' : 'Soon' },
-            ].map((m, i) => (
-              <div key={i} className={`reveal card-hover relative bg-gradient-to-br ${m.color} border ${m.border} rounded-2xl p-5 text-center`}
-                   style={{ transitionDelay: `${i * 60}ms` }}>
-                {m.tag && (
-                  <span className="absolute -top-2 left-1/2 -translate-x-1/2 text-xs bg-yellow-600/80 text-white px-2 py-0.5 rounded-full whitespace-nowrap">
-                    {m.tag}
-                  </span>
-                )}
-                <div className="text-3xl mb-2">{m.icon}</div>
-                <div className="font-bold text-white text-sm">{m.symbol}</div>
-                <div className="text-gray-400 text-xs mt-0.5">{m.name}</div>
-              </div>
-            ))}
+          <div className="reveal">
+            <MarketsShowcase isAr={isAr} ctaTo={user ? '/dashboard' : '/register'} />
           </div>
           {/* Hidden SEO keywords */}
           <p className="text-gray-700 text-xs text-center mt-8 select-none" aria-hidden="true">

@@ -1,23 +1,97 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import axios from 'axios'
 import {
-  MessageCircle, X, Send, BarChart2, FileText,
-  Sparkles, Trash2, TrendingUp, TrendingDown, Minus, Zap, Copy, Check
+  X, Send, BarChart2, FileText,
+  Sparkles, Trash2, TrendingUp, TrendingDown, Minus, Zap, Copy, Check, ShieldAlert,
 } from 'lucide-react'
 import useMarkets from '../hooks/useMarkets'
+import { useLang } from '../contexts/LangContext'
+import { BRAND, BRAND_CSS, NeuralOrb } from './SmartAnalysisBrand'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const SEEN_KEY = 'qaffel_smart_analysis_seen'
 
 const TIMEFRAMES = ['15m', '30m', '1h', '4h', '1d']
+
 const CATEGORY_LABELS = {
-  forex: 'فوركس', crypto: 'كريبتو', commodity: 'سلع', metal: 'معادن',
-  metals: 'معادن', index: 'مؤشرات', indices: 'مؤشرات', stock: 'أسهم',
-  stocks: 'أسهم', gulf: 'أسهم خليجية',
+  ar: {
+    forex: 'فوركس', crypto: 'كريبتو', commodity: 'سلع', metal: 'معادن',
+    metals: 'معادن', index: 'مؤشرات', indices: 'مؤشرات', stock: 'أسهم',
+    stocks: 'أسهم', gulf: 'أسهم خليجية',
+  },
+  en: {
+    forex: 'Forex', crypto: 'Crypto', commodity: 'Commodities', metal: 'Metals',
+    metals: 'Metals', index: 'Indices', indices: 'Indices', stock: 'Stocks',
+    stocks: 'Stocks', gulf: 'Gulf Stocks',
+  },
 }
-const categoryLabel = (cat) => CATEGORY_LABELS[(cat || '').toLowerCase()] || cat || 'أخرى'
+const categoryLabel = (cat, isAr) =>
+  CATEGORY_LABELS[isAr ? 'ar' : 'en'][(cat || '').toLowerCase()] || cat || (isAr ? 'أخرى' : 'Other')
+
+// كل نصوص الودجت بلغتين — الأرقام والرموز (XAUUSD, ICT/SMC...) تبقى كما هي
+const T = {
+  ar: {
+    close: 'إغلاق', clear: 'مسح المحادثة', online: 'متصل',
+    analyze: 'حلّل', analyzeNow: 'حلّل الآن',
+    ask: 'اكتب سؤالك... مثل: حلل الذهب ساعة', subscribeToContinue: 'اشترك للمتابعة...',
+    subscribe: 'اشترك الآن',
+    emptyTitle: 'ماذا تريد أن تحلّل؟',
+    emptySub: 'اختر سوقاً، أو اسأل عن أي مفهوم في ICT / SMC',
+    orType: 'أو اكتب سؤالك مباشرة بالأسفل',
+    noSymbols: 'لا رموز بهذي الفئة',
+    thinking: 'يفكّر…',
+    copy: 'نسخ التحليل كاملاً', copied: 'تم النسخ',
+    candles: 'شمعة', chart: 'رسم بياني', report: 'تقرير', analysisLbl: 'تحليل',
+    buy: 'شراء', sell: 'بيع', wait: 'انتظار',
+    entry: 'دخول', stop: 'وقف', target: 'هدف',
+    grade: 'جودة الإشارة:',
+    received: 'تم استقبال الرد.',
+    trialOut: 'استهلكت رسائل المحادثة التجريبية.',
+    connFail: 'فشل الاتصال. تأكد أن الخادم يعمل.',
+    genericErr: '⚠️ حدث خطأ. حاول مرة أخرى.',
+    disclaimer: 'تحليل تقني تعليمي وليس نصيحة مالية.',
+    symbolLbl: 'الرمز', recLbl: 'التوصية', confLbl: 'الثقة', entryLbl: 'الدخول', stopLbl: 'الوقف',
+    suggestions: [
+      { label: 'حلّل الذهب على ساعة', msg: 'حلل الذهب على ساعة' },
+      { label: 'اشرح Order Block', msg: 'اشرح لي Order Block' },
+      { label: 'كيف أربط تلجرام؟', msg: 'كيف أربط تلجرام؟' },
+    ],
+    cmd: (s, tf) => `تحليل ${s} ${tf}`,
+  },
+  en: {
+    close: 'Close', clear: 'Clear conversation', online: 'Online',
+    analyze: 'Analyze', analyzeNow: 'Analyze now',
+    ask: 'Ask anything... e.g. Analyze gold 1h', subscribeToContinue: 'Subscribe to continue...',
+    subscribe: 'Subscribe now',
+    emptyTitle: 'What do you want to analyze?',
+    emptySub: 'Pick a market, or ask about any ICT / SMC concept',
+    orType: 'Or type your question below',
+    noSymbols: 'No symbols in this category',
+    thinking: 'Thinking…',
+    copy: 'Copy full analysis', copied: 'Copied',
+    candles: 'candles', chart: 'Chart', report: 'Report', analysisLbl: 'Analysis',
+    buy: 'BUY', sell: 'SELL', wait: 'WAIT',
+    entry: 'Entry', stop: 'SL', target: 'TP',
+    grade: 'Signal grade:',
+    received: 'Reply received.',
+    trialOut: 'Chat limit reached. Subscribe to continue or try again tomorrow.',
+    connFail: 'Connection failed. Please check the server is running.',
+    genericErr: '⚠️ Something went wrong. Please try again.',
+    disclaimer: 'Educational technical analysis — not financial advice.',
+    symbolLbl: 'Symbol', recLbl: 'Signal', confLbl: 'Confidence', entryLbl: 'Entry', stopLbl: 'Stop',
+    suggestions: [
+      { label: 'Analyze gold on 1h', msg: 'Analyze gold on 1h' },
+      { label: 'Explain Order Block', msg: 'Explain Order Block' },
+      { label: 'How do I link Telegram?', msg: 'How do I link Telegram?' },
+    ],
+    cmd: (s, tf) => `Analyze ${s} ${tf}`,
+  },
+}
+
+const fmtNum = (v) => (+v % 1 === 0 ? v : (+v).toFixed(5))
 
 // ─── Candlestick Chart ────────────────────────────────────────────────────────
-function CandlesChart({ candles, symbol, timeframe }) {
+function CandlesChart({ candles, symbol, timeframe, tx }) {
   const ref = useRef(null)
   const chartRef = useRef(null)
 
@@ -33,7 +107,7 @@ function CandlesChart({ candles, symbol, timeframe }) {
         }
 
         const chart = createChart(ref.current, {
-          layout: { background: { color: '#111827' }, textColor: '#9ca3af' },
+          layout: { background: { color: '#0B1020' }, textColor: '#9ca3af' },
           grid: {
             vertLines: { color: 'rgba(55,65,81,0.3)' },
             horzLines: { color: 'rgba(55,65,81,0.3)' },
@@ -58,7 +132,6 @@ function CandlesChart({ candles, symbol, timeframe }) {
           .filter(c => c.time && !isNaN(c.open))
           .sort((a, b) => a.time - b.time)
 
-        // deduplicate by time
         const seen = new Set()
         const deduped = formatted.filter(c => {
           if (seen.has(c.time)) return false
@@ -91,18 +164,18 @@ function CandlesChart({ candles, symbol, timeframe }) {
   if (!candles?.length) return null
 
   return (
-    <div className="mt-2 rounded-lg overflow-hidden border border-gray-700/60">
-      <div className="flex items-center gap-1.5 px-2 py-1.5 bg-gray-800/80 text-xs text-gray-400">
-        <BarChart2 size={12} className="text-blue-400" />
-        <span>{symbol} · {timeframe} · {candles.length} شمعة</span>
+    <div className="mt-2 rounded-lg overflow-hidden border border-cyan-500/15">
+      <div className="flex items-center gap-1.5 px-2 py-1.5 bg-[#0B1020] text-xs text-gray-400" dir="ltr">
+        <BarChart2 size={12} className="text-cyan-400" />
+        <span>{symbol} · {timeframe} · {candles.length} {tx.candles}</span>
       </div>
-      <div ref={ref} className="w-full bg-gray-900" />
+      <div ref={ref} className="w-full bg-[#0B1020]" dir="ltr" />
     </div>
   )
 }
 
 // ─── Analysis Card ────────────────────────────────────────────────────────────
-function AnalysisCard({ data, symbol, timeframe }) {
+function AnalysisCard({ data, symbol, timeframe, tx }) {
   if (!data || data.error) return null
 
   const rec = data.recommendation || 'WAIT'
@@ -114,67 +187,69 @@ function AnalysisCard({ data, symbol, timeframe }) {
   const gemini = data.gemini_analysis
 
   const recStyles = {
-    BUY:  { icon: TrendingUp,   color: 'text-green-400', bg: 'bg-green-400/10 border-green-500/30', label: 'شراء' },
-    SELL: { icon: TrendingDown, color: 'text-red-400',   bg: 'bg-red-400/10 border-red-500/30',     label: 'بيع' },
-    WAIT: { icon: Minus,        color: 'text-yellow-400', bg: 'bg-yellow-400/10 border-yellow-500/30', label: 'انتظار' },
+    BUY:  { icon: TrendingUp,   color: 'text-emerald-400', bg: 'bg-emerald-400/[0.07] border-emerald-500/30', label: tx.buy },
+    SELL: { icon: TrendingDown, color: 'text-rose-400',    bg: 'bg-rose-400/[0.07] border-rose-500/30',       label: tx.sell },
+    WAIT: { icon: Minus,        color: 'text-amber-400',   bg: 'bg-amber-400/[0.07] border-amber-500/30',     label: tx.wait },
   }
   const style = recStyles[rec] || recStyles.WAIT
   const Icon = style.icon
-
-  const confColor = conf >= 70 ? 'text-green-400' : conf >= 50 ? 'text-yellow-400' : 'text-gray-400'
+  const confColor = conf >= 70 ? 'text-emerald-400' : conf >= 50 ? 'text-amber-400' : 'text-gray-400'
+  const barColor = conf >= 70 ? 'bg-emerald-400' : conf >= 50 ? 'bg-amber-400' : 'bg-gray-500'
 
   return (
     <div className={`mt-2 rounded-xl border p-3 text-xs space-y-2 ${style.bg}`}>
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
           <Icon size={14} className={style.color} />
           <span className={`font-bold text-sm ${style.color}`}>{style.label}</span>
         </div>
-        <div className="flex items-center gap-2 text-gray-400">
+        <div className="flex items-center gap-2 text-gray-400" dir="ltr">
           {symbol && <span className="font-mono">{symbol}</span>}
           {timeframe && <span className="text-gray-500">({timeframe})</span>}
           <span className={`font-semibold ${confColor}`}>{conf.toFixed(1)}%</span>
         </div>
       </div>
 
-      {/* Price Levels */}
+      {/* شريط الثقة */}
+      <div className="h-1 rounded-full bg-white/5 overflow-hidden">
+        <div className={`h-full rounded-full ${barColor}`} style={{ width: `${Math.min(100, Math.max(0, conf))}%`, transition: 'width .5s' }} />
+      </div>
+
       {(entry || sl || tps.length > 0) && (
-        <div className="grid grid-cols-2 gap-x-3 gap-y-1 border-t border-gray-700/40 pt-2">
+        <div className="grid grid-cols-2 gap-x-3 gap-y-1 border-t border-white/5 pt-2">
           {entry && (
-            <div>
-              <span className="text-gray-500">دخول</span>
-              <span className="ml-1 font-mono text-gray-100">{+entry % 1 === 0 ? entry : (+entry).toFixed(5)}</span>
+            <div className="flex items-center justify-between gap-1">
+              <span className="text-gray-500">{tx.entry}</span>
+              <span className="font-mono text-gray-100" dir="ltr">{fmtNum(entry)}</span>
             </div>
           )}
           {sl && (
-            <div>
-              <span className="text-gray-500">وقف</span>
-              <span className="ml-1 font-mono text-red-400">{+sl % 1 === 0 ? sl : (+sl).toFixed(5)}</span>
+            <div className="flex items-center justify-between gap-1">
+              <span className="text-gray-500">{tx.stop}</span>
+              <span className="font-mono text-rose-400" dir="ltr">{fmtNum(sl)}</span>
             </div>
           )}
           {tps.slice(0, 3).map((tp, i) => tp ? (
-            <div key={i}>
-              <span className="text-gray-500">هدف {i + 1}</span>
-              <span className="ml-1 font-mono text-green-400">{+tp % 1 === 0 ? tp : (+tp).toFixed(5)}</span>
+            <div key={i} className="flex items-center justify-between gap-1">
+              <span className="text-gray-500">{tx.target} {i + 1}</span>
+              <span className="font-mono text-emerald-400" dir="ltr">{fmtNum(tp)}</span>
             </div>
           ) : null)}
           {rr && (
-            <div className="col-span-2">
+            <div className="col-span-2 flex items-center justify-between gap-1">
               <span className="text-gray-500">R/R</span>
-              <span className="ml-1 font-mono text-blue-400">1:{(+rr).toFixed(1)}</span>
+              <span className="font-mono text-cyan-400" dir="ltr">1:{(+rr).toFixed(1)}</span>
             </div>
           )}
         </div>
       )}
 
-      {/* Gemini grade */}
       {gemini?.signal_grade && gemini.signal_grade !== '?' && (
-        <div className="flex items-center gap-1.5 border-t border-gray-700/40 pt-1.5">
-          <Sparkles size={11} className="text-purple-400" />
-          <span className="text-gray-400">جودة الإشارة:</span>
-          <span className="font-bold text-purple-300">{gemini.signal_grade}</span>
-          {gemini.ict_setup && <span className="text-gray-500 ml-1">{gemini.ict_setup}</span>}
+        <div className="flex items-center gap-1.5 border-t border-white/5 pt-1.5">
+          <Sparkles size={11} className="text-violet-400" />
+          <span className="text-gray-400">{tx.grade}</span>
+          <span className="font-bold text-violet-300">{gemini.signal_grade}</span>
+          {gemini.ict_setup && <span className="text-gray-500">{gemini.ict_setup}</span>}
         </div>
       )}
     </div>
@@ -182,20 +257,20 @@ function AnalysisCard({ data, symbol, timeframe }) {
 }
 
 // ─── نسخ التحليل كامل (نص الرد + الأرقام المهيكلة إن وجدت) ─────────────────────
-function buildCopyText(msg) {
+function buildCopyText(msg, tx) {
   const lines = [msg.content || '']
   const d = msg.analysisData
   if (d && !d.error) {
-    const recLabel = { BUY: 'شراء', SELL: 'بيع', WAIT: 'انتظار' }[d.recommendation] || d.recommendation
+    const recLabel = { BUY: tx.buy, SELL: tx.sell, WAIT: tx.wait }[d.recommendation] || d.recommendation
     const entry = d.entry_zones?.[0]
     const sl = d.stop_loss_zone
     const tps = d.take_profit_zones || []
     lines.push('')
-    if (msg.symbol) lines.push(`الرمز: ${msg.symbol}${msg.timeframe ? ` (${msg.timeframe})` : ''}`)
-    if (recLabel) lines.push(`التوصية: ${recLabel}${d.ai_confidence_score ? ` · الثقة ${(+d.ai_confidence_score).toFixed(1)}%` : ''}`)
-    if (entry) lines.push(`الدخول: ${+entry % 1 === 0 ? entry : (+entry).toFixed(5)}`)
-    if (sl)    lines.push(`الوقف: ${+sl % 1 === 0 ? sl : (+sl).toFixed(5)}`)
-    tps.slice(0, 3).forEach((tp, i) => { if (tp) lines.push(`هدف ${i + 1}: ${+tp % 1 === 0 ? tp : (+tp).toFixed(5)}`) })
+    if (msg.symbol) lines.push(`${tx.symbolLbl}: ${msg.symbol}${msg.timeframe ? ` (${msg.timeframe})` : ''}`)
+    if (recLabel) lines.push(`${tx.recLbl}: ${recLabel}${d.ai_confidence_score ? ` · ${tx.confLbl} ${(+d.ai_confidence_score).toFixed(1)}%` : ''}`)
+    if (entry) lines.push(`${tx.entryLbl}: ${fmtNum(entry)}`)
+    if (sl)    lines.push(`${tx.stopLbl}: ${fmtNum(sl)}`)
+    tps.slice(0, 3).forEach((tp, i) => { if (tp) lines.push(`${tx.target} ${i + 1}: ${fmtNum(tp)}`) })
     if (d.risk_reward_ratio) lines.push(`R/R: 1:${(+d.risk_reward_ratio).toFixed(1)}`)
   }
   lines.push('', 'via Qaffel AI — qaffel.com')
@@ -203,14 +278,20 @@ function buildCopyText(msg) {
 }
 
 // ─── Message Bubble ───────────────────────────────────────────────────────────
-function MessageBubble({ msg }) {
+// الصفوف ltr ثابتة (المستخدم يمين، الذكاء يسار) والنص داخل الفقاعة يتبع لغة الواجهة
+function MessageBubble({ msg, tx, isAr }) {
   const isUser = msg.role === 'user'
   const [copied, setCopied] = useState(false)
+  const textDir = isAr ? 'rtl' : 'ltr'
 
   if (isUser) {
     return (
-      <div className="flex justify-end">
-        <div className="max-w-[80%] rounded-2xl rounded-br-sm px-3 py-2 bg-blue-600 text-white text-sm whitespace-pre-wrap">
+      <div className="flex justify-end" style={{ direction: 'ltr' }}>
+        <div
+          dir={textDir}
+          className="max-w-[80%] rounded-2xl rounded-br-sm px-3 py-2 text-white text-sm whitespace-pre-wrap"
+          style={{ background: 'linear-gradient(135deg,#4f46e5,#2563eb)' }}
+        >
           {msg.content}
         </div>
       </div>
@@ -218,51 +299,44 @@ function MessageBubble({ msg }) {
   }
 
   const actionLabel = {
-    analyze: { icon: BarChart2, label: 'تحليل', color: 'text-blue-400' },
-    chart:   { icon: BarChart2, label: 'رسم بياني', color: 'text-cyan-400' },
-    report:  { icon: FileText,  label: 'تقرير', color: 'text-amber-400' },
+    analyze: { icon: BarChart2, label: tx.analysisLbl, color: 'text-cyan-400' },
+    chart:   { icon: BarChart2, label: tx.chart,       color: 'text-sky-400' },
+    report:  { icon: FileText,  label: tx.report,      color: 'text-amber-400' },
   }[msg.action]
 
   const copyAll = () => {
-    navigator.clipboard?.writeText(buildCopyText(msg)).then(() => {
+    navigator.clipboard?.writeText(buildCopyText(msg, tx)).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 1800)
     }).catch(() => {})
   }
 
   return (
-    <div className="flex justify-start">
-      <div className="max-w-[90%] space-y-1">
+    <div className="flex justify-start gap-2" style={{ direction: 'ltr' }}>
+      <div className="mt-0.5 flex-shrink-0"><NeuralOrb size={22} /></div>
+      <div className="max-w-[88%] space-y-1" dir={textDir}>
         {actionLabel && (
           <div className={`flex items-center gap-1 text-[11px] ${actionLabel.color} mb-0.5`}>
             <actionLabel.icon size={11} />
             <span>{actionLabel.label}</span>
           </div>
         )}
-        <div className="rounded-2xl rounded-bl-sm px-3 py-2 bg-gray-800 text-gray-100 text-sm whitespace-pre-wrap leading-relaxed">
+        <div className="rounded-2xl rounded-tl-sm px-3 py-2 bg-white/[0.045] border border-white/[0.06] text-gray-100 text-sm whitespace-pre-wrap leading-relaxed">
           {msg.content}
         </div>
         {msg.analysisData && (
-          <AnalysisCard
-            data={msg.analysisData}
-            symbol={msg.symbol}
-            timeframe={msg.timeframe}
-          />
+          <AnalysisCard data={msg.analysisData} symbol={msg.symbol} timeframe={msg.timeframe} tx={tx} />
         )}
         {msg.candles?.length > 0 && (
-          <CandlesChart
-            candles={msg.candles}
-            symbol={msg.symbol}
-            timeframe={msg.timeframe}
-          />
+          <CandlesChart candles={msg.candles} symbol={msg.symbol} timeframe={msg.timeframe} tx={tx} />
         )}
         {msg.action !== 'error' && (
           <button
             onClick={copyAll}
-            className="flex items-center gap-1 text-[11px] text-gray-500 hover:text-gray-300 transition-colors px-0.5"
+            className="flex items-center gap-1 text-[11px] text-gray-500 hover:text-cyan-300 transition-colors px-0.5"
           >
-            {copied ? <Check size={11} className="text-green-400" /> : <Copy size={11} />}
-            {copied ? 'تم النسخ' : 'نسخ التحليل كاملاً'}
+            {copied ? <Check size={11} className="text-emerald-400" /> : <Copy size={11} />}
+            {copied ? tx.copied : tx.copy}
           </button>
         )}
       </div>
@@ -272,6 +346,11 @@ function MessageBubble({ msg }) {
 
 // ─── Main ChatBot ─────────────────────────────────────────────────────────────
 export default function ChatBot() {
+  const { lang } = useLang()
+  const isAr = lang === 'ar'
+  const tx = T[isAr ? 'ar' : 'en']
+  const brand = BRAND[isAr ? 'ar' : 'en']
+
   const [open, setOpen] = useState(false)
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState([])
@@ -281,13 +360,23 @@ export default function ChatBot() {
   const [limitReached, setLimitReached] = useState(false)
   const bottomRef = useRef(null)
 
-  // ── شريط التحليل السريع (دائم أعلى الشات) + تابات الفئات (بحالة الفراغ) ──
+  // النبض الخارجي للزر يظهر حتى أول فتح فقط — بعدها يهدأ (حركة دائمة تشتّت وتستهلك)
+  const [seen, setSeen] = useState(() => {
+    try { return localStorage.getItem(SEEN_KEY) === '1' } catch { return false }
+  })
+  useEffect(() => {
+    if (open && !seen) {
+      setSeen(true)
+      try { localStorage.setItem(SEEN_KEY, '1') } catch { /* تصفّح خاص */ }
+    }
+  }, [open, seen])
+
   const { markets } = useMarkets()
   const [quickSymbol, setQuickSymbol] = useState('XAUUSD')
   const [quickTf, setQuickTf] = useState('1h')
   const categories = useMemo(() => {
-    const seen = [...new Set(markets.map(m => m.category || 'forex'))]
-    return seen.length ? seen : ['forex']
+    const s = [...new Set(markets.map(m => m.category || 'forex'))]
+    return s.length ? s : ['forex']
   }, [markets])
   const [activeCategory, setActiveCategory] = useState('')
   useEffect(() => {
@@ -297,12 +386,12 @@ export default function ChatBot() {
     () => markets.filter(m => (m.category || 'forex') === activeCategory),
     [markets, activeCategory]
   )
+  const marketName = (m) => (isAr ? (m.name_ar || m.symbol) : (m.name || m.symbol))
 
   const scrollToBottom = useCallback(() => {
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
   }, [])
-
-  useEffect(() => { scrollToBottom() }, [messages, scrollToBottom])
+  useEffect(() => { scrollToBottom() }, [messages, loading, scrollToBottom])
 
   const sendMessage = useCallback(async (text) => {
     if (!text.trim() || loading) return
@@ -310,170 +399,173 @@ export default function ChatBot() {
     setError('')
     setLimitReached(false)
 
-    const userMsg = { role: 'user', content: text }
-    setMessages(prev => [...prev, userMsg])
+    setMessages(prev => [...prev, { role: 'user', content: text }])
 
     try {
       setLoading(true)
       const res = await axios.post(`${API}/api/v1/chat/message`, {
         message: text,
         session_id: sessionId || '',
+        lang: isAr ? 'ar' : 'en',
       })
 
       const { session_id, response } = res.data
       if (session_id && !sessionId) setSessionId(session_id)
 
-      const assistantMsg = {
+      setMessages(prev => [...prev, {
         role: 'assistant',
-        content: response?.message || 'تم استقبال الرد.',
+        content: response?.message || tx.received,
         action: response?.action || 'text',
         symbol: response?.symbol,
         timeframe: response?.timeframe,
         analysisData: response?.data || response?.analysis || null,
         candles: response?.candles || response?.data?.candles || null,
-      }
-
-      setMessages(prev => [...prev, assistantMsg])
+      }])
     } catch (e) {
       console.error(e)
       if (e.response?.status === 403) {
-        const detail = e.response.data?.detail || 'استهلكت رسائل المحادثة التجريبية.'
+        // رسالة الخادم عربية — تُعرض كما هي بالعربية، وبالإنجليزية نص عام مطابق
+        const detail = isAr ? (e.response.data?.detail || tx.trialOut) : tx.trialOut
         setLimitReached(true)
         setError(detail)
-        setMessages(prev => [...prev, {
-          role: 'assistant',
-          content: `🔒 ${detail}`,
-          action: 'error',
-        }])
+        setMessages(prev => [...prev, { role: 'assistant', content: `🔒 ${detail}`, action: 'error' }])
       } else {
-        setError('فشل الاتصال. تأكد أن الخادم يعمل.')
-        setMessages(prev => [...prev, {
-          role: 'assistant',
-          content: '⚠️ حدث خطأ. حاول مرة أخرى.',
-          action: 'error',
-        }])
+        setError(tx.connFail)
+        setMessages(prev => [...prev, { role: 'assistant', content: tx.genericErr, action: 'error' }])
       }
     } finally {
       setLoading(false)
     }
-  }, [loading, sessionId])
+  }, [loading, sessionId, isAr, tx])
 
   const handleClear = async () => {
     setMessages([])
     setError('')
     if (sessionId) {
-      try { await axios.delete(`${API}/api/v1/chat/session/${sessionId}`) } catch {}
+      try { await axios.delete(`${API}/api/v1/chat/session/${sessionId}`) } catch { /* لا يهم */ }
       setSessionId('')
     }
   }
 
   return (
     <>
-      {/* Floating Button */}
+      <style>{BRAND_CSS}</style>
+
+      {/* Floating launcher */}
       <button
         onClick={() => setOpen(o => !o)}
-        className={`fixed bottom-5 left-4 md:left-auto md:right-6 z-50 group transition-all duration-300 ${open ? 'hidden md:flex' : 'flex'}`}
-        style={{ filter: open ? 'none' : 'drop-shadow(0 0 18px rgba(99,102,241,0.7))' }}
+        aria-label={open ? tx.close : brand.name}
+        className={`fixed bottom-5 left-4 md:left-auto md:right-6 z-50 group ${open ? 'hidden md:flex' : 'flex'}`}
       >
         {open ? (
-          /* زر الإغلاق */
-          <div className="flex items-center gap-2 rounded-full bg-gray-800 border border-gray-700 hover:bg-gray-700 text-gray-300 px-4 py-2.5 shadow-xl text-sm font-medium transition-all">
+          <div className="flex items-center gap-2 rounded-full bg-[#0B1020] border border-white/10 hover:border-white/25 text-gray-300 px-4 py-2.5 shadow-xl text-sm font-medium transition-colors">
             <X size={16} />
-            <span>إغلاق</span>
+            <span>{tx.close}</span>
           </div>
         ) : (
-          /* زر الفتح — متحرك */
-          <div className="relative flex items-center gap-2.5 rounded-full px-4 py-2.5 text-sm font-semibold text-white overflow-visible"
-            style={{ background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #2563eb 100%)' }}>
-
-            {/* حلقات نبض خارجية */}
-            <span className="absolute inset-0 rounded-full animate-ping opacity-30"
-              style={{ background: 'linear-gradient(135deg,#4f46e5,#7c3aed)', animationDuration: '2s' }} />
-            <span className="absolute inset-0 rounded-full animate-ping opacity-15"
-              style={{ background: 'linear-gradient(135deg,#4f46e5,#7c3aed)', animationDuration: '2.8s', animationDelay:'0.4s' }} />
-
-            {/* أيقونة AI دوّارة */}
-            <div className="relative w-6 h-6 flex items-center justify-center flex-shrink-0">
-              {/* دائرة خارجية تدور */}
-              <svg className="absolute inset-0 w-6 h-6 animate-spin" style={{ animationDuration:'4s' }} viewBox="0 0 24 24" fill="none">
-                <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" strokeDasharray="4 3" />
-              </svg>
-              {/* نجمة في المنتصف */}
-              <Sparkles size={13} className="relative z-10 text-yellow-300 drop-shadow-sm" />
+          <div className="relative">
+            {!seen && (
+              <span className="absolute inset-0 rounded-full animate-ping opacity-25" style={{ background: 'linear-gradient(135deg,#22D3EE,#8B5CF6)', animationDuration: '2.4s' }} />
+            )}
+            <div
+              className="relative flex items-center gap-2.5 rounded-full ps-2 pe-2 sm:pe-4 py-2 text-sm font-semibold text-white shadow-2xl transition-transform group-hover:scale-[1.03]"
+              style={{
+                background: 'linear-gradient(#0B1020,#0B1020) padding-box, linear-gradient(135deg,#22D3EE,#8B5CF6) border-box',
+                border: '1.5px solid transparent',
+                boxShadow: '0 8px 30px rgba(34,211,238,0.22), 0 0 0 1px rgba(139,92,246,0.15)',
+              }}
+            >
+              <NeuralOrb size={32} />
+              <span className="hidden sm:flex flex-col leading-tight text-start">
+                <span>{brand.name}</span>
+                <span className="text-[10px] font-normal text-cyan-300/70 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> {tx.online}
+                </span>
+              </span>
             </div>
-
-            <span className="relative z-10 tracking-wide">شات كفيل AI</span>
-
-            {/* نقطة خضراء "متصل" */}
-            <span className="relative flex h-2.5 w-2.5 flex-shrink-0">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" style={{ animationDuration:'1.5s' }} />
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-400" />
-            </span>
           </div>
         )}
       </button>
 
       {/* Panel */}
       {open && (
-        <div className="fixed inset-0 md:inset-auto md:bottom-20 md:right-6 z-40 md:w-full md:max-w-md">
-          <div className="rounded-none md:rounded-2xl border-0 md:border border-gray-700/80 bg-gray-900 backdrop-blur-sm shadow-2xl flex flex-col h-full md:h-[520px]">
-
+        <div className="fixed inset-0 md:inset-auto md:bottom-20 md:right-6 z-40 md:w-full md:max-w-md sa-panel" dir={isAr ? 'rtl' : 'ltr'}>
+          <div
+            className="rounded-none md:rounded-2xl border-0 md:border border-white/10 shadow-2xl flex flex-col h-full md:h-[560px] overflow-hidden"
+            style={{ background: 'radial-gradient(120% 60% at 50% 0%, rgba(34,211,238,0.07), transparent 60%), #0B1020' }}
+          >
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold shadow-lg">
-                  ك
-                </div>
+            <div className={`relative overflow-hidden flex items-center justify-between px-4 py-3 border-b border-white/[0.07] ${loading ? 'sa-scan' : ''}`}>
+              <div className="flex items-center gap-3">
+                <NeuralOrb size={38} active={loading} />
                 <div>
-                  <div className="text-sm font-semibold text-white">كفيل — وكيل التداول الذكي</div>
-                  <div className="text-[11px] text-gray-400">ICT · SMC · Wyckoff · Real-time</div>
+                  <div className="text-sm font-semibold text-white leading-tight">{brand.name}</div>
+                  <div className="text-[11px] text-cyan-300/70">{brand.tagline}</div>
                 </div>
               </div>
               <div className="flex items-center gap-1">
-                <button onClick={handleClear} className="p-1.5 rounded-full hover:bg-gray-800 text-gray-400 hover:text-red-400 transition-colors" title="مسح المحادثة">
+                <button onClick={handleClear} className="p-1.5 rounded-full hover:bg-white/5 text-gray-400 hover:text-rose-400 transition-colors" title={tx.clear} aria-label={tx.clear}>
                   <Trash2 size={14} />
                 </button>
-                <button onClick={() => setOpen(false)} className="p-1.5 rounded-full hover:bg-gray-800 text-gray-400 hover:text-gray-100 transition-colors">
+                <button onClick={() => setOpen(false)} className="p-1.5 rounded-full hover:bg-white/5 text-gray-400 hover:text-gray-100 transition-colors" title={tx.close} aria-label={tx.close}>
                   <X size={16} />
                 </button>
               </div>
             </div>
 
-            {/* شريط التحليل السريع — دائم، مش بس بحالة الفراغ */}
-            <div className="flex items-center gap-1.5 px-3 py-2 border-b border-gray-800 bg-gray-900/60">
+            {/* شريط التحليل السريع */}
+            <div className="flex items-center gap-1.5 px-3 py-2 border-b border-white/[0.07]" dir="ltr">
               <select
                 value={quickSymbol}
                 onChange={e => setQuickSymbol(e.target.value)}
-                className="flex-1 min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-xs text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="flex-1 min-w-0 bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-gray-200 focus:outline-none focus:ring-1 focus:ring-cyan-500"
               >
-                {(markets.length ? markets : [{ symbol: quickSymbol, name_ar: quickSymbol }]).map(m => (
-                  <option key={m.symbol} value={m.symbol}>{m.name_ar || m.symbol} ({m.symbol})</option>
+                {(markets.length ? markets : [{ symbol: quickSymbol }]).map(m => (
+                  <option key={m.symbol} value={m.symbol} className="bg-[#0B1020]">{marketName(m)} ({m.symbol})</option>
                 ))}
               </select>
               <select
                 value={quickTf}
                 onChange={e => setQuickTf(e.target.value)}
-                className="w-16 flex-shrink-0 bg-gray-800 border border-gray-700 rounded-lg px-1.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-16 flex-shrink-0 bg-white/5 border border-white/10 rounded-lg px-1.5 py-1.5 text-xs text-gray-200 focus:outline-none focus:ring-1 focus:ring-cyan-500"
               >
-                {TIMEFRAMES.map(tf => <option key={tf} value={tf}>{tf}</option>)}
+                {TIMEFRAMES.map(tf => <option key={tf} value={tf} className="bg-[#0B1020]">{tf}</option>)}
               </select>
               <button
-                onClick={() => sendMessage(`تحليل ${quickSymbol} ${quickTf}`)}
+                onClick={() => sendMessage(tx.cmd(quickSymbol, quickTf))}
                 disabled={loading || limitReached}
-                title="حلّل الآن"
-                className="flex-shrink-0 flex items-center gap-1 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors"
+                title={tx.analyzeNow}
+                className="flex-shrink-0 flex items-center gap-1 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-opacity disabled:opacity-50 hover:opacity-90"
+                style={{ background: 'linear-gradient(135deg,#0891B2,#6D28D9)' }}
               >
                 <Zap size={12} />
-                حلّل
+                {tx.analyze}
               </button>
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-700">
+            <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
 
-              {/* Empty state — تابات الفئات + قائمة رموز، تلف (wrap) بدل سكرول جانبي */}
               {messages.length === 0 && (
-                <div className="space-y-2">
+                <div className="space-y-4">
+                  <div className="flex flex-col items-center text-center pt-2">
+                    <NeuralOrb size={56} />
+                    <div className="mt-2 text-sm font-semibold text-white">{tx.emptyTitle}</div>
+                    <div className="text-[11px] text-gray-500 mt-0.5">{tx.emptySub}</div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5 justify-center">
+                    {tx.suggestions.map(s => (
+                      <button
+                        key={s.label}
+                        onClick={() => sendMessage(s.msg)}
+                        className="text-[11.5px] px-3 py-1.5 rounded-full border border-cyan-500/25 text-cyan-200 hover:bg-cyan-500/10 transition-colors"
+                      >
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+
                   <div className="flex flex-wrap gap-1.5">
                     {categories.map(cat => (
                       <button
@@ -481,11 +573,11 @@ export default function ChatBot() {
                         onClick={() => setActiveCategory(cat)}
                         className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border transition-colors ${
                           activeCategory === cat
-                            ? 'bg-blue-600 border-blue-500 text-white'
-                            : 'bg-gray-800/80 border-gray-700/60 text-gray-400 hover:text-gray-200 hover:border-gray-600'
+                            ? 'bg-cyan-600/90 border-cyan-400 text-white'
+                            : 'bg-white/[0.04] border-white/10 text-gray-400 hover:text-gray-200 hover:border-white/20'
                         }`}
                       >
-                        {categoryLabel(cat)}
+                        {categoryLabel(cat, isAr)}
                       </button>
                     ))}
                   </div>
@@ -494,48 +586,42 @@ export default function ChatBot() {
                     {categoryMarkets.map(m => (
                       <button
                         key={m.symbol}
-                        onClick={() => sendMessage(`تحليل ${m.symbol} ${quickTf}`)}
-                        className="text-xs bg-gray-800/80 hover:bg-gray-700 border border-gray-700/60 rounded-lg px-2.5 py-1.5 text-gray-300 transition-colors"
+                        onClick={() => sendMessage(tx.cmd(m.symbol, quickTf))}
+                        className="text-xs bg-white/[0.04] hover:bg-white/[0.09] border border-white/10 rounded-lg px-2.5 py-1.5 text-gray-300 transition-colors"
                       >
-                        {m.name_ar || m.symbol}
+                        {marketName(m)}
                       </button>
                     ))}
                     {categoryMarkets.length === 0 && (
-                      <p className="text-center text-gray-600 text-xs py-2 w-full">لا رموز بهذي الفئة</p>
+                      <p className="text-center text-gray-600 text-xs py-2 w-full">{tx.noSymbols}</p>
                     )}
                   </div>
 
-                  <p className="text-center text-[11px] text-gray-600 pt-1">
-                    أو اكتب سؤالك مباشرة بالأسفل
-                  </p>
+                  <p className="text-center text-[11px] text-gray-600">{tx.orType}</p>
                 </div>
               )}
 
               {messages.map((m, i) => (
-                <MessageBubble key={i} msg={m} />
+                <MessageBubble key={i} msg={m} tx={tx} isAr={isAr} />
               ))}
 
               {loading && (
-                <div className="flex justify-start">
-                  <div className="bg-gray-800 rounded-2xl rounded-bl-sm px-4 py-3">
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                      <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                      <div className="w-1.5 h-1.5 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                    </div>
-                  </div>
+                <div className="flex items-center gap-2" style={{ direction: 'ltr' }}>
+                  <NeuralOrb size={22} active />
+                  <span className="text-xs text-cyan-300/80" dir={isAr ? 'rtl' : 'ltr'}>{tx.thinking}</span>
                 </div>
               )}
 
               {error && (
-                <div className="flex items-center justify-between gap-2 text-xs text-red-400 bg-red-900/20 border border-red-700/50 rounded-lg px-3 py-2">
+                <div className="flex items-center justify-between gap-2 text-xs text-rose-300 bg-rose-900/20 border border-rose-700/40 rounded-lg px-3 py-2">
                   <span>{error}</span>
                   {limitReached && (
                     <a
                       href="/pricing"
-                      className="flex-shrink-0 bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded-lg font-semibold whitespace-nowrap"
+                      className="flex-shrink-0 text-white px-3 py-1 rounded-lg font-semibold whitespace-nowrap"
+                      style={{ background: 'linear-gradient(135deg,#0891B2,#6D28D9)' }}
                     >
-                      اشترك الآن
+                      {tx.subscribe}
                     </a>
                   )}
                 </div>
@@ -545,7 +631,7 @@ export default function ChatBot() {
             </div>
 
             {/* Input */}
-            <div className="border-t border-gray-800 px-3 py-2.5">
+            <div className="border-t border-white/[0.07] px-3 pt-2.5 pb-2">
               <div className="flex items-end gap-2">
                 <textarea
                   rows={1}
@@ -558,19 +644,21 @@ export default function ChatBot() {
                     }
                   }}
                   disabled={limitReached}
-                  placeholder={limitReached ? 'اشترك للمتابعة...' : 'اكتب سؤالك... مثل: حلل الذهب ساعة'}
-                  className="flex-1 resize-none bg-gray-800 text-gray-100 text-sm rounded-xl px-3 py-2 border border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 placeholder:text-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  placeholder={limitReached ? tx.subscribeToContinue : tx.ask}
+                  className="flex-1 resize-none bg-white/5 text-gray-100 text-sm rounded-xl px-3 py-2 border border-white/10 focus:outline-none focus:ring-1 focus:ring-cyan-500 placeholder:text-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
                 <button
                   onClick={() => sendMessage(input)}
                   disabled={loading || !input.trim() || limitReached}
-                  className="h-9 w-9 flex items-center justify-center rounded-full bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white shadow-lg transition-colors"
+                  aria-label={tx.analyze}
+                  className="h-9 w-9 flex items-center justify-center rounded-full text-white shadow-lg transition-opacity disabled:opacity-40"
+                  style={{ background: 'linear-gradient(135deg,#0891B2,#6D28D9)' }}
                 >
-                  {loading
-                    ? <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    : <Send size={15} />
-                  }
+                  <Send size={15} className={isAr ? 'scale-x-[-1]' : ''} />
                 </button>
+              </div>
+              <div className="mt-1.5 flex items-center justify-center gap-1 text-[10px] text-gray-600">
+                <ShieldAlert size={10} /> {tx.disclaimer}
               </div>
             </div>
           </div>

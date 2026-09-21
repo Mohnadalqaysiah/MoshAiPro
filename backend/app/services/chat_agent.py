@@ -142,7 +142,7 @@ GROQ_URL   = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_MODEL = "llama-3.3-70b-versatile"
 
 # ─── Groq System Prompt — شرح فقط، لا قرارات ────────────────────────────────
-GROQ_SYSTEM_PROMPT = """أنت "كفيل" — محلل تداول ذكي يتحدث بالعربية العامية.
+GROQ_SYSTEM_PROMPT = """أنت "تحليل ذكي" (Smart Analysis) — محلل تداول ذكي يتحدث بالعربية العامية.
 
 ══ قواعد صارمة ══
 • لا تغير أي رقم — Entry، SL، TP، الثقة، كلها تُعرض كما وردت بالضبط
@@ -240,9 +240,9 @@ R/R **1:[رقم]** ← [اشرح ماذا يعني للمستخدم]
 # ─── System Prompt ─────────────────────────────────────────────────────────────
 
 AGENT_SYSTEM_PROMPT = """
-🧠 كفيل — وكيل التداول الذكي (Qaffel AI)
+🧠 تحليل ذكي — Smart Analysis (Qaffel AI)
 
-أنت "كفيل" — محلل تداول محترف (15 سنة خبرة ICT + SMC + Wyckoff).
+أنت "تحليل ذكي" — محلل تداول محترف (15 سنة خبرة ICT + SMC + Wyckoff).
 تفكر بعقلية Smart Money فقط.
 
 🎯 الأسلوب
@@ -938,7 +938,7 @@ class TradingChatAgent:
         # لأنه عالق، والجواب يعيده لنقطة الصفر. صار يعرض ما يستطيعه فعلاً
         # ويدعوه لإعادة الصياغة بدل أن يفترض أن سؤاله خارج الموضوع.
         return (
-            "أهلاً 👋 أنا **كفيل** — هنا لتحليل الأسواق ولمساعدتك في المنصة أيضاً.\n\n"
+            "أهلاً 👋 أنا **تحليل ذكي** — هنا لتحليل الأسواق ولمساعدتك في المنصة أيضاً.\n\n"
             "أقدر أساعدك في:\n"
             "📊 **تحليل أي زوج** — «حلل الذهب على ساعة» أو «BTCUSD 4h»\n"
             "📚 **شرح المفاهيم** — OB · FVG · BOS · Kill Zones · Wyckoff · R/R\n"
@@ -1158,12 +1158,15 @@ class TradingChatAgent:
 
     # ─── Groq Call ───────────────────────────────────────────────────────────
 
-    async def _call_groq(self, messages: list, analysis_context: str = "") -> str:
+    async def _call_groq(self, messages: list, analysis_context: str = "", lang: str = "ar") -> str:
         """يستدعي Groq لشرح التحليل بلغة طبيعية — لا يتدخل في الأرقام أو القرارات"""
         if not self.groq_enabled:
             return ""
 
         system_content = GROQ_SYSTEM_PROMPT
+        if lang == "en":
+            # سطر واحد لمستخدمي الإنجليزية فقط — بلا كلفة توكن على العربية
+            system_content += "\n\nIMPORTANT: The user's interface is English. Reply in English (keep numbers and symbols exactly as given)."
         if analysis_context:
             system_content += (
                 "\n\n══════════════════\n"
@@ -1205,7 +1208,7 @@ class TradingChatAgent:
 
     # ─── Main Chat ───────────────────────────────────────────────────────────
 
-    async def chat(self, session_id: str, user_message: str) -> dict:
+    async def chat(self, session_id: str, user_message: str, lang: str = "ar") -> dict:
         if session_id not in self.sessions:
             self.sessions[session_id] = []
         if session_id not in self.session_context:
@@ -1229,9 +1232,13 @@ class TradingChatAgent:
         # ── تحية ──────────────────────────────────────────────────────────────
         if intent["is_greeting"] and not intent["is_analysis"] and not symbol:
             msgs = [
-                "👋 هلا! أنا مُوش، محللك في أسواق الـ ICT/SMC.\n\nقولي أي زوج تبي أحلله وبأي إطار زمني 🎯\nمثال: *حلل الذهب على ساعة* أو *BTCUSD 4h*",
+                "👋 هلا! أنا «تحليل ذكي»، محللك في أسواق الـ ICT/SMC.\n\nقولي أي زوج تبي أحلله وبأي إطار زمني 🎯\nمثال: *حلل الذهب على ساعة* أو *BTCUSD 4h*",
                 "👋 أهلاً! جاهز أحلل لك أي سوق بمنهج SMC/ICT.\n\nاكتب الزوج والإطار الزمني وأنا أبدأ 🚀",
-                "هلا وغلا 👋 — أنا مُوش، شايل أسرار Smart Money.\n\nقولي ايش تبي تحلل اليوم؟",
+                "هلا وغلا 👋 — أنا «تحليل ذكي»، شايل أسرار Smart Money.\n\nقولي ايش تبي تحلل اليوم؟",
+            ] if lang != "en" else [
+                "👋 Hi! I'm Smart Analysis, your ICT/SMC market analyst.\n\nTell me a pair and a timeframe 🎯\nExample: *Analyze Gold 1h* or *BTCUSD 4h*",
+                "👋 Hello! Ready to analyze any market with the SMC/ICT method.\n\nType a pair and timeframe and I'll start 🚀",
+                "Hey 👋 — I'm Smart Analysis, I read Smart Money footprints.\n\nWhat would you like to analyze today?",
             ]
             msg = random.choice(msgs)
             reply = {"action": "text", "message": msg}
@@ -1274,7 +1281,7 @@ class TradingChatAgent:
                     # Groq يُحسّن صياغة الإجابة المحلية
                     if self.groq_enabled:
                         ctx = f"المستخدم يسأل سؤال متابعة. الإجابة الصحيحة:\n{local_answer}\nأعد صياغتها بلغة عامية طبيعية ومختصرة بدون تغيير أي رقم."
-                        raw = await self._call_groq(history, ctx)
+                        raw = await self._call_groq(history, ctx, lang)
                         msg = raw.strip() if raw else local_answer
                     else:
                         msg = local_answer
@@ -1299,7 +1306,7 @@ class TradingChatAgent:
 
             # أسئلة المنصة حُسمت أعلاه قبل أي تفريع — لا حاجة لفحصها هنا.
             if self.groq_enabled:
-                raw = await self._call_groq(history, groq_ctx)
+                raw = await self._call_groq(history, groq_ctx, lang)
                 msg = raw.strip() if raw else (
                     self._explain_concept_local(user_message.lower())
                     or self._local_general_response(user_message.lower())
