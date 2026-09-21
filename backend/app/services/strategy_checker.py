@@ -114,7 +114,8 @@ async def strategy_checker():
                             matched_json=result["matched"], price=result["price"],
                             telegram_sent=telegram_sent,
                             diagnostics_json={
-                                "block_reason":  result.get("block_reason"),
+                                "block_reason":    result.get("block_reason"),
+                                "block_reason_en": result.get("block_reason_en"),
                                 "groups_passed": result.get("groups_passed"),
                                 "score_ok":      result.get("score_ok"),
                                 "min_score":     result.get("min_score"),

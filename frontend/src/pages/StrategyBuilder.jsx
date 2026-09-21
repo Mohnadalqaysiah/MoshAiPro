@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import axios from "axios";
 import { Link } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { useLang } from "../contexts/LangContext";
 import StrategyBuilderTour from "../components/StrategyBuilderTour";
 import StrategyGuide from "../components/StrategyGuide";
 import UpgradeModal from "../components/UpgradeModal";
@@ -94,7 +95,10 @@ const fmtPrice = (sym, val) => {
 const basePrice = (sym) => (SYMBOL_POOL.find((x) => x.s === sym) || { base: 100 }).base;
 
 const TIMEFRAMES = ["1m", "5m", "15m", "1H", "4H", "1D"];
+// القيم الفعلية عربية ثابتة (متوافقة مع الافتراضي بـbackend/app/api/strategies.py
+// وبيانات الاستراتيجيات المحفوظة سابقاً) — تُترجَم فقط بالعرض عبر TF_MODE_LABEL_EN.
 const TF_MODES = ["نفس الفريم", "فريم أعلى", "فريم مخصص"];
+const TF_MODE_LABEL_EN = { "نفس الفريم": "Same Timeframe", "فريم أعلى": "Higher Timeframe", "فريم مخصص": "Custom Timeframe" };
 
 /* =========================================================================
    CONDITION CATALOG — (2026-09-06) مقصودة على الشروط المربوطة فعلياً بمحرك
@@ -107,54 +111,59 @@ const TF_MODES = ["نفس الفريم", "فريم أعلى", "فريم مخصص
 const CAT = [
   { id: "indicators", label: "مؤشرات فنية", en: "Technical Indicators", icon: Activity, color: C.teal, w: 10,
     items: [
-      ["rsi", "RSI", "مؤشر القوة النسبية — تشبع شرائي/بيعي"],
-      ["macd", "MACD", "تقاطع خط الإشارة مع MACD"],
-      ["ema", "EMA", "المتوسط المتحرك الأسي"],
-      ["stoch", "Stochastic", "مذبذب الزخم العشوائي"],
+      ["rsi", "RSI", "مؤشر القوة النسبية — تشبع شرائي/بيعي", "Relative Strength Index — overbought/oversold"],
+      ["macd", "MACD", "تقاطع خط الإشارة مع MACD", "MACD line crossing its signal line"],
+      ["ema", "EMA", "المتوسط المتحرك الأسي", "Exponential Moving Average"],
+      ["stoch", "Stochastic", "مذبذب الزخم العشوائي", "Stochastic momentum oscillator"],
     ]},
   { id: "smc", label: "ICT / SMC", en: "ICT / SMC", icon: Layers, color: C.gold, w: 18,
     items: [
-      ["bos", "BOS", "Break of Structure — كسر هيكل"],
-      ["choch", "CHoCH", "Change of Character — تغيّر طابع"],
-      ["ob", "Order Block", "منطقة أوامر مؤسساتية"],
-      ["fvg", "FVG", "Fair Value Gap — فجوة سعرية"],
-      ["liquidity", "Liquidity Sweep", "سحب سيولة قبل الانعكاس"],
-      ["eqh", "Equal Highs", "قمم متساوية"],
-      ["eql", "Equal Lows", "قيعان متساوية"],
-      ["premium", "Premium/Discount", "منطقة علاوة أو خصم"],
-      ["killzone", "Kill Zone", "نافذة زمنية عالية النشاط"],
+      ["bos", "BOS", "Break of Structure — كسر هيكل", "Break of Structure"],
+      ["choch", "CHoCH", "Change of Character — تغيّر طابع", "Change of Character"],
+      ["ob", "Order Block", "منطقة أوامر مؤسساتية", "Institutional order zone"],
+      ["fvg", "FVG", "Fair Value Gap — فجوة سعرية", "Fair Value Gap — a price imbalance"],
+      ["liquidity", "Liquidity Sweep", "سحب سيولة قبل الانعكاس", "Liquidity grab before a reversal"],
+      ["eqh", "Equal Highs", "قمم متساوية", "Equal highs"],
+      ["eql", "Equal Lows", "قيعان متساوية", "Equal lows"],
+      ["premium", "Premium/Discount", "منطقة علاوة أو خصم", "Premium or discount zone"],
+      ["killzone", "Kill Zone", "نافذة زمنية عالية النشاط", "High-activity time window"],
       // (2026-09-17) شروط الاستراتيجية تقرّر "هل" يُرسَل تنبيه، ومستويات
       // المحرك تقرّر "باتجاه أي جهة" — وهما منفصلان. فبلا هذا الشرط لا
       // يملك المستخدم أي وسيلة لتقييد الاتجاه، ويتلقى الجهتين مهما ضبط.
-      ["direction", "اتجاه الصفقة", "قيّد التنبيه بالشراء فقط أو البيع فقط — اكتب: شراء / بيع"],
+      ["direction", "اتجاه الصفقة", "قيّد التنبيه بالشراء فقط أو البيع فقط — اكتب: شراء / بيع", "Trade Direction", "Restrict the alert to buy-only or sell-only — type: buy / sell"],
     ]},
   { id: "volatility", label: "التذبذب", en: "Volatility", icon: Waves, color: "#9AA7FF", w: 7,
     items: [
-      ["atrv", "ATR", "قراءة التذبذب الحالية"],
+      ["atrv", "ATR", "قراءة التذبذب الحالية", "Current volatility reading"],
     ]},
   { id: "sessions", label: "الجلسات والوقت", en: "Sessions & Time", icon: Clock, color: "#F0C24E", w: 6,
     items: [
-      ["london", "London Session", "جلسة لندن"],
-      ["newyork", "New York Session", "جلسة نيويورك"],
-      ["asian", "Asian Session", "الجلسة الآسيوية"],
-      ["killzones", "Kill Zones", "نوافذ التقلب العالي"],
+      ["london", "London Session", "جلسة لندن", "London session"],
+      ["newyork", "New York Session", "جلسة نيويورك", "New York session"],
+      ["asian", "Asian Session", "الجلسة الآسيوية", "Asian session"],
+      ["killzones", "Kill Zones", "نوافذ التقلب العالي", "High-volatility windows"],
     ]},
 ];
 const CAT_BY_ID = Object.fromEntries(CAT.map((c) => [c.id, c]));
-const ALL_ITEMS = CAT.flatMap((c) => c.items.map(([type, label, desc]) => ({ catId: c.id, type, label, desc })));
+// العنصر [type, label, desc, labelEn?, descEn?] — labelEn يُستخدم فقط حين يختلف
+// عن label (متل "اتجاه الصفقة"/"Trade Direction")، وإلا فالاسم إنجليزي أصلاً
+// (RSI, MACD, BOS...) ويبقى كما هو بأي لغة — نفس اصطلاح المكتبة المتخصصة.
+const ALL_ITEMS = CAT.flatMap((c) => c.items.map(([type, label, desc, labelEn, descEn]) => ({
+  catId: c.id, type, label, desc, labelEn: labelEn || label, descEn: descEn || desc,
+})));
 
 const TABS = [
-  { id: "build", label: "البناء", icon: Hammer },
-  { id: "logic", label: "المنطق والسكور", icon: SlidersHorizontal },
-  { id: "telegram", label: "تلجرام", icon: Bot },
-  { id: "monitoring", label: "المراقبة الحية", icon: MonitorDot },
-  { id: "saved", label: "المحفوظة", icon: FolderOpen },
+  { id: "build", label: "البناء", labelEn: "Build", icon: Hammer },
+  { id: "logic", label: "المنطق والسكور", labelEn: "Logic & Score", icon: SlidersHorizontal },
+  { id: "telegram", label: "تلجرام", labelEn: "Telegram", icon: Bot },
+  { id: "monitoring", label: "المراقبة الحية", labelEn: "Live Monitoring", icon: MonitorDot },
+  { id: "saved", label: "المحفوظة", labelEn: "Saved", icon: FolderOpen },
 ];
 
 /* =========================================================================
    DEMO PRESET — "London Gold Liquidity Reversal"
 ========================================================================= */
-function buildDemoState() {
+function buildDemoState(isAr = true) {
   const gA = { id: "gA", name: "Market Structure", logic: "AND", atLeast: 1, collapsed: false };
   const gB = { id: "gB", name: "Entry Confirmation", logic: "OR", atLeast: 1, collapsed: false };
   const gC = { id: "gC", name: "Session Filter", logic: "AND", atLeast: 1, collapsed: false };
@@ -163,13 +172,18 @@ function buildDemoState() {
     timeframe: tf, tfMode: "نفس الفريم",
     value, weight: CAT_BY_ID[catId].w, enabled: true, not: false,
   });
+  // قيم "value" نصوص تُطابَق بالمحرك (backend/app/services/strategy_engine.py) —
+  // يقبل عربي وإنجليزي معاً لمعظمها، فتُبدَّل هنا بأمان حسب لغة العرض.
+  const v = isAr
+    ? { discount: "خصم", top: "قمة", bull: "صعودي", fill: "امتلاء 50%", demand: "طلب", active: "نشطة" }
+    : { discount: "Discount", top: "Top", bull: "Bullish", fill: "50% Fill", demand: "Demand", active: "Active" };
   const conditions = [
-    mk("gA", "smc", "premium", "HTF Discount Zone", "1D", "خصم"),
-    mk("gA", "smc", "liquidity", "Liquidity Sweep", "1H", "قمة"),
-    mk("gA", "smc", "bos", "BOS", "15m", "صعودي"),
-    mk("gB", "smc", "fvg", "FVG", "15m", "امتلاء 50%"),
-    mk("gB", "smc", "ob", "Order Block", "15m", "طلب"),
-    mk("gC", "sessions", "london", "London Session", "15m", "نشطة"),
+    mk("gA", "smc", "premium", "HTF Discount Zone", "1D", v.discount),
+    mk("gA", "smc", "liquidity", "Liquidity Sweep", "1H", v.top),
+    mk("gA", "smc", "bos", "BOS", "15m", v.bull),
+    mk("gB", "smc", "fvg", "FVG", "15m", v.fill),
+    mk("gB", "smc", "ob", "Order Block", "15m", v.demand),
+    mk("gC", "sessions", "london", "London Session", "15m", v.active),
   ];
   return { groups: [gA, gB, gC], conditions };
 }
@@ -249,6 +263,8 @@ function Modal({ title, children, onClose, danger }) {
 ========================================================================= */
 export default function StrategyBuilder() {
   const { user } = useAuth();
+  const { lang } = useLang();
+  const isAr = lang === "ar";
   const tgConnected = !!user?.telegram_linked;
   const isPaid = user?.role === "admin" || ["weekly", "monthly"].includes(user?.plan);
   const [paywallOpen, setPaywallOpen] = useState(false);
@@ -260,7 +276,7 @@ export default function StrategyBuilder() {
   };
 
   const [activeTab, setActiveTab] = useState("build");
-  const [strategyName, setStrategyName] = useState("استراتيجية جديدة");
+  const [strategyName, setStrategyName] = useState(() => (isAr ? "استراتيجية جديدة" : "New Strategy"));
   const [symbols, setSymbols] = useState(["XAU/USD"]);
   const [timeframes, setTimeframes] = useState(["1H", "15m", "5m"]);
 
@@ -327,27 +343,27 @@ export default function StrategyBuilder() {
   };
 
   const undo = () => {
-    if (historyIdx.current <= 0) return showToast("لا يوجد ما يمكن التراجع عنه");
+    if (historyIdx.current <= 0) return showToast(isAr ? "لا يوجد ما يمكن التراجع عنه" : "Nothing to undo");
     historyIdx.current -= 1;
     const snap = JSON.parse(history.current[historyIdx.current]);
     suppressHistory.current = true;
     setGroups(snap.g); setConditions(snap.c);
     suppressHistory.current = false;
-    showToast("تم التراجع");
+    showToast(isAr ? "تم التراجع" : "Undone");
   };
   const redo = () => {
-    if (historyIdx.current >= history.current.length - 1) return showToast("لا يوجد ما يمكن الإعادة");
+    if (historyIdx.current >= history.current.length - 1) return showToast(isAr ? "لا يوجد ما يمكن الإعادة" : "Nothing to redo");
     historyIdx.current += 1;
     const snap = JSON.parse(history.current[historyIdx.current]);
     suppressHistory.current = true;
     setGroups(snap.g); setConditions(snap.c);
     suppressHistory.current = false;
-    showToast("تمت الإعادة");
+    showToast(isAr ? "تمت الإعادة" : "Redone");
   };
 
   /* ---------------- group ops ---------------- */
   const addGroup = () => {
-    const g = { id: nextId(), name: `مجموعة ${groups.length + 1}`, logic: "AND", atLeast: 1, collapsed: false };
+    const g = { id: nextId(), name: isAr ? `مجموعة ${groups.length + 1}` : `Group ${groups.length + 1}`, logic: "AND", atLeast: 1, collapsed: false };
     const ng = [...groups, g];
     mutate(ng, conditions);
     setActiveGroupId(g.id);
@@ -358,23 +374,23 @@ export default function StrategyBuilder() {
   const toggleCollapse = (id) => setGroups((prev) => prev.map((g) => (g.id === id ? { ...g, collapsed: !g.collapsed } : g)));
   const duplicateGroup = (id) => {
     const g = groups.find((x) => x.id === id);
-    const ng2 = { ...g, id: nextId(), name: `${g.name} (نسخة)` };
+    const ng2 = { ...g, id: nextId(), name: isAr ? `${g.name} (نسخة)` : `${g.name} (copy)` };
     const members = conditions.filter((c) => c.groupId === id).map((c) => ({ ...c, id: nextId(), groupId: ng2.id }));
     mutate([...groups, ng2], [...conditions, ...members]);
-    showToast("تم نسخ المجموعة");
+    showToast(isAr ? "تم نسخ المجموعة" : "Group duplicated");
   };
   const deleteGroup = (id) => {
     mutate(groups.filter((g) => g.id !== id), conditions.filter((c) => c.groupId !== id));
     if (activeGroupId === id) setActiveGroupId(null);
-    showToast("تم حذف المجموعة");
+    showToast(isAr ? "تم حذف المجموعة" : "Group deleted");
   };
 
   /* ---------------- condition ops ---------------- */
   const addCondition = (item) => {
-    if (!activeGroupId) return showToast("أنشئ مجموعة أولًا أو اخترها");
+    if (!activeGroupId) return showToast(isAr ? "أنشئ مجموعة أولًا أو اخترها" : "Create or select a group first");
     const cat = CAT_BY_ID[item.catId];
     const c = {
-      id: nextId(), groupId: activeGroupId, catId: item.catId, type: item.type, label: item.label,
+      id: nextId(), groupId: activeGroupId, catId: item.catId, type: item.type, label: isAr ? item.label : item.labelEn,
       timeframe: "15m", tfMode: "نفس الفريم", value: "", weight: cat.w, enabled: true, not: false,
     };
     mutate(groups, [...conditions, c]);
@@ -393,22 +409,25 @@ export default function StrategyBuilder() {
     mutate([], []);
     setActiveGroupId(null);
     setCurrentStrategyId(null);
-    showToast("تم مسح الاستراتيجية");
+    showToast(isAr ? "تم مسح الاستراتيجية" : "Strategy cleared");
   };
 
   const loadDemoIntoEditor = () => {
-    const demo = buildDemoState();
+    const demo = buildDemoState(isAr);
     mutate(demo.groups, demo.conditions);
     setActiveGroupId(demo.groups[0]?.id || null);
     setCurrentStrategyId(null);
-    showToast("تم تحميل استراتيجية تجريبية — عدّلها ثم احفظها لتصبح حقيقية");
+    showToast(isAr ? "تم تحميل استراتيجية تجريبية — عدّلها ثم احفظها لتصبح حقيقية" : "Demo strategy loaded — edit it then save to make it real");
   };
 
   const filteredItems = useMemo(() => {
     const pool = ALL_ITEMS.filter((it) => it.catId === activeCat);
     if (!search.trim()) return pool;
     const q = search.trim().toLowerCase();
-    return ALL_ITEMS.filter((it) => it.label.toLowerCase().includes(q) || it.desc.includes(q));
+    return ALL_ITEMS.filter((it) =>
+      it.label.toLowerCase().includes(q) || it.desc.includes(q) ||
+      it.labelEn.toLowerCase().includes(q) || it.descEn.toLowerCase().includes(q)
+    );
   }, [activeCat, search]);
 
   /* ---------------- derived: score / summary ---------------- */
@@ -421,10 +440,10 @@ export default function StrategyBuilder() {
     .filter((g) => conditions.some((c) => c.groupId === g.id))
     .map((g) => {
       const members = conditions.filter((c) => c.groupId === g.id);
-      const joiner = g.logic === "AND" ? " و " : g.logic === "OR" ? " أو " : ` (٢+ من ${members.length}) `;
+      const joiner = g.logic === "AND" ? (isAr ? " و " : " AND ") : g.logic === "OR" ? (isAr ? " أو " : " OR ") : (isAr ? ` (٢+ من ${members.length}) ` : ` (2+ of ${members.length}) `);
       return `(${members.map((m) => (m.not ? `NOT ${m.label}` : m.label)).join(joiner)})`;
     })
-    .join(" و ");
+    .join(isAr ? " و " : " AND ");
 
   /* ---------------- live price (real, falls back to a reference price if unavailable) ---------------- */
   const [livePrice, setLivePrice] = useState(null);
@@ -498,40 +517,44 @@ export default function StrategyBuilder() {
           active: r.data.status === "ACTIVE",
           events: (r.data.events || []).map((e) => ({
             id: e.id,
-            time: e.createdAt ? new Date(e.createdAt).toLocaleTimeString("ar-EG") : "",
+            time: e.createdAt ? new Date(e.createdAt).toLocaleTimeString(isAr ? "ar-EG" : "en-US") : "",
             msg: `${e.symbol} — Score ${e.score}${e.triggered ? " — ✓ TRIGGERED" : ""}${e.telegramSent ? " — Telegram Alert Sent ✓" : ""}`,
             // (2026-09-17) سبب عدم الإطلاق. عرض الدرجة وحدها كان يُوهم بعطل:
             // درجة 54 وعتبة 50 بلا إطلاق تبدو خللاً، والسبب أن الإطلاق يشترط
             // منطق المجموعات معها. الرقم بلا شرطه إخفاءٌ بصيغة إظهار.
-            reason: e.triggered ? null : (e.diagnostics?.block_reason || null),
+            // (2026-09-21) block_reason_en مبني بالخادم بموازاة block_reason —
+            // يتبع isAr هنا بدل نص عربي ثابت.
+            reason: e.triggered ? null : ((isAr ? e.diagnostics?.block_reason : e.diagnostics?.block_reason_en) || e.diagnostics?.block_reason || null),
           })),
-          lastScan: r.data.events?.[0]?.createdAt ? new Date(r.data.events[0].createdAt).toLocaleTimeString("ar-EG") : null,
+          lastScan: r.data.events?.[0]?.createdAt ? new Date(r.data.events[0].createdAt).toLocaleTimeString(isAr ? "ar-EG" : "en-US") : null,
         });
       } catch { /* تُترك الحالة كما هي عند فشل الاستطلاع */ }
     };
     poll();
     const id = setInterval(poll, 10000);
     return () => { stopped = true; clearInterval(id); };
-  }, [activeTab, currentStrategyId]);
+  }, [activeTab, currentStrategyId, isAr]);
 
   const toggleMonitor = async () => {
     if (!requirePaid()) return;
-    if (!currentStrategyId) return showToast("احفظ الاستراتيجية أولًا لتفعيل المراقبة الحقيقية");
+    if (!currentStrategyId) return showToast(isAr ? "احفظ الاستراتيجية أولًا لتفعيل المراقبة الحقيقية" : "Save the strategy first to enable real monitoring");
     const next = monitor.active ? "DISABLED" : "ACTIVE";
     try {
       await axios.put(`${API}/api/v1/strategies/${currentStrategyId}/status`, { status: next });
       setMonitor((m) => ({ ...m, active: next === "ACTIVE" }));
       await loadSaved();
-      showToast(next === "ACTIVE" ? "تم تفعيل المراقبة — يفحصها الخادم كل 5 دقائق" : "تم إيقاف المراقبة");
+      showToast(next === "ACTIVE"
+        ? (isAr ? "تم تفعيل المراقبة — يفحصها الخادم كل 5 دقائق" : "Monitoring enabled — checked by the server every 5 minutes")
+        : (isAr ? "تم إيقاف المراقبة" : "Monitoring stopped"));
     } catch {
-      showToast("فشل تحديث حالة المراقبة");
+      showToast(isAr ? "فشل تحديث حالة المراقبة" : "Failed to update monitoring status");
     }
   };
 
   /* ---------------- save / load strategies (REAL — DB-backed) ---------------- */
   const saveStrategy = async (activate) => {
     if (!requirePaid()) return;
-    if (conditions.length === 0) return showToast("أضف شروطًا قبل الحفظ");
+    if (conditions.length === 0) return showToast(isAr ? "أضف شروطًا قبل الحفظ" : "Add conditions before saving");
     setSaving(true);
     try {
       let id = currentStrategyId;
@@ -546,9 +569,9 @@ export default function StrategyBuilder() {
         await axios.put(`${API}/api/v1/strategies/${id}/status`, { status: "ACTIVE" });
       }
       await loadSaved();
-      showToast(activate ? "تم الحفظ والتفعيل" : "تم حفظ المسودة");
+      showToast(activate ? (isAr ? "تم الحفظ والتفعيل" : "Saved and activated") : (isAr ? "تم حفظ المسودة" : "Draft saved"));
     } catch (e) {
-      showToast(e.response?.data?.detail || "فشل الحفظ");
+      showToast(e.response?.data?.detail || (isAr ? "فشل الحفظ" : "Save failed"));
     } finally {
       setSaving(false);
     }
@@ -567,9 +590,11 @@ export default function StrategyBuilder() {
       setCurrentStrategyId(d.id);
       setActiveGroupId(d.groups[0]?.id || null);
       setActiveTab(tab);
-      showToast(tab === "monitoring" ? "تم فتح المراقبة الحية لهذه الاستراتيجية" : "تم تحميل الاستراتيجية للتحرير");
+      showToast(tab === "monitoring"
+        ? (isAr ? "تم فتح المراقبة الحية لهذه الاستراتيجية" : "Live monitoring opened for this strategy")
+        : (isAr ? "تم تحميل الاستراتيجية للتحرير" : "Strategy loaded for editing"));
     } catch {
-      showToast("فشل تحميل الاستراتيجية");
+      showToast(isAr ? "فشل تحميل الاستراتيجية" : "Failed to load strategy");
     }
   };
 
@@ -590,9 +615,9 @@ export default function StrategyBuilder() {
     try {
       await axios.post(`${API}/api/v1/strategies/${rec.id}/duplicate`);
       await loadSaved();
-      showToast("تم نسخ الاستراتيجية");
+      showToast(isAr ? "تم نسخ الاستراتيجية" : "Strategy duplicated");
     } catch {
-      showToast("فشل نسخ الاستراتيجية");
+      showToast(isAr ? "فشل نسخ الاستراتيجية" : "Failed to duplicate strategy");
     }
   };
 
@@ -603,7 +628,7 @@ export default function StrategyBuilder() {
       await axios.put(`${API}/api/v1/strategies/${rec.id}/status`, { status: next });
       await loadSaved();
     } catch {
-      showToast("فشل تحديث الحالة");
+      showToast(isAr ? "فشل تحديث الحالة" : "Failed to update status");
     }
   };
 
@@ -612,9 +637,9 @@ export default function StrategyBuilder() {
       await axios.delete(`${API}/api/v1/strategies/${deleteTarget.id}`);
       if (currentStrategyId === deleteTarget.id) setCurrentStrategyId(null);
       await loadSaved();
-      showToast("تم حذف الاستراتيجية");
+      showToast(isAr ? "تم حذف الاستراتيجية" : "Strategy deleted");
     } catch {
-      showToast("فشل حذف الاستراتيجية");
+      showToast(isAr ? "فشل حذف الاستراتيجية" : "Failed to delete strategy");
     } finally {
       setDeleteTarget(null);
     }
@@ -622,13 +647,13 @@ export default function StrategyBuilder() {
 
   const sendTestTelegramAlert = async () => {
     if (!requirePaid()) return;
-    if (!currentStrategyId) return showToast("احفظ الاستراتيجية أولًا");
-    if (!tgConnected) return showToast("اربط حساب Telegram أولًا من صفحة الملف الشخصي");
+    if (!currentStrategyId) return showToast(isAr ? "احفظ الاستراتيجية أولًا" : "Save the strategy first");
+    if (!tgConnected) return showToast(isAr ? "اربط حساب Telegram أولًا من صفحة الملف الشخصي" : "Link your Telegram account first from the Profile page");
     try {
       const r = await axios.post(`${API}/api/v1/strategies/${currentStrategyId}/telegram/test`);
-      showToast(r.data.message || "تم الإرسال ✅");
+      showToast(r.data.message || (isAr ? "تم الإرسال ✅" : "Sent ✅"));
     } catch (e) {
-      showToast(e.response?.data?.detail || "فشل إرسال التنبيه");
+      showToast(e.response?.data?.detail || (isAr ? "فشل إرسال التنبيه" : "Failed to send alert"));
     }
   };
 
@@ -639,7 +664,7 @@ export default function StrategyBuilder() {
      RENDER
   ======================================================================= */
   return (
-    <div dir="rtl" style={{ background: C.bgGrad, color: C.text, fontFamily: FB, minHeight: "100vh" }} className="w-full">
+    <div dir={isAr ? "rtl" : "ltr"} style={{ background: C.bgGrad, color: C.text, fontFamily: FB, minHeight: "100vh" }} className="w-full">
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
         * { box-sizing: border-box; }
@@ -663,20 +688,20 @@ export default function StrategyBuilder() {
           <div className="flex items-center gap-2.5">
             <Link
               to="/dashboard"
-              title="العودة للوحة التحكم"
+              title={isAr ? "العودة للوحة التحكم" : "Back to dashboard"}
               style={{ background: C.surfaceHi, border: `1px solid ${C.border}`, color: C.sub }}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] hover:text-white hover:border-gray-500 transition"
             >
-              <ArrowLeft size={13} style={{ transform: "scaleX(-1)" }} /> لوحة التحكم
+              <ArrowLeft size={13} style={{ transform: isAr ? "scaleX(-1)" : "none" }} /> {isAr ? "لوحة التحكم" : "Dashboard"}
             </Link>
             <div style={{ background: C.goldSoft, border: `1px solid ${C.gold}` }} className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0">
               <Sparkles size={16} color={C.gold} />
             </div>
             <div>
               <div style={{ fontFamily: FD, fontWeight: 600, fontSize: 14.5 }}>Qaffel Strategy Terminal</div>
-              <div style={{ color: C.sub, fontSize: 10.5, fontFamily: FM }}>LIVE — SMC/ICT مربوطة بمحرك التحليل الحقيقي</div>
+              <div style={{ color: C.sub, fontSize: 10.5, fontFamily: FM }}>LIVE — SMC/ICT {isAr ? "مربوطة بمحرك التحليل الحقيقي" : "wired to the real analysis engine"}</div>
             </div>
-            <button onClick={() => setTourForceOpen(true)} title="جولة تعريفية" style={{ color: C.muted }} className="hover:text-white p-1 rounded-md">
+            <button onClick={() => setTourForceOpen(true)} title={isAr ? "جولة تعريفية" : "Guided tour"} style={{ color: C.muted }} className="hover:text-white p-1 rounded-md">
               <HelpCircle size={15} />
             </button>
           </div>
@@ -696,7 +721,7 @@ export default function StrategyBuilder() {
             {!isPaid && (
               <Link to="/pricing">
                 <Pill color={C.gold} bg={C.goldSoft} border={C.gold}>
-                  🔒 وضع المعاينة — اشترك للتفعيل
+                  🔒 {isAr ? "وضع المعاينة — اشترك للتفعيل" : "Preview mode — subscribe to activate"}
                 </Pill>
               </Link>
             )}
@@ -716,7 +741,7 @@ export default function StrategyBuilder() {
                 className="tab-underline flex items-center gap-1.5 px-3 py-2.5 text-[13px] whitespace-nowrap"
               >
                 <Icon size={14} />
-                {t.label}
+                {isAr ? t.label : t.labelEn}
               </button>
             );
           })}
@@ -731,10 +756,10 @@ export default function StrategyBuilder() {
       {activeTab !== "build" && (
         <div className="max-w-[1500px] mx-auto px-4 md:px-8 pt-4 flex items-center justify-end gap-2">
           <button disabled={saving} onClick={() => saveStrategy(false)} style={{ background: C.surfaceHi, border: `1px solid ${C.border}`, color: C.text, opacity: saving ? 0.6 : 1 }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12.5px]">
-            {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} حفظ كمسودة
+            {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} {isAr ? "حفظ كمسودة" : "Save as Draft"}
           </button>
           <button disabled={saving} onClick={() => saveStrategy(true)} style={{ background: C.gold, color: "#1A1200", fontWeight: 600, opacity: saving ? 0.6 : 1 }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12.5px]">
-            {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} حفظ وتفعيل
+            {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} {isAr ? "حفظ وتفعيل" : "Save & Activate"}
           </button>
         </div>
       )}
@@ -773,7 +798,7 @@ export default function StrategyBuilder() {
                 <input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="ابحث عن شرط..."
+                  placeholder={isAr ? "ابحث عن شرط..." : "Search conditions..."}
                   style={{ background: C.surfaceHi, border: `1px solid ${C.border}`, color: C.text, paddingRight: 30 }}
                   className="w-full rounded-lg py-2 pl-3 text-[12.5px]"
                 />
@@ -789,9 +814,9 @@ export default function StrategyBuilder() {
                         key={cat.id}
                         onClick={() => setActiveCat(cat.id)}
                         style={{ background: active ? `${cat.color}1A` : "transparent", border: `1px solid ${active ? cat.color : "transparent"}`, color: active ? cat.color : C.sub }}
-                        className="flex items-center justify-between px-3 py-2 rounded-xl text-[13px] text-right"
+                        className={`flex items-center justify-between px-3 py-2 rounded-xl text-[13px] ${isAr ? "text-right" : "text-left"}`}
                       >
-                        <span className="flex items-center gap-2"><Icon size={14} /> {cat.label}</span>
+                        <span className="flex items-center gap-2"><Icon size={14} /> {isAr ? cat.label : cat.en}</span>
                         <span style={{ fontFamily: FM, fontSize: 10, color: C.muted }}>{cat.items.length}</span>
                       </button>
                     );
@@ -807,21 +832,21 @@ export default function StrategyBuilder() {
                       key={item.catId + item.type}
                       onClick={() => addCondition(item)}
                       style={{ background: C.surfaceHi, border: `1px solid ${C.border}` }}
-                      className="group flex items-start justify-between gap-2 px-3 py-2.5 rounded-xl text-right hover:opacity-90"
+                      className={`group flex items-start justify-between gap-2 px-3 py-2.5 rounded-xl hover:opacity-90 ${isAr ? "text-right" : "text-left"}`}
                     >
                       <div>
                         <div className="flex items-center gap-1.5">
                           <span style={{ width: 5, height: 5, borderRadius: 99, background: cat.color }} />
-                          <span style={{ fontSize: 12.5, fontWeight: 500 }}>{item.label}</span>
+                          <span style={{ fontSize: 12.5, fontWeight: 500 }}>{isAr ? item.label : item.labelEn}</span>
                         </div>
-                        <div style={{ color: C.muted, fontSize: 10.5 }} className="mt-0.5">{item.desc}</div>
+                        <div style={{ color: C.muted, fontSize: 10.5 }} className="mt-0.5">{isAr ? item.desc : item.descEn}</div>
                       </div>
                       <Plus size={13} style={{ color: C.gold, marginTop: 2, flexShrink: 0 }} />
                     </button>
                   );
                 })}
                 {filteredItems.length === 0 && (
-                  <div style={{ color: C.muted }} className="text-center text-[12px] py-6">لا توجد نتائج مطابقة</div>
+                  <div style={{ color: C.muted }} className="text-center text-[12px] py-6">{isAr ? "لا توجد نتائج مطابقة" : "No matching results"}</div>
                 )}
               </div>
             </div>
@@ -865,17 +890,17 @@ export default function StrategyBuilder() {
               {/* toolbar */}
               <div className="flex flex-wrap items-center gap-2">
                 <button onClick={addGroup} style={{ background: C.goldSoft, border: `1px solid ${C.gold}`, color: C.gold }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12.5px]">
-                  <Plus size={13} /> مجموعة جديدة
+                  <Plus size={13} /> {isAr ? "مجموعة جديدة" : "New Group"}
                 </button>
-                <IconBtn icon={Undo2} onClick={undo} title="تراجع" />
-                <IconBtn icon={Redo2} onClick={redo} title="إعادة" />
-                <IconBtn icon={RefreshCw} onClick={clearStrategy} title="مسح الكل" color={C.red} />
+                <IconBtn icon={Undo2} onClick={undo} title={isAr ? "تراجع" : "Undo"} />
+                <IconBtn icon={Redo2} onClick={redo} title={isAr ? "إعادة" : "Redo"} />
+                <IconBtn icon={RefreshCw} onClick={clearStrategy} title={isAr ? "مسح الكل" : "Clear all"} color={C.red} />
                 <div className="flex-1" />
                 <button disabled={saving} onClick={() => saveStrategy(false)} style={{ background: C.surfaceHi, border: `1px solid ${C.border}`, color: C.text, opacity: saving ? 0.6 : 1 }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12.5px]">
-                  {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} حفظ كمسودة
+                  {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} {isAr ? "حفظ كمسودة" : "Save as Draft"}
                 </button>
                 <button disabled={saving} onClick={() => saveStrategy(true)} style={{ background: C.gold, color: "#1A1200", fontWeight: 600, opacity: saving ? 0.6 : 1, animation: conditions.length && !saving ? "glowPulse 2.6s infinite" : "none" }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12.5px]">
-                  {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} حفظ وتفعيل
+                  {saving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />} {isAr ? "حفظ وتفعيل" : "Save & Activate"}
                 </button>
               </div>
 
@@ -889,7 +914,7 @@ export default function StrategyBuilder() {
                       style={{ background: activeGroupId === g.id ? C.tealSoft : "transparent", border: `1px dashed ${activeGroupId === g.id ? C.teal : C.border}`, color: activeGroupId === g.id ? C.teal : C.sub }}
                       className="px-2.5 py-1 rounded-full text-[11px]"
                     >
-                      إضافة إلى: {g.name}
+                      {isAr ? "إضافة إلى:" : "Add to:"} {g.name}
                     </button>
                   ))}
                 </div>
@@ -899,9 +924,9 @@ export default function StrategyBuilder() {
               {groups.length === 0 && (
                 <div style={{ background: C.surface, border: `1px dashed ${C.border}`, color: C.muted }} className="rounded-2xl py-12 flex flex-col items-center gap-3 text-sm">
                   <Layers size={22} />
-                  أنشئ مجموعة أولى، ثم أضف شروطًا من المكتبة على اليمين
+                  {isAr ? "أنشئ مجموعة أولى، ثم أضف شروطًا من المكتبة على اليمين" : "Create your first group, then add conditions from the library"}
                   <button onClick={loadDemoIntoEditor} style={{ background: C.goldSoft, border: `1px solid ${C.gold}`, color: C.gold }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px]">
-                    <Sparkles size={12} /> جرّب استراتيجية تجريبية جاهزة
+                    <Sparkles size={12} /> {isAr ? "جرّب استراتيجية تجريبية جاهزة" : "Try a ready-made demo strategy"}
                   </button>
                 </div>
               )}
@@ -921,7 +946,7 @@ export default function StrategyBuilder() {
                           style={{ background: "transparent", color: C.text, fontFamily: FD, fontWeight: 600, fontSize: 13 }}
                           className="min-w-0 flex-1"
                         />
-                        <span style={{ color: C.muted, fontFamily: FM, fontSize: 10.5 }}>{members.length} شروط</span>
+                        <span style={{ color: C.muted, fontFamily: FM, fontSize: 10.5 }}>{members.length} {isAr ? "شروط" : "conditions"}</span>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
                         {["AND", "OR", "AT_LEAST"].map((lg) => (
@@ -932,10 +957,12 @@ export default function StrategyBuilder() {
                             style={{ background: g.logic === lg ? C.goldSoft : "transparent", border: `1px solid ${g.logic === lg ? C.gold : C.border}`, color: g.logic === lg ? C.gold : C.muted, fontFamily: FM }}
                             className="px-2 py-0.5 rounded-md text-[10.5px]"
                           >
-                            {/* (2026-09-21) مصطلحات عربية — نفس ما يُعرض بسجل
-                                المراقبة (strategy_engine.py) ولوحة الإرشاد،
-                                لمن لا يعرف AND/OR/X-of-Y. الاسم التقني بالـtitle. */}
-                            {lg === "AND" ? "الكل" : lg === "OR" ? "واحد على الأقل" : "عدد محدد"}
+                            {/* (2026-09-21) مصطلحات عربية/إنجليزية معاً — نفس
+                                ما يُعرض بسجل المراقبة (strategy_engine.py)
+                                ولوحة الإرشاد. الاسم التقني بالـtitle. */}
+                            {isAr
+                              ? (lg === "AND" ? "الكل" : lg === "OR" ? "واحد على الأقل" : "عدد محدد")
+                              : (lg === "AND" ? "All" : lg === "OR" ? "At least one" : "Custom count")}
                           </button>
                         ))}
                         {g.logic === "AT_LEAST" && (
@@ -947,14 +974,14 @@ export default function StrategyBuilder() {
                             className="rounded-md px-1 py-0.5 text-[11px] text-center"
                           />
                         )}
-                        <IconBtn icon={Copy} onClick={() => duplicateGroup(g.id)} title="نسخ المجموعة" />
-                        <IconBtn icon={Trash2} onClick={() => deleteGroup(g.id)} title="حذف المجموعة" color={C.red} />
+                        <IconBtn icon={Copy} onClick={() => duplicateGroup(g.id)} title={isAr ? "نسخ المجموعة" : "Duplicate group"} />
+                        <IconBtn icon={Trash2} onClick={() => deleteGroup(g.id)} title={isAr ? "حذف المجموعة" : "Delete group"} color={C.red} />
                       </div>
                     </div>
 
                     {!g.collapsed && (
                       <div className="p-3 flex flex-col gap-2">
-                        {members.length === 0 && <div style={{ color: C.muted, fontSize: 12 }} className="text-center py-4">لا شروط بعد في هذه المجموعة</div>}
+                        {members.length === 0 && <div style={{ color: C.muted, fontSize: 12 }} className="text-center py-4">{isAr ? "لا شروط بعد في هذه المجموعة" : "No conditions in this group yet"}</div>}
                         {members.map((c, i) => {
                           const cat = CAT_BY_ID[c.catId];
                           return (
@@ -962,7 +989,7 @@ export default function StrategyBuilder() {
                               {i > 0 && (
                                 <div className="flex justify-center">
                                   <span style={{ color: C.muted, fontFamily: FM, fontSize: 10 }}>
-                                    {g.logic === "AND" ? "و" : g.logic === "OR" ? "أو" : "•"}
+                                    {g.logic === "AND" ? (isAr ? "و" : "AND") : g.logic === "OR" ? (isAr ? "أو" : "OR") : "•"}
                                   </span>
                                 </div>
                               )}
@@ -970,9 +997,9 @@ export default function StrategyBuilder() {
                                 style={{ background: C.surfaceHi, border: `1px solid ${C.border}`, borderInlineStart: `3px solid ${cat.color}`, opacity: c.enabled ? 1 : 0.45 }}
                                 className="rounded-xl p-2.5 flex flex-wrap items-center gap-2"
                               >
-                                <Pill color={cat.color} bg={`${cat.color}1A`} border={cat.color} style={{ fontSize: 10 }}>{cat.label}</Pill>
+                                <Pill color={cat.color} bg={`${cat.color}1A`} border={cat.color} style={{ fontSize: 10 }}>{isAr ? cat.label : cat.en}</Pill>
                                 {NUMERIC_VALUE_TYPES.has(c.type) && !/-?\d/.test(c.value || "") && (
-                                  <span title="أدخل رقمًا حتى يُحتسب هذا الشرط بالتقييم الحقيقي" style={{ color: C.red, fontSize: 9, border: `1px solid ${C.red}` }} className="px-1 py-0.5 rounded">بلا قيمة</span>
+                                  <span title={isAr ? "أدخل رقمًا حتى يُحتسب هذا الشرط بالتقييم الحقيقي" : "Enter a number so this condition counts in real evaluation"} style={{ color: C.red, fontSize: 9, border: `1px solid ${C.red}` }} className="px-1 py-0.5 rounded">{isAr ? "بلا قيمة" : "No value"}</span>
                                 )}
                                 <input
                                   value={c.label}
@@ -993,7 +1020,7 @@ export default function StrategyBuilder() {
                                   style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.muted, fontSize: 10 }}
                                   className="rounded-md px-1.5 py-1"
                                 >
-                                  {TF_MODES.map((t) => <option key={t}>{t}</option>)}
+                                  {TF_MODES.map((t) => <option key={t} value={t}>{isAr ? t : TF_MODE_LABEL_EN[t]}</option>)}
                                 </select>
                                 {NUMERIC_VALUE_TYPES.has(c.type) ? (
                                   (() => {
@@ -1024,7 +1051,7 @@ export default function StrategyBuilder() {
                                 ) : (
                                   <input
                                     value={c.value}
-                                    placeholder="قيمة / وصف"
+                                    placeholder={isAr ? "قيمة / وصف" : "Value / description"}
                                     onChange={(e) => updateCondition(c.id, { value: e.target.value })}
                                     style={{ background: C.bg, border: `1px solid ${C.border}`, color: C.text, fontFamily: FM, fontSize: 11, width: 90 }}
                                     className="rounded-md px-2 py-1"
@@ -1043,15 +1070,15 @@ export default function StrategyBuilder() {
                                   onClick={() => updateCondition(c.id, { not: !c.not })}
                                   style={{ background: c.not ? C.redSoft : "transparent", border: `1px solid ${c.not ? C.red : C.border}`, color: c.not ? C.red : C.muted, fontSize: 10 }}
                                   className="px-1.5 py-0.5 rounded-md flex items-center gap-1"
-                                  title="عكس الشرط (NOT)"
+                                  title={isAr ? "عكس الشرط (NOT)" : "Invert condition (NOT)"}
                                 >
                                   <Ban size={10} /> NOT
                                 </button>
                                 <div className="flex items-center gap-1 mr-auto">
                                   <Toggle on={c.enabled} onClick={() => updateCondition(c.id, { enabled: !c.enabled })} />
-                                  <IconBtn icon={Copy} onClick={() => duplicateCondition(c.id)} title="تكرار" />
-                                  <IconBtn icon={RefreshCw} onClick={() => resetCondition(c.id)} title="إعادة تعيين" />
-                                  <IconBtn icon={X} onClick={() => removeCondition(c.id)} title="حذف" color={C.red} />
+                                  <IconBtn icon={Copy} onClick={() => duplicateCondition(c.id)} title={isAr ? "تكرار" : "Duplicate"} />
+                                  <IconBtn icon={RefreshCw} onClick={() => resetCondition(c.id)} title={isAr ? "إعادة تعيين" : "Reset"} />
+                                  <IconBtn icon={X} onClick={() => removeCondition(c.id)} title={isAr ? "حذف" : "Delete"} color={C.red} />
                                 </div>
                               </div>
                             </React.Fragment>
@@ -1077,10 +1104,10 @@ export default function StrategyBuilder() {
               <div className="flex items-center gap-4 mb-4">
                 <ScoreRing pct={totalWeight} color={totalWeight >= minScore ? C.teal : C.gold} size={78} />
                 <div>
-                  <div style={{ color: C.sub, fontSize: 12 }}>مدارس مدمجة: {schoolsUsed}</div>
-                  <div style={{ color: C.sub, fontSize: 12 }}>شروط فعّالة: {enabledConditions.length}</div>
+                  <div style={{ color: C.sub, fontSize: 12 }}>{isAr ? `مدارس مدمجة: ${schoolsUsed}` : `Schools combined: ${schoolsUsed}`}</div>
+                  <div style={{ color: C.sub, fontSize: 12 }}>{isAr ? `شروط فعّالة: ${enabledConditions.length}` : `Active conditions: ${enabledConditions.length}`}</div>
                   <div className="flex items-center gap-2 mt-2">
-                    <span style={{ color: C.muted, fontSize: 11.5 }}>الحد الأدنى للتفعيل</span>
+                    <span style={{ color: C.muted, fontSize: 11.5 }}>{isAr ? "الحد الأدنى للتفعيل" : "Minimum to trigger"}</span>
                     <input
                       type="number" value={minScore} min={0} max={100}
                       onChange={(e) => setMinScore(Number(e.target.value))}
@@ -1099,7 +1126,7 @@ export default function StrategyBuilder() {
 
               <div style={{ color: C.sub, fontSize: 11 }} className="uppercase tracking-wide mb-2">Breakdown</div>
               <div className="flex flex-col gap-1.5 max-h-[240px] overflow-auto scroll-thin">
-                {scoreBreakdown.length === 0 && <div style={{ color: C.muted, fontSize: 12 }}>لا توجد شروط بعد</div>}
+                {scoreBreakdown.length === 0 && <div style={{ color: C.muted, fontSize: 12 }}>{isAr ? "لا توجد شروط بعد" : "No conditions yet"}</div>}
                 {scoreBreakdown.map((c) => (
                   <div key={c.id} className="flex items-center justify-between text-[12.5px]">
                     <span>{c.not ? `NOT ${c.label}` : c.label}</span>
@@ -1121,7 +1148,7 @@ export default function StrategyBuilder() {
                 </div>
                 <div style={{ color: C.muted, fontSize: 10.5 }} className="uppercase mb-1">WHEN</div>
                 <div style={{ background: C.bg, border: `1px solid ${C.borderSoft}`, color: C.sub, fontFamily: FM, fontSize: 11.5, lineHeight: 1.8 }} className="rounded-lg p-3 mb-3">
-                  {whenText || "لا شروط بعد"} {whenText && <><br />و Score ≥ {minScore}</>}
+                  {whenText || (isAr ? "لا شروط بعد" : "No conditions yet")} {whenText && <><br />{isAr ? "و" : "AND"} Score ≥ {minScore}</>}
                 </div>
                 <div style={{ color: C.muted, fontSize: 10.5 }} className="uppercase mb-1">THEN</div>
                 <div className="flex flex-col gap-1.5">
@@ -1191,7 +1218,7 @@ export default function StrategyBuilder() {
                     style={{ background: C.tealSoft, border: `1px solid ${C.teal}`, color: C.teal }}
                     className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px]"
                   >
-                    <Link2 size={11} /> متصل
+                    <Link2 size={11} /> {isAr ? "متصل" : "Connected"}
                   </span>
                 ) : (
                   <Link
@@ -1199,15 +1226,15 @@ export default function StrategyBuilder() {
                     style={{ background: C.surfaceHi, border: `1px solid ${C.border}`, color: C.sub }}
                     className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] hover:opacity-90"
                   >
-                    <Link2 size={11} /> اربط حسابك الآن
+                    <Link2 size={11} /> {isAr ? "اربط حسابك الآن" : "Link your account now"}
                   </Link>
                 )}
               </div>
 
-              <label style={{ color: C.sub, fontSize: 11 }}>Channel / Chat ID <span style={{ color: C.muted }}>(اختياري — فارغ = يُرسل لحسابك المرتبط)</span></label>
+              <label style={{ color: C.sub, fontSize: 11 }}>Channel / Chat ID <span style={{ color: C.muted }}>{isAr ? "(اختياري — فارغ = يُرسل لحسابك المرتبط)" : "(optional — empty = sent to your linked account)"}</span></label>
               <input value={tgChannel} onChange={(e) => setTgChannel(e.target.value)} style={{ background: C.surfaceHi, border: `1px solid ${C.border}`, color: C.text, fontFamily: FM }} className="w-full rounded-lg px-3 py-2 text-sm mt-1 mb-4" />
 
-              <div style={{ color: C.sub, fontSize: 11 }} className="mb-2">Include in message</div>
+              <div style={{ color: C.sub, fontSize: 11 }} className="mb-2">{isAr ? "ضمّن بالرسالة" : "Include in message"}</div>
               <div className="grid grid-cols-2 gap-2 mb-4">
                 {[
                   ["entry", "Entry"], ["sl", "SL"], ["tp", "TP"], ["rr", "RR"],
@@ -1229,10 +1256,10 @@ export default function StrategyBuilder() {
                 style={{ background: C.gold, color: "#1A1200", fontWeight: 600 }}
                 className="w-full rounded-lg py-2.5 text-sm flex items-center justify-center gap-2"
               >
-                <Send size={14} /> Send Test Alert
+                <Send size={14} /> {isAr ? "إرسال تنبيه تجريبي" : "Send Test Alert"}
               </button>
               {!currentStrategyId && (
-                <p style={{ color: C.muted, fontSize: 10.5 }} className="text-center mt-2">احفظ الاستراتيجية أولًا لتفعيل الإرسال الحقيقي</p>
+                <p style={{ color: C.muted, fontSize: 10.5 }} className="text-center mt-2">{isAr ? "احفظ الاستراتيجية أولًا لتفعيل الإرسال الحقيقي" : "Save the strategy first to enable real sending"}</p>
               )}
             </div>
 
@@ -1254,7 +1281,7 @@ export default function StrategyBuilder() {
           // يقصدها المستخدم، فنعرض قائمة اختيار صريحة بدل تحميل عشوائي.
           <div style={{ background: C.surface, border: `1px dashed ${C.border}` }} className="rounded-2xl p-6 flex flex-col gap-3">
             <div style={{ color: C.sub, fontSize: 13 }} className="flex items-center gap-2">
-              <MonitorDot size={16} /> عندك أكثر من استراتيجية محفوظة — اختر وحدة لعرض مراقبتها الحية
+              <MonitorDot size={16} /> {isAr ? "عندك أكثر من استراتيجية محفوظة — اختر وحدة لعرض مراقبتها الحية" : "You have more than one saved strategy — pick one to view its live monitoring"}
             </div>
             <div className="flex flex-col gap-2">
               {saved.map((r) => (
@@ -1291,7 +1318,7 @@ export default function StrategyBuilder() {
               <div style={{ fontFamily: FM, fontSize: 12.5, color: C.sub }} className="flex flex-col gap-2 mb-4">
                 <div className="flex justify-between"><span>Monitoring</span><span style={{ color: C.text }}>{symbols.length || SYMBOL_POOL.length} Markets</span></div>
                 <div className="flex justify-between"><span>Last Scan</span><span style={{ color: C.text }}>{monitor.lastScan || "—"}</span></div>
-                <div className="flex justify-between"><span>Check Interval</span><span style={{ color: C.text }}>~5 دقائق</span></div>
+                <div className="flex justify-between"><span>Check Interval</span><span style={{ color: C.text }}>{isAr ? "~5 دقائق" : "~5 min"}</span></div>
               </div>
 
               <button
@@ -1300,11 +1327,11 @@ export default function StrategyBuilder() {
                 style={{ background: monitor.active ? C.redSoft : C.tealSoft, border: `1px solid ${monitor.active ? C.red : C.teal}`, color: monitor.active ? C.red : C.teal, opacity: currentStrategyId ? 1 : 0.5 }}
                 className="w-full rounded-lg py-2.5 text-sm flex items-center justify-center gap-2"
               >
-                <Power size={14} /> {monitor.active ? "إيقاف المراقبة" : "بدء المراقبة"}
+                <Power size={14} /> {monitor.active ? (isAr ? "إيقاف المراقبة" : "Stop Monitoring") : (isAr ? "بدء المراقبة" : "Start Monitoring")}
               </button>
               {!currentStrategyId && (
                 <p style={{ color: C.muted, fontSize: 10.5 }} className="text-center mt-2">
-                  {savedLoading ? "جاري التحميل..." : "احفظ الاستراتيجية أولًا"}
+                  {savedLoading ? (isAr ? "جاري التحميل..." : "Loading...") : (isAr ? "احفظ الاستراتيجية أولًا" : "Save the strategy first")}
                 </p>
               )}
             </div>
@@ -1314,7 +1341,7 @@ export default function StrategyBuilder() {
               {monitor.events.length === 0 && (
                 <div style={{ color: C.muted }} className="flex flex-col items-center justify-center py-16 text-sm gap-2">
                   <MonitorDot size={22} />
-                  ابدأ المراقبة لعرض أحداث الفحص الحقيقية (يفحص الخادم كل 5 دقائق تقريبًا)
+                  {isAr ? "ابدأ المراقبة لعرض أحداث الفحص الحقيقية (يفحص الخادم كل 5 دقائق تقريبًا)" : "Start monitoring to see real scan events (the server checks roughly every 5 minutes)"}
                 </div>
               )}
               <div className="flex flex-col gap-2 max-h-[420px] overflow-auto scroll-thin">
@@ -1346,7 +1373,7 @@ export default function StrategyBuilder() {
             )}
             {!savedLoading && saved.length === 0 && (
               <div style={{ background: C.surface, border: `1px dashed ${C.border}`, color: C.muted }} className="col-span-full rounded-2xl py-14 flex flex-col items-center gap-2 text-sm">
-                <FolderOpen size={22} /> لا توجد استراتيجيات محفوظة بعد
+                <FolderOpen size={22} /> {isAr ? "لا توجد استراتيجيات محفوظة بعد" : "No saved strategies yet"}
               </div>
             )}
             {saved.map((r) => (
@@ -1371,15 +1398,15 @@ export default function StrategyBuilder() {
                     <span>Signals: <span style={{ color: C.text }}>{r.signals}</span></span>
                   </div>
                 </div>
-                <div style={{ color: C.muted, fontSize: 11 }}>آخر تفعيل: {r.lastTrigger}</div>
+                <div style={{ color: C.muted, fontSize: 11 }}>{isAr ? "آخر تفعيل:" : "Last triggered:"} {r.lastTrigger}</div>
 
                 <div style={{ borderTop: `1px solid ${C.borderSoft}` }} className="pt-2.5 flex items-center gap-1 flex-wrap">
-                  <IconBtn icon={Edit3} onClick={() => loadStrategy(r)} title="تحرير" color={C.blue} />
-                  <IconBtn icon={MonitorDot} onClick={() => loadStrategy(r, "monitoring")} title="المراقبة الحية" color={C.teal} />
-                  <IconBtn icon={Copy} onClick={() => duplicateSaved(r)} title="تكرار" />
-                  <IconBtn icon={Power} onClick={() => toggleSavedStatus(r)} title="تفعيل/تعطيل" color={r.status === "ACTIVE" ? C.teal : C.muted} />
-                  <IconBtn icon={Eye} onClick={() => setViewTarget(r)} title="عرض" />
-                  <IconBtn icon={Trash2} onClick={() => { if (requirePaid()) setDeleteTarget(r); }} title="حذف" color={C.red} />
+                  <IconBtn icon={Edit3} onClick={() => loadStrategy(r)} title={isAr ? "تحرير" : "Edit"} color={C.blue} />
+                  <IconBtn icon={MonitorDot} onClick={() => loadStrategy(r, "monitoring")} title={isAr ? "المراقبة الحية" : "Live monitoring"} color={C.teal} />
+                  <IconBtn icon={Copy} onClick={() => duplicateSaved(r)} title={isAr ? "تكرار" : "Duplicate"} />
+                  <IconBtn icon={Power} onClick={() => toggleSavedStatus(r)} title={isAr ? "تفعيل/تعطيل" : "Enable/Disable"} color={r.status === "ACTIVE" ? C.teal : C.muted} />
+                  <IconBtn icon={Eye} onClick={() => setViewTarget(r)} title={isAr ? "عرض" : "View"} />
+                  <IconBtn icon={Trash2} onClick={() => { if (requirePaid()) setDeleteTarget(r); }} title={isAr ? "حذف" : "Delete"} color={C.red} />
                 </div>
               </div>
             ))}
@@ -1389,13 +1416,15 @@ export default function StrategyBuilder() {
 
       {/* ============ MODALS ============ */}
       {deleteTarget && (
-        <Modal title="حذف الاستراتيجية؟" danger onClose={() => setDeleteTarget(null)}>
+        <Modal title={isAr ? "حذف الاستراتيجية؟" : "Delete this strategy?"} danger onClose={() => setDeleteTarget(null)}>
           <p style={{ color: C.sub, fontSize: 13 }} className="mb-4">
-            سيتم حذف «{deleteTarget.name}» نهائيًا من القائمة المحفوظة. هذا الإجراء لا يمكن التراجع عنه.
+            {isAr
+              ? <>سيتم حذف «{deleteTarget.name}» نهائيًا من القائمة المحفوظة. هذا الإجراء لا يمكن التراجع عنه.</>
+              : <>"{deleteTarget.name}" will be permanently deleted from your saved list. This action cannot be undone.</>}
           </p>
           <div className="flex gap-2 justify-end">
-            <button onClick={() => setDeleteTarget(null)} style={{ background: C.surfaceHi, border: `1px solid ${C.border}`, color: C.text }} className="px-3.5 py-2 rounded-lg text-sm">إلغاء</button>
-            <button onClick={confirmDelete} style={{ background: C.red, color: "#1A0505" }} className="px-3.5 py-2 rounded-lg text-sm font-medium">حذف نهائي</button>
+            <button onClick={() => setDeleteTarget(null)} style={{ background: C.surfaceHi, border: `1px solid ${C.border}`, color: C.text }} className="px-3.5 py-2 rounded-lg text-sm">{isAr ? "إلغاء" : "Cancel"}</button>
+            <button onClick={confirmDelete} style={{ background: C.red, color: "#1A0505" }} className="px-3.5 py-2 rounded-lg text-sm font-medium">{isAr ? "حذف نهائي" : "Delete permanently"}</button>
           </div>
         </Modal>
       )}

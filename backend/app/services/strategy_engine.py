@@ -381,26 +381,42 @@ def evaluate_strategy(groups: List, conditions: List, analyses: Dict[str, Dict],
     # المجموعات **و** العتبة — وكان السجل يعرض الثاني فقط. فحين يتحقق
     # المعروض ولا يقع الإطلاق، يبدو النظام معطلاً وهو يعمل بالضبط كما
     # عُرّف. عرض الرقم دون شرطه إخفاءٌ بصيغة إظهار.
+    # (2026-09-21) block_reason يُعرض بلوحة "المراقبة الحية" بالموقع، وهي
+    # تتبع مبدّل لغة الموقع (isAr) — فيُبنى هنا بالعربي والإنجليزي معاً بدل
+    # نص عربي ثابت، والواجهة تختار النسخة المطابقة. لا علاقة لهذا برسائل
+    # بوت تلغرام (عربية دائماً بتصميمها، راجع CLAUDE.md).
     block_reason = None
+    block_reason_en = None
     if not enabled:
         block_reason = "لا شروط مفعّلة بهذه الاستراتيجية"
+        block_reason_en = "No enabled conditions in this strategy"
     elif not groups_passed:
         failed = [g for g in groups_detail if not g["passed"]]
-        parts = []
+        parts, parts_en = [], []
         for g in failed:
             lg = {"AND": "الكل", "OR": "واحد على الأقل"}.get(g["logic"],
                                                             f"{g['need']} على الأقل")
+            lg_en = {"AND": "all", "OR": "at least one"}.get(g["logic"],
+                                                              f"at least {g['need']}")
             miss = ("، ينقص: " + "، ".join(g["missing"][:3])) if g["missing"] else ""
+            miss_en = (", missing: " + ", ".join(g["missing"][:3])) if g["missing"] else ""
             parts.append(f"{g['name']} ({lg}) — تحقّق {g['hits']} من {g['members']}{miss}")
+            parts_en.append(f"{g['name']} ({lg_en}) — {g['hits']}/{g['members']} met{miss_en}")
         detail = " · ".join(parts)
+        detail_en = " · ".join(parts_en)
         if score_ok:
             block_reason = (f"الدرجة كافية ({score} ≥ {min_score}) "
                             f"لكن منطق المجموعات لم يكتمل: {detail}")
+            block_reason_en = (f"Score is sufficient ({score} ≥ {min_score}) "
+                                f"but group logic is not met: {detail_en}")
         else:
             block_reason = (f"الدرجة {score} دون العتبة {min_score}، "
                             f"ومنطق المجموعات لم يكتمل: {detail}")
+            block_reason_en = (f"Score {score} is below threshold {min_score}, "
+                                f"and group logic is not met: {detail_en}")
     elif not score_ok:
         block_reason = f"منطق المجموعات مكتمل لكن الدرجة {score} دون العتبة {min_score}"
+        block_reason_en = f"Group logic is met but score {score} is below threshold {min_score}"
 
     return {
         "score": score,
@@ -409,6 +425,7 @@ def evaluate_strategy(groups: List, conditions: List, analyses: Dict[str, Dict],
         "groups_passed": groups_passed,
         "groups_detail": groups_detail,
         "block_reason": block_reason,
+        "block_reason_en": block_reason_en,
         "matched": matched,
         "unsupported": unsupported,
         "triggered": triggered,
