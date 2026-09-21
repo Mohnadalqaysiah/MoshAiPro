@@ -1619,7 +1619,7 @@ class ReportSendIn(BaseModel):
 # ينحرفوا عن بعض. راجع الملف المشترك للشرح الكامل.
 
 
-def _build_performance_report(signals: list, days: int) -> tuple[str, str]:
+def _build_performance_report(signals: list, days: int, db: Session) -> tuple[str, str]:
     """
     يبني تقرير الأداء — يُعيد (telegram_text, email_html)
 
@@ -1627,7 +1627,21 @@ def _build_performance_report(signals: list, days: int) -> tuple[str, str]:
     بدل الصف الخام — انظر التعليق فوق `_group_unique_decisions`.
     """
     decisions   = _group_unique_decisions(signals)
-    total_rows  = len(signals)
+    # (2026-09-21) بلاغ حقيقي: "عدد المستخدمين" هون كان len(signals) — صفوف
+    # Signal الخام، وهي تُنشأ أيضاً لكل مستخدم حلّل الرمز بنفسه عبر مراقبته
+    # الشخصية (monitor_watchlists)، لا لكل من استلم رسالة تلغرام فعلياً.
+    # البث الفعلي (broadcast_new_signals) يصل لعشرات المشتركين (كل من لا
+    # watchlist عنده + من واتشلستو تضم الرمز) بلا أي صف Signal يمثّلهم —
+    # نفس العطل الذي أُصلح بلوحة "كل الإشارات" (SignalDelivery,
+    # delivered_count) بـ16/09، لكنه لم يُصلَح هنا. لا علاقة لهذا بحساب
+    # win_rate/wins/losses أسفله — كلها من `decisions` لا من total_rows.
+    from app.models.signal_delivery import SignalDelivery
+    _sig_ids   = [s.id for s in signals]
+    total_rows = (
+        db.query(func.count(SignalDelivery.id))
+          .filter(SignalDelivery.signal_id.in_(_sig_ids), SignalDelivery.ok == True)  # noqa: E712
+          .scalar() or 0
+    ) if _sig_ids else 0
     closed      = [d for d in decisions if d["status"] in ("TP1_HIT", "TP2_HIT", "SL_HIT")]
     wins        = [d for d in closed if d["status"] in ("TP1_HIT", "TP2_HIT")]
     losses      = [d for d in closed if d["status"] == "SL_HIT"]
@@ -1642,7 +1656,7 @@ def _build_performance_report(signals: list, days: int) -> tuple[str, str]:
         f"📊 <b>تقرير أداء Qaffel AI</b>",
         f"🗓 الفترة: {period}",
         "━━━━━━━━━━━━━━━━━━━━━━",
-        f"📈 قرارات فريدة: <b>{len(closed)}</b>  <i>(وُزّعت على {total_rows} صفقة مستخدمين)</i>",
+        f"📈 قرارات فريدة: <b>{len(closed)}</b>  <i>(وصلت فعلياً لـ{total_rows} مستخدم)</i>",
         f"✅ رابحة: <b>{len(wins)}</b>  │  ❌ خاسرة: <b>{len(losses)}</b>",
         f"🏆 نسبة نجاح القرارات: <b>{win_rate}%</b>",
         f"⚡ إجمالي النقاط: <b>{pts_sign}{total_pts:.1f}</b>",
@@ -1701,7 +1715,7 @@ def _build_performance_report(signals: list, days: int) -> tuple[str, str]:
         <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px">
           <div style="flex:1;background:#1f2937;border-radius:8px;padding:16px;text-align:center;min-width:100px">
             <div style="font-size:28px;font-weight:bold">{len(closed)}</div>
-            <div style="color:#9ca3af;font-size:12px">قرارات فريدة<br>(وُزّعت على {total_rows} صفقة)</div>
+            <div style="color:#9ca3af;font-size:12px">قرارات فريدة<br>(وصلت فعلياً لـ{total_rows} مستخدم)</div>
           </div>
           <div style="flex:1;background:#1f2937;border-radius:8px;padding:16px;text-align:center;min-width:100px">
             <div style="font-size:28px;font-weight:bold;color:#22c55e">{win_rate}%</div>
@@ -1746,6 +1760,25 @@ def get_performance_report(
     )
 
     decisions = _group_unique_decisions(signals)
+
+    # (2026-09-21) بلاغ حقيقي: عمود "مستخدمون" كان user_count = عدد صفوف
+    # Signal بالمجموعة (كم مستخدم حلّل الرمز بنفسه عبر مراقبته الشخصية)،
+    # لا عدد من استلم رسالة تلغرام فعلياً — البث العام (broadcast_new_signals)
+    # يصل لعشرات المشتركين بلا أي صف Signal يمثّلهم. نفس العطل المُصلَح
+    # بلوحة "كل الإشارات" (SignalDelivery) بـ16/09، هنا فقط لم يُصلَح.
+    # لا نلمس decision_grouping.py (مشترك مع معايرة المحرك بـai_engine_v5) —
+    # الإصلاح معزول بطبقة العرض هون فقط، بعد التجميع لا قبله.
+    if decisions:
+        from app.models.signal_delivery import SignalDelivery
+        _rep_ids = [d["id"] for d in decisions]
+        _delivered_map = dict(
+            db.query(SignalDelivery.signal_id, func.count(SignalDelivery.id))
+              .filter(SignalDelivery.signal_id.in_(_rep_ids), SignalDelivery.ok == True)  # noqa: E712
+              .group_by(SignalDelivery.signal_id).all()
+        )
+        for d in decisions:
+            d["user_count"] = _delivered_map.get(d["id"], d["user_count"])
+
     decisions.sort(key=lambda d: d["exit_executed"] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
     wins    = [d for d in decisions if d["status"] in ("TP1_HIT","TP2_HIT")]
     losses  = [d for d in decisions if d["status"] == "SL_HIT"]
@@ -1794,7 +1827,7 @@ def send_performance_report(
         .all()
     )
 
-    tg_text, email_html = _build_performance_report(signals, data.days)
+    tg_text, email_html = _build_performance_report(signals, data.days, db)
     period = "اليوم" if data.days == 1 else f"آخر {data.days} يوم" if data.days < 30 else "الشهر"
 
     # ── جمع المستلمين ────────────────────────────────────────────────────────
