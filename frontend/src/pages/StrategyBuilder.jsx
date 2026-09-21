@@ -928,10 +928,14 @@ export default function StrategyBuilder() {
                           <button
                             key={lg}
                             onClick={() => setGroupLogic(g.id, lg)}
+                            title={lg === "AT_LEAST" ? "X of Y" : lg}
                             style={{ background: g.logic === lg ? C.goldSoft : "transparent", border: `1px solid ${g.logic === lg ? C.gold : C.border}`, color: g.logic === lg ? C.gold : C.muted, fontFamily: FM }}
                             className="px-2 py-0.5 rounded-md text-[10.5px]"
                           >
-                            {lg === "AT_LEAST" ? "X of Y" : lg}
+                            {/* (2026-09-21) مصطلحات عربية — نفس ما يُعرض بسجل
+                                المراقبة (strategy_engine.py) ولوحة الإرشاد،
+                                لمن لا يعرف AND/OR/X-of-Y. الاسم التقني بالـtitle. */}
+                            {lg === "AND" ? "الكل" : lg === "OR" ? "واحد على الأقل" : "عدد محدد"}
                           </button>
                         ))}
                         {g.logic === "AT_LEAST" && (
@@ -958,7 +962,7 @@ export default function StrategyBuilder() {
                               {i > 0 && (
                                 <div className="flex justify-center">
                                   <span style={{ color: C.muted, fontFamily: FM, fontSize: 10 }}>
-                                    {g.logic === "AND" ? "AND" : g.logic === "OR" ? "OR" : "•"}
+                                    {g.logic === "AND" ? "و" : g.logic === "OR" ? "أو" : "•"}
                                   </span>
                                 </div>
                               )}
