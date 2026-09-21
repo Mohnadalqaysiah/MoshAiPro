@@ -2076,9 +2076,9 @@ export default function Admin() {
                       </div>
                     ))}
                   </div>
-                  {reportData.total_raw > reportData.total && (
+                  {(reportData.total_delivered ?? reportData.total_raw) > reportData.total && (
                     <p className="text-xs text-gray-500 -mt-2 mb-5">
-                      وُزّعت على {reportData.total_raw} صفقة مستخدمين
+                      وصلت فعلياً لـ{reportData.total_delivered ?? reportData.total_raw} مستخدم
                       {reportData.conflicts > 0 && <span className="text-orange-400"> · ⚠️ {reportData.conflicts} قرار بنتائج متضاربة</span>}
                     </p>
                   )}

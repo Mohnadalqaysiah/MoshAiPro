@@ -1788,6 +1788,10 @@ def get_performance_report(
         "days":         days,
         "total":        len(decisions),
         "total_raw":    len(signals),
+        # (2026-09-21) العدد الحقيقي لمن استلم رسالة تلغرام فعلياً —
+        # مجموع user_count بعد تصحيحه بالأعلى من SignalDelivery، لا صفوف
+        # Signal الخام. total_raw يبقى كما هو (شفافية العدد الخام فقط).
+        "total_delivered": sum(d["user_count"] for d in decisions),
         "wins":         len(wins),
         "losses":       len(losses),
         "win_rate":     round(len(wins)/len(decisions)*100) if decisions else 0,
