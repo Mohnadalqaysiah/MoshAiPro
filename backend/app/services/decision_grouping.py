@@ -78,6 +78,12 @@ def _finalize_decision_group(rows: list) -> dict:
         "created_at":      rep.created_at,
         "exit_executed":   rep.exit_executed,
         "user_count":      len(rows),
+        # (2026-09-21) حقل إضافي بحت — لا يمسّ أي مفتاح موجود ولا يغيّر
+        # سلوك معايرة ai_engine_v5. لازم لمطابقة SignalDelivery بدقة:
+        # rep هون أقدم صف بالمجموعة (rows[0] بعد ترتيب تصاعدي)، بينما
+        # /bot/new-signals يبثّ عن أحدث صف — فالبحث بـid واحد بيخطئ الصف
+        # الصحيح دائماً. الحل: كل معرّفات المجموعة، لا واحد مفترَض.
+        "row_ids":         [r.id for r in rows],
     }
 
 

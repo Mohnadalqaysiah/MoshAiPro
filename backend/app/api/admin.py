@@ -1768,16 +1768,25 @@ def get_performance_report(
     # بلوحة "كل الإشارات" (SignalDelivery) بـ16/09، هنا فقط لم يُصلَح.
     # لا نلمس decision_grouping.py (مشترك مع معايرة المحرك بـai_engine_v5) —
     # الإصلاح معزول بطبقة العرض هون فقط، بعد التجميع لا قبله.
+    #
+    # (2026-09-21، تصحيح فوري) أول محاولة بحثت بـd["id"] وحده — فشلت دائماً:
+    # d["id"] هو rep.id بعد decision_grouping (أقدم صف بالمجموعة)، بينما
+    # /bot/new-signals يبثّ عن **أحدث** صف بنفس المجموعة (ترتيب desc فالأول
+    # بالتكرار هو الأحدث). معرّفان مختلفان تماماً — فالبحث بواحد يخطئ الصف
+    # اللي عليه سجلّ SignalDelivery الفعلي دائماً. الحل: كل معرّفات
+    # المجموعة (row_ids)، لا معرّف واحد مفترَض.
     if decisions:
         from app.models.signal_delivery import SignalDelivery
-        _rep_ids = [d["id"] for d in decisions]
+        _all_ids = [rid for d in decisions for rid in d.get("row_ids", [d["id"]])]
         _delivered_map = dict(
             db.query(SignalDelivery.signal_id, func.count(SignalDelivery.id))
-              .filter(SignalDelivery.signal_id.in_(_rep_ids), SignalDelivery.ok == True)  # noqa: E712
+              .filter(SignalDelivery.signal_id.in_(_all_ids), SignalDelivery.ok == True)  # noqa: E712
               .group_by(SignalDelivery.signal_id).all()
         )
         for d in decisions:
-            d["user_count"] = _delivered_map.get(d["id"], d["user_count"])
+            delivered = sum(_delivered_map.get(rid, 0) for rid in d.get("row_ids", [d["id"]]))
+            if delivered:
+                d["user_count"] = delivered
 
     decisions.sort(key=lambda d: d["exit_executed"] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
     wins    = [d for d in decisions if d["status"] in ("TP1_HIT","TP2_HIT")]
