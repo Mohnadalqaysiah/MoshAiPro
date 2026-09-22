@@ -2572,6 +2572,17 @@ class MoshAIEngineV5:
         analysis["institutional_gate_passed"] = True
         analysis["signal_status"]         = "PASS"
         analysis["gate_rr"]               = rr_final
+        # (2026-09-22) بلاغ حقيقي: RR المعروض/المخزَّن للمستخدم كان أقل من
+        # الحقيقي (زي BNBUSD: عُرض 1.0 والفعلي 2.67). السبب: levels["risk_reward"]/
+        # risk_reward_ratio انضبطا فوق (Rule 7) بـtp1 الأصلي قبل Rule 10،
+        # وRule 10 لتوّه غيّر levels["tp1"] بلا ما يحدّث الحقلين — فبقيا يعكسان
+        # هدفاً أضيق من الهدف الفعلي المرسَل للمستخدم. rr_final هون محسوب
+        # بالفعل بـtp1 النهائي (بعد Rule 10)، فهو المرجع الصحيح الوحيد —
+        # نزامن الحقلين معه بدل ما نترك نسخة قديمة تُقرأ بمعظم الاستهلاكات
+        # (bot.py، بوت تلغرام، _classify_trade_mode) بينما gate_rr وحده يُقرأ
+        # بمكان واحد فقط (_confidence_calibration_layer).
+        levels["risk_reward"]             = rr_final
+        analysis["risk_reward_ratio"]     = rr_final
         analysis["gate_htf_aligned"]      = False
         if htf_analysis:
             htf_trend = htf_analysis.get("market_structure", {}).get("trend", "RANGING")
