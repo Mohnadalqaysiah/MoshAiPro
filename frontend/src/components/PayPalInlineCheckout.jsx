@@ -1,39 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
-import axios from 'axios'
 import { loadScript } from '@paypal/paypal-js'
 import { Shield, Loader2 } from 'lucide-react'
 
-const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-
-// ── تشخيص Web SDK v6 (؟ppdebug=1 فقط) ───────────────────────────────────────
-// (2026-09-22) PayPal عندها جيل جديد كلياً من الـSDK (v6، createInstance +
-// findEligibleMethods) بفحص أهلية "advanced_cards" منفصل تماماً عن
-// cardFields.isEligible() الكلاسيكي بالأسفل. أول محاولة عزلته بـiframe
-// فشلت (`No ack for postMessage: pixelReady`) — بكسل الحماية/كشف الاحتيال
-// الداخلي بالسكربت يحتاج نافذة top-level حقيقية، يرفض العمل بـiframe
-// متداخل (بغض النظر عن srcdoc أو أي عزل). فالتشغيل الآن بنفس النافذة
-// الرئيسية مباشرة — بس **بعد** ما الكود الكلاسيكي تحت يمسك مرجعه الخاص
-// لـwindow.paypal ويُنشئ عناصره (CardFields/Buttons) فعلياً: تلك العناصر
-// دوال جاهزة على كائن مُلتقَط بمتغيّر محلي، فاستبدال v6 لاحقاً لـ
-// window.paypal العام لا يمسّها إطلاقاً — يعمل بأمان حتى لو تصادم الاسمان.
-async function runV6EligibilityCheck() {
-  const { data } = await axios.get(`${API}/api/v1/subscription/paypal/browser-safe-token`)
-  const isSandbox = (data.base_url || '').includes('sandbox')
-  const scriptSrc = isSandbox
-    ? 'https://www.sandbox.paypal.com/web-sdk/v6/core'
-    : 'https://www.paypal.com/web-sdk/v6/core'
-
-  await new Promise((resolve, reject) => {
-    const s = document.createElement('script')
-    s.src = scriptSrc
-    s.onload = resolve
-    s.onerror = () => reject(new Error('v6 script load failed'))
-    document.body.appendChild(s)
-  })
-  const sdk = await window.paypal.createInstance({ clientToken: data.access_token, components: ['card-fields'] })
-  const methods = await sdk.findEligibleMethods()
-  return methods.isEligible('advanced_cards')
-}
+// (2026-09-22) محاولتان لفحص أهلية Web SDK v6 ("advanced_cards") من هالمكوّن
+// نفسه فشلتا لسببين بنيويين مختلفين — لا تُعاد المحاولة هنا:
+//   1. عزل بـiframe → PayPal's fraud-detection pixel رفض العمل (يحتاج
+//      نافذة top-level حقيقية).
+//   2. بنفس الصفحة بعد الكلاسيكي → "createInstance is not a function":
+//      v6 وsdk.js الكلاسيكي يكتبان على window.paypal معاً؛ v6 يتصرّف
+//      دفاعياً ولا يستبدل window.paypal الموجود أصلاً، فما يضيف
+//      createInstance إطلاقاً. مشاركة namespace، لا مسألة ترتيب تحميل.
+// الفحص الموثوق الوحيد: صفحة مستقلة بلا أي سكربت PayPal آخر —
+// راجع frontend/src/pages/PayPalV6Diag.jsx (/paypal-v6-diag).
 
 // نموذج "الدفع بالبطاقة". المسار المفضَّل: حقول بطاقة مستضافة بلا أي
 // شعار (PayPal Advanced Card Payments) — يحتاج تفعيل/أهلية خاصة من
@@ -74,7 +52,6 @@ export default function PayPalInlineCheckout({
   // بلا وصول لـConsole على آيفون بلا ماك متاح.
   const debugOn = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('ppdebug') === '1'
   const [debugInfo, setDebugInfo] = useState(null)
-  const [v6Debug, setV6Debug] = useState(null)
   const cardFieldsRef     = useRef(null)
   const buttonsContainerRef = useRef(null)
   const buttonsInstanceRef  = useRef(null)
@@ -193,15 +170,6 @@ export default function PayPalInlineCheckout({
       } else if (!cancelled) {
         setMode('error')
       }
-
-      // تشخيص v6 — بعد ما الكود فوق خلص يمسك مرجعه لـ`paypal` وينشئ
-      // عناصره فعلياً (سطر synchronous، خلص قبل ما نوصل هون). fire-and-forget
-      // عمداً: ما يوقف ولا يأخّر عرض واجهة الدفع الحقيقية بأي حال.
-      if (debugOn) {
-        runV6EligibilityCheck()
-          .then((eligible) => { if (!cancelled) setV6Debug({ eligible, error: null }) })
-          .catch((e) => { if (!cancelled) setV6Debug({ eligible: null, error: e.response?.data?.detail || e.message }) })
-      }
     }).catch((e) => {
       console.error('payment sdk load error', e)
       if (!cancelled) setMode('error')
@@ -216,7 +184,7 @@ export default function PayPalInlineCheckout({
         try { applePayInstanceRef.current.close() } catch { /* تجاهل */ }
       }
     }
-  }, [orderId, clientId, debugOn])
+  }, [orderId, clientId])
 
   const handleFieldsSubmit = async (e) => {
     e.preventDefault()
@@ -248,13 +216,10 @@ export default function PayPalInlineCheckout({
           cardFields isEligible(): {String(debugInfo.cardFieldsEligible)}<br />
           error: {String(debugInfo.error)}<br />
           <br />
-          — Web SDK v6 (منفصل تماماً) —<br />
-          {v6Debug ? (
-            <>
-              advanced_cards isEligible(): {String(v6Debug.eligible)}<br />
-              v6 error: {String(v6Debug.error)}
-            </>
-          ) : 'جاري الفحص...'}
+          فحص Web SDK v6 (advanced_cards) صار على صفحة مستقلة —{' '}
+          <a href="/paypal-v6-diag" target="_blank" rel="noreferrer" style={{ color: '#67e8f9', textDecoration: 'underline' }}>
+            /paypal-v6-diag
+          </a>
         </div>
       )}
 

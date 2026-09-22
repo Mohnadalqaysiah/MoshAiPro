@@ -21,6 +21,7 @@ import Landing from './pages/Landing'
 const AppShell = lazy(() => import('./components/AppShell'))
 
 // Lazy-load the rest of the pages — each becomes its own JS chunk
+const PayPalV6Diag   = lazy(() => import('./pages/PayPalV6Diag'))
 const Login          = lazy(() => import('./pages/Login'))
 const Register       = lazy(() => import('./pages/Register'))
 const Pricing        = lazy(() => import('./pages/Pricing'))
@@ -130,6 +131,9 @@ function AppRoutes() {
 
         {/* Strategy Builder — full-bleed terminal UI, any logged-in user (paid actions gated inside) */}
         <Route path="/strategies" element={<ProtectedRoute><StrategyBuilder /></ProtectedRoute>} />
+
+        {/* تشخيص PayPal Web SDK v6 المعزول — راجع تعليق الملف نفسه لسبب وجوده */}
+        <Route path="/paypal-v6-diag" element={<ProtectedRoute><PayPalV6Diag /></ProtectedRoute>} />
 
         {/* Protected */}
         <Route path="/*" element={
