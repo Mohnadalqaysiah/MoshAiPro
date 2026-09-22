@@ -22,6 +22,7 @@ const AppShell = lazy(() => import('./components/AppShell'))
 
 // Lazy-load the rest of the pages — each becomes its own JS chunk
 const PayPalV6Diag   = lazy(() => import('./pages/PayPalV6Diag'))
+const PayPalHostedFieldsDiag = lazy(() => import('./pages/PayPalHostedFieldsDiag'))
 const Login          = lazy(() => import('./pages/Login'))
 const Register       = lazy(() => import('./pages/Register'))
 const Pricing        = lazy(() => import('./pages/Pricing'))
@@ -134,6 +135,7 @@ function AppRoutes() {
 
         {/* تشخيص PayPal Web SDK v6 المعزول — راجع تعليق الملف نفسه لسبب وجوده */}
         <Route path="/paypal-v6-diag" element={<ProtectedRoute><PayPalV6Diag /></ProtectedRoute>} />
+        <Route path="/paypal-hf-diag" element={<ProtectedRoute><PayPalHostedFieldsDiag /></ProtectedRoute>} />
 
         {/* Protected */}
         <Route path="/*" element={
