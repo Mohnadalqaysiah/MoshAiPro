@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import axios from 'axios'
+import { signInWithGoogle } from '../firebase'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const AuthContext = createContext(null)
@@ -46,6 +47,20 @@ export function AuthProvider({ children }) {
     return r.data.user
   }
 
+  // signInWithPopup + بعث الـID token للخادم للتحقق — نفس شكل استجابة
+  // login/register (token + user)، فباقي التطبيق ما يحتاج يميّز المصدر.
+  const loginWithGoogle = async (ref = '') => {
+    const idToken = await signInWithGoogle()
+    const url = ref
+      ? `${API}/api/v1/auth/google?ref=${encodeURIComponent(ref)}`
+      : `${API}/api/v1/auth/google`
+    const r = await axios.post(url, { id_token: idToken })
+    localStorage.setItem('mosh_token', r.data.token)
+    setToken(r.data.token)
+    setUser(r.data.user)
+    return r.data.user
+  }
+
   const logout = () => {
     localStorage.removeItem('mosh_token')
     setToken(null)
@@ -60,7 +75,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, register, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, token, loading, login, register, loginWithGoogle, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   )

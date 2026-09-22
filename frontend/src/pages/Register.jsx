@@ -7,6 +7,7 @@ import useSEO from '../hooks/useSEO'
 import useBreadcrumbSchema from '../hooks/useBreadcrumbSchema'
 import { mirrorPath } from '../utils/langRoutes'
 import Logo from '../components/Logo'
+import GoogleAuthButton from '../components/GoogleAuthButton'
 
 // Simple math captcha — generates client-side, no external API needed
 function useCaptcha() {
@@ -239,6 +240,13 @@ export default function Register() {
               {loading ? tx.submitting : tx.submit}
             </button>
           </form>
+
+          <GoogleAuthButton
+            isAr={isAr}
+            refCode={ref}
+            onSuccess={() => navigate('/dashboard')}
+            onError={(msg) => setError(msg)}
+          />
 
           <p className="text-center text-sm text-gray-500 mt-6">
             {tx.haveAccount}{' '}

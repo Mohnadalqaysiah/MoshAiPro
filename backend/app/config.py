@@ -132,6 +132,13 @@ class Settings(BaseSettings):
     PAYPAL_TEST_SECRET_KEY: str = ""
     PAYPAL_TEST_WEBHOOK_ID: str = ""
 
+    # ----- Firebase (Google Sign-In) -----
+    # مسار ملف مفتاح حساب الخدمة (service account JSON) — يُولَّد من
+    # Firebase Console → Project settings → Service accounts. سرّي، يبقى
+    # على السيرفر بره git بالكامل. فاضٍ = تسجيل الدخول بقوقل معطّل بأمان
+    # (الـendpoint يرجّع 503 واضح بدل خطأ غامض).
+    FIREBASE_CREDENTIALS_PATH: str = ""
+
     class Config:
         env_file = ".env"
         case_sensitive = True

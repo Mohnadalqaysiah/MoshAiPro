@@ -25,7 +25,11 @@ class User(Base):
 
     id           = Column(Integer, primary_key=True, index=True)
     email        = Column(String, unique=True, index=True, nullable=False)
-    password_hash = Column(String, nullable=False)
+    # (2026-09-22) nullable لحسابات Google — ما عندها كلمة سر إطلاقاً،
+    # التحقق يصير عبر Firebase ID token لا verify_password. راجع
+    # auth_provider تحت للتمييز، وmigrate_add_google_auth.py للهجرة.
+    password_hash = Column(String, nullable=True)
+    auth_provider = Column(String, default="password", nullable=False)  # "password" | "google"
     full_name    = Column(String, nullable=True)
     role         = Column(SAEnum(UserRole), default=UserRole.USER, nullable=False)
 

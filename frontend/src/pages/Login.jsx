@@ -7,6 +7,7 @@ import useSEO from '../hooks/useSEO'
 import useBreadcrumbSchema from '../hooks/useBreadcrumbSchema'
 import { mirrorPath } from '../utils/langRoutes'
 import Logo from '../components/Logo'
+import GoogleAuthButton from '../components/GoogleAuthButton'
 
 const T = {
   ar: {
@@ -146,6 +147,12 @@ export default function Login() {
               {loading ? tx.submitting : tx.submit}
             </button>
           </form>
+
+          <GoogleAuthButton
+            isAr={isAr}
+            onSuccess={(user) => navigate(user.role === 'admin' ? '/admin' : '/dashboard')}
+            onError={(msg) => setError(msg)}
+          />
 
           <p className="text-center text-sm text-gray-500 mt-4">
             <Link to={isAr ? '/forgot-password' : '/forgot-password'} className="text-gray-400 hover:text-blue-400 transition">

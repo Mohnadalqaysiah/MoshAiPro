@@ -86,6 +86,9 @@ class ContactIn(BaseModel):
 class VerifyEmailIn(BaseModel):
     otp: str
 
+class GoogleLoginIn(BaseModel):
+    id_token: str  # Firebase ID token من signInWithPopup بالفرونت-إند
+
 class FeatureSurveyIn(BaseModel):
     selected_option: str
     custom_text: Optional[str] = None
@@ -127,57 +130,61 @@ def _send_verification_otp(email: str, background_tasks: BackgroundTasks):
 
 # ─── Register ─────────────────────────────────────────────────────────────────
 
-@router.post("/register")
-def register(
-    data: RegisterIn,
-    background_tasks: BackgroundTasks,
-    request: Request,
-    ref: str = Query(default=""),
-    db: Session = Depends(get_db),
-):
-    if db.query(User).filter(User.email == data.email.lower()).first():
-        raise HTTPException(400, "البريد الإلكتروني مسجّل مسبقاً")
+def _get_setting(db: Session, key: str, default: int) -> int:
+    r = db.query(SiteSettings).filter(SiteSettings.key == key).first()
+    try: return int(r.value) if r and r.value else default
+    except: return default
 
-    # Resolve referral code (silently ignore invalid/self-referrals)
+
+def _provision_trial_user(
+    db: Session,
+    background_tasks: BackgroundTasks,
+    email: str,
+    full_name: str,
+    ref: str,
+    registration_ip: str,
+    password_hash: Optional[str],
+    is_verified: bool,
+    auth_provider: str,
+) -> User:
+    """
+    ينشئ حساب تجربة جديداً (خطة/نقاط/كود إحالة/تنبيه أدمن/إيميل ترحيب) —
+    مشترك بين /register و/google. الفرق الوحيد بينهما: كلمة السر
+    (None لحسابات Google) وis_verified (Google يوثّق البريد بنفسه فوراً)،
+    وOTP التفعيل (يُرسَل لحساب كلمة السر فقط — Google لا يحتاجه).
+    """
     referrer = None
     clean_ref = ref.upper().strip() if ref else ""
     if clean_ref:
         referrer = db.query(User).filter(User.affiliate_code == clean_ref).first()
-        if referrer and referrer.email == data.email.lower().strip():
+        if referrer and referrer.email == email:
             referrer = None  # prevent self-referral
 
-    # Generate unique affiliate code for new user
     new_code = generate_affiliate_code(db)
-
     now = datetime.now(timezone.utc)
 
-    def _get_setting(key: str, default: int) -> int:
-        r = db.query(SiteSettings).filter(SiteSettings.key == key).first()
-        try: return int(r.value) if r and r.value else default
-        except: return default
-
     user = User(
-        email         = data.email.lower().strip(),
-        password_hash = hash_password(data.password),
-        full_name     = data.full_name,
+        email         = email,
+        password_hash = password_hash,
+        auth_provider = auth_provider,
+        full_name     = full_name,
         role          = UserRole.USER,
         plan          = PlanType.TRIAL,
         is_active     = True,
         trial_started_at    = now,
         trial_ends_at       = now + timedelta(days=TRIAL_DAYS),
-        trial_analyses_left = _get_setting("trial_analysis_limit", 10),
-        trial_chat_left     = _get_setting("trial_chat_limit", 20),
+        trial_analyses_left = _get_setting(db, "trial_analysis_limit", 10),
+        trial_chat_left     = _get_setting(db, "trial_chat_limit", 20),
         telegram_link_token = secrets.token_urlsafe(16),
         affiliate_code      = new_code,
         referred_by_code    = clean_ref if referrer else None,
-        registration_ip     = _client_ip(request),
-        is_verified         = False,
+        registration_ip     = registration_ip,
+        is_verified         = is_verified,
     )
     db.add(user)
     db.commit()
     db.refresh(user)
 
-    # Create affiliate profile
     aff = Affiliate(
         user_id             = user.id,
         code                = new_code,
@@ -189,20 +196,17 @@ def register(
     db.add(aff)
     db.commit()
 
-    # ── منح نقاط الإحالة للمُحيل (10 نقاط عند التسجيل) ─────────────────
     if referrer:
         referrer.referral_points = (referrer.referral_points or 0) + 10
         db.commit()
         logger.info(f"🎁 +10 referral points → {referrer.email} (new user: {user.email})")
 
-    token = create_token(user.id, user.role)
-    logger.info(f"✅ New user registered: {user.email} (ref={user.referred_by_code or 'none'})")
+    logger.info(f"✅ New user registered: {user.email} (via={auth_provider}, ref={user.referred_by_code or 'none'})")
 
-    # ── تنبيه الأدمن عبر Telegram ────────────────────────────────────────
     from app.services.admin_notify import notify_admin_telegram
     _ref_note = f"\n🔗 إحالة: <code>{user.referred_by_code}</code>" if user.referred_by_code else ""
     _msg = (
-        f"👤 <b>مستخدم جديد سجّل!</b>\n"
+        f"👤 <b>مستخدم جديد سجّل!</b> ({auth_provider})\n"
         f"━━━━━━━━━━━━━━━\n"
         f"📧 البريد: <code>{user.email}</code>\n"
         f"👤 الاسم: {user.full_name or '—'}\n"
@@ -212,16 +216,91 @@ def register(
     )
     background_tasks.add_task(notify_admin_telegram, _msg)
 
-    # ── إيميل ترحيب في الخلفية ──────────────────────────────────────────
     smtp_pass = settings.SMTP_PASSWORD
     if smtp_pass:
         from app.services.email_service import send_email, welcome_email_body
         body = welcome_email_body(user.full_name or user.email, trial_days=TRIAL_DAYS, trial_analyses=10)
         background_tasks.add_task(send_email, user.email, "مرحباً بك في Qaffel AI 🎉", body, smtp_pass)
 
-    # ── رمز تفعيل البريد الإلكتروني ────────────────────────────────────
+    return user
+
+
+@router.post("/register")
+def register(
+    data: RegisterIn,
+    background_tasks: BackgroundTasks,
+    request: Request,
+    ref: str = Query(default=""),
+    db: Session = Depends(get_db),
+):
+    email = data.email.lower().strip()
+    if db.query(User).filter(User.email == email).first():
+        raise HTTPException(400, "البريد الإلكتروني مسجّل مسبقاً")
+
+    user = _provision_trial_user(
+        db, background_tasks,
+        email=email, full_name=data.full_name, ref=ref,
+        registration_ip=_client_ip(request),
+        password_hash=hash_password(data.password),
+        is_verified=False,
+        auth_provider="password",
+    )
+
+    token = create_token(user.id, user.role)
+    # ── رمز تفعيل البريد الإلكتروني (فقط لحسابات كلمة السر) ─────────────
     _send_verification_otp(user.email, background_tasks)
 
+    return {"token": token, "user": _user_info(user)}
+
+
+# ─── Google Sign-In ─────────────────────────────────────────────────────────────
+
+@router.post("/google")
+def google_login(
+    data: GoogleLoginIn,
+    background_tasks: BackgroundTasks,
+    request: Request,
+    ref: str = Query(default=""),
+    db: Session = Depends(get_db),
+):
+    """
+    تسجيل دخول/تسجيل حساب جديد عبر Google — الفرونت-إند يفتح نافذة قوقل
+    بـFirebase JS SDK ويبعث الـID token هون للتحقق منه من الخادم (لا يُوثَق
+    بأي بيانات يبعثها المتصفح مباشرة، التحقق دايماً من التوكن الموقَّع).
+    """
+    from app.services.firebase_auth import verify_google_id_token, FirebaseNotConfigured
+
+    try:
+        claims = verify_google_id_token(data.id_token)
+    except FirebaseNotConfigured as e:
+        logger.error(f"Google login: {e}")
+        raise HTTPException(503, "تسجيل الدخول بقوقل غير مفعّل حالياً على الخادم")
+    except Exception as e:
+        logger.warning(f"Google login: invalid token ({e})")
+        raise HTTPException(401, "جلسة قوقل غير صالحة أو منتهية — حاول مرة أخرى")
+
+    email = claims["email"]
+    user = db.query(User).filter(User.email == email).first()
+
+    if user:
+        if user.plan == PlanType.BANNED or not user.is_active:
+            raise HTTPException(403, "الحساب معلّق. تواصل مع الدعم.")
+        # حساب موجود أصلاً بكلمة سر (سجّل عادي قبل هيك) — نربط Google كطريقة
+        # دخول إضافية بلا ما نلغي كلمة سره أو نغيّر auth_provider الأصلي.
+        if claims["email_verified"] and not user.is_verified:
+            user.is_verified = True
+            db.commit()
+    else:
+        user = _provision_trial_user(
+            db, background_tasks,
+            email=email, full_name=claims["name"], ref=ref,
+            registration_ip=_client_ip(request),
+            password_hash=None,
+            is_verified=claims["email_verified"],
+            auth_provider="google",
+        )
+
+    token = create_token(user.id, user.role)
     return {"token": token, "user": _user_info(user)}
 
 
@@ -276,7 +355,13 @@ def resend_verification(
 @router.post("/login")
 def login(data: LoginIn, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == data.email.lower()).first()
-    if not user or not verify_password(data.password, user.password_hash):
+    # (2026-09-22) حسابات Google قد لا تملك كلمة سر إطلاقاً (password_hash
+    # فاضي) — verify_password تنهار بمدخل None قبل ما توصل لمقارنة حقيقية.
+    if not user or not user.password_hash:
+        if user and not user.password_hash:
+            raise HTTPException(401, "هذا الحساب مسجَّل عبر Google — استخدم زر «الدخول بحساب Google»")
+        raise HTTPException(401, "البريد أو كلمة المرور غير صحيحة")
+    if not verify_password(data.password, user.password_hash):
         raise HTTPException(401, "البريد أو كلمة المرور غير صحيحة")
     if user.plan == PlanType.BANNED or not user.is_active:
         raise HTTPException(403, "الحساب معلّق. تواصل مع الدعم.")
