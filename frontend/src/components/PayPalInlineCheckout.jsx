@@ -1,6 +1,39 @@
 import { useEffect, useRef, useState } from 'react'
+import axios from 'axios'
 import { loadScript } from '@paypal/paypal-js'
 import { Shield, Loader2 } from 'lucide-react'
+
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
+// ── تشخيص Web SDK v6 (؟ppdebug=1 فقط) ───────────────────────────────────────
+// (2026-09-22) PayPal عندها جيل جديد كلياً من الـSDK (v6، createInstance +
+// findEligibleMethods) بفحص أهلية "advanced_cards" منفصل تماماً عن
+// cardFields.isEligible() الكلاسيكي المستخدم بمسار الدفع الحي بالأسفل.
+// الاثنان يكتبان على window.paypal بنفس الصفحة — تحميلهما معاً بنفس
+// النافذة قد يتصادما (وأحدهما يستبدل الآخر حسب ترتيب التحميل)، فهذا
+// التشخيص يعمل بمعزل تام داخل iframe مخفي، بلا أي أثر على مسار الدفع
+// الحقيقي (الأزرار/الحقول بالأسفل) بأي حال — نجح التشخيص أو فشل.
+function v6DiagnosticHtml(scriptSrc) {
+  return `<!doctype html><html><body><script>
+    window.addEventListener('message', async function (ev) {
+      if (!ev.data || ev.data.type !== 'run') return;
+      try {
+        await new Promise(function (resolve, reject) {
+          var s = document.createElement('script');
+          s.src = ${JSON.stringify(scriptSrc)};
+          s.onload = resolve; s.onerror = function () { reject(new Error('script load failed')); };
+          document.body.appendChild(s);
+        });
+        var sdk = await window.paypal.createInstance({ clientToken: ev.data.clientToken, components: ['card-fields'] });
+        var methods = await sdk.findEligibleMethods();
+        var eligible = methods.isEligible('advanced_cards');
+        parent.postMessage({ type: 'v6result', eligible: eligible, error: null }, '*');
+      } catch (e) {
+        parent.postMessage({ type: 'v6result', eligible: null, error: String((e && e.message) || e) }, '*');
+      }
+    });
+  </script></body></html>`
+}
 
 // نموذج "الدفع بالبطاقة". المسار المفضَّل: حقول بطاقة مستضافة بلا أي
 // شعار (PayPal Advanced Card Payments) — يحتاج تفعيل/أهلية خاصة من
@@ -41,6 +74,7 @@ export default function PayPalInlineCheckout({
   // بلا وصول لـConsole على آيفون بلا ماك متاح.
   const debugOn = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('ppdebug') === '1'
   const [debugInfo, setDebugInfo] = useState(null)
+  const [v6Debug, setV6Debug] = useState(null)
   const cardFieldsRef     = useRef(null)
   const buttonsContainerRef = useRef(null)
   const buttonsInstanceRef  = useRef(null)
@@ -175,6 +209,44 @@ export default function PayPalInlineCheckout({
     }
   }, [orderId, clientId])
 
+  // تشخيص Web SDK v6 المعزول — راجع v6DiagnosticHtml أعلاه. لا يشترك بأي
+  // state أو DOM مع مسار الدفع الحي، ولا يشغّله إلا ?ppdebug=1.
+  useEffect(() => {
+    if (!debugOn) return
+    let cancelled = false
+    const iframe = document.createElement('iframe')
+    iframe.style.display = 'none'
+    document.body.appendChild(iframe)
+
+    const handleMsg = (ev) => {
+      if (ev.source !== iframe.contentWindow || !ev.data || ev.data.type !== 'v6result') return
+      if (!cancelled) setV6Debug({ eligible: ev.data.eligible, error: ev.data.error })
+    }
+    window.addEventListener('message', handleMsg)
+
+    axios.get(`${API}/api/v1/subscription/paypal/browser-safe-token`)
+      .then(({ data }) => {
+        if (cancelled) return
+        const isSandbox = (data.base_url || '').includes('sandbox')
+        const scriptSrc = isSandbox
+          ? 'https://www.sandbox.paypal.com/web-sdk/v6/core'
+          : 'https://www.paypal.com/web-sdk/v6/core'
+        iframe.srcdoc = v6DiagnosticHtml(scriptSrc)
+        iframe.onload = () => {
+          iframe.contentWindow.postMessage({ type: 'run', clientToken: data.access_token }, '*')
+        }
+      })
+      .catch((e) => {
+        if (!cancelled) setV6Debug({ eligible: null, error: `token fetch: ${e.response?.data?.detail || e.message}` })
+      })
+
+    return () => {
+      cancelled = true
+      window.removeEventListener('message', handleMsg)
+      iframe.remove()
+    }
+  }, [debugOn])
+
   const handleFieldsSubmit = async (e) => {
     e.preventDefault()
     if (!cardFieldsRef.current) return
@@ -203,7 +275,15 @@ export default function PayPalInlineCheckout({
           canMakePayments(): {String(debugInfo.canMakePayments)}<br />
           applePay isEligible(): {String(debugInfo.applePayEligible)}<br />
           cardFields isEligible(): {String(debugInfo.cardFieldsEligible)}<br />
-          error: {String(debugInfo.error)}
+          error: {String(debugInfo.error)}<br />
+          <br />
+          — Web SDK v6 (منفصل تماماً) —<br />
+          {v6Debug ? (
+            <>
+              advanced_cards isEligible(): {String(v6Debug.eligible)}<br />
+              v6 error: {String(v6Debug.error)}
+            </>
+          ) : 'جاري الفحص...'}
         </div>
       )}
 

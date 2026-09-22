@@ -834,6 +834,41 @@ def create_paypal_order(
     return {"order_id": order["id"], "client_id": cfg["client_id"]}
 
 
+@router.get("/paypal/browser-safe-token")
+def paypal_browser_safe_token(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    (2026-09-22) توكن مقيّد مخصَّص للتحميل بالمتصفح مباشرة (لا Bearer
+    الكامل الخادمي المستخدم بـ_paypal_access_token) — يلزم **Web SDK v6**
+    الجديد من PayPal (`window.paypal.createInstance`) لفحص أهلية
+    "advanced_cards" بطريقتهم الحالية، منفصلة تماماً عن فحص
+    `cardFields.isEligible()` بالـSDK الكلاسيكي (`sdk.js`) المستخدم فعلياً
+    بمسار الدفع الحي.
+
+    الغرض تشخيصي بحت الآن (خلف ?ppdebug=1 بالفرونت): نقارن هل v6 يعطي
+    أهلية مختلفة عن v5/classic — الحسابان منفصلان على خوادم PayPal وقد لا
+    يتزامنان. لا يُستخدم هذا التوكن بمسار الدفع الفعلي حتى تُؤكَّد الفائدة.
+    """
+    cfg = _paypal_config(db)
+    if not cfg["enabled"] or not cfg["client_id"] or not cfg["secret_key"]:
+        raise HTTPException(503, "الدفع بالبطاقة غير متاح حالياً")
+    try:
+        resp = requests.post(
+            f"{cfg['base_url']}/v1/oauth2/token",
+            auth=(cfg["client_id"], cfg["secret_key"]),
+            data={"grant_type": "client_credentials", "response_type": "client_token", "intent": "sdk_init"},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        token = resp.json().get("access_token")
+    except Exception as e:
+        logger.error(f"❌ PayPal browser-safe token error: {e}")
+        raise HTTPException(500, "تعذّر تجهيز فحص الأهلية")
+    return {"access_token": token, "base_url": cfg["base_url"]}
+
+
 @router.post("/paypal/capture-order")
 def capture_paypal_order(
     data: PayPalCaptureIn,
