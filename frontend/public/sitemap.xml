@@ -586,4 +586,64 @@
     <priority>0.8</priority>
   </url>
 
+  <!-- مقالة إقليمية: بوت تداول الذهب بالذكاء الاصطناعي في السعودية (عربي + English) -->
+  <url>
+    <loc>https://qaffel.com/blog/ai-gold-trading-bot-saudi-arabia</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/ai-gold-trading-bot-saudi-arabia" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/ai-gold-trading-bot-saudi-arabia" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/ai-gold-trading-bot-saudi-arabia" />
+    <lastmod>2026-09-22</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://qaffel.com/en/blog/ai-gold-trading-bot-saudi-arabia</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/ai-gold-trading-bot-saudi-arabia" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/ai-gold-trading-bot-saudi-arabia" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/ai-gold-trading-bot-saudi-arabia" />
+    <lastmod>2026-09-22</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- مقالة إقليمية: التداول بالذكاء الاصطناعي بالخليج ومصر والأردن والعراق (عربي + English) -->
+  <url>
+    <loc>https://qaffel.com/blog/ai-trading-middle-east-gulf-guide</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/ai-trading-middle-east-gulf-guide" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/ai-trading-middle-east-gulf-guide" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/ai-trading-middle-east-gulf-guide" />
+    <lastmod>2026-09-22</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://qaffel.com/en/blog/ai-trading-middle-east-gulf-guide</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/ai-trading-middle-east-gulf-guide" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/ai-trading-middle-east-gulf-guide" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/ai-trading-middle-east-gulf-guide" />
+    <lastmod>2026-09-22</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- مقالة مقارنة: أفضل توصيات ذهب مجانية بالذكاء الاصطناعي 2026 (عربي + English) -->
+  <url>
+    <loc>https://qaffel.com/blog/best-free-ai-gold-signals-2026</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/best-free-ai-gold-signals-2026" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/best-free-ai-gold-signals-2026" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/best-free-ai-gold-signals-2026" />
+    <lastmod>2026-09-22</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://qaffel.com/en/blog/best-free-ai-gold-signals-2026</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/best-free-ai-gold-signals-2026" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/best-free-ai-gold-signals-2026" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/best-free-ai-gold-signals-2026" />
+    <lastmod>2026-09-22</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
 </urlset>
