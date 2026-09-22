@@ -8,31 +8,31 @@ const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 // ── تشخيص Web SDK v6 (؟ppdebug=1 فقط) ───────────────────────────────────────
 // (2026-09-22) PayPal عندها جيل جديد كلياً من الـSDK (v6، createInstance +
 // findEligibleMethods) بفحص أهلية "advanced_cards" منفصل تماماً عن
-// cardFields.isEligible() الكلاسيكي المستخدم بمسار الدفع الحي بالأسفل.
-// الاثنان يكتبان على window.paypal بنفس الصفحة — تحميلهما معاً بنفس
-// النافذة قد يتصادما (وأحدهما يستبدل الآخر حسب ترتيب التحميل)، فهذا
-// التشخيص يعمل بمعزل تام داخل iframe مخفي، بلا أي أثر على مسار الدفع
-// الحقيقي (الأزرار/الحقول بالأسفل) بأي حال — نجح التشخيص أو فشل.
-function v6DiagnosticHtml(scriptSrc) {
-  return `<!doctype html><html><body><script>
-    window.addEventListener('message', async function (ev) {
-      if (!ev.data || ev.data.type !== 'run') return;
-      try {
-        await new Promise(function (resolve, reject) {
-          var s = document.createElement('script');
-          s.src = ${JSON.stringify(scriptSrc)};
-          s.onload = resolve; s.onerror = function () { reject(new Error('script load failed')); };
-          document.body.appendChild(s);
-        });
-        var sdk = await window.paypal.createInstance({ clientToken: ev.data.clientToken, components: ['card-fields'] });
-        var methods = await sdk.findEligibleMethods();
-        var eligible = methods.isEligible('advanced_cards');
-        parent.postMessage({ type: 'v6result', eligible: eligible, error: null }, '*');
-      } catch (e) {
-        parent.postMessage({ type: 'v6result', eligible: null, error: String((e && e.message) || e) }, '*');
-      }
-    });
-  </script></body></html>`
+// cardFields.isEligible() الكلاسيكي بالأسفل. أول محاولة عزلته بـiframe
+// فشلت (`No ack for postMessage: pixelReady`) — بكسل الحماية/كشف الاحتيال
+// الداخلي بالسكربت يحتاج نافذة top-level حقيقية، يرفض العمل بـiframe
+// متداخل (بغض النظر عن srcdoc أو أي عزل). فالتشغيل الآن بنفس النافذة
+// الرئيسية مباشرة — بس **بعد** ما الكود الكلاسيكي تحت يمسك مرجعه الخاص
+// لـwindow.paypal ويُنشئ عناصره (CardFields/Buttons) فعلياً: تلك العناصر
+// دوال جاهزة على كائن مُلتقَط بمتغيّر محلي، فاستبدال v6 لاحقاً لـ
+// window.paypal العام لا يمسّها إطلاقاً — يعمل بأمان حتى لو تصادم الاسمان.
+async function runV6EligibilityCheck() {
+  const { data } = await axios.get(`${API}/api/v1/subscription/paypal/browser-safe-token`)
+  const isSandbox = (data.base_url || '').includes('sandbox')
+  const scriptSrc = isSandbox
+    ? 'https://www.sandbox.paypal.com/web-sdk/v6/core'
+    : 'https://www.paypal.com/web-sdk/v6/core'
+
+  await new Promise((resolve, reject) => {
+    const s = document.createElement('script')
+    s.src = scriptSrc
+    s.onload = resolve
+    s.onerror = () => reject(new Error('v6 script load failed'))
+    document.body.appendChild(s)
+  })
+  const sdk = await window.paypal.createInstance({ clientToken: data.access_token, components: ['card-fields'] })
+  const methods = await sdk.findEligibleMethods()
+  return methods.isEligible('advanced_cards')
 }
 
 // نموذج "الدفع بالبطاقة". المسار المفضَّل: حقول بطاقة مستضافة بلا أي
@@ -193,6 +193,15 @@ export default function PayPalInlineCheckout({
       } else if (!cancelled) {
         setMode('error')
       }
+
+      // تشخيص v6 — بعد ما الكود فوق خلص يمسك مرجعه لـ`paypal` وينشئ
+      // عناصره فعلياً (سطر synchronous، خلص قبل ما نوصل هون). fire-and-forget
+      // عمداً: ما يوقف ولا يأخّر عرض واجهة الدفع الحقيقية بأي حال.
+      if (debugOn) {
+        runV6EligibilityCheck()
+          .then((eligible) => { if (!cancelled) setV6Debug({ eligible, error: null }) })
+          .catch((e) => { if (!cancelled) setV6Debug({ eligible: null, error: e.response?.data?.detail || e.message }) })
+      }
     }).catch((e) => {
       console.error('payment sdk load error', e)
       if (!cancelled) setMode('error')
@@ -207,45 +216,7 @@ export default function PayPalInlineCheckout({
         try { applePayInstanceRef.current.close() } catch { /* تجاهل */ }
       }
     }
-  }, [orderId, clientId])
-
-  // تشخيص Web SDK v6 المعزول — راجع v6DiagnosticHtml أعلاه. لا يشترك بأي
-  // state أو DOM مع مسار الدفع الحي، ولا يشغّله إلا ?ppdebug=1.
-  useEffect(() => {
-    if (!debugOn) return
-    let cancelled = false
-    const iframe = document.createElement('iframe')
-    iframe.style.display = 'none'
-    document.body.appendChild(iframe)
-
-    const handleMsg = (ev) => {
-      if (ev.source !== iframe.contentWindow || !ev.data || ev.data.type !== 'v6result') return
-      if (!cancelled) setV6Debug({ eligible: ev.data.eligible, error: ev.data.error })
-    }
-    window.addEventListener('message', handleMsg)
-
-    axios.get(`${API}/api/v1/subscription/paypal/browser-safe-token`)
-      .then(({ data }) => {
-        if (cancelled) return
-        const isSandbox = (data.base_url || '').includes('sandbox')
-        const scriptSrc = isSandbox
-          ? 'https://www.sandbox.paypal.com/web-sdk/v6/core'
-          : 'https://www.paypal.com/web-sdk/v6/core'
-        iframe.srcdoc = v6DiagnosticHtml(scriptSrc)
-        iframe.onload = () => {
-          iframe.contentWindow.postMessage({ type: 'run', clientToken: data.access_token }, '*')
-        }
-      })
-      .catch((e) => {
-        if (!cancelled) setV6Debug({ eligible: null, error: `token fetch: ${e.response?.data?.detail || e.message}` })
-      })
-
-    return () => {
-      cancelled = true
-      window.removeEventListener('message', handleMsg)
-      iframe.remove()
-    }
-  }, [debugOn])
+  }, [orderId, clientId, debugOn])
 
   const handleFieldsSubmit = async (e) => {
     e.preventDefault()
