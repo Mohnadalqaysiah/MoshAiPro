@@ -404,10 +404,14 @@ class MoshAIEngineV5:
             analysis["cache_ttl_seconds"] = _SIGNAL_CACHE_TTL.get(timeframe, 1800)
 
             # ── Record result for emergency calibration pass_rate tracking ───
+            # decision_layer was just set above (htf_veto/zone_veto = the
+            # engine resolved a direction and unconditionally vetoed it —
+            # see _get_pass_rate's docstring for why these are excluded).
             self._record_analysis_result(
                 symbol, timeframe,
                 passed=analysis.get("signal_status") == "PASS",
                 delta=float(analysis.get("effective_delta") or 0),
+                hard_veto=analysis.get("decision_layer") in ("htf_veto", "zone_veto"),
             )
 
             self._set_cached(symbol, timeframe, analysis)
@@ -1177,19 +1181,38 @@ class MoshAIEngineV5:
         """Called when a BUY/SELL passes all gates — updates silence tracker."""
         self._last_signal_issued[f"{symbol.upper()}_{timeframe}"] = time.time()
 
-    def _record_analysis_result(self, symbol: str, timeframe: str, passed: bool, delta: float):
-        """Rolling window tracker for emergency calibration mode."""
+    def _record_analysis_result(self, symbol: str, timeframe: str, passed: bool, delta: float, hard_veto: bool = False):
+        """Rolling window tracker for emergency calibration mode.
+
+        (2026-09-22) hard_veto marks rejections _get_pass_rate must ignore —
+        see that method's docstring for why.
+        """
         key = f"{symbol.upper()}_{timeframe}"
         hist = self._signal_history.setdefault(key, [])
-        hist.append({"ts": time.time(), "passed": passed, "delta": abs(delta)})
+        hist.append({"ts": time.time(), "passed": passed, "delta": abs(delta), "hard_veto": hard_veto})
         if len(hist) > self._HISTORY_WINDOW:
             self._signal_history[key] = hist[-self._HISTORY_WINDOW:]
 
     def _get_pass_rate(self, symbol: str, timeframe: str) -> float:
-        """Fraction of recent analyses that produced a PASS signal (0.0–1.0)."""
-        hist = self._signal_history.get(f"{symbol.upper()}_{timeframe}", [])
+        """Fraction of recent *eligible* analyses that produced a PASS signal (0.0–1.0).
+
+        (2026-09-22) Real incident: PERFORMANCE_TIGHTENING (below) reacted to
+        a multi-hour stretch where nearly every analysis across many symbols
+        was rejected by htf_veto/zone_veto — an unconditional direction veto
+        ("HTF_DIRECTION_CONFLICT → REJECTED, no delta exception" in
+        _decision_finalizer). Tightening required_delta/min_rr cannot affect
+        those rejections at all; counting them as "pass_rate" evidence just
+        drove pass_rate to 0% across the board and tightened every symbol in
+        response to something tightening can't fix — a self-reinforcing
+        drought with no relation to signal quality. Hard-veto attempts are
+        now excluded from the sample entirely (neither pass nor fail), so
+        pass_rate reflects only attempts where the score/RR bar was actually
+        the deciding factor.
+        """
+        hist = [h for h in self._signal_history.get(f"{symbol.upper()}_{timeframe}", [])
+                if not h.get("hard_veto")]
         if len(hist) < 3:
-            return 1.0   # not enough history — assume healthy
+            return 1.0   # not enough eligible history — assume healthy
         return sum(1 for h in hist if h["passed"]) / len(hist)
 
     def _get_avg_delta(self, symbol: str, timeframe: str) -> float:
