@@ -181,12 +181,18 @@ async def lifespan(app: FastAPI):
     integrity_task = asyncio.create_task(integrity_checker())
     logger.success("✅ Integrity checker started")
 
+    # بدء مذكّر الدفع المتروك (checkout_started بلا اكتمال بعد ساعة)
+    from app.services.checkout_reminder import checkout_reminder_checker
+    checkout_reminder_task = asyncio.create_task(checkout_reminder_checker())
+    logger.success("✅ Checkout reminder checker started")
+
     yield
 
     alert_task.cancel()
     strategy_task.cancel()
     scanner_task.cancel()
     integrity_task.cancel()
+    checkout_reminder_task.cancel()
 
     # Shutdown
     logger.info("👋 Shutting down Mosh AI Pro v5...")

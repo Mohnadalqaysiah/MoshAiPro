@@ -255,6 +255,23 @@ def subscription_expiry_email_body(name: str, days_left: int) -> str:
     """ + _FOOTER
 
 
+def checkout_reminder_email_body(name: str, plan_label: str) -> str:
+    first = name.split()[0] if name else "مستخدمنا العزيز"
+    return _HEADER + f"""
+    <h2 style="color:#3b82f6;margin-top:0;">لاحظنا إنك ما أكملت اشتراكك 👋</h2>
+    <p style="color:#cbd5e1;">مرحباً <strong style="color:#93c5fd;">{first}</strong>،</p>
+    <p style="color:#94a3b8;line-height:1.7;">
+      بدأت خطوات الاشتراك بالباقة <strong style="color:#fff;">{plan_label}</strong>
+      ولم تكتمل الدفعة. إذا واجهتك أي مشكلة تقنية أو سؤال قبل الدفع، رد على
+      هذا الإيميل وسنساعدك مباشرة.
+    </p>
+    {_btn("إكمال الاشتراك", "https://qaffel.com/pricing")}
+    <p style="color:#64748b;font-size:13px;text-align:center;">
+      support@qaffel.com
+    </p>
+    """ + _FOOTER
+
+
 def affiliate_commission_email_body(
     name: str, commission_usd: float, referral_name: str,
     tier: int, pending_balance: float

@@ -354,6 +354,52 @@ def get_status(
     }
 
 
+class FunnelEventIn(BaseModel):
+    event:  str
+    plan:   Optional[str] = None
+    method: Optional[str] = None
+
+
+_ALLOWED_FUNNEL_EVENTS = {"pricing_viewed", "checkout_started"}
+
+
+@router.post("/track")
+def track_funnel_event(
+    data: FunnelEventIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    (2026-09-24) تتبّع بسيط لمسار الاشتراك — راجع DECISIONS.md لسياق الطلب:
+    ما كان عندنا أي أثر لمحاولة دفع لم تكتمل (create_paypal_order لا يخزّن
+    شيئاً قبل النجاح، وUSDT فقط عند إدخال tx_id يدوياً). هذا يسدّ الفجوة
+    بأقل قدر ممكن: حدثان فقط، لا نكرر "اكتمل الدفع" (موجود أصلاً بـPayment).
+    """
+    if data.event not in _ALLOWED_FUNNEL_EVENTS:
+        raise HTTPException(400, "event غير معروف")
+
+    from app.models.funnel_event import FunnelEvent
+
+    # تجنّب ضجيج pricing_viewed عند إعادة تحميل الصفحة أو التنقل المتكرر —
+    # مرة كل 30 دقيقة لكل مستخدم تكفي لحساب "دخل الصفحة" دون تضخيم الجدول.
+    if data.event == "pricing_viewed":
+        recent = (
+            db.query(FunnelEvent)
+            .filter(
+                FunnelEvent.user_id == user.id,
+                FunnelEvent.event == "pricing_viewed",
+                FunnelEvent.created_at >= datetime.now(timezone.utc) - timedelta(minutes=30),
+            )
+            .first()
+        )
+        if recent:
+            return {"success": True, "deduped": True}
+
+    db.add(FunnelEvent(user_id=user.id, event=data.event, plan=data.plan, method=data.method))
+    db.commit()
+    return {"success": True}
+
+
 @router.post("/pay")
 def submit_payment(
     data: PaymentIn,

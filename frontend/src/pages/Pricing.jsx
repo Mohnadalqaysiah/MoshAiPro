@@ -231,6 +231,19 @@ export default function Pricing() {
   // لباقة أخرى يعرض رقماً لن يُحصَّل.
   useEffect(() => { setCouponApplied(null); setCouponError('') }, [selected])
 
+  // (2026-09-24) تتبّع مسار الاشتراك — راجع DECISIONS.md. لا نتتبّع الزوار
+  // غير المسجَّلين (endpoint يتطلب مستخدماً مسجَّلاً، والمهم فعلياً هو
+  // مستخدمو التجربة الحاليون لأننا نقدر نصلهم لاحقاً لو ما أكملوا الدفع).
+  useEffect(() => {
+    if (!user) return
+    axios.post(`${API}/api/v1/subscription/track`, { event: 'pricing_viewed' }).catch(() => {})
+  }, [user])
+
+  useEffect(() => {
+    if (!user || step !== 'pay') return
+    axios.post(`${API}/api/v1/subscription/track`, { event: 'checkout_started', plan: selected }).catch(() => {})
+  }, [user, step, selected])
+
   const couponCode  = couponApplied?.code || null
   const effectivePrice = couponApplied ? couponApplied.price_after : undefined
 

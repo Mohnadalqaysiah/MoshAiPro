@@ -20,6 +20,7 @@ from app.models.support_chat import SupportChatThread, SupportChatMessage, ChatT
 from app.models.feature_request import FeatureRequest
 from app.models.signal_delivery import SignalDelivery
 from app.models.coupon import Coupon, CouponRedemption
+from app.models.funnel_event import FunnelEvent
 
 __all__ = [
     "User", "UserRole", "PlanType",
@@ -37,4 +38,5 @@ __all__ = [
     "FeatureRequest",
     "SignalDelivery",
     "Coupon", "CouponRedemption",
+    "FunnelEvent",
 ]

@@ -14,7 +14,7 @@ import {
   X, ExternalLink, Shield, AlertTriangle, Settings, Mail, Upload, Signal, Send,
   FileText, TrendingUp as TrendUp, Bell, Sparkles,
   ShieldCheck, UserCog, MessageCircle, UserMinus, Paperclip, Gift, ChevronRight, Menu,
-  Lightbulb, Ticket
+  Lightbulb, Ticket, Filter
 } from 'lucide-react'
 
 const MAX_SUPPORT_ATTACHMENT_BYTES = 1 * 1024 * 1024
@@ -412,6 +412,9 @@ export default function Admin() {
   const [tab, setTab]         = useState('stats')
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [stats, setStats]     = useState(null)
+  const [funnel, setFunnel]         = useState(null)
+  const [funnelLoading, setFunnelLoading] = useState(false)
+  const [funnelDays, setFunnelDays] = useState(7)
   const [users, setUsers]     = useState([])
   const [onlineCount, setOnlineCount] = useState(0)
   const [showOnline, setShowOnline]   = useState(false)
@@ -555,6 +558,7 @@ export default function Admin() {
     if (tab === 'messages')  loadUsers()  // للحصول على قائمة المستخدمين للاختيار
     if (tab === 'team')      loadTeam()
     if (tab === 'support')   loadSupportThreads()
+    if (tab === 'funnel')    loadFunnel()
   }, [tab])
 
   // تحديث دوري لحالة "متصل الآن" وقت عرض تبويب المستخدمين
@@ -589,6 +593,13 @@ export default function Admin() {
   }, [tab, activeThreadId])
 
   const loadStats    = async () => { const r = await axios.get(`${API}/api/v1/admin/stats`); setStats(r.data) }
+  const loadFunnel   = async (days = funnelDays) => {
+    setFunnelLoading(true)
+    try {
+      const r = await axios.get(`${API}/api/v1/admin/funnel-report?days=${days}`)
+      setFunnel(r.data)
+    } catch (e) {} finally { setFunnelLoading(false) }
+  }
   const loadAffStats = async (q = '') => {
     setAffLoading(true)
     try {
@@ -862,6 +873,7 @@ export default function Admin() {
     { key:'markets',    icon:BarChart2,     label:'الأسواق' },
     { key:'signals',    icon:TrendingUp,    label:'الإشارات' },
     { key:'reports',    icon:FileText,      label:'تقارير الأداء' },
+    { key:'funnel',     icon:Filter,        label:'مسار الاشتراك' },
     { key:'affiliate',  icon:TrendUp,       label:'الأفلييت' },
     { key:'messages',   icon:Send,          label:'رسائل تيليجرام' },
     { key:'email',      icon:Mail,          label:'البريد' },
@@ -1034,6 +1046,89 @@ export default function Admin() {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* ── Funnel — مسار الاشتراك ── */}
+          {tab === 'funnel' && (
+            <div>
+              <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+                <h1 className="text-xl font-bold">مسار الاشتراك</h1>
+                <div className="flex gap-1">
+                  {[7, 14, 30].map(d => (
+                    <button key={d}
+                      onClick={() => { setFunnelDays(d); loadFunnel(d) }}
+                      className={`text-xs px-3 py-1.5 rounded-lg border transition ${funnelDays===d ? 'border-blue-500 text-blue-400 bg-blue-900/20' : 'border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-300'}`}>
+                      آخر {d} يوم
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {funnelLoading && <p className="text-gray-500 text-sm">جاري التحميل...</p>}
+
+              {!funnelLoading && funnel && (
+                <>
+                  <div className="grid grid-cols-3 gap-4 mb-6">
+                    {[
+                      { label:'دخل صفحة الأسعار', value: funnel.pricing_viewed, color:'blue' },
+                      { label:'بدأ الدفع',        value: funnel.checkout_started, color:'yellow' },
+                      { label:'أكمل الدفع',       value: funnel.converted, color:'green' },
+                    ].map((s, i) => (
+                      <div key={s.label} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+                        <div className="text-2xl font-bold">{s.value}</div>
+                        <div className="text-xs text-gray-400 mt-1">{s.label}</div>
+                        {i > 0 && funnel.pricing_viewed > 0 && (
+                          <div className="text-[11px] text-gray-600 mt-2">
+                            {Math.round((s.value / funnel.pricing_viewed) * 100)}% من الداخلين
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  <h2 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+                    <AlertTriangle size={14} className="text-yellow-500" />
+                    بدأوا الدفع ولم يكملوا ({funnel.abandoned.length})
+                  </h2>
+                  {funnel.abandoned.length === 0 ? (
+                    <p className="text-gray-500 text-sm">لا يوجد — كل من بدأ الدفع بهذه الفترة أكمله 🎉</p>
+                  ) : (
+                    <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-gray-500 text-xs border-b border-gray-800">
+                            <th className="text-right py-2.5 px-4 font-medium">المستخدم</th>
+                            <th className="text-right py-2.5 px-4 font-medium">الباقة</th>
+                            <th className="text-right py-2.5 px-4 font-medium">الوقت</th>
+                            <th className="text-right py-2.5 px-4 font-medium">تيليجرام</th>
+                            <th className="text-right py-2.5 px-4 font-medium">التذكير</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-800/60">
+                          {funnel.abandoned.map(a => (
+                            <tr key={a.user_id} className="hover:bg-gray-800/30">
+                              <td className="py-2.5 px-4">{a.full_name || a.email}</td>
+                              <td className="py-2.5 px-4 text-gray-400">{a.plan || '—'}</td>
+                              <td className="py-2.5 px-4 text-gray-500 text-xs">{new Date(a.started_at).toLocaleString('ar-EG')}</td>
+                              <td className="py-2.5 px-4">
+                                {a.telegram
+                                  ? <span className="text-green-400 text-xs">مربوط</span>
+                                  : <span className="text-gray-600 text-xs">غير مربوط</span>}
+                              </td>
+                              <td className="py-2.5 px-4">
+                                {a.reminded
+                                  ? <span className="text-blue-400 text-xs">أُرسل</span>
+                                  : <span className="text-gray-600 text-xs">بانتظار الساعة الأولى</span>}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           )}
 

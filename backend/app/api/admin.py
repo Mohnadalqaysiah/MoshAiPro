@@ -112,6 +112,86 @@ def admin_stats(
     }
 
 
+@router.get("/funnel-report")
+def funnel_report(
+    days: int = 7,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """
+    (2026-09-24) مسار الاشتراك: دخل صفحة الأسعار → بدأ الدفع → أكمل الدفع.
+    راجع DECISIONS.md لسياق الطلب — أول مرة يكون عندنا رؤية على "بدأ ولم
+    يكمل"، لا فقط "أكمل" (Payment) أو "لا شيء إطلاقاً" كالسابق.
+    """
+    from app.models.funnel_event import FunnelEvent
+
+    now   = datetime.now(timezone.utc)
+    start = now - timedelta(days=days)
+
+    events = (
+        db.query(FunnelEvent)
+        .filter(FunnelEvent.created_at >= start)
+        .order_by(FunnelEvent.created_at.asc())
+        .all()
+    )
+    viewed_users    = {e.user_id for e in events if e.event == "pricing_viewed"}
+    checkout_events = [e for e in events if e.event == "checkout_started"]
+    checkout_users  = {e.user_id for e in checkout_events}
+
+    # أول محاولة دفع لكل مستخدم بالنافذة — أي دفعة مقبولة بعدها تُحتسب تحويلاً
+    first_checkout_at = {}
+    for e in checkout_events:
+        if e.user_id not in first_checkout_at or e.created_at < first_checkout_at[e.user_id]:
+            first_checkout_at[e.user_id] = e.created_at
+
+    converted_users = set()
+    if checkout_users:
+        payments = (
+            db.query(Payment)
+            .filter(Payment.user_id.in_(checkout_users), Payment.status == PaymentStatus.APPROVED)
+            .all()
+        )
+        for p in payments:
+            fc = first_checkout_at.get(p.user_id)
+            if fc and p.created_at:
+                p_created = p.created_at if p.created_at.tzinfo else p.created_at.replace(tzinfo=timezone.utc)
+                if p_created >= fc:
+                    converted_users.add(p.user_id)
+
+    abandoned_ids = checkout_users - converted_users
+    abandoned_list = []
+    if abandoned_ids:
+        users_map = {u.id: u for u in db.query(User).filter(User.id.in_(abandoned_ids)).all()}
+        last_attempt = {}
+        for e in checkout_events:
+            if e.user_id in abandoned_ids:
+                if e.user_id not in last_attempt or e.created_at > last_attempt[e.user_id].created_at:
+                    last_attempt[e.user_id] = e
+        for uid, e in last_attempt.items():
+            u = users_map.get(uid)
+            if not u:
+                continue
+            abandoned_list.append({
+                "user_id":    uid,
+                "email":      u.email,
+                "full_name":  u.full_name,
+                "telegram":   bool(u.telegram_id),
+                "plan":       e.plan,
+                "method":     e.method,
+                "started_at": e.created_at.isoformat(),
+                "reminded":   e.reminded_at is not None,
+            })
+        abandoned_list.sort(key=lambda x: x["started_at"], reverse=True)
+
+    return {
+        "window_days":      days,
+        "pricing_viewed":   len(viewed_users),
+        "checkout_started": len(checkout_users),
+        "converted":        len(converted_users),
+        "abandoned":        abandoned_list,
+    }
+
+
 # ─── Users ────────────────────────────────────────────────────────────────────
 
 @router.get("/users")
