@@ -1,33 +1,25 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
+import { Link } from 'react-router-dom'
 import { X, ChevronRight, ChevronLeft, Zap, BarChart2, Activity,
-         MessageCircle, TrendingUp, Star, Send, CheckCircle } from 'lucide-react'
+         MessageCircle, TrendingUp, Send, CheckCircle, Settings2 } from 'lucide-react'
 import { useLang } from '../contexts/LangContext'
 import { useAuth } from '../contexts/AuthContext'
 
 const STORAGE_KEY = 'onboarding_done_v2'   // v2 so existing users see new onboarding
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
-// ── Market options for the preference step ──────────────────────────────────
-const MARKET_OPTIONS = [
-  { symbol: 'XAUUSD', label: { ar: '🥇 الذهب',       en: '🥇 Gold'       }, popular: true },
-  { symbol: 'BTCUSD', label: { ar: '₿ بيتكوين',      en: '₿ Bitcoin'     }, popular: true },
-  { symbol: 'EURUSD', label: { ar: '💶 يورو/دولار',   en: '💶 EUR/USD'    } },
-  { symbol: 'GBPUSD', label: { ar: '💷 جنيه/دولار',  en: '💷 GBP/USD'    } },
-  { symbol: 'USDJPY', label: { ar: '💴 دولار/ين',    en: '💴 USD/JPY'    } },
-  { symbol: 'USOIL',  label: { ar: '🛢 نفط',         en: '🛢 Crude Oil'  } },
-  { symbol: 'NAS100', label: { ar: '📈 ناسداك',      en: '📈 NASDAQ'     } },
-  { symbol: 'ETHUSD', label: { ar: 'Ξ إيثيريوم',    en: 'Ξ Ethereum'    } },
-]
-
-// ── Tour steps (excluding the market-pick step which is rendered separately) ─
+// (2026-09-23) خطوة اختيار الأسواق أُزيلت من الجولة — قرار صاحب المنتج:
+// التخصيص يتم حصراً من صفحة الحساب (Profile.jsx#watchlist)، والديفولت
+// دائماً "كل الرموز" (notify_watchlist فاضي). كانت هاي الخطوة أصلاً معطوبة
+// وما بتُحفظ فعلياً (كانت ترسل لـ endpoint غير موجود)، فإزالتها لا تغيّر
+// أي سلوك حالي للمستخدمين — فقط تشيل خطوة كانت توهم بأنها تعمل.
 const STEPS_AR = [
   {
     icon: <Activity size={28} className="text-blue-400" />,
     title: 'مرحباً بك في Qaffel AI! 👋',
     desc: 'منصة تداول ذكية بتحليل Smart Money Concepts + ذكاء اصطناعي. سنعدّ المنصة لك في 30 ثانية.',
   },
-  // step 1 = market picker (special)
   {
     icon: <Zap size={28} className="text-yellow-400" />,
     title: 'التحليل السريع',
@@ -46,7 +38,9 @@ const STEPS_AR = [
   {
     icon: <TrendingUp size={28} className="text-green-400" />,
     title: 'أنت جاهز! 🚀',
-    desc: 'Watchlist مُعدّ بناءً على اختياراتك — ستصلك الإشارات تلقائياً. حظ موفق وتداول بحكمة!',
+    desc: 'ستصلك إشارات كل الأسواق افتراضياً. حابب تركّز على رموز معينة؟ خصّصها لاحقاً من صفحة حسابك.',
+    linkTo: '/profile#watchlist',
+    linkLabel: 'تخصيص الرموز من صفحة الحساب',
   },
 ]
 
@@ -74,59 +68,11 @@ const STEPS_EN = [
   {
     icon: <TrendingUp size={28} className="text-green-400" />,
     title: "You're Ready! 🚀",
-    desc: 'Your Watchlist is set based on your preferences — signals will arrive automatically. Trade smart!',
+    desc: 'You\'ll get signals for all markets by default. Want to focus on specific symbols? Customize that anytime from your account page.',
+    linkTo: '/profile#watchlist',
+    linkLabel: 'Customize symbols from your account',
   },
 ]
-
-// ── Market Picker step ───────────────────────────────────────────────────────
-function MarketPickerStep({ isAr, selected, onToggle }) {
-  return (
-    <div className="px-5 py-4">
-      <div className="flex items-center gap-3 mb-4">
-        <div className="w-12 h-12 rounded-xl bg-blue-500/15 flex items-center justify-center flex-shrink-0">
-          <Star size={24} className="text-blue-400 fill-blue-400/30" />
-        </div>
-        <div>
-          <h3 className="font-bold text-white text-base leading-snug">
-            {isAr ? 'اختر أسواقك المفضلة' : 'Choose Your Favorite Markets'}
-          </h3>
-          <p className="text-xs text-gray-500 mt-0.5">
-            {isAr ? 'سيتم إضافتها لـ Watchlist تلقائياً' : 'They\'ll be added to your Watchlist automatically'}
-          </p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2">
-        {MARKET_OPTIONS.map(m => {
-          const active = selected.includes(m.symbol)
-          return (
-            <button key={m.symbol}
-              onClick={() => onToggle(m.symbol)}
-              className={`relative flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-medium transition-all ${
-                active
-                  ? 'bg-blue-600/20 border-blue-500/50 text-blue-300'
-                  : 'bg-gray-800/50 border-gray-700/50 text-gray-400 hover:border-gray-600 hover:text-gray-200'
-              }`}>
-              {m.popular && !active && (
-                <span className="absolute -top-1.5 -end-1.5 text-[9px] bg-yellow-500/80 text-black px-1 rounded-full font-bold">
-                  {isAr ? 'شائع' : 'Popular'}
-                </span>
-              )}
-              <span>{m.label[isAr ? 'ar' : 'en']}</span>
-              {active && <span className="ms-auto text-blue-400 text-xs">✓</span>}
-            </button>
-          )
-        })}
-      </div>
-
-      {selected.length === 0 && (
-        <p className="text-center text-xs text-gray-400 mt-3">
-          {isAr ? 'اختر سوقاً واحداً على الأقل' : 'Select at least one market'}
-        </p>
-      )}
-    </div>
-  )
-}
 
 // ── Main Component ───────────────────────────────────────────────────────────
 export default function OnboardingTour() {
@@ -137,29 +83,13 @@ export default function OnboardingTour() {
 
   const [visible,   setVisible]   = useState(false)
   const [step,      setStep]      = useState(0)
-  const [markets,   setMarkets]   = useState(['XAUUSD', 'BTCUSD'])   // defaults
-  const [saving,    setSaving]    = useState(false)
   const [tgLink,    setTgLink]    = useState('')
   const [tgBot,     setTgBot]     = useState('Qaffelbot')
 
-  // MARKET_PICKER is inserted between step 0 (welcome) and step 1 (features)
-  const MARKET_STEP = 1
-  const totalSteps  = steps.length + 1   // +1 for market picker
-
-  // Convert logical step → display index (0-based)
-  const currentStepData = step < MARKET_STEP ? steps[step]
-                        : step === MARKET_STEP ? null   // market picker
-                        : steps[step - 1]
-
-  const isMarketStep = step === MARKET_STEP
+  const totalSteps  = steps.length
+  const currentStepData = steps[step]
   const isLast       = step === totalSteps - 1
-  // steps[2] ("تنبيهات Telegram") displays at step===3 (currentStepData
-  // formula above: step - 1 === 2 → step === 3).
-  // (2026-09-10) كانت هاي الخطوة مجرد نص وصفي بدون زر فعلي — تحقّقنا من بيانات
-  // حقيقية: 57% من المستخدمين الجدد (آخر 14 يوم) ما ربطوا تيليجرام أبداً، فما
-  // وصلتهم ولا إشارة رغم "الديفلت" (الديفلت بيتحكم بالمحتوى بعد الربط، مش
-  // قبله). إضافة زر ربط مباشر هون بدل نص بس يحوّل نقطة تسرّب لفرصة تحويل حقيقية.
-  const isTelegramStep = step === 3
+  const isTelegramStep = step === 2
 
   useEffect(() => {
     if (isTelegramStep && user && !user.telegram_linked && !tgLink) {
@@ -180,40 +110,12 @@ export default function OnboardingTour() {
     }
   }, [])
 
-  const toggleMarket = sym => {
-    setMarkets(prev =>
-      prev.includes(sym)
-        ? prev.length > 1 ? prev.filter(s => s !== sym) : prev   // keep min 1
-        : [...prev, sym]
-    )
-  }
-
-  const saveWatchlist = async () => {
-    if (!user) return
-    try {
-      setSaving(true)
-      await axios.post(
-        `${API}/api/v1/bot/watchlist`,
-        { symbols: markets },
-        { headers: { Authorization: `Bearer ${localStorage.getItem('access_token')}` } }
-      )
-    } catch (e) {
-      // silent — user can set watchlist manually later
-    } finally {
-      setSaving(false)
-    }
-  }
-
   const dismiss = () => {
     localStorage.setItem(STORAGE_KEY, '1')
     setVisible(false)
   }
 
-  const next = async () => {
-    // On market step → save watchlist before moving on
-    if (isMarketStep) {
-      await saveWatchlist()
-    }
+  const next = () => {
     if (step < totalSteps - 1) setStep(s => s + 1)
     else dismiss()
   }
@@ -253,46 +155,53 @@ export default function OnboardingTour() {
           </div>
 
           {/* Body */}
-          {isMarketStep ? (
-            <MarketPickerStep isAr={isAr} selected={markets} onToggle={toggleMarket} />
-          ) : (
-            <div className="px-5 py-4 space-y-3">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/8 flex items-center justify-center flex-shrink-0">
-                  {currentStepData?.icon}
-                </div>
-                <h3 className="font-bold text-white text-base leading-snug">
-                  {currentStepData?.title}
-                </h3>
+          <div className="px-5 py-4 space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/8 flex items-center justify-center flex-shrink-0">
+                {currentStepData?.icon}
               </div>
-              <p className="text-gray-400 text-sm leading-relaxed">
-                {currentStepData?.desc}
-              </p>
-
-              {isTelegramStep && (
-                user?.telegram_linked ? (
-                  <div className="flex items-center gap-1.5 text-emerald-400 text-xs font-medium">
-                    <CheckCircle size={14} />
-                    {isAr ? 'حسابك مربوط بتيليجرام بالفعل ✅' : 'Your account is already linked ✅'}
-                  </div>
-                ) : tgLink ? (
-                  <a
-                    href={tgLink}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center justify-center gap-2 w-full bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-all"
-                  >
-                    <Send size={15} />
-                    {isAr ? `ربط الآن مع @${tgBot}` : `Link now with @${tgBot}`}
-                  </a>
-                ) : (
-                  <div className="text-center text-xs text-gray-500 py-2">
-                    {isAr ? 'جاري تجهيز الرابط...' : 'Preparing link...'}
-                  </div>
-                )
-              )}
+              <h3 className="font-bold text-white text-base leading-snug">
+                {currentStepData?.title}
+              </h3>
             </div>
-          )}
+            <p className="text-gray-400 text-sm leading-relaxed">
+              {currentStepData?.desc}
+            </p>
+
+            {isTelegramStep && (
+              user?.telegram_linked ? (
+                <div className="flex items-center gap-1.5 text-emerald-400 text-xs font-medium">
+                  <CheckCircle size={14} />
+                  {isAr ? 'حسابك مربوط بتيليجرام بالفعل ✅' : 'Your account is already linked ✅'}
+                </div>
+              ) : tgLink ? (
+                <a
+                  href={tgLink}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center justify-center gap-2 w-full bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-all"
+                >
+                  <Send size={15} />
+                  {isAr ? `ربط الآن مع @${tgBot}` : `Link now with @${tgBot}`}
+                </a>
+              ) : (
+                <div className="text-center text-xs text-gray-500 py-2">
+                  {isAr ? 'جاري تجهيز الرابط...' : 'Preparing link...'}
+                </div>
+              )
+            )}
+
+            {currentStepData?.linkTo && (
+              <Link
+                to={currentStepData.linkTo}
+                onClick={dismiss}
+                className="flex items-center justify-center gap-1.5 w-full text-xs text-blue-400 hover:text-blue-300 border border-blue-500/20 hover:border-blue-500/40 bg-blue-500/5 px-4 py-2 rounded-xl transition-all"
+              >
+                <Settings2 size={13} />
+                {currentStepData.linkLabel}
+              </Link>
+            )}
+          </div>
 
           {/* Dots */}
           <div className="flex justify-center gap-1.5 pb-3">
@@ -322,22 +231,17 @@ export default function OnboardingTour() {
 
             <button
               onClick={next}
-              disabled={saving}
-              className={`flex items-center gap-1.5 text-sm font-semibold px-4 py-1.5 rounded-lg transition-all disabled:opacity-60 ${
+              className={`flex items-center gap-1.5 text-sm font-semibold px-4 py-1.5 rounded-lg transition-all ${
                 isLast
                   ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white'
                   : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white'
               }`}
             >
-              {saving
-                ? (isAr ? 'جاري الحفظ...' : 'Saving...')
-                : isLast
+              {isLast
                 ? (isAr ? 'ابدأ الآن 🚀' : 'Get Started 🚀')
-                : isMarketStep
-                ? (isAr ? 'حفظ وتابع' : 'Save & Continue')
                 : (isAr ? 'التالي' : 'Next')
               }
-              {!isLast && !saving && (isAr ? <ChevronLeft size={16} /> : <ChevronRight size={16} />)}
+              {!isLast && (isAr ? <ChevronLeft size={16} /> : <ChevronRight size={16} />)}
             </button>
           </div>
         </div>

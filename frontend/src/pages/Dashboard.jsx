@@ -826,20 +826,80 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* Latest signals (the rest) */}
-          {rest.length > 0 && (
+          {/* Latest signals (the rest) — يُعرض دائماً (مو فقط لما rest.length>0)
+              لأن اختفاءه بصمت كان بيوحي للعميل إن الصفحة "فاضية"/معطوبة، بينما
+              الحقيقة إن /latest تغذية عامة بنافذة 12 ساعة فقط ممكن تكون فاضية
+              فترة وجيزة رغم إن النظام شغال طبيعي. لما تكون فاضية، نعرض بدلها
+              معاينة من سجل صفقات العميل نفسه (signalHistory، مجلوب أصلاً) —
+              إثبات نشاط حقيقي بدل رسالة عامة فقط. */}
           <div className="rounded-2xl q-glass overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b q-line">
               <h2 className="text-white font-semibold flex items-center gap-2">
                 {isAr ? 'آخر الإشارات' : 'Latest Signals'}
-                <span className="text-xs text-gray-500 font-normal">({rest.length})</span>
+                {rest.length > 0 && <span className="text-xs text-gray-500 font-normal">({rest.length})</span>}
               </h2>
               <button onClick={fetchSignals} className="text-gray-500 hover:text-gray-300 transition-colors p-1 rounded-lg hover:bg-gray-700">
                 <RefreshCw size={14} />
               </button>
             </div>
 
-            {(
+            {rest.length === 0 && (
+              <div className="px-5 py-6">
+                <p className="text-center text-gray-500 text-sm mb-1">
+                  {isAr ? 'لا توجد إشارات جديدة حالياً' : 'No new signals right now'}
+                </p>
+                <p className="text-center text-gray-600 text-xs mb-4">
+                  {isAr
+                    ? 'البوت يرسل فقط الإعدادات القوية اللي تجتاز كل شروط الجودة — القليل المنضبط أفضل من الكثرة العشوائية.'
+                    : 'The engine only sends setups that pass every quality filter — a disciplined few beats a random many.'}
+                </p>
+
+                {signalHistory.length > 0 ? (
+                  <div className="border-t q-line pt-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs text-gray-400 font-medium">{isAr ? 'آخر نتائجك' : 'Your recent results'}</span>
+                      <button onClick={() => setActiveTab('performance')} className="text-xs text-[var(--q-acc3)] hover:underline">
+                        {isAr ? 'عرض السجل الكامل' : 'View full history'}
+                      </button>
+                    </div>
+                    <div className="space-y-1.5">
+                      {signalHistory.slice(0, 3).map((s) => {
+                        const HIST_STATUS = {
+                          ACTIVE:  { label: isAr ? 'نشطة'      : 'Active',  icon: '🟢', cls: 'bg-blue-500/15 text-blue-400 border-blue-500/30' },
+                          TP1_HIT: { label: isAr ? 'هدف 1'     : 'TP1',     icon: '✅', cls: 'bg-green-500/15 text-green-400 border-green-500/30' },
+                          TP2_HIT: { label: isAr ? 'هدف 2'     : 'TP2',     icon: '🎯', cls: 'bg-green-500/15 text-green-400 border-green-500/30' },
+                          SL_HIT:  { label: isAr ? 'وقف خسارة' : 'SL',      icon: '❌', cls: 'bg-red-500/15 text-red-400 border-red-500/30' },
+                          EXPIRED: { label: isAr ? 'منتهية'    : 'Expired', icon: '⏰', cls: 'bg-gray-600/30 text-gray-400 border-gray-600/40' },
+                        }
+                        const st = HIST_STATUS[s.status] || { label: s.status, icon: '•', cls: 'bg-gray-600/30 text-gray-400 border-gray-600/40' }
+                        return (
+                          <div key={s.id} className="flex items-center justify-between gap-2 text-xs px-3 py-2 rounded-lg bg-white/[0.02]">
+                            <span className="flex items-center gap-2">
+                              <span className="text-white font-semibold">{s.market}</span>
+                              <span className="text-gray-500">{s.type === 'BUY' ? (isAr ? '▲ شراء' : '▲ BUY') : (isAr ? '▼ بيع' : '▼ SELL')}</span>
+                            </span>
+                            <span className={`inline-flex items-center gap-1 font-medium px-2 py-0.5 rounded-full border ${st.cls}`}>
+                              {st.icon} {st.label}
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex justify-center">
+                    <button
+                      onClick={() => heroSym && analyzeMarket(heroSym, false, heroTf)}
+                      className="text-xs font-semibold px-4 py-2 rounded-xl bg-[var(--q-acc3)]/15 text-[var(--q-acc3)] border border-[var(--q-acc3)]/30 hover:bg-[var(--q-acc3)]/25 transition-colors"
+                    >
+                      {isAr ? 'حلّل سوقاً الآن' : 'Analyze a market now'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {rest.length > 0 && (
               <div className="divide-y divide-gray-700/40">
                 {rest.slice(0, signalsLimit).map((sig, i) => {
                   const rec        = sig.recommendation || sig.signal_type || 'WATCH'
@@ -939,7 +999,6 @@ export default function Dashboard() {
               </button>
             )}
           </div>
-          )}
         </div>
       )}
 

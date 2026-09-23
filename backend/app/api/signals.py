@@ -19,6 +19,7 @@ from app.models.site_settings import SiteSettings
 from app.services.auth_service import get_current_user, check_subscription, deduct_trial
 from app.api.bot import _check_loss_streak_breaker, _has_active_signal
 from app.services.decision_grouping import verified_unique_decisions
+from app.services.quality_report import OUTCOME_FIX_DATE
 
 
 def _calc_lot_size(account_balance: float, risk_percent: float,
@@ -377,24 +378,36 @@ async def get_signal_performance(
     if join_start and join_start.tzinfo is None:
         join_start = join_start.replace(tzinfo=timezone.utc)
 
+    # (2026-09-23) نفس رمز الحقيقة الواحد لصلاحية البيانات المستخدم بتقرير
+    # الجودة الداخلي (`OUTCOME_FIX_DATE`, راجع quality_report.py) — أي بيانات
+    # قبله سُجّلت بحلقة رصد معطوبة (DECISIONS.md 16/09) ولا يصح عرضها كأداء
+    # حقيقي للعميل أيضاً، لا فقط للاستنتاج الاستراتيجي الداخلي.
+    data_floor = OUTCOME_FIX_DATE
+
+    # (2026-09-23) تخصيص العميل — `notify_watchlist` فاضي يعني "كل الرموز"
+    # (نفس الاتفاقية المستخدمة بصفحة الحساب والبوت)، وإلا يُحصر الأداء
+    # برموزه المختارة فقط، ويتحدث تلقائياً بمجرد ما يعدّل اختياره لأن هذا
+    # endpoint يُستدعى بكل تحميل للصفحة ويقرأ notify_watchlist وقتها مباشرة.
+    symbols_filter = list(user.notify_watchlist) if user.notify_watchlist else []
+
     # ── Helper: fetch closed signals in date range (raw, no join clipping) ──
     def _signals_in_range(start_dt, end_dt):
-        return (
-            db.query(Signal)
-            .filter(
-                Signal.status.in_(closed),
-                Signal.exit_executed >= start_dt,
-                Signal.exit_executed < end_dt,
-            )
-            .all()
+        q = db.query(Signal).filter(
+            Signal.status.in_(closed),
+            Signal.exit_executed >= start_dt,
+            Signal.exit_executed < end_dt,
         )
+        if symbols_filter:
+            q = q.filter(Signal.market.in_(symbols_filter))
+        return q.all()
 
-    # ── Helper: fetch signals in range, clipped to the user's join date.
-    #    Returns (decisions_list, before_join) — before_join=True means the
-    #    whole period ends before the user even joined, so it's reported as
-    #    "not yours to see" rather than a misleading "0 trades that week".
+    # ── Helper: fetch signals in range, clipped to the user's join date
+    #    AND to data_floor (أيهما أحدث). Returns (decisions_list, before_join)
+    #    — before_join=True means the whole period ends before the user even
+    #    joined أو قبل بداية البيانات الموثوقة، فيُعرض "غير متاح" بدل رقم
+    #    مضلّل زي "0 صفقات هالأسبوع".
     def _clipped_range(start_dt, end_dt):
-        eff_start = max(start_dt, join_start) if join_start else start_dt
+        eff_start = max(start_dt, join_start, data_floor) if join_start else max(start_dt, data_floor)
         if eff_start >= end_dt:
             return [], True
         return _signals_in_range(eff_start, end_dt), False
@@ -435,22 +448,13 @@ async def get_signal_performance(
     }
 
     # (2026-09-04) نافذة متحركة (اليوم - 30 يوم) بدل أسبوع تقويمي ثابت —
-    # رقم أقل تذبذباً وأعدل تمثيلاً من current_week المنفرد. لكن: W32/W33
-    # (ضمن آخر 30 يوم حالياً) هي بالضبط الفترة الملوّثة/الانتقالية اللي
-    # القرار المتفق عليه (winrate-monitoring-plan) استبعدها من أي حكم على
-    # الأداء الحالي — "W37 هو أول أسبوع نظيف بالكامل". فبدل ما تبدأ النافذة
-    # عند today-30d ثابت (يسحب W32/W33 تلقائياً)، تبدأ عند أحدث نقطتين:
-    # today-30d أو تاريخ آخر تصحيح جوهري (commit 5791d4f، 2026-09-03) —
-    # أيهما أحدث. لحد ما تتجمع 30 يوم نظيفة كاملة، النافذة "تنمو" تدريجياً
-    # (window_days تعكس الأيام الفعلية المتاحة، مش 30 دايماً) بدل ما تدّعي
-    # تمثيل شهر كامل وهي فعلياً خالطة فترة معروفة إنها غير موثوقة.
-    _ROLLING_CLEAN_CUTOFF = datetime(2026, 9, 4, tzinfo=timezone.utc)
-
-    rolling_start = max(
-        datetime.combine(today - timedelta(days=30), dt_time(0, 0, 0)).replace(tzinfo=timezone.utc),
-        _ROLLING_CLEAN_CUTOFF,
-    )
-    rolling_eff_start = max(rolling_start, join_start) if join_start else rolling_start
+    # رقم أقل تذبذباً وأعدل تمثيلاً من current_week المنفرد. لحد ما تتجمع
+    # 30 يوم نظيفة كاملة بعد data_floor، النافذة "تنمو" تدريجياً (window_days
+    # تعكس الأيام الفعلية المتاحة، مش 30 دايماً) بدل ما تدّعي تمثيل شهر كامل
+    # وهي فعلياً خالطة فترة معروفة إنها غير موثوقة. الحد الأدنى الفعلي
+    # (data_floor/join_start) يُطبَّق داخل _clipped_range تلقائياً.
+    rolling_start = datetime.combine(today - timedelta(days=30), dt_time(0, 0, 0)).replace(tzinfo=timezone.utc)
+    rolling_eff_start = max(rolling_start, join_start, data_floor) if join_start else max(rolling_start, data_floor)
     window_days = round(max(0.0, (now_utc - rolling_eff_start).total_seconds() / 86400), 1)
 
     rolling_raw, _ = _clipped_range(rolling_start, now_utc)
@@ -538,6 +542,8 @@ async def get_signal_performance(
         "rolling_30d":  rolling_30d,
         "daily_stats":  daily_stats,
         "weekly_stats": weekly_stats,
+        "watchlist_filter": symbols_filter,   # [] = كل الرموز (لا تخصيص)
+        "data_floor":       data_floor.date().isoformat(),
     }
 
 

@@ -5,7 +5,7 @@ Qaffel AI Bot v2 — Professional Edition
 
 import os, asyncio, aiohttp
 from datetime import datetime, timezone
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, ContextTypes,
 )
@@ -647,6 +647,27 @@ async def cmd_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🤖 *Qaffel AI — القائمة الرئيسية*",
         parse_mode="Markdown",
         reply_markup=kb_main(),
+    )
+
+
+# (2026-09-23) نفس نص شاشة "❓ المساعدة" بالضبط (راجع فرع d == "m_help" أسفل) —
+# أُضيف كأمر /help مستقل عشان يظهر بقائمة أوامر تيليجرام الأصلية (set_my_commands
+# بـmain()) بدل ما يكون الوصول الوحيد له عبر ضغطتين. تحسين واجهة بحت، لا علاقة
+# له بحلقة الرصد/البث المجمَّدة (DECISIONS.md 17/09) — ما يلمسها إطلاقاً.
+async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "📚 *المساعدة*\n\n"
+        "📊 *تحليل فوري*\nاختر الفئة ثم الزوج والإطار الزمني.\n\n"
+        "👁 *المراقبة*\nاختر الأزواج التي تريد مراقبتها.\n"
+        "البوت يحللها كل 15 دقيقة تلقائياً.\n\n"
+        "📡 *الإشارات*\nآخر الإشارات المنشورة من الأدمن.\n\n"
+        "📈 *إحصائياتي*\nعرض نسبة ربحك ومجموع نقاطك.\n\n"
+        "🎁 *الإحالة*\nرابطك الخاص + تفاصيل العمولة.",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("🌐 فتح المنصة", url=FRONTEND_URL)],
+            [InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="m_back")],
+        ]),
     )
 
 
@@ -1841,9 +1862,19 @@ def main():
 
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("menu",  cmd_menu))
+    app.add_handler(CommandHandler("help",  cmd_help))
     app.add_handler(CallbackQueryHandler(on_button))
 
     async def post_init(application: Application):
+        # (2026-09-23) قائمة أوامر تيليجرام الأصلية (زر "/" جانب حقل الكتابة) —
+        # كانت فاضية تماماً رغم وجود /start و/menu فعلياً، فتبدو للمستخدم الجديد
+        # كأنه بوت بلا أوامر حقيقية. تحسين واجهة بحت — لا علاقة له بحلقة
+        # الرصد/البث المجمَّدة.
+        await application.bot.set_my_commands([
+            BotCommand("start", "بدء التشغيل وربط الحساب"),
+            BotCommand("menu",  "القائمة الرئيسية"),
+            BotCommand("help",  "المساعدة وشرح الأوامر"),
+        ])
         asyncio.create_task(broadcast_new_signals(application))
         asyncio.create_task(outcome_checker(application))
         asyncio.create_task(monitor_watchlists(application))

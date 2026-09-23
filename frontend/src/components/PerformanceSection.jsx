@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
-import { TrendingUp, TrendingDown, Activity, BarChart2, ChevronDown } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { TrendingUp, TrendingDown, Activity, BarChart2, ChevronDown, Settings2 } from 'lucide-react'
 import { useLang } from '../contexts/LangContext'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -32,6 +33,9 @@ const T = {
     collecting: 'قيد جمع بيانات كافية',
     collectingProgress: '{count} من {min} قرار',
     beforeJoin: 'قبل اشتراكك',
+    allSymbols: 'أداء كل الرموز',
+    yourSymbols: 'أداء رموزك المختارة',
+    editSymbols: 'تعديل',
   },
   en: {
     title: 'Signal Performance',
@@ -59,6 +63,9 @@ const T = {
     collecting: 'Collecting Enough Data',
     collectingProgress: '{count} of {min} decisions',
     beforeJoin: 'Before you joined',
+    allSymbols: 'Performance across all symbols',
+    yourSymbols: 'Performance for your selected symbols',
+    editSymbols: 'Edit',
   },
 }
 
@@ -107,7 +114,7 @@ export default function PerformanceSection() {
 
   if (!data) return null
 
-  const { current_week, rolling_30d, daily_stats, weekly_stats } = data
+  const { current_week, rolling_30d, daily_stats, weekly_stats, watchlist_filter } = data
   const ptColor = (pts) => pts > 0 ? 'text-green-400' : pts < 0 ? 'text-red-400' : 'text-gray-400'
   const ptBg    = (pts) => pts > 0 ? 'bg-green-900/30 border-green-800' : pts < 0 ? 'bg-red-900/30 border-red-800' : 'bg-gray-800 border-gray-700'
 
@@ -128,9 +135,22 @@ export default function PerformanceSection() {
   return (
     <div className="space-y-4" dir={isAr ? 'rtl' : 'ltr'}>
       {/* Header */}
-      <div className="flex items-center gap-2">
-        <BarChart2 size={20} className="text-blue-400" />
-        <h2 className="text-white font-semibold text-lg">{tx.title}</h2>
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <BarChart2 size={20} className="text-blue-400" />
+          <h2 className="text-white font-semibold text-lg">{tx.title}</h2>
+        </div>
+        <Link
+          to="/profile#watchlist"
+          className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white q-glass px-3 py-1.5 rounded-full transition-colors"
+        >
+          <span>
+            {watchlist_filter?.length > 0
+              ? `${tx.yourSymbols} (${watchlist_filter.join('، ')})`
+              : tx.allSymbols}
+          </span>
+          <Settings2 size={12} />
+        </Link>
       </div>
 
       {/* 30-Day Rolling Headline — leads with the fairer, less volatile number.
