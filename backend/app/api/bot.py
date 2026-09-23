@@ -416,6 +416,31 @@ async def bot_check_outcomes(
       عدة دورات لتغطية الـwicks.
     """
     now = datetime.now(timezone.utc)
+
+    # (2026-09-24) بلاغ حقيقي مؤكَّد: إشارة شراء فضة (دخول أعلى من السعر
+    # اللحظي وقت الإصدار — أمر معلَّق لم يتفعّل) سُجّلت SL_HIT رغم إن السعر
+    # ما لمس منطقة الدخول إطلاقاً. السبب الجذري: الحلقة تحت تعامل أي إشارة
+    # ACTIVE كصفقة مفتوحة فعلاً من لحظة إصدارها، وتقارن السعر بـSL/TP مباشرة
+    # بلا أي تحقق مسبق من "هل تحقق الدخول أصلاً؟". يُصلَح تحت عبر
+    # `entry_executed` (عمود موجود بالجدول أصلاً منذ البداية، غير مُستخدَم
+    # لحد الآن) — يُسجَّل أول لحظة يُلمس فيها الدخول فعلياً، ولا يُحتسب أي
+    # SL/TP قبلها. راجع DECISIONS.md 2026-09-24 لتفصيل الأثر الكامل: عدد
+    # مجهول من "الخسائر" التاريخية قد تكون أوامر لم تُفتح إطلاقاً.
+    #
+    # إشارات انتهت مدتها بلا ما يتحقق دخولها إطلاقاً: "لم تُفتح الصفقة"،
+    # لا "خسارة" — تُقفل EXPIRED مباشرة هون (بدل الاعتماد على فحص كسول
+    # عند عرض /history لاحقاً، وهو ممكن ما يصير أبداً لإشارة معيّنة).
+    expired_untriggered = db.query(Signal).filter(
+        Signal.status == SignalStatus.ACTIVE,
+        Signal.expires_at <= now,
+        Signal.entry_executed.is_(None),
+    ).all()
+    for _s in expired_untriggered:
+        _s.status = SignalStatus.EXPIRED
+    if expired_untriggered:
+        db.commit()
+        logger.info(f"⏰ {len(expired_untriggered)} إشارة انتهت بلا تفعيل دخول → EXPIRED")
+
     active = db.query(Signal).filter(
         Signal.status == SignalStatus.ACTIVE,
         Signal.expires_at > now,
@@ -568,6 +593,9 @@ async def bot_check_outcomes(
             new_status = None
             walked     = False   # هل توفّرت شموع فعلاً ومُشِيت بالترتيب الزمني؟
             has_tp2 = (tp2 > tp1) if is_buy else (tp2 < tp1)
+            # (2026-09-24) خارج try/range_check عمداً — لازم تُقرأ بالفحص
+            # اللحظي تحت كمان (range_check=False)، لا فقط بالمشي بالشموع.
+            already_triggered = sig.entry_executed is not None
             if range_check:
                 try:
                     created = sig.created_at
@@ -645,7 +673,21 @@ async def bot_check_outcomes(
                             f"↩️ {market_upper} #{sig.id}: المشي غطّى شريحة حديثة فقط "
                             f"(أقدم شمعة بعد الإنشاء) — يبقى الفحص اللحظي فعّالاً"
                         )
+                    # (2026-09-24) بوابة تفعيل الدخول: قبل هذا الإصلاح كانت
+                    # الحلقة تحكم SL/TP من أول شمعة بغض النظر هل السعر لمس
+                    # منطقة الدخول أصلاً — أي "أمر معلَّق" لم يتفعّل (السعر
+                    # لم يصل الدخول إطلاقاً) كان يُحكَم عليه كصفقة خاسرة لو
+                    # واصل بعيداً عن الدخول باتجاه الوقف. entry_executed
+                    # (عمود قديم غير مُستخدَم) يُسجَّل أول لحظة يتقاطع فيها
+                    # مدى الشمعة مع سعر الدخول (lo<=entry<=hi) — لا SL/TP
+                    # قبلها إطلاقاً، بغض النظر عن اتجاه اقتراب السعر.
+                    new_entry_ts = None
                     for _ts, hi, lo in candles:
+                        if not already_triggered:
+                            if not (lo <= entry <= hi):
+                                continue  # الدخول لسا ما تحقق — هذه الشمعة بلا معنى لصفقة لم تُفتح
+                            already_triggered = True
+                            new_entry_ts = _ts
                         sl_touch  = (lo <= sl) if is_buy else (hi >= sl)
                         tp2_touch = has_tp2 and ((hi >= tp2) if is_buy else (lo <= tp2))
                         tp1_touch = (hi >= tp1) if is_buy else (lo <= tp1)
@@ -658,6 +700,17 @@ async def bot_check_outcomes(
                         if tp1_touch and new_status is None:
                             new_status = SignalStatus.TP1_HIT
                             # بلا break — نكمل لنرى هل يبلغ TP2 قبل SL
+
+                    if new_entry_ts is not None and sig.entry_executed is None:
+                        sig.entry_executed = (
+                            new_entry_ts if hasattr(new_entry_ts, "tzinfo")
+                            else datetime.fromtimestamp(float(new_entry_ts), tz=timezone.utc)
+                        )
+                        # يُحفَظ فوراً — لو ضلّت الإشارة بلا SL/TP هالدورة (فُتحت
+                        # الصفقة بس ما انحسمت بعد)، ما تصير `db.commit()` تانية
+                        # لهالصف قبل ما يتحدد new_status بدورة لاحقة، وبلا حفظ
+                        # فوري كان ممكن يضيع مع أي rollback بنهاية الطلب.
+                        db.commit()
                 except Exception as _walk_err:
                     # (2026-09-16) كان `pass` صامتاً — وهو ما أخفى عطل المنطقة
                     # الزمنية أعلاه لأيام: المشي الزمني كان يرمي استثناءً بكل
@@ -681,7 +734,12 @@ async def bot_check_outcomes(
             # بعد الشرط: إن مُشِيت الشموع فحكمها نهائي لهذه الدورة. الفجوة
             # الوحيدة هي الشمعة الجارية غير المكتملة، وتُغطّى بالدورة
             # التالية بعد 90 ثانية.
-            if new_status is None and not walked:
+            # (2026-09-24) لا نحكم SL/TP من تذبذبة سعرية لحظية وحيدة إلا لو
+            # تأكّد تفعيل الدخول أصلاً بدورة عميقة سابقة (already_triggered).
+            # سعر لحظي واحد لا يكفي لإثبات "لُمس الدخول ثم استمر" بأمان — لو
+            # لسا غير مؤكَّد، ننتظر الدورة العميقة القادمة (تفحص الشموع
+            # وترتيبها الزمني الصحيح) بدل تخمين قد يُخطئ بنفس الثغرة الأصلية.
+            if new_status is None and not walked and already_triggered:
                 if is_buy:
                     if   price <= sl:  new_status = SignalStatus.SL_HIT
                     elif price >= tp2: new_status = SignalStatus.TP2_HIT
