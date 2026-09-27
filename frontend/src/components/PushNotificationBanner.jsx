@@ -1,20 +1,39 @@
 import { useState, useEffect } from 'react'
-import { Bell, X, CheckCircle } from 'lucide-react'
+import { Bell, X, CheckCircle, Share } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { isPushSupported, getExistingSubscription, subscribeToPush } from '../utils/webPush'
 
 // (2026-09-27) قناة موازية لتيليجرام — خصوصاً لعميل الموقع اللي ما ربط
 // حسابه بتيليجرام (لا يصله أي تنبيه شخصي حالياً بلا هاي القناة). إخفاء
 // دائم لو المتصفح غير مدعوم أو الإذن مرفوض مسبقاً — لا نلحّ بلا فائدة.
+//
+// (2026-09-27 #2) بلاغ حقيقي مؤكَّد: بآيفون، إشعارات الويب غير متاحة
+// إطلاقاً بأي متصفح (كلها تستخدم محرك سفاري تحت الغطاء) إلا لو الموقع
+// "أُضيف للشاشة الرئيسية" أولاً (قيد من أبل، لا خلل بالكود) — isPushSupported()
+// ترجع false بهاي الحالة فيختفي البانر بصمت، فيظن المستخدم إنها معطوبة.
+// نميّز هاي الحالة تحديداً ونوجّه للحل (نفس خطوات PWAInstallBanner.jsx)
+// بدل الاختفاء الصامت.
 export default function PushNotificationBanner() {
   const { user } = useAuth()
   const [dismissed, setDismissed] = useState(false)
   const [subscribed, setSubscribed] = useState(null)   // null = جاري الفحص
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState(false)
+  const [needsIOSInstall, setNeedsIOSInstall] = useState(false)
 
   useEffect(() => {
-    if (!user || !isPushSupported() || Notification.permission === 'denied') {
+    if (!user) { setSubscribed(true); return }
+
+    const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true
+
+    if (isIOS && !isStandalone) {
+      setNeedsIOSInstall(true)
+      setSubscribed(false)
+      return
+    }
+
+    if (!isPushSupported() || Notification.permission === 'denied') {
       setSubscribed(true)   // يمنع أي عرض
       return
     }
@@ -42,13 +61,17 @@ export default function PushNotificationBanner() {
       dir="rtl"
     >
       <div className="flex items-center gap-2 text-xs min-w-0">
-        <Bell size={13} className="text-indigo-400 flex-shrink-0" />
+        {needsIOSInstall ? <Share size={13} className="text-indigo-400 flex-shrink-0" /> : <Bell size={13} className="text-indigo-400 flex-shrink-0" />}
         <span className="text-indigo-200">
-          {done ? 'تم تفعيل إشعارات المتصفح ✅' : 'فعّل إشعارات المتصفح لتصلك الإشارات حتى بدون تيليجرام'}
+          {done
+            ? 'تم تفعيل إشعارات المتصفح ✅'
+            : needsIOSInstall
+            ? 'إشعارات الآيفون تحتاج تثبيت التطبيق أولاً: زر المشاركة ← إضافة إلى الشاشة الرئيسية'
+            : 'فعّل إشعارات المتصفح لتصلك الإشارات حتى بدون تيليجرام'}
         </span>
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">
-        {!done && (
+        {!done && !needsIOSInstall && (
           <button
             onClick={enable}
             disabled={busy}
