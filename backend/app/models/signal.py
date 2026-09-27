@@ -76,6 +76,11 @@ class Signal(Base):
     points_earned = Column(Float, nullable=True)  # calculated when admin marks TP/SL
     broadcast_sent        = Column(Boolean, default=False, nullable=False)
     result_broadcast_sent = Column(Boolean, default=False, nullable=True)   # إشعار النتيجة (TP/SL) لكل المشتركين
+    # (2026-09-27) قناة موازية لـbroadcast_sent — إشعار متصفح (Web Push)
+    # منفصل تماماً عن تيليجرام (web_push_broadcaster.py)، يصل حتى لعميل
+    # ما ربط تيليجرام إطلاقاً. علَم مستقل: قد يُبَث لتيليجرام بلا Web Push
+    # أو العكس، حسب مين مشترك بأي قناة.
+    push_broadcast_sent   = Column(Boolean, default=False, nullable=True)
     # (2026-09-10) True = نتيجة يدوية لكن مؤكدة بالسعر الحقيقي (زر "تحقق" +
     # تحقّق closed_price بـset_signal_outcome). تُحتسب بتقارير الأداء والصفحة
     # العامة (verified_unique_decisions)، بعكس التصحيح اليدوي القديم غير

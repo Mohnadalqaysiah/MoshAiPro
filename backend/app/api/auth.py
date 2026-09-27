@@ -93,6 +93,17 @@ class FeatureSurveyIn(BaseModel):
     selected_option: str
     custom_text: Optional[str] = None
 
+class PushKeysIn(BaseModel):
+    p256dh: str
+    auth: str
+
+class PushSubscribeIn(BaseModel):
+    endpoint: str
+    keys: PushKeysIn
+
+class PushUnsubscribeIn(BaseModel):
+    endpoint: str
+
 
 # OTP store: email → {otp, expires_at}
 _otp_store: dict = {}
@@ -405,6 +416,52 @@ def update_trading_settings(
         "account_balance": user.account_balance,
         "risk_percent": user.risk_percent,
     }
+
+
+# ─── Web Push (browser notifications) ──────────────────────────────────────────
+
+@router.get("/push/vapid-public-key")
+def get_vapid_public_key():
+    """المفتاح العام لتسجيل اشتراك المتصفح (pushManager.subscribe) — لا سرّ به."""
+    from app.services.web_push import push_enabled
+    if not push_enabled():
+        return {"enabled": False, "key": ""}
+    return {"enabled": True, "key": settings.VAPID_PUBLIC_KEY}
+
+
+@router.post("/push/subscribe")
+def subscribe_push(
+    data: PushSubscribeIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    from app.models.push_subscription import PushSubscription
+    existing = db.query(PushSubscription).filter(PushSubscription.endpoint == data.endpoint).first()
+    if existing:
+        existing.user_id = user.id
+        existing.p256dh  = data.keys.p256dh
+        existing.auth    = data.keys.auth
+    else:
+        db.add(PushSubscription(
+            user_id=user.id, endpoint=data.endpoint,
+            p256dh=data.keys.p256dh, auth=data.keys.auth,
+        ))
+    db.commit()
+    return {"success": True}
+
+
+@router.post("/push/unsubscribe")
+def unsubscribe_push(
+    data: PushUnsubscribeIn,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    from app.models.push_subscription import PushSubscription
+    db.query(PushSubscription).filter(
+        PushSubscription.endpoint == data.endpoint, PushSubscription.user_id == user.id,
+    ).delete()
+    db.commit()
+    return {"success": True}
 
 
 # ─── Feature Request Survey (Popup) ────────────────────────────────────────────

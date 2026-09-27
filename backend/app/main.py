@@ -186,6 +186,10 @@ async def lifespan(app: FastAPI):
     checkout_reminder_task = asyncio.create_task(checkout_reminder_checker())
     logger.success("✅ Checkout reminder checker started")
 
+    # بدء بثّ إشعارات المتصفح (Web Push) — قناة موازية لتيليجرام
+    from app.services.web_push_broadcaster import web_push_broadcaster
+    web_push_task = asyncio.create_task(web_push_broadcaster())
+
     yield
 
     alert_task.cancel()
@@ -193,6 +197,7 @@ async def lifespan(app: FastAPI):
     scanner_task.cancel()
     integrity_task.cancel()
     checkout_reminder_task.cancel()
+    web_push_task.cancel()
 
     # Shutdown
     logger.info("👋 Shutting down Mosh AI Pro v5...")

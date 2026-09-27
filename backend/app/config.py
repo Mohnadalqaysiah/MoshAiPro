@@ -139,6 +139,15 @@ class Settings(BaseSettings):
     # (الـendpoint يرجّع 503 واضح بدل خطأ غامض).
     FIREBASE_CREDENTIALS_PATH: str = ""
 
+    # ----- Web Push (browser notifications) -----
+    # (2026-09-27) فارغ = تعطيل آمن (send_push يتخطى بصمت) — نفس اتفاقية
+    # FIREBASE_CREDENTIALS_PATH فوق. مفاتيح VAPID زوج واحد ثابت للمشروع
+    # كله (لا لكل مستخدم) — تُولَّد مرة واحدة، لا تتغيّر بعدها (تغييرها
+    # يُبطل كل اشتراكات العملاء الحالية فيضطرون يوافقوا على الإشعارات مجدداً).
+    VAPID_PUBLIC_KEY:  str = ""
+    VAPID_PRIVATE_KEY: str = ""
+    VAPID_CLAIM_EMAIL: str = "support@qaffel.com"
+
     class Config:
         env_file = ".env"
         case_sensitive = True

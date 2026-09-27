@@ -14,6 +14,7 @@ import Logo from './Logo'
 
 const TrialBanner        = lazy(() => import('./TrialBanner'))
 const TelegramLinkBanner = lazy(() => import('./TelegramLinkBanner'))
+const PushNotificationBanner = lazy(() => import('./PushNotificationBanner'))
 const EmailVerifyBanner  = lazy(() => import('./EmailVerifyBanner'))
 const OnboardingTour     = lazy(() => import('./OnboardingTour'))
 const UpgradeModal       = lazy(() => import('./UpgradeModal'))
@@ -523,6 +524,7 @@ export default function AppShell({ children }) {
             <EmailVerifyBanner />
             <div className="xl:hidden"><TrialBanner /></div>
             <div className="xl:hidden"><TelegramLinkBanner /></div>
+            <PushNotificationBanner />
             <OnboardingTour />
             {verifyOpen && <EmailVerifyModal open onClose={closeVerify} />}
             {upgradeOpen && !verifyOpen && <UpgradeModal open onClose={closeUpgrade} reason="trial_expired" />}

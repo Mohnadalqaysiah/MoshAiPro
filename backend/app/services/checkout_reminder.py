@@ -29,6 +29,7 @@ async def checkout_reminder_checker():
     from app.models.user import User
     from app.services.admin_notify import notify_user_telegram
     from app.services.email_service import send_email, checkout_reminder_email_body
+    from app.services.web_push import send_push
     from app.services.worker_lock import try_acquire_singleton_lock
 
     lock_conn = try_acquire_singleton_lock(_LOCK_KEY, "Checkout reminder checker")
@@ -87,6 +88,15 @@ async def checkout_reminder_checker():
                             f"واجهتك مشكلة؟ راسلنا مباشرة، أو أكمل الآن:\n"
                             f"https://qaffel.com/pricing"
                         )
+                        sent_count += 1
+                    elif send_push(
+                        db, user, "أكمل اشتراكك 👋",
+                        f"بدأت الاشتراك بالباقة {plan_label} ولم تكمل الدفع — أكمل الآن",
+                        url="/pricing", tag="checkout-reminder",
+                    ):
+                        # (2026-09-27) قناة موازية لمن ما ربط تيليجرام — تُجرَّب
+                        # قبل الإيميل (أسرع وصولاً، مو بديل: لو ما عنده اشتراك
+                        # فعّال send_push تعيد 0 بصمت وتكمل للإيميل تحت).
                         sent_count += 1
                     elif user.email:
                         send_email(

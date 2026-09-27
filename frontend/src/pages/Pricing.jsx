@@ -126,8 +126,8 @@ const DEFAULT_PLANS = [
     periodAr: '/ أسبوع',
     periodEn: '/ week',
     popular: false,
-    featuresAr: ['تحليل ICT/SMC كامل', 'شات AI غير محدود', 'تنبيهات Telegram', 'جميع الأزواج', 'تحليل متعدد الفريمات'],
-    featuresEn: ['Full ICT/SMC Analysis', 'Unlimited AI Chat', 'Telegram Alerts', 'All Pairs', 'Multi-Timeframe Analysis'],
+    featuresAr: ['تحليل ICT/SMC كامل', 'شات AI غير محدود', 'تنبيهات Telegram', 'جميع الأزواج', 'تحليل متعدد الفريمات', 'باني الاستراتيجيات: تجربة محدودة (استراتيجية واحدة، بلا SMC)'],
+    featuresEn: ['Full ICT/SMC Analysis', 'Unlimited AI Chat', 'Telegram Alerts', 'All Pairs', 'Multi-Timeframe Analysis', 'Strategy Builder: limited trial (1 strategy, no SMC conditions)'],
   },
   {
     key: 'monthly',
@@ -149,8 +149,8 @@ const DEFAULT_PLANS = [
     periodEn: '/ year',
     popular: false,
     bestValue: true,
-    featuresAr: ['كل مزايا الشهري', 'أفضل قيمة — شهران مجاناً', 'سعر مثبَّت طوال السنة', 'أولوية الدعم الفني', 'وصول مبكر للمزايا الجديدة'],
-    featuresEn: ['All Monthly Features', 'Best value — two months free', 'Price locked for the year', 'Priority Support', 'Early Access to New Features'],
+    featuresAr: ['كل مزايا الشهري', '✨ باني الاستراتيجيات: وصول كامل بلا حدود', 'أفضل قيمة — شهران مجاناً', 'سعر مثبَّت طوال السنة', 'أولوية الدعم الفني', 'وصول مبكر للمزايا الجديدة'],
+    featuresEn: ['All Monthly Features', '✨ Strategy Builder: full unlimited access', 'Best value — two months free', 'Price locked for the year', 'Priority Support', 'Early Access to New Features'],
   },
 ]
 
