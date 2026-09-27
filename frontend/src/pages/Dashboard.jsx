@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext'
 import useMarkets from '../hooks/useMarkets'
 import { useLang } from '../contexts/LangContext'
 import PerformanceSection from '../components/PerformanceSection'
+import ExpiryCountdown from '../components/ExpiryCountdown'
 import ReferralWidget from '../components/ReferralWidget'
 import PriceAlertWidget from '../components/PriceAlertWidget'
 import SignalScorecard from '../components/SignalScorecard'
@@ -312,6 +313,13 @@ export default function Dashboard() {
                 <span className="text-white font-bold text-sm">{Math.round(conf)}%</span>
               </div>
             </div>
+
+            {result.expires_at && (rec === 'BUY' || rec === 'SELL') && (
+              <div className="flex items-center justify-between text-sm -mt-2">
+                <span className="text-gray-400">صلاحية الإشارة</span>
+                <ExpiryCountdown expiresAt={result.expires_at} className="font-semibold" />
+              </div>
+            )}
 
             {/* Levels grid */}
             <div className="grid grid-cols-2 gap-2">
@@ -818,6 +826,9 @@ export default function Dashboard() {
                             <b className="text-white tabular-nums">{Math.round(confidence)}%</b>
                           </span>
                         </div>
+                        {sig.expires_at && (
+                          <div className="mt-1.5 text-[11px]"><ExpiryCountdown expiresAt={sig.expires_at} /></div>
+                        )}
                       </div>
                     </article>
                   )
@@ -952,6 +963,7 @@ export default function Dashboard() {
                               </div>
                               <span className="text-xs text-gray-300 font-medium w-9 text-left">{Math.round(confidence)}%</span>
                             </div>
+                            {sig.expires_at && <ExpiryCountdown expiresAt={sig.expires_at} className="text-[11px]" />}
                           </div>
                         </div>
                         {locked ? (

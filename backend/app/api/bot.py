@@ -989,6 +989,7 @@ def bot_new_signals(
             "premium_discount": s.premium_discount,
             "news_context":   s.notes,
             "owner_telegram_id": owner_tid,
+            "expires_at":     s.expires_at.isoformat() if s.expires_at else None,
         })
 
     # إزالة التكرار: إشارة واحدة فقط لكل (رمز + إطار + اتجاه)
@@ -1314,7 +1315,18 @@ def bot_save_alert_signal(
     db.commit()
     db.refresh(sig)
     logger.info(f"💾 Alert signal saved: {symbol}/{timeframe} {signal_type} entry={entry:.5f} user={user.id}")
-    return {"saved": True, "signal_id": sig.id}
+
+    # (2026-09-27) استطلاع الميزات: "تحذير عند أكثر من صفقة مرتبطة مفتوحة
+    # بنفس الوقت" (10 أصوات، أعلى طلب مع عداد الانتهاء). التعريف المعتمد:
+    # نفس الرمز فقط (بغض النظر عن الفريم/الاتجاه) — بلاغ حقيقي سابق (فضة
+    # شراء + بيع مفتوحتين معاً) كان بالضبط هالحالة.
+    concurrent_same_symbol = db.query(Signal).filter(
+        Signal.user_id == user.id,
+        Signal.market == symbol,
+        Signal.status == SignalStatus.ACTIVE,
+        Signal.id != sig.id,
+    ).count()
+    return {"saved": True, "signal_id": sig.id, "concurrent_same_symbol": concurrent_same_symbol}
 
 
 @router.post("/save-watchlist")

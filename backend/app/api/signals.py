@@ -177,6 +177,10 @@ async def analyze_market(
                 tf_hours  = {"1m":2,"5m":4,"15m":8,"30m":12,"1h":24,"4h":72,"1d":168,"1w":336}
                 expires_h = tf_hours.get(timeframe, 24)
                 expires_at = datetime.now(timezone.utc) + timedelta(hours=expires_h)
+                # (2026-09-27) analysis يُعاد للفرونت مباشرة بلا مرور بـ/latest —
+                # بدون هذا السطر، عداد الانتهاء بنافذة "تحليل فوري" يضل فارغاً
+                # رغم إن expires_at محسوبة أصلاً ومحفوظة بالسجل تحت.
+                analysis["expires_at"] = expires_at.isoformat()
                 # hash لا يشمل user_id — إشارة واحدة لكل (رمز+إطار+اتجاه+entry) في الكل
                 sig_hash = hashlib.md5(
                     f"{symbol}-{timeframe}-{rec}-{round(float(entry), 4)}".encode()
@@ -281,6 +285,7 @@ async def get_latest_signals(
                 "ai_confidence":    s.ai_confidence,
                 "ai_confidence_score": s.ai_confidence,
                 "created_at":       s.created_at.isoformat(),
+                "expires_at":       s.expires_at.isoformat() if s.expires_at else None,
                 "locked":           not unlocked,
             }
             if unlocked:

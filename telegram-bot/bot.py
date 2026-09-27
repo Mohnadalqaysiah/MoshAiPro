@@ -4,7 +4,7 @@ Qaffel AI Bot v2 — Professional Edition
 """
 
 import os, asyncio, aiohttp
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, ContextTypes,
@@ -179,6 +179,28 @@ def _fmt_price(v) -> str:
 
 def _fmt_pts(v) -> str:
     return f"{float(v):.2f}" if v is not None else "—"
+
+
+# (2026-09-27) استطلاع الميزات: "عداد وقت متبقي لكل إشارة" (10 أصوات، أعلى
+# طلب). رسالة تلغرام ثابتة بمجرد إرسالها — عداد حي غير ممكن هون فعلياً،
+# فنعرض الموعد المطلق (وقت الرياض/مكة، نفس مرجع بقية البوت) بدل "متبقي".
+# نفس الجدول المستخدم فعلياً بالخادم عند حفظ الإشارة (save-alert-signal/
+# signals.py) — مكرَّر عمداً هون لأن telegram-bot عملية منفصلة بلا وصول
+# مباشر لكود الباك-إند.
+_EXPIRY_HOURS = {"1m": 2, "5m": 4, "15m": 8, "30m": 12, "1h": 24, "4h": 72, "1d": 168, "1w": 336}
+
+
+def _fmt_expiry(expires_at_iso: str | None) -> str:
+    if not expires_at_iso:
+        return ""
+    try:
+        dt = datetime.fromisoformat(expires_at_iso.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        local = dt.astimezone(timezone(timedelta(hours=3)))
+        return f"⏳ صالحة حتى: `{local.strftime('%H:%M')}` ({local.strftime('%d/%m')})\n"
+    except Exception:
+        return ""
 
 
 def get_confidence(data: dict) -> float:
@@ -408,6 +430,12 @@ def fmt_analysis(data: dict, symbol: str, timeframe: str) -> str:
     if tp1: msg += f"✅ هدف 1: `{_fmt_price(tp1)}`\n"
     if tp2: msg += f"✅ هدف 2: `{_fmt_price(tp2)}`\n"
     if rr:  msg += f"⚖️ R/R:   `{float(rr):.2f}x`\n"
+    if rec in ("BUY", "SELL"):
+        # لا expires_at فعلي هون (data تحليل حي، لا صف Signal محفوظ بعد) —
+        # نفس tf_hours المستخدم فعلياً عند save-alert-signal بالخادم لحظات لاحقاً.
+        _exp_h  = _EXPIRY_HOURS.get(timeframe, 24)
+        _exp_dt = datetime.now(timezone.utc) + timedelta(hours=_exp_h)
+        msg += _fmt_expiry(_exp_dt.isoformat())
 
     ob  = data.get("order_blocks", {})
     wyc = data.get("wyckoff_analysis") or data.get("wyckoff", {})
@@ -482,6 +510,7 @@ def fmt_new_signal(s: dict) -> str:
     )
     if rr:
         msg += f"⚖️ R/R:   `{float(rr):.1f}x`\n"
+    msg += _fmt_expiry(s.get("expires_at"))
     if tt_warning:
         msg += f"{tt_warning}\n"
 
@@ -1484,6 +1513,16 @@ async def monitor_watchlists(app: Application):
                         emoji  = "🟢" if rec == "BUY" else "🔴"
                         rec_ar = "شراء" if rec == "BUY" else "بيع"
 
+                        # (2026-09-27) استطلاع الميزات: تحذير صفقات مرتبطة (نفس
+                        # الرمز) — 10 أصوات. concurrent_same_symbol من
+                        # save-alert-signal فوق (فحص server-side، لا حساب هون).
+                        concurrent_n = save_res.get("concurrent_same_symbol", 0)
+                        concurrent_line = (
+                            f"⚠️ *عندك {concurrent_n} صفقة أخرى مفتوحة بنفس الرمز* "
+                            f"({MARKET_NAMES.get(symbol,symbol)}) — انتبه لتركّز المخاطرة.\n\n"
+                            if concurrent_n else ""
+                        )
+
                         # full_access (أدمن/مشترك فعلي) → دايماً كاملة. غيرهم (تجربة
                         # نشطة أو منتهية) → نستهلك من حصتهم اليومية المجانية؛ لو
                         # خلصت، تنبيه مموّه بدل قطع المراقبة الشخصية بالكامل عنهم.
@@ -1497,6 +1536,7 @@ async def monitor_watchlists(app: Application):
                                 f"🚨 *تنبيه مراقبة!*\n\n"
                                 f"{emoji} *{rec_ar}* — {MARKET_NAMES.get(symbol,symbol)} ({tf})\n"
                                 f"📊 الثقة: *{conf:.1f}%*\n\n"
+                                f"{concurrent_line}"
                                 f"{fmt_analysis(data, symbol, tf)}"
                             )[:4000]
                             kb = InlineKeyboardMarkup([[
@@ -1508,6 +1548,7 @@ async def monitor_watchlists(app: Application):
                                 f"🚨 *تنبيه مراقبة!*\n\n"
                                 f"{emoji} *{rec_ar}* — {MARKET_NAMES.get(symbol,symbol)} ({tf})\n"
                                 f"📊 الثقة: *{conf:.1f}%*\n\n"
+                                f"{concurrent_line}"
                                 f"🔒 استهلكت حصتك المجانية اليوم — تفاصيل الدخول/الوقف/الأهداف مقفلة\n"
                                 f"💳 اشترك لرؤية التفاصيل الكاملة"
                             )
