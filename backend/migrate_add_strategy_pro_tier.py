@@ -40,10 +40,15 @@ def migrate():
                     print(f"❌ Error adding {label}: {e}")
                     raise
 
+        # (2026-09-27) بلاغ حقيقي: enum plantype/paymentplan/paymentstatus
+        # بقاعدة البيانات تخزّن اسم عضو enum بايثون (WEEKLY/MONTHLY/YEARLY/
+        # APPROVED بحروف كبيرة)، لا .value الصغير (weekly/monthly/...) رغم
+        # إن الكود التطبيقي يقارن غالباً بـ.value — SQL خام لازم يطابق قيمة
+        # enum الفعلية بقاعدة البيانات لا قيمة enum بايثون.
         try:
             result = conn.execute(text(
                 "UPDATE users SET strategy_builder_grandfathered = TRUE "
-                "WHERE plan IN ('weekly', 'monthly') AND strategy_builder_grandfathered = FALSE"
+                "WHERE plan IN ('WEEKLY', 'MONTHLY') AND strategy_builder_grandfathered = FALSE"
             ))
             conn.commit()
             print(f"✅ Grandfathered {result.rowcount} existing weekly/monthly subscribers")
@@ -52,7 +57,7 @@ def migrate():
             print(f"❌ Error grandfathering existing subscribers: {e}")
             raise
 
-        # المشترك السنوي الحالي فعلياً (آخر دفعة مقبولة له plan='yearly'،
+        # المشترك السنوي الحالي فعلياً (آخر دفعة مقبولة له plan='YEARLY'،
         # واشتراكه لسا سارٍ) — يُعلَّم is_yearly_subscriber بأثر رجعي.
         try:
             result = conn.execute(text("""
@@ -61,9 +66,9 @@ def migrate():
                   AND u.subscription_ends_at > NOW()
                   AND (
                       SELECT p.plan FROM payments p
-                      WHERE p.user_id = u.id AND p.status = 'approved'
+                      WHERE p.user_id = u.id AND p.status = 'APPROVED'
                       ORDER BY p.created_at DESC LIMIT 1
-                  ) = 'yearly'
+                  ) = 'YEARLY'
             """))
             conn.commit()
             print(f"✅ Marked {result.rowcount} existing users as yearly subscribers")
