@@ -17,6 +17,9 @@ class FeatureRequest(Base):
     user_id         = Column(Integer, ForeignKey("users.id"), nullable=False)
     selected_option = Column(String, nullable=False)
     custom_text     = Column(Text, nullable=True)
+    # (2026-09-27) أي نسخة استطلاع أُجيب عليها — NULL للإجابات القديمة
+    # (قبل الاستطلاع القابل للتعديل، كلها كانت لنفس النسخة الثابتة الوحيدة).
+    survey_id       = Column(Integer, ForeignKey("feature_surveys.id"), nullable=True)
     created_at      = Column(DateTime(timezone=True), server_default=func.now())
 
     user = relationship("User")

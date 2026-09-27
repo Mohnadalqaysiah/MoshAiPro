@@ -2744,6 +2744,101 @@ def feature_requests_summary(
     }
 
 
+# ─── Feature Survey Editor (سؤال + خيارات قابلة للتعديل) ───────────────────────
+
+class FeatureSurveyOptionIn(BaseModel):
+    ar:        str
+    en:        str
+    is_other:  bool = False   # يفتح صندوق نص حر بالمودال (نفس سلوك "شيء تاني" القديم)
+
+
+class FeatureSurveyPublishIn(BaseModel):
+    question_ar: str
+    question_en: str
+    options:     List[FeatureSurveyOptionIn]
+
+
+@router.get("/feature-survey")
+def get_feature_survey_editor(
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """الاستطلاع النشط حالياً لتعبئة نموذج التعديل بلوحة الأدمن."""
+    from app.models.feature_survey import FeatureSurvey
+    active = db.query(FeatureSurvey).filter(FeatureSurvey.is_active == True).first()
+    if not active:
+        return {"active": False}
+    return {
+        "active":      True,
+        "id":          active.id,
+        "question_ar": active.question_ar,
+        "question_en": active.question_en,
+        "options":     active.options,
+    }
+
+
+@router.put("/feature-survey")
+def publish_feature_survey(
+    data: FeatureSurveyPublishIn,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """
+    ينشر نسخة استطلاع جديدة (سؤال + خيارات) — تُخمَّد النسخة القديمة
+    (is_active=False) لا تُحذف، فتبقى إجابات FeatureRequest القديمة
+    مقروءة بسياقها (survey_id). النسخة الجديدة تظهر تلقائياً لكل مستخدم
+    (feature_survey_seen_id لا يطابق رقمها الجديد) بلا حاجة لأي زر إضافي.
+    """
+    from app.models.feature_survey import FeatureSurvey
+    if not data.options:
+        raise HTTPException(400, "أضِف خياراً واحداً على الأقل")
+
+    options_json = []
+    other_used = False
+    for i, opt in enumerate(data.options):
+        if not opt.ar.strip() or not opt.en.strip():
+            raise HTTPException(400, "كل خيار يحتاج نصاً بالعربي والإنجليزي")
+        if opt.is_other and other_used:
+            raise HTTPException(400, "خيار واحد فقط يمكن تعليمه كنص حر")
+        key = "other" if opt.is_other else f"opt_{i + 1}"
+        other_used = other_used or opt.is_other
+        options_json.append({"key": key, "ar": opt.ar.strip(), "en": opt.en.strip()})
+
+    db.query(FeatureSurvey).filter(FeatureSurvey.is_active == True).update({"is_active": False})
+    new_survey = FeatureSurvey(
+        question_ar=data.question_ar.strip(),
+        question_en=data.question_en.strip(),
+        options=options_json,
+        is_active=True,
+    )
+    db.add(new_survey)
+    db.commit()
+    db.refresh(new_survey)
+    logger.info(f"📋 استطلاع جديد نُشر (#{new_survey.id}) بواسطة {admin.email}")
+    return {"success": True, "id": new_survey.id}
+
+
+@router.post("/feature-survey/reshow")
+def reshow_feature_survey(
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """
+    يعيد إظهار الاستطلاع الحالي لكل المستخدمين حتى لو أجابوا/تخطّوه
+    سابقاً — بلا تغيير أي محتوى، فقط تصفير "آخر نسخة رآها" للجميع.
+    """
+    from app.models.feature_survey import FeatureSurvey
+    active = db.query(FeatureSurvey).filter(FeatureSurvey.is_active == True).first()
+    if not active:
+        raise HTTPException(400, "لا يوجد استطلاع نشط حالياً")
+    updated = db.query(User).filter(User.feature_survey_seen_id == active.id).update(
+        {"feature_survey_seen_id": None}
+    )
+    db.commit()
+    logger.info(f"🔁 إعادة إظهار الاستطلاع #{active.id} — {updated} مستخدم")
+    return {"success": True, "reset_count": updated}
+
+
 # ══════════════════════════════════════════════════════════════════════
 # تقرير جودة القرارات — رفيق /diagnostic لا بديله
 # ══════════════════════════════════════════════════════════════════════

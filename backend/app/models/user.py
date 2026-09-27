@@ -83,6 +83,12 @@ class User(Base):
 
     # Feature-request survey popup — يُعرض مرة واحدة فقط (إرسال أو تخطٍّ)
     feature_survey_dismissed = Column(Boolean, default=False, nullable=False)
+    # (2026-09-27) استطلاع قابل للتعديل من لوحة الأدمن (FeatureSurvey) —
+    # يسجّل رقم آخر استطلاع شاهده المستخدم (إرسال أو تخطٍّ)، لا مجرد
+    # بوليان ثابت. يظهر استطلاع جديد تلقائياً لمن رأى نسخة أقدم فقط
+    # (feature_survey_dismissed أعلاه صار محسوباً ديناميكياً بـ_user_info،
+    # لا يُقرأ مباشرة بعد الآن — أُبقي العمود بلا حذف تفادياً لهجرة إضافية).
+    feature_survey_seen_id = Column(Integer, nullable=True)
 
     # Bot Notification Preferences
     notify_watchlist      = Column(JSON,    default=list)   # ["XAUUSD","BTCUSD"]

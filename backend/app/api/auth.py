@@ -250,7 +250,7 @@ def register(
     # ── رمز تفعيل البريد الإلكتروني (فقط لحسابات كلمة السر) ─────────────
     _send_verification_otp(user.email, background_tasks)
 
-    return {"token": token, "user": _user_info(user)}
+    return {"token": token, "user": _user_info(user, db)}
 
 
 # ─── Google Sign-In ─────────────────────────────────────────────────────────────
@@ -301,7 +301,7 @@ def google_login(
         )
 
     token = create_token(user.id, user.role)
-    return {"token": token, "user": _user_info(user)}
+    return {"token": token, "user": _user_info(user, db)}
 
 
 # ─── Email Verification ────────────────────────────────────────────────────────
@@ -313,7 +313,7 @@ def verify_email(
     db: Session = Depends(get_db),
 ):
     if user.is_verified:
-        return {"success": True, "message": "الحساب مُفعّل مسبقاً", "user": _user_info(user)}
+        return {"success": True, "message": "الحساب مُفعّل مسبقاً", "user": _user_info(user, db)}
 
     stored = _verify_otp_store.get(user.email)
     if not stored:
@@ -329,7 +329,7 @@ def verify_email(
     _verify_otp_store.pop(user.email, None)
 
     logger.info(f"✅ Email verified: {user.email}")
-    return {"success": True, "message": "تم تفعيل بريدك الإلكتروني بنجاح", "user": _user_info(user)}
+    return {"success": True, "message": "تم تفعيل بريدك الإلكتروني بنجاح", "user": _user_info(user, db)}
 
 
 @router.post("/resend-verification")
@@ -367,7 +367,7 @@ def login(data: LoginIn, db: Session = Depends(get_db)):
         raise HTTPException(403, "الحساب معلّق. تواصل مع الدعم.")
 
     token = create_token(user.id, user.role)
-    return {"token": token, "user": _user_info(user)}
+    return {"token": token, "user": _user_info(user, db)}
 
 
 # ─── Profile ──────────────────────────────────────────────────────────────────
@@ -378,7 +378,7 @@ def get_profile(
     db: Session = Depends(get_db)
 ):
     status = check_subscription(user, db)
-    info = _user_info(user)
+    info = _user_info(user, db)
     info["subscription_status"] = status
     return info
 
@@ -409,22 +409,42 @@ def update_trading_settings(
 
 # ─── Feature Request Survey (Popup) ────────────────────────────────────────────
 
+@router.get("/feature-survey/active")
+def get_active_feature_survey(db: Session = Depends(get_db)):
+    """الاستطلاع النشط حالياً (سؤال + خيارات) — يقرأه FeatureSurveyModal.jsx
+    بدل نص ثابت بالكود، عشان يصير قابلاً للتعديل الكامل من لوحة الأدمن."""
+    from app.models.feature_survey import FeatureSurvey
+    active = db.query(FeatureSurvey).filter(FeatureSurvey.is_active == True).first()
+    if not active:
+        return {"active": False}
+    return {
+        "active":      True,
+        "id":          active.id,
+        "question_ar": active.question_ar,
+        "question_en": active.question_en,
+        "options":     active.options,
+    }
+
+
 @router.post("/feature-survey/submit")
 def submit_feature_survey(
     data: FeatureSurveyIn,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """يحفظ إجابة الاستطلاع ويعلّم الحساب كمنتهي (ما يظهر له تاني)."""
+    """يحفظ إجابة الاستطلاع ويعلّم هالنسخة كمشاهَدة (ما يظهر له تاني إلا لو نُشرت نسخة جديدة)."""
+    from app.models.feature_survey import FeatureSurvey
     if not data.selected_option.strip():
         raise HTTPException(400, "الرجاء اختيار إجابة")
+    active = db.query(FeatureSurvey).filter(FeatureSurvey.is_active == True).first()
     fr = FeatureRequest(
         user_id=user.id,
         selected_option=data.selected_option.strip(),
         custom_text=(data.custom_text or "").strip() or None,
+        survey_id=active.id if active else None,
     )
     db.add(fr)
-    user.feature_survey_dismissed = True
+    user.feature_survey_seen_id = active.id if active else None
     db.commit()
     return {"success": True}
 
@@ -434,8 +454,10 @@ def skip_feature_survey(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """يعلّم الحساب كمنتهي بدون تسجيل أي إجابة (تخطّي)."""
-    user.feature_survey_dismissed = True
+    """يعلّم هالنسخة كمشاهَدة بدون تسجيل أي إجابة (تخطّي)."""
+    from app.models.feature_survey import FeatureSurvey
+    active = db.query(FeatureSurvey).filter(FeatureSurvey.is_active == True).first()
+    user.feature_survey_seen_id = active.id if active else None
     db.commit()
     return {"success": True}
 
@@ -546,7 +568,7 @@ def update_profile(
     if data.phone_number is not None:
         user.phone_number = data.phone_number.strip() or None
     db.commit()
-    return {"success": True, "user": _user_info(user)}
+    return {"success": True, "user": _user_info(user, db)}
 
 
 # ─── Link Telegram ────────────────────────────────────────────────────────────
@@ -682,7 +704,7 @@ def bot_verify_link(data: BotVerifyIn, db: Session = Depends(get_db)):
 
 # ─── Helper ───────────────────────────────────────────────────────────────────
 
-def _user_info(user: User) -> dict:
+def _user_info(user: User, db: Session) -> dict:
     now = datetime.now(timezone.utc)
     sub_ends = user.subscription_ends_at
     trial_ends = user.trial_ends_at
@@ -724,8 +746,20 @@ def _user_info(user: User) -> dict:
         "affiliate_code":        user.affiliate_code or "",
         "referred_by_code":      user.referred_by_code or "",
         "referral_points":       user.referral_points or 0,
-        "feature_survey_dismissed": bool(user.feature_survey_dismissed),
+        # (2026-09-27) صار محسوباً بمقارنة آخر نسخة استطلاع شاهدها المستخدم
+        # بالنسخة النشطة حالياً — لا يُقرأ العمود الثابت مباشرة بعد الآن،
+        # فيظهر استطلاع جديد تلقائياً لمن رأى نسخة أقدم فقط. الاسم بقي
+        # نفسه (feature_survey_dismissed) فبقيت AppShell.jsx بلا أي تعديل.
+        "feature_survey_dismissed": _feature_survey_dismissed(user, db),
     }
+
+
+def _feature_survey_dismissed(user: User, db: Session) -> bool:
+    from app.models.feature_survey import FeatureSurvey
+    active = db.query(FeatureSurvey).filter(FeatureSurvey.is_active == True).first()
+    if not active:
+        return True
+    return user.feature_survey_seen_id == active.id
 
 
 # ─── Notification Preferences ──────────────────────────────────────────────────

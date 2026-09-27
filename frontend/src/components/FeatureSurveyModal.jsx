@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
@@ -6,33 +6,27 @@ import { Lightbulb, X, Send } from 'lucide-react'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
-const OPTIONS = [
-  { key: 'concurrent_signals_warning',
-    ar: 'تحذير لما يكون عندي أكتر من صفقة مرتبطة مفتوحة بنفس الوقت',
-    en: 'A warning when I have more than one related open trade at once' },
-  { key: 'position_size_calculator',
-    ar: 'حاسبة تلقائية لحجم الصفقة المناسب حسب رأس مالي',
-    en: 'An automatic position-size calculator based on my capital' },
-  { key: 'signal_expiry_countdown',
-    ar: 'عداد وقت متبقي لكل إشارة قبل ما تنتهي',
-    en: 'A countdown showing time left before each signal expires' },
-  { key: 'confidence_explainer',
-    ar: 'شرح أوضح ليش الثقة كذا% (بيانات تاريخية حقيقية بدل رقم فقط)',
-    en: 'A clearer explanation of the confidence score (real historical data, not just a number)' },
-  { key: 'other',
-    ar: 'شيء تاني',
-    en: 'Something else' },
-]
-
 export default function FeatureSurveyModal({ onDone }) {
   const { refreshUser } = useAuth()
   const { lang } = useLang()
   const isAr = lang === 'ar'
 
+  // (2026-09-27) السؤال والخيارات صارت قابلة للتعديل من لوحة الأدمن —
+  // تُجلَب هون بدل نص ثابت بالكود (راجع GET /auth/feature-survey/active).
+  const [survey, setSurvey]   = useState(null)
+  const [loading, setLoading] = useState(true)
+
   const [selected, setSelected] = useState('')
   const [customText, setCustomText] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    axios.get(`${API}/api/v1/auth/feature-survey/active`)
+      .then(r => setSurvey(r.data?.active ? r.data : null))
+      .catch(() => setSurvey(null))
+      .finally(() => setLoading(false))
+  }, [])
 
   const close = () => onDone?.()
 
@@ -62,6 +56,11 @@ export default function FeatureSurveyModal({ onDone }) {
     }
   }
 
+  // لا استطلاع نشط، أو لسا قيد التحميل — لا نعرض شيء (بدل شاشة فاضية تومض)
+  if (loading || !survey) return null
+
+  const options = survey.options || []
+
   return (
     <div
       className="fixed inset-0 z-[70] flex items-center justify-center p-4"
@@ -86,12 +85,12 @@ export default function FeatureSurveyModal({ onDone }) {
           </div>
           <h2 className="text-lg font-black text-white">{isAr ? 'ساعدنا نطور المنصة لك' : 'Help Us Improve the Platform'}</h2>
           <p className="text-sm text-gray-400 mt-1.5">
-            {isAr ? 'أي ميزة تحس إنها أهم إشي ينضاف حالياً؟' : 'Which feature do you feel is most important to add right now?'}
+            {isAr ? survey.question_ar : survey.question_en}
           </p>
         </div>
 
         <div className="space-y-2 mb-4">
-          {OPTIONS.map(opt => (
+          {options.map(opt => (
             <label key={opt.key}
               className={`flex items-start gap-3 rounded-xl border px-3.5 py-3 cursor-pointer transition-colors ${
                 selected === opt.key ? 'border-blue-500/60 bg-blue-500/10' : 'border-gray-700/60 hover:border-gray-600'

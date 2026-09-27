@@ -3309,12 +3309,29 @@ function FeatureSurveyPanel() {
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState(null)
 
-  const OPTION_LABELS = {
+  // ── محرر الاستطلاع (سؤال + خيارات قابلة للتعديل) ──────────────────────────
+  const emptyOption = () => ({ ar: '', en: '', is_other: false })
+  const [surveyId, setSurveyId]         = useState(null)
+  const [questionAr, setQuestionAr]     = useState('')
+  const [questionEn, setQuestionEn]     = useState('')
+  const [options, setOptions]           = useState([emptyOption()])
+  const [editorLoading, setEditorLoading] = useState(true)
+  const [publishing, setPublishing]     = useState(false)
+  const [reshowing, setReshowing]       = useState(false)
+  const [editorMsg, setEditorMsg]       = useState('')
+
+  const OPTION_LABELS_BASE = {
     concurrent_signals_warning: 'تحذير عند أكثر من صفقة مرتبطة مفتوحة بنفس الوقت',
     position_size_calculator:   'حاسبة تلقائية لحجم الصفقة حسب رأس المال',
     signal_expiry_countdown:    'عداد وقت متبقي لكل إشارة قبل ما تنتهي',
     confidence_explainer:       'شرح أوضح ليش الثقة كذا% (بيانات تاريخية حقيقية)',
     other:                      'شيء تاني',
+  }
+  // خيارات النسخة الحالية تطغى على التسميات الثابتة (خيارات جديدة أنشأها
+  // الأدمن، بمفاتيح opt_1/opt_2/...، تُعرض بنصها الحقيقي لا كمفتاح خام)
+  const OPTION_LABELS = {
+    ...OPTION_LABELS_BASE,
+    ...Object.fromEntries(options.filter(o => o.ar).map((o, i) => [o.is_other ? 'other' : `opt_${i + 1}`, o.ar])),
   }
 
   const load = async () => {
@@ -3329,7 +3346,64 @@ function FeatureSurveyPanel() {
     }
   }
 
-  useEffect(() => { load() }, [])
+  const loadEditor = async () => {
+    setEditorLoading(true)
+    try {
+      const res = await axios.get(`${API}/api/v1/admin/feature-survey`)
+      if (res.data?.active) {
+        setSurveyId(res.data.id)
+        setQuestionAr(res.data.question_ar)
+        setQuestionEn(res.data.question_en)
+        setOptions((res.data.options || []).map(o => ({ ar: o.ar, en: o.en, is_other: o.key === 'other' })))
+      } else {
+        // لا استطلاع نشط بعد — نبدأ من نفس الخيارات الافتراضية القديمة كنقطة انطلاق
+        setQuestionAr('أي ميزة تحس إنها أهم إشي ينضاف حالياً؟')
+        setQuestionEn('Which feature do you feel is most important to add right now?')
+        setOptions([
+          { ar: 'تحذير لما يكون عندي أكتر من صفقة مرتبطة مفتوحة بنفس الوقت', en: 'A warning when I have more than one related open trade at once', is_other: false },
+          { ar: 'حاسبة تلقائية لحجم الصفقة المناسب حسب رأس مالي', en: 'An automatic position-size calculator based on my capital', is_other: false },
+          { ar: 'عداد وقت متبقي لكل إشارة قبل ما تنتهي', en: 'A countdown showing time left before each signal expires', is_other: false },
+          { ar: 'شرح أوضح ليش الثقة كذا% (بيانات تاريخية حقيقية بدل رقم فقط)', en: 'A clearer explanation of the confidence score (real historical data, not just a number)', is_other: false },
+          { ar: 'شيء تاني', en: 'Something else', is_other: true },
+        ])
+      }
+    } catch (e) {} finally { setEditorLoading(false) }
+  }
+
+  useEffect(() => { load(); loadEditor() }, [])
+
+  const updateOption = (i, patch) => setOptions(prev => prev.map((o, idx) => idx === i ? { ...o, ...patch } : o))
+  const addOption    = () => setOptions(prev => [...prev, emptyOption()])
+  const removeOption = (i) => setOptions(prev => prev.filter((_, idx) => idx !== i))
+
+  const publish = async () => {
+    setEditorMsg('')
+    if (!questionAr.trim() || !questionEn.trim()) { setEditorMsg('❌ اكتب السؤال بالعربي والإنجليزي'); return }
+    if (options.some(o => !o.ar.trim() || !o.en.trim())) { setEditorMsg('❌ كل خيار يحتاج نصاً بالعربي والإنجليزي'); return }
+    setPublishing(true)
+    try {
+      const res = await axios.put(`${API}/api/v1/admin/feature-survey`, {
+        question_ar: questionAr.trim(),
+        question_en: questionEn.trim(),
+        options: options.map(o => ({ ar: o.ar.trim(), en: o.en.trim(), is_other: o.is_other })),
+      })
+      setSurveyId(res.data.id)
+      setEditorMsg('✅ نُشر بنجاح — سيظهر تلقائياً لكل عميل لم يشاهد هذه النسخة بعد')
+    } catch (e) {
+      setEditorMsg('❌ ' + (e.response?.data?.detail || 'تعذّر النشر'))
+    } finally { setPublishing(false) }
+  }
+
+  const reshow = async () => {
+    if (!confirm('إعادة إظهار الاستطلاع الحالي لكل العملاء حتى لو أجابوا/تخطّوه سابقاً؟')) return
+    setReshowing(true); setEditorMsg('')
+    try {
+      const res = await axios.post(`${API}/api/v1/admin/feature-survey/reshow`)
+      setEditorMsg(`✅ سيُعرض من جديد على ${res.data.reset_count} عميل`)
+    } catch (e) {
+      setEditorMsg('❌ ' + (e.response?.data?.detail || 'تعذّر التنفيذ'))
+    } finally { setReshowing(false) }
+  }
 
   const counts = data?.counts || {}
   const maxCount = Math.max(1, ...Object.values(counts))
@@ -3348,6 +3422,77 @@ function FeatureSurveyPanel() {
           className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 disabled:opacity-60 text-gray-200 px-4 py-2 rounded-xl text-sm transition">
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> تحديث
         </button>
+      </div>
+
+      {/* ── محرر الاستطلاع ── */}
+      <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 space-y-4">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <h2 className="text-sm font-semibold text-gray-300">تعديل السؤال والخيارات</h2>
+          {surveyId && (
+            <button onClick={reshow} disabled={reshowing}
+              className="flex items-center gap-1.5 text-xs bg-purple-900/30 text-purple-300 border border-purple-700/40 hover:bg-purple-900/50 disabled:opacity-60 px-3 py-1.5 rounded-full transition">
+              <RefreshCw size={12} className={reshowing ? 'animate-spin' : ''} /> إعادة إظهاره لكل العملاء
+            </button>
+          )}
+        </div>
+
+        {editorLoading ? (
+          <p className="text-gray-500 text-sm">جاري التحميل...</p>
+        ) : (
+          <>
+            <div className="grid md:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">السؤال (عربي)</label>
+                <input value={questionAr} onChange={e => setQuestionAr(e.target.value)}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500" dir="rtl" />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">السؤال (إنجليزي)</label>
+                <input value={questionEn} onChange={e => setQuestionEn(e.target.value)}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-blue-500" dir="ltr" />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-xs text-gray-400">الخيارات</label>
+              {options.map((opt, i) => (
+                <div key={i} className="flex items-start gap-2 bg-gray-800/40 border border-gray-700/50 rounded-xl p-2.5">
+                  <div className="flex-1 grid md:grid-cols-2 gap-2">
+                    <input value={opt.ar} onChange={e => updateOption(i, { ar: e.target.value })}
+                      placeholder="نص الخيار (عربي)" dir="rtl"
+                      className="bg-gray-800 border border-gray-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                    <input value={opt.en} onChange={e => updateOption(i, { en: e.target.value })}
+                      placeholder="Option text (English)" dir="ltr"
+                      className="bg-gray-800 border border-gray-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                  </div>
+                  <label className="flex items-center gap-1 text-[11px] text-gray-400 whitespace-nowrap px-1 pt-2" title="يفتح صندوق نص حر للعميل عند اختياره">
+                    <input type="checkbox" checked={opt.is_other}
+                      onChange={e => updateOption(i, { is_other: e.target.checked })} />
+                    نص حر
+                  </label>
+                  <button onClick={() => removeOption(i)} disabled={options.length <= 1}
+                    className="text-gray-500 hover:text-red-400 disabled:opacity-30 p-1.5">
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+              <button onClick={addOption}
+                className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300">
+                <Plus size={13} /> إضافة خيار
+              </button>
+            </div>
+
+            {editorMsg && <p className="text-xs">{editorMsg}</p>}
+
+            <div className="flex items-center gap-2 pt-1">
+              <button onClick={publish} disabled={publishing}
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white px-4 py-2 rounded-xl text-sm font-semibold transition">
+                <Send size={14} /> {publishing ? 'جاري النشر...' : (surveyId ? 'نشر التعديلات' : 'نشر الاستطلاع')}
+              </button>
+              {surveyId && <span className="text-xs text-gray-500">النسخة الحالية: #{surveyId}</span>}
+            </div>
+          </>
+        )}
       </div>
 
       {error && (
