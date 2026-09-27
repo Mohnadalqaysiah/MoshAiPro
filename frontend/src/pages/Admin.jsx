@@ -416,6 +416,7 @@ export default function Admin() {
   const [funnelLoading, setFunnelLoading] = useState(false)
   const [funnelDays, setFunnelDays] = useState(7)
   const [users, setUsers]     = useState([])
+  const [usersTotal, setUsersTotal] = useState(0)
   const [onlineCount, setOnlineCount] = useState(0)
   const [showOnline, setShowOnline]   = useState(false)
   const [team, setTeam]           = useState([])
@@ -608,7 +609,12 @@ export default function Admin() {
     } catch (e) {}
     finally { setAffLoading(false) }
   }
-  const loadUsers    = async () => { setLoading(true); const r = await axios.get(`${API}/api/v1/admin/users?search=${search}&limit=200`); setUsers(r.data.users); setOnlineCount(r.data.online_count || 0); setLoading(false) }
+  // (2026-09-27) بلاغ حقيقي: عدّاد "إرسال للكل" كان يعرض users.length —
+  // محصور بـlimit=200 بهالطلب، فيوهم الأدمن إنه العدد الحقيقي 200 رغم
+  // وجود 360+ مستخدم فعلياً. الإرسال الفعلي بالخادم (/email/send) سليم
+  // ومستقل تماماً (يستعلم كل is_active بنفسه، لا يعتمد هالقائمة إطلاقاً)
+  // — كان خللاً بالعرض فقط لا بالإرسال. usersTotal يعرض r.data.total الحقيقي.
+  const loadUsers    = async () => { setLoading(true); const r = await axios.get(`${API}/api/v1/admin/users?search=${search}&limit=200`); setUsers(r.data.users); setUsersTotal(r.data.total || r.data.users.length); setOnlineCount(r.data.online_count || 0); setLoading(false) }
   const loadTeam     = async () => { setTeamLoading(true); try { const r = await axios.get(`${API}/api/v1/admin/team`); setTeam(r.data.admins) } catch (e) {} finally { setTeamLoading(false) } }
   const searchForPromotion = async () => {
     if (!teamSearch.trim()) { setTeamSearchResults([]); return }
@@ -1614,7 +1620,7 @@ export default function Admin() {
                     onChange={e => setEmailForm(f => ({ ...f, user_id: e.target.value === 'all' ? '' : (f.user_id || '') }))}
                     className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white mb-2"
                   >
-                    <option value="all">الكل ({users.length} مستخدم)</option>
+                    <option value="all">الكل ({usersTotal || users.length} مستخدم)</option>
                     <option value="specific">مستخدم معين (بالـ ID)</option>
                   </select>
                   {emailForm.user_id !== '' && (
@@ -1665,7 +1671,7 @@ export default function Admin() {
                   <button type="submit" disabled={emailSending}
                     className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-6 py-2 rounded-lg text-sm transition">
                     {emailSending ? <RefreshCw size={14} className="animate-spin"/> : <Mail size={14}/>}
-                    {emailSending ? 'جاري الإرسال...' : emailForm.user_id ? 'إرسال للمستخدم' : `إرسال للكل (${users.length})`}
+                    {emailSending ? 'جاري الإرسال...' : emailForm.user_id ? 'إرسال للمستخدم' : `إرسال للكل (${usersTotal || users.length})`}
                   </button>
                   <button type="button" onClick={() => { if (!users.length) loadUsers() }}
                     className="text-xs text-gray-400 hover:text-white px-3 py-2 rounded-lg hover:bg-gray-800">
