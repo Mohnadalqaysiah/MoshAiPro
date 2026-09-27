@@ -90,6 +90,23 @@ class User(Base):
     # لا يُقرأ مباشرة بعد الآن — أُبقي العمود بلا حذف تفادياً لهجرة إضافية).
     feature_survey_seen_id = Column(Integer, nullable=True)
 
+    # (2026-09-27) باني الاستراتيجيات صار مسيَّراً بشكل منفصل عن الأسبوعي/
+    # الشهري العاديين (قرار صاحب المنتج) — راجع DECISIONS.md لو أُضيف لاحقاً.
+    # مشتركو ما قبل هذا التاريخ يحتفظون بوصولهم الكامل المجاني (استثناء
+    # تاريخي، لا يتكرر مع أي مشترك جديد بعدهم) — عمود منفصل تماماً عن
+    # PlanType عمداً، تفادياً لنفس هشاشة إضافة قيمة enum جديدة الموثّقة
+    # بـsubscription_service.py (يمسّ ~25 فحصاً بـ8 ملفات).
+    strategy_builder_grandfathered = Column(Boolean, default=False, nullable=False)
+    strategy_pro_until             = Column(DateTime(timezone=True), nullable=True)
+    # (2026-09-27) قرار صاحب المنتج: المشترك السنوي دائماً "كل شيء مفتوح
+    # له" — أقوى تمييز فعلي بين السنوي والشهري العادي الآن. عمود منفصل لا
+    # PlanType (نفس السبب: YEARLY تُخزَّن كـMONTHLY على .plan، راجع
+    # subscription_service.py) — يُضبَط بكل تفعيل دفعة حسب باقتها الفعلية.
+    is_yearly_subscriber           = Column(Boolean, default=False, nullable=False)
+    # حصة التجربة المحدودة (غير Pro وغير grandfathered): تنبيهات Telegram
+    # حقيقية فقط، لا تُستهلك على المعاينة/المحاكاة بلا حفظ.
+    strategy_free_alerts_left      = Column(Integer, default=3, nullable=False)
+
     # Bot Notification Preferences
     notify_watchlist      = Column(JSON,    default=list)   # ["XAUUSD","BTCUSD"]
     notify_timeframe      = Column(String,  default="1h")   # legacy single value

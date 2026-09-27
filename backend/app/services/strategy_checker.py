@@ -26,10 +26,10 @@ _LOCK_KEY = 90210001  # arbitrary unique advisory-lock key for this task
 async def strategy_checker():
     from app.database import SessionLocal
     from app.models.strategy import Strategy, StrategyStatus, StrategyTriggerEvent
-    from app.models.user import UserRole, PlanType
     from app.services.strategy_engine import (
         evaluate_strategy, build_telegram_message, distinct_timeframes, primary_timeframe,
     )
+    from app.services.strategy_access import access_tier
     from app.services.ai_engine_v5 import mosh_ai_engine_v5
     from app.services.admin_notify import get_bot_token
     from app.services.worker_lock import try_acquire_singleton_lock
@@ -52,12 +52,16 @@ async def strategy_checker():
                     continue
 
                 for s in active:
-                    # Strategy Builder alerting is subscriber-exclusive — if the
-                    # owner's subscription lapsed since activation, stop here
-                    # rather than keep alerting a now-trial/expired account.
                     owner = s.user
-                    if not owner or (owner.role != UserRole.ADMIN and owner.plan not in (PlanType.WEEKLY, PlanType.MONTHLY)):
+                    if not owner:
                         continue
+                    # (2026-09-27) باني الاستراتيجيات مسيَّر منفصل — نفس منطق
+                    # الفئة المستخدَم بـstrategies.py (استيراد لا نسخ، تفادي
+                    # انحراف الاثنين لاحقاً). الفئة المحدودة لسا تُقيَّم
+                    # وتُسجَّل (StrategyTriggerEvent) — فقط إرسال Telegram
+                    # الحقيقي محكوم بحصتها (strategy_free_alerts_left).
+                    tier = access_tier(owner)
+                    limited = tier == "limited"
 
                     conditions = [c for g in s.groups for c in g.conditions]
                     if not conditions or not s.symbols:
@@ -82,7 +86,8 @@ async def strategy_checker():
                         )
 
                         telegram_sent = False
-                        if result["triggered"] and s.trigger_send_telegram and s.tg_enabled:
+                        quota_blocked = limited and owner.strategy_free_alerts_left <= 0
+                        if result["triggered"] and s.trigger_send_telegram and s.tg_enabled and not quota_blocked:
                             key = (s.id, symbol)
                             last = _last_sent.get(key)
                             now = datetime.now(timezone.utc)
@@ -99,8 +104,12 @@ async def strategy_checker():
                                     telegram_sent = True
                                     _last_sent[key] = now
                                     logger.info(f"🎯 Strategy triggered & alerted: {s.name} / {symbol}")
+                                    if limited:
+                                        owner.strategy_free_alerts_left = max(0, owner.strategy_free_alerts_left - 1)
                                 except Exception as e:
                                     logger.warning(f"Strategy checker: telegram send failed: {e}")
+                        elif result["triggered"] and quota_blocked:
+                            logger.debug(f"🔕 Strategy {s.id}/{symbol} triggered but limited-tier alert quota exhausted")
 
                         if result["triggered"]:
                             s.last_triggered_at = datetime.now(timezone.utc)

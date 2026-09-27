@@ -185,7 +185,7 @@ function SidebarContent({ isAr, onNavigate }) {
     { path: '/backtesting',     ar: 'الأداء التاريخي',   en: 'Backtesting', icon: <BarChart2 size={17} /> },
     { path: '/analytics',       ar: 'التحليلات',         en: 'Analytics',   icon: <TrendingUp size={17} /> },
     { path: '/journal',         ar: 'يومية التداول',     en: 'Journal',     icon: <BookOpen size={17} /> },
-    { path: '/strategies',      ar: 'بناء الاستراتيجيات', en: 'Strategies', icon: <Sparkles size={17} />, tag: isAr ? 'تجريبي' : 'Beta' },
+    { path: '/strategies',      ar: 'بناء الاستراتيجيات', en: 'Strategies', icon: <Sparkles size={17} /> },
     { path: '/affiliate',       ar: 'إحالاتي',           en: 'Referrals',   icon: <Gift size={17} /> },
   ]
   const isActive = p => location.pathname === p || (p === '/dashboard' && location.pathname === '/')

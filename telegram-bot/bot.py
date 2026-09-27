@@ -5,7 +5,7 @@ Qaffel AI Bot v2 — Professional Edition
 
 import os, asyncio, aiohttp
 from datetime import datetime, timezone, timedelta
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand, WebAppInfo
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, ContextTypes,
 )
@@ -288,7 +288,7 @@ def kb_main():
         [InlineKeyboardButton("🎁 نقاط الإحالة", callback_data="m_referral"),
          InlineKeyboardButton("❓ المساعدة",      callback_data="m_help")],
         # ── داشبورد ──
-        [InlineKeyboardButton("🌐 فتح الداشبورد", url=FRONTEND_URL)],
+        [InlineKeyboardButton("🌐 فتح الداشبورد", web_app=WebAppInfo(url=FRONTEND_URL))],
     ])
 
 
@@ -655,7 +655,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"للحصول على رابط جديد: افتح المنصة ← إعدادات ← ربط تيليجرام",
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("🌐 فتح المنصة", url=FRONTEND_URL)
+                    InlineKeyboardButton("🌐 فتح المنصة", web_app=WebAppInfo(url=FRONTEND_URL))
                 ]]),
             )
         return
@@ -694,7 +694,7 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🎁 *الإحالة*\nرابطك الخاص + تفاصيل العمولة.",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🌐 فتح المنصة", url=FRONTEND_URL)],
+            [InlineKeyboardButton("🌐 فتح المنصة", web_app=WebAppInfo(url=FRONTEND_URL))],
             [InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="m_back")],
         ]),
     )
@@ -775,7 +775,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "3️⃣ افتح الرابط",
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🌐 فتح المنصة", url=FRONTEND_URL)],
+                    [InlineKeyboardButton("🌐 فتح المنصة", web_app=WebAppInfo(url=FRONTEND_URL))],
                     [InlineKeyboardButton("🔙 رجوع", callback_data="m_back")],
                 ]),
             )
@@ -884,7 +884,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("🔄 تحديث",        callback_data="m_signals"),
                  InlineKeyboardButton("⚡ تحليل فوري",   callback_data="m_analyze")],
-                [InlineKeyboardButton("🌐 الداشبورد",    url=FRONTEND_URL),
+                [InlineKeyboardButton("🌐 الداشبورد",    web_app=WebAppInfo(url=FRONTEND_URL)),
                  InlineKeyboardButton("🔙 رجوع",         callback_data="m_back")],
             ]),
         )
@@ -924,7 +924,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"💡 لإدارة الأزواج والإعدادات بشكل أفضل افتح الداشبورد:",
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🌐 إدارة المراقبة من الداشبورد", url=f"{FRONTEND_URL}/dashboard")],
+                [InlineKeyboardButton("🌐 إدارة المراقبة من الداشبورد", web_app=WebAppInfo(url=f"{FRONTEND_URL}/dashboard"))],
                 [InlineKeyboardButton("🔔 تبديل الإشعارات", callback_data="wl_notif"),
                  InlineKeyboardButton("🔙 رجوع",            callback_data="m_back")],
             ]),
@@ -958,7 +958,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"💡 لإدارة الأزواج والإعدادات بشكل أفضل افتح الداشبورد:",
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🌐 إدارة المراقبة من الداشبورد", url=f"{FRONTEND_URL}/dashboard")],
+                [InlineKeyboardButton("🌐 إدارة المراقبة من الداشبورد", web_app=WebAppInfo(url=f"{FRONTEND_URL}/dashboard"))],
                 [InlineKeyboardButton("🔔 تبديل الإشعارات", callback_data="wl_notif"),
                  InlineKeyboardButton("🔙 رجوع",            callback_data="m_back")],
             ]),
@@ -980,7 +980,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "🔗 *ربط الحساب مطلوب لعرض الإحصائيات.*",
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🌐 فتح المنصة", url=FRONTEND_URL)],
+                    [InlineKeyboardButton("🌐 فتح المنصة", web_app=WebAppInfo(url=FRONTEND_URL))],
                     [InlineKeyboardButton("🔙 رجوع",       callback_data="m_back")],
                 ]),
             )
@@ -1055,7 +1055,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("🔄 تحديث",        callback_data="m_stats"),
-                 InlineKeyboardButton("🌐 الداشبورد",    url=FRONTEND_URL)],
+                 InlineKeyboardButton("🌐 الداشبورد",    web_app=WebAppInfo(url=FRONTEND_URL))],
                 [InlineKeyboardButton("🔙 رجوع",         callback_data="m_back")],
             ]),
         )
@@ -1069,7 +1069,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "🔗 *ربط الحساب مطلوب للوصول لبرنامج الإحالة.*",
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🌐 فتح المنصة", url=FRONTEND_URL)],
+                    [InlineKeyboardButton("🌐 فتح المنصة", web_app=WebAppInfo(url=FRONTEND_URL))],
                     [InlineKeyboardButton("🔙 رجوع",       callback_data="m_back")],
                 ]),
             )
@@ -1122,8 +1122,8 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             text,
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🌐 استبدل النقاط من الداشبورد", url=f"{FRONTEND_URL}/dashboard")],
-                [InlineKeyboardButton("📊 تفاصيل البرنامج", url=f"{FRONTEND_URL}/referral"),
+                [InlineKeyboardButton("🌐 استبدل النقاط من الداشبورد", web_app=WebAppInfo(url=f"{FRONTEND_URL}/dashboard"))],
+                [InlineKeyboardButton("📊 تفاصيل البرنامج", web_app=WebAppInfo(url=f"{FRONTEND_URL}/referral")),
                  InlineKeyboardButton("🔙 رجوع",            callback_data="m_back")],
             ]),
         )
@@ -1183,7 +1183,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "🎁 *الإحالة*\nرابطك الخاص + تفاصيل العمولة.",
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🌐 فتح المنصة", url=FRONTEND_URL)],
+                [InlineKeyboardButton("🌐 فتح المنصة", web_app=WebAppInfo(url=FRONTEND_URL))],
                 [InlineKeyboardButton("🔙 رجوع",       callback_data="m_back")],
             ]),
         )

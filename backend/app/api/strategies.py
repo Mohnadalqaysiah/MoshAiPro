@@ -4,7 +4,7 @@ CRUD for user-defined strategies + real evaluation against the live
 AI engine (ai_engine_v5) + real Telegram test-alert sending.
 """
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Dict
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -23,19 +23,29 @@ from app.services.strategy_engine import (
     evaluate_strategy, build_telegram_message, SUPPORTED_CONDITION_TYPES,
     distinct_timeframes, primary_timeframe, norm_timeframe,
 )
+from app.services.strategy_access import (
+    access_tier as _access_tier,
+    LIMITED_MAX_STRATEGIES, LIMITED_MAX_CONDITIONS, LIMITED_BLOCKED_CATEGORY,
+)
 
 router = APIRouter()
 
 
-def _require_paid(user: User, db: Session):
-    """Strategy Builder actions (save/activate/duplicate/delete/telegram-test)
-    are exclusive to active weekly/monthly subscribers. Trial users can browse
-    and simulate, but not persist or trigger real alerts."""
-    if user.role == UserRole.ADMIN:
-        return
-    check_subscription(user, db)  # downgrades an expired sub back to TRIAL as a side effect
-    if user.plan not in (PlanType.WEEKLY, PlanType.MONTHLY):
-        raise HTTPException(403, "هذه الميزة حصرية للمشتركين — اشترك لتفعيل استراتيجياتك الحقيقية")
+def _enforce_limited_constraints(db: Session, user: User, body: "StrategyIn", exclude_strategy_id: int = None):
+    """يرفع 403 عند تجاوز قيود الفئة المحدودة. exclude_strategy_id: استبعاد
+    الاستراتيجية الحالية من عدّ 'واحدة فقط' عند التعديل، لا الإنشاء."""
+    q = db.query(Strategy).filter(Strategy.user_id == user.id)
+    if exclude_strategy_id is not None:
+        q = q.filter(Strategy.id != exclude_strategy_id)
+    if q.count() >= LIMITED_MAX_STRATEGIES:
+        raise HTTPException(403, "التجربة المحدودة تسمح باستراتيجية واحدة فقط — رقّي لباقة Premium لإنشاء المزيد")
+
+    if len(body.conditions) > LIMITED_MAX_CONDITIONS:
+        raise HTTPException(403, "التجربة المحدودة تسمح بشرط واحد فقط لكل استراتيجية — رقّي لباقة Premium لدمج شروط متعددة")
+
+    for c in body.conditions:
+        if (c.catId or "").strip().lower() == LIMITED_BLOCKED_CATEGORY:
+            raise HTTPException(403, "شروط Smart Money Concepts (Order Blocks، FVG، السيولة...) حصرية لباقة Premium")
 
 # نفس مجموعة الرموز الثمانية بالـ Prototype (SYMBOL_POOL بالفرونت)
 SIM_SYMBOLS = ["XAU/USD", "EUR/USD", "GBP/USD", "BTC/USD", "ETH/USD", "NAS100", "US30", "USOIL"]
@@ -218,7 +228,8 @@ def list_strategies(db: Session = Depends(get_db), user = Depends(get_current_us
 
 @router.post("")
 def create_strategy(body: StrategyIn, db: Session = Depends(get_db), user = Depends(get_current_user)):
-    _require_paid(user, db)
+    if _access_tier(user, db) == "limited":
+        _enforce_limited_constraints(db, user, body)
     if not body.name.strip():
         raise HTTPException(400, "اسم الاستراتيجية مطلوب")
     s = Strategy(user_id=user.id, name=body.name.strip(), status=StrategyStatus.DRAFT)
@@ -237,7 +248,8 @@ def get_strategy(strategy_id: int, db: Session = Depends(get_db), user = Depends
 
 @router.put("/{strategy_id}")
 def update_strategy(strategy_id: int, body: StrategyIn, db: Session = Depends(get_db), user = Depends(get_current_user)):
-    _require_paid(user, db)
+    if _access_tier(user, db) == "limited":
+        _enforce_limited_constraints(db, user, body, exclude_strategy_id=strategy_id)
     s = _get_owned(db, strategy_id, user)
     _apply_payload(db, s, body)
     db.commit()
@@ -247,7 +259,8 @@ def update_strategy(strategy_id: int, body: StrategyIn, db: Session = Depends(ge
 
 @router.delete("/{strategy_id}")
 def delete_strategy(strategy_id: int, db: Session = Depends(get_db), user = Depends(get_current_user)):
-    _require_paid(user, db)
+    # الحذف متاح لأي مالك بغض النظر عن الفئة — الفئة المحدودة محتاجة تقدر
+    # تحذف استراتيجيتها الوحيدة لتبني غيرها (سقف "واحدة فقط" بالحفظ لا الحذف).
     s = _get_owned(db, strategy_id, user)
     db.delete(s)
     db.commit()
@@ -256,7 +269,8 @@ def delete_strategy(strategy_id: int, db: Session = Depends(get_db), user = Depe
 
 @router.post("/{strategy_id}/duplicate")
 def duplicate_strategy(strategy_id: int, db: Session = Depends(get_db), user = Depends(get_current_user)):
-    _require_paid(user, db)
+    if _access_tier(user, db) == "limited" and db.query(Strategy).filter(Strategy.user_id == user.id).count() >= LIMITED_MAX_STRATEGIES:
+        raise HTTPException(403, "التجربة المحدودة تسمح باستراتيجية واحدة فقط — رقّي لباقة Premium لإنشاء المزيد")
     s = _get_owned(db, strategy_id, user)
     clone = Strategy(
         user_id=user.id, name=f"{s.name} (نسخة)", symbols=s.symbols, timeframes=s.timeframes,
@@ -289,7 +303,8 @@ def duplicate_strategy(strategy_id: int, db: Session = Depends(get_db), user = D
 
 @router.put("/{strategy_id}/status")
 def set_status(strategy_id: int, body: StatusIn, db: Session = Depends(get_db), user = Depends(get_current_user)):
-    _require_paid(user, db)
+    # لا قيد تفعيل إضافي هون — التزام الفئة المحدودة (عدد/شروط) يُفرَض
+    # وقت الحفظ أعلاه، فالاستراتيجية المحفوظة مطابقة أصلاً حين تصل هون.
     s = _get_owned(db, strategy_id, user)
     try:
         s.status = StrategyStatus(body.status)
@@ -406,7 +421,9 @@ def list_events(strategy_id: int, limit: int = 20, db: Session = Depends(get_db)
 
 @router.post("/{strategy_id}/telegram/test")
 async def send_test_alert(strategy_id: int, db: Session = Depends(get_db), user = Depends(get_current_user)):
-    _require_paid(user, db)
+    tier = _access_tier(user, db)
+    if tier == "limited" and user.strategy_free_alerts_left <= 0:
+        raise HTTPException(403, "استهلكت تنبيهاتك المجانية الثلاثة لباني الاستراتيجيات — رقّي لباقة Premium لتنبيهات غير محدودة")
     s = _get_owned(db, strategy_id, user)
     if not user.telegram_id:
         raise HTTPException(400, "اربط حساب Telegram أولاً من صفحة الملف الشخصي قبل إرسال تنبيه تجريبي")
@@ -440,5 +457,9 @@ async def send_test_alert(strategy_id: int, db: Session = Depends(get_db), user 
             body_text = await resp.text()
             logger.warning(f"Telegram test alert failed: {body_text}")
             raise HTTPException(502, "تعذّر إرسال الرسالة عبر Telegram — تحقق من الربط والتوكن")
+
+    if tier == "limited":
+        user.strategy_free_alerts_left = max(0, user.strategy_free_alerts_left - 1)
+        db.commit()
 
     return {"success": True, "message": "تم إرسال تنبيه تجريبي حقيقي ✅"}

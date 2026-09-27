@@ -5,7 +5,6 @@ import { useAuth } from "../contexts/AuthContext";
 import { useLang } from "../contexts/LangContext";
 import StrategyBuilderTour from "../components/StrategyBuilderTour";
 import StrategyGuide from "../components/StrategyGuide";
-import UpgradeModal from "../components/UpgradeModal";
 import {
   Search, Plus, X, ChevronDown, ChevronRight, Copy, Trash2, Power,
   Edit3, Eye, Send, Bot, Link2, Check, AlertTriangle, Sparkles,
@@ -266,14 +265,13 @@ export default function StrategyBuilder() {
   const { lang } = useLang();
   const isAr = lang === "ar";
   const tgConnected = !!user?.telegram_linked;
+  // (2026-09-27) باني الاستراتيجيات صار مسيَّراً منفصلاً — أي مستخدم مسجَّل
+  // يقدر يجرّب (استراتيجية واحدة، شرط واحد، بلا SMC، 3 تنبيهات) بدل حجب
+  // كامل. الحدود تُفرَض بالخادم فقط الآن (رسائل واضحة عبر showToast) —
+  // isPaid تبقى فقط لتمييز شكل الواجهة (شارة "وصول كامل" مثلاً)، لا لمنع أي فعل.
   const isPaid = user?.role === "admin" || ["weekly", "monthly"].includes(user?.plan);
-  const [paywallOpen, setPaywallOpen] = useState(false);
   const [tourForceOpen, setTourForceOpen] = useState(false);
-  const requirePaid = () => {
-    if (isPaid) return true;
-    setPaywallOpen(true);
-    return false;
-  };
+  const requirePaid = () => true;
 
   const [activeTab, setActiveTab] = useState("build");
   const [strategyName, setStrategyName] = useState(() => (isAr ? "استراتيجية جديدة" : "New Strategy"));
@@ -546,8 +544,8 @@ export default function StrategyBuilder() {
       showToast(next === "ACTIVE"
         ? (isAr ? "تم تفعيل المراقبة — يفحصها الخادم كل 5 دقائق" : "Monitoring enabled — checked by the server every 5 minutes")
         : (isAr ? "تم إيقاف المراقبة" : "Monitoring stopped"));
-    } catch {
-      showToast(isAr ? "فشل تحديث حالة المراقبة" : "Failed to update monitoring status");
+    } catch (e) {
+      showToast(e.response?.data?.detail || (isAr ? "فشل تحديث حالة المراقبة" : "Failed to update monitoring status"));
     }
   };
 
@@ -616,8 +614,8 @@ export default function StrategyBuilder() {
       await axios.post(`${API}/api/v1/strategies/${rec.id}/duplicate`);
       await loadSaved();
       showToast(isAr ? "تم نسخ الاستراتيجية" : "Strategy duplicated");
-    } catch {
-      showToast(isAr ? "فشل نسخ الاستراتيجية" : "Failed to duplicate strategy");
+    } catch (e) {
+      showToast(e.response?.data?.detail || (isAr ? "فشل نسخ الاستراتيجية" : "Failed to duplicate strategy"));
     }
   };
 
@@ -627,8 +625,8 @@ export default function StrategyBuilder() {
     try {
       await axios.put(`${API}/api/v1/strategies/${rec.id}/status`, { status: next });
       await loadSaved();
-    } catch {
-      showToast(isAr ? "فشل تحديث الحالة" : "Failed to update status");
+    } catch (e) {
+      showToast(e.response?.data?.detail || (isAr ? "فشل تحديث الحالة" : "Failed to update status"));
     }
   };
 
@@ -721,7 +719,9 @@ export default function StrategyBuilder() {
             {!isPaid && (
               <Link to="/pricing">
                 <Pill color={C.gold} bg={C.goldSoft} border={C.gold}>
-                  🔒 {isAr ? "وضع المعاينة — اشترك للتفعيل" : "Preview mode — subscribe to activate"}
+                  🔒 {isAr
+                    ? "تجربة محدودة (استراتيجية واحدة، شرط واحد، بلا SMC) — رقّي لـPremium للوصول الكامل"
+                    : "Limited trial (1 strategy, 1 condition, no SMC) — upgrade to Premium for full access"}
                 </Pill>
               </Link>
             )}
@@ -1443,7 +1443,6 @@ export default function StrategyBuilder() {
         </Modal>
       )}
 
-      <UpgradeModal open={paywallOpen} onClose={() => setPaywallOpen(false)} reason="premium" />
 
       {toast && (
         <div style={{ background: C.surfaceHi, border: `1px solid ${C.gold}`, color: C.text }} className="fixed bottom-5 left-1/2 -translate-x-1/2 px-4 py-2.5 rounded-xl text-sm shadow-2xl fade-in z-50">

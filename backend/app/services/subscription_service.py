@@ -66,6 +66,9 @@ def activate_subscription_payment(
     _plan_value = "monthly" if payment.plan == PaymentPlan.YEARLY else payment.plan.value
     user.plan      = PlanType(_plan_value)
     user.is_active = True
+    # (2026-09-27) يُضبَط بكل تفعيل حسب باقة *هذه* الدفعة تحديداً — يُصحَّح
+    # نفسه تلقائياً لو تحوّل المشترك لاحقاً لباقة غير سنوية.
+    user.is_yearly_subscriber = (payment.plan == PaymentPlan.YEARLY)
     logger.info(
         f"✅ Payment activated: user={user.email} plan={payment.plan} "
         f"days={days} provider={payment.provider}"
