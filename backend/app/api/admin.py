@@ -2753,6 +2753,18 @@ class PushSendIn(BaseModel):
     user_id: Optional[int] = None   # None = كل مشتركي إشعارات المتصفح
 
 
+@router.get("/push/subscribers-count")
+def push_subscribers_count(
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """عدد المستخدمين الفريدين المشتركين بإشعارات المتصفح حالياً (قد يملك
+    الواحد عدة أجهزة/متصفحات مسجَّلة — نعدّ المستخدمين لا الاشتراكات)."""
+    from app.models.push_subscription import PushSubscription
+    count = db.query(PushSubscription.user_id).distinct().count()
+    return {"count": count}
+
+
 @router.post("/push/send")
 def admin_send_push(
     data: PushSendIn,

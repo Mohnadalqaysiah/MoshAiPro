@@ -445,6 +445,21 @@ async def get_signal_performance(
     win_points   = sum(d["points"] for d in wins)
     loss_points  = sum(d["points"] for d in losses)
 
+    # (2026-09-28) بلاغ: عميل شاف "0 صفقات هالأسبوع" رغم إشارات وصلته فعلاً
+    # من بداية فتح الأسواق — السبب إنها لسا ACTIVE/PENDING (ما ضربت TP ولا
+    # SL بعد)، و current_week أصلاً يعرض نتائج متحققة فقط لا عدد الإصدار
+    # (راجع تعليق _signals_in_range فوق). نضيف عدّاد منفصل للإشارات المفتوحة
+    # هالأسبوع حتى "0" ما توحي بغياب نشاط بينما هو موجود ولسا ما تحقق.
+    open_statuses = [SignalStatus.ACTIVE, SignalStatus.PENDING]
+    open_q = db.query(Signal).filter(
+        Signal.status.in_(open_statuses),
+        Signal.created_at >= week_start,
+        Signal.created_at < week_end,
+    )
+    if symbols_filter:
+        open_q = open_q.filter(Signal.market.in_(symbols_filter))
+    active_trades = open_q.count()
+
     current_week = {
         "week_label":    f"الأسبوع {iso_week} / {iso_year}",
         "before_join":   week_before_join,
@@ -454,6 +469,7 @@ async def get_signal_performance(
         "total_trades":  len(week_decisions),
         "wins":          len(wins),
         "losses":        len(losses),
+        "active_trades": active_trades,
         "win_rate":      round(len(wins) / len(week_decisions) * 100, 1) if week_decisions else 0.0,
         "expectancy":    round(total_points / len(week_decisions), 2) if week_decisions else 0.0,
     }

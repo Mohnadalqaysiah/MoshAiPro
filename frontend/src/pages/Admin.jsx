@@ -461,6 +461,7 @@ export default function Admin() {
   const [pushForm, setPushForm]     = useState({ title:'', body:'', url:'/dashboard', user_id:'' })
   const [pushSending, setPushSending] = useState(false)
   const [pushMsg, setPushMsg]       = useState(null)
+  const [pushSubCount, setPushSubCount] = useState(null)
 
   // Messages state
   const [messageForm, setMessageForm] = useState({ title:'', message:'', user_ids:[] })
@@ -561,7 +562,7 @@ export default function Admin() {
     if (tab === 'settings')  loadSettings()
     if (tab === 'affiliate') loadAffStats()
     if (tab === 'signals')   loadAdminSignals()
-    if (tab === 'messages')  loadUsers()  // للحصول على قائمة المستخدمين للاختيار
+    if (tab === 'messages') { loadUsers(); loadPushSubCount() }  // للحصول على قائمة المستخدمين للاختيار + عدد مشتركي إشعارات المتصفح
     if (tab === 'team')      loadTeam()
     if (tab === 'support')   loadSupportThreads()
     if (tab === 'funnel')    loadFunnel()
@@ -782,6 +783,13 @@ export default function Admin() {
       setEmailForm(f => ({ ...f, subject:'', body:'' }))
     } catch (err) { setEmailMsg({ type:'err', text: err.response?.data?.detail || 'فشل الإرسال' }) }
     finally { setEmailSending(false) }
+  }
+
+  const loadPushSubCount = async () => {
+    try {
+      const r = await axios.get(`${API}/api/v1/admin/push/subscribers-count`)
+      setPushSubCount(r.data.count)
+    } catch (e) {}
   }
 
   const sendPush = async (e) => {
@@ -1699,7 +1707,12 @@ export default function Admin() {
 
               {/* ── إشعارات المتصفح (Web Push) — إرسال يدوي (2026-09-28) ── */}
               <div className="mt-6">
-                <h1 className="text-xl font-bold mb-4 flex items-center gap-2"><Bell size={20} className="text-indigo-400"/> إرسال إشعار متصفح</h1>
+                <h1 className="text-xl font-bold mb-4 flex items-center gap-2">
+                  <Bell size={20} className="text-indigo-400"/> إرسال إشعار متصفح
+                  <span className="text-xs font-normal text-gray-500">
+                    ({pushSubCount === null ? '...' : `${pushSubCount} مشترك حالياً`})
+                  </span>
+                </h1>
 
                 {pushMsg && (
                   <div className={`flex items-center gap-2 text-sm rounded-lg px-3 py-2 mb-4 ${pushMsg.type==='ok'?'bg-green-900/30 text-green-400':'bg-red-900/30 text-red-400'}`}>

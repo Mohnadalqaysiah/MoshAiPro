@@ -36,6 +36,7 @@ const T = {
     allSymbols: 'أداء كل الرموز',
     yourSymbols: 'أداء رموزك المختارة',
     editSymbols: 'تعديل',
+    activeTradesNote: '+ {n} إشارة مفتوحة لسا ما تحققت نتيجتها',
   },
   en: {
     title: 'Signal Performance',
@@ -66,6 +67,7 @@ const T = {
     allSymbols: 'Performance across all symbols',
     yourSymbols: 'Performance for your selected symbols',
     editSymbols: 'Edit',
+    activeTradesNote: '+ {n} signal(s) still open, not yet resolved',
   },
 }
 
@@ -221,7 +223,7 @@ export default function PerformanceSection() {
           <TrendingUp size={16} className="text-blue-400" />
           {tx.weeklyPerf}
         </h3>
-        <div className="flex items-center justify-between mb-3 pb-3 border-b border-gray-700/60">
+        <div className="flex items-center justify-between mb-1 pb-3 border-b border-gray-700/60">
           <div className="text-xs text-gray-400">{tx.thisWeekInline} — {current_week.week_label}</div>
           <div className="flex items-center gap-3">
             <span className="text-xs text-gray-500">{current_week.wins}/{current_week.total_trades} {tx.wins.toLowerCase()}</span>
@@ -230,6 +232,11 @@ export default function PerformanceSection() {
             </span>
           </div>
         </div>
+        {current_week.active_trades > 0 && (
+          <div className="text-[11px] text-indigo-400 mb-3 -mt-2">
+            {tx.activeTradesNote.replace('{n}', current_week.active_trades)}
+          </div>
+        )}
         {(() => {
           // مشترك جديد ما لازم يشوف أسابيع قبل ما ينضم — لا حتى كـ"0
           // صفقات" (بيوحي غلط إنه ما كان في نشاط، بينما النظام كان شغال)
