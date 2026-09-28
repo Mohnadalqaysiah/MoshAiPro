@@ -11,7 +11,7 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
 import {
-  Ticket, Plus, Trash2, RefreshCw, CheckCircle, XCircle, X, Users, Copy,
+  Ticket, Plus, Trash2, RefreshCw, CheckCircle, XCircle, X, Users, Copy, PartyPopper,
 } from 'lucide-react'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -36,6 +36,14 @@ export default function CouponsPanel() {
   const [uses, setUses]       = useState(null)      // سجل استخدام كوبون
   const [copied, setCopied]   = useState('')
 
+  // (2026-09-28) بوب أب الخصم المفاجئ (DiscountPopup.jsx) يُضبط بالكامل
+  // عبر 3 مفاتيح SiteSettings — ما كان لهم أي واجهة إدارة (فقط PUT خام)،
+  // فبقي الإعداد "معلّق" بلا طريقة فعلية للأدمن يفعّله. هون بجانب لوحة
+  // الكوبونات نفسها لأنه يعتمد على كوبون موجود مسبقاً.
+  const [promo, setPromo]         = useState({ enabled: false, code: '', plan: 'monthly' })
+  const [promoSaving, setPromoSaving] = useState(false)
+  const [promoMsg, setPromoMsg]   = useState('')
+
   const load = async () => {
     setLoading(true); setError('')
     try {
@@ -47,7 +55,32 @@ export default function CouponsPanel() {
       setLoading(false)
     }
   }
-  useEffect(() => { load() }, [])
+  const loadPromo = async () => {
+    try {
+      const r = await axios.get(`${API}/api/v1/admin/settings`)
+      setPromo({
+        enabled: (r.data.promo_popup_enabled?.value || '').toLowerCase() === 'true',
+        code:    r.data.promo_popup_coupon_code?.value || '',
+        plan:    r.data.promo_popup_plan?.value || 'monthly',
+      })
+    } catch (e) { /* noop */ }
+  }
+  useEffect(() => { load(); loadPromo() }, [])
+
+  const savePromo = async () => {
+    setPromoSaving(true); setPromoMsg('')
+    try {
+      await axios.put(`${API}/api/v1/admin/settings/promo_popup_enabled`, { value: String(promo.enabled) })
+      await axios.put(`${API}/api/v1/admin/settings/promo_popup_coupon_code`, { value: promo.code.trim().toUpperCase() })
+      await axios.put(`${API}/api/v1/admin/settings/promo_popup_plan`, { value: promo.plan })
+      setPromoMsg('تم الحفظ')
+      setTimeout(() => setPromoMsg(''), 2000)
+    } catch (e) {
+      setPromoMsg(e.response?.data?.detail || e.message)
+    } finally {
+      setPromoSaving(false)
+    }
+  }
 
   const openNew  = () => setForm({ ...EMPTY })
   const openEdit = (c) => setForm({
@@ -144,6 +177,52 @@ export default function CouponsPanel() {
           <XCircle size={15} className="mt-0.5 shrink-0" /> {error}
         </div>
       )}
+
+      {/* بوب أب الخصم المفاجئ (DiscountPopup.jsx) — يظهر فقط لمستخدمي trial */}
+      <div className="bg-gray-800 border border-gray-700 rounded-2xl p-5">
+        <h2 className="font-bold flex items-center gap-2 mb-1">
+          <PartyPopper size={18} className="text-purple-400" /> بوب أب الخصم المفاجئ
+        </h2>
+        <p className="text-gray-500 text-xs mb-4">
+          يظهر بعد 12 ثانية لمستخدمي التجربة (trial) فقط — يحتاج كوبون فعّال أدناه.
+        </p>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={promo.enabled}
+              onChange={e => setPromo(p => ({ ...p, enabled: e.target.checked }))}
+              className="accent-purple-600" />
+            <span className="text-sm text-gray-300">مفعّل</span>
+          </label>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">رمز الكوبون</label>
+            <select value={promo.code} dir="ltr"
+              onChange={e => setPromo(p => ({ ...p, code: e.target.value }))}
+              className="bg-gray-900 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm font-mono focus:outline-none focus:border-purple-600">
+              <option value="">— اختر كوبوناً —</option>
+              {rows.filter(c => c.is_active).map(c => (
+                <option key={c.id} value={c.code}>{c.code} (−{c.discount_percent}%)</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">الباقة المعروضة</label>
+            <select value={promo.plan}
+              onChange={e => setPromo(p => ({ ...p, plan: e.target.value }))}
+              className="bg-gray-900 border border-gray-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-600">
+              {PLAN_OPTIONS.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
+            </select>
+          </div>
+          <button onClick={savePromo} disabled={promoSaving}
+            className="flex items-center gap-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white px-5 py-2 rounded-xl font-semibold text-sm transition">
+            {promoSaving ? <RefreshCw size={13} className="animate-spin" /> : <CheckCircle size={13} />}
+            حفظ
+          </button>
+          {promoMsg && <span className="text-xs text-gray-400">{promoMsg}</span>}
+        </div>
+        {promo.enabled && !promo.code && (
+          <p className="text-xs text-amber-400 mt-3">اختر كوبوناً فعّالاً وإلا لن يظهر البوب أب لأي مستخدم.</p>
+        )}
+      </div>
 
       {/* الجدول */}
       <div className="bg-gray-800 border border-gray-700 rounded-2xl overflow-hidden">

@@ -2724,8 +2724,21 @@ def feature_requests_summary(
     admin: User = Depends(get_admin_user),
     db: Session = Depends(get_db)
 ):
-    """ملخص نتائج بوب أب استطلاع الميزات: عدد كل خيار + النصوص المخصصة."""
-    rows = db.query(FeatureRequest).order_by(FeatureRequest.created_at.desc()).all()
+    """ملخص نتائج بوب أب استطلاع الميزات: عدد كل خيار + النصوص المخصصة —
+    حصراً للاستطلاع النشط حالياً.
+
+    (2026-09-28) بلاغ: نشر استطلاع جديد كانت نتائج القديم تبقى ظاهرة معه —
+    السبب إنه ما في فلترة بـsurvey_id إطلاقاً، فكل الإجابات التاريخية
+    (كل الاستطلاعات، بمفاتيح خيارات مختلفة تماماً) كانت تُجمَع سوا. الآن
+    يُحصر العدّ بصفوف survey_id == نسخة الاستطلاع النشطة فقط؛ النسخ
+    القديمة تبقى بقاعدة البيانات (بلا حذف) لكن لا تظهر بملخّص النشطة.
+    """
+    from app.models.feature_survey import FeatureSurvey
+    active = db.query(FeatureSurvey).filter(FeatureSurvey.is_active == True).first()
+    q = db.query(FeatureRequest)
+    if active:
+        q = q.filter(FeatureRequest.survey_id == active.id)
+    rows = q.order_by(FeatureRequest.created_at.desc()).all()
     counts = {}
     custom_texts = []
     for r in rows:
