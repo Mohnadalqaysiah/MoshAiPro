@@ -125,9 +125,9 @@ export default function PublicChatBot() {
               }}
             >
               <NeuralOrb size={32} />
-              <span className="hidden sm:flex flex-col leading-tight text-start">
-                <span>{brand.name}</span>
-                <span className="text-[10px] font-normal text-cyan-300/70 flex items-center gap-1">
+              <span className="flex flex-col leading-tight text-start">
+                <span className="text-xs sm:text-sm">{brand.name}</span>
+                <span className="hidden sm:flex text-[10px] font-normal text-cyan-300/70 items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> {tx.online}
                 </span>
               </span>

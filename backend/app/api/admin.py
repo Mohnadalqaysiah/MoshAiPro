@@ -2744,6 +2744,59 @@ def feature_requests_summary(
     }
 
 
+# ─── Web Push (إرسال يدوي من لوحة الأدمن) ───────────────────────────────────────
+
+class PushSendIn(BaseModel):
+    title:   str
+    body:    str
+    url:     str = "/dashboard"
+    user_id: Optional[int] = None   # None = كل مشتركي إشعارات المتصفح
+
+
+@router.post("/push/send")
+def admin_send_push(
+    data: PushSendIn,
+    background: BackgroundTasks,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """إرسال إشعار متصفح يدوي — لمستخدم معيّن أو لكل مشتركي القناة."""
+    from app.services.web_push import push_enabled, send_push
+    from app.models.push_subscription import PushSubscription
+
+    if not push_enabled():
+        raise HTTPException(400, "إشعارات المتصفح غير مفعّلة — مفاتيح VAPID غير مضبوطة بالخادم")
+
+    if data.user_id:
+        u = db.query(User).filter(User.id == data.user_id).first()
+        if not u:
+            raise HTTPException(404, "المستخدم غير موجود")
+        sent = send_push(db, u, data.title, data.body, url=data.url, tag="admin-push")
+        if not sent:
+            return {"message": "هذا المستخدم غير مشترك بإشعارات المتصفح", "count": 0}
+        return {"message": f"أُرسل لـ {u.email}", "count": sent}
+
+    subscriber_ids = [row[0] for row in db.query(PushSubscription.user_id).distinct().all()]
+    if not subscriber_ids:
+        return {"message": "لا يوجد أي مستخدم مشترك بإشعارات المتصفح بعد", "count": 0}
+
+    # (2026-09-28) جلسة DB جديدة داخل المهمة الخلفية عمداً — جلسة الطلب
+    # (db أعلاه) تُغلَق فور إرجاع الرد، واستخدامها لاحقاً بمهمة خلفية
+    # يفشل. send_push نفسها تكتب (حذف اشتراكات منتهية) فلازم جلسة حيّة.
+    def _bulk_push(title: str, body: str, url: str, ids: list):
+        from app.database import SessionLocal
+        bg_db = SessionLocal()
+        try:
+            users = bg_db.query(User).filter(User.id.in_(ids)).all()
+            sent = sum(send_push(bg_db, u, title, body, url=url, tag="admin-push") for u in users)
+            logger.info(f"📲 Admin push broadcast: {sent} إشعار أُرسل لـ {len(users)} مشترك")
+        finally:
+            bg_db.close()
+
+    background.add_task(_bulk_push, data.title, data.body, data.url, subscriber_ids)
+    return {"message": f"جاري الإرسال لـ {len(subscriber_ids)} مشترك بإشعارات المتصفح", "count": len(subscriber_ids)}
+
+
 # ─── Feature Survey Editor (سؤال + خيارات قابلة للتعديل) ───────────────────────
 
 class FeatureSurveyOptionIn(BaseModel):
@@ -2763,18 +2816,49 @@ def get_feature_survey_editor(
     admin: User = Depends(get_admin_user),
     db: Session = Depends(get_db),
 ):
-    """الاستطلاع النشط حالياً لتعبئة نموذج التعديل بلوحة الأدمن."""
+    """
+    آخر نسخة استطلاع (بغضّ النظر عن حالتها) لتعبئة نموذج التعديل — لا
+    نقتصر على is_active=True هون: لو أُوقفت الاستطلاع (toggle تحت)، لازم
+    الأدمن يقدر يشوف محتواها ويشغّلها من جديد، لا أن تختفي كأنها ما وُجدت.
+    """
     from app.models.feature_survey import FeatureSurvey
-    active = db.query(FeatureSurvey).filter(FeatureSurvey.is_active == True).first()
-    if not active:
-        return {"active": False}
+    latest = db.query(FeatureSurvey).order_by(FeatureSurvey.created_at.desc()).first()
+    if not latest:
+        return {"active": False, "exists": False}
     return {
-        "active":      True,
-        "id":          active.id,
-        "question_ar": active.question_ar,
-        "question_en": active.question_en,
-        "options":     active.options,
+        "active":      latest.is_active,
+        "exists":      True,
+        "id":          latest.id,
+        "question_ar": latest.question_ar,
+        "question_en": latest.question_en,
+        "options":     latest.options,
     }
+
+
+class SurveyToggleIn(BaseModel):
+    active: bool
+
+
+@router.post("/feature-survey/toggle")
+def toggle_feature_survey(
+    data: SurveyToggleIn,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """
+    يوقف/يشغّل عرض الاستطلاع الحالي بلا حذف محتواه ولا نشر نسخة جديدة —
+    يفرق عن publish (ينشئ نسخة جديدة) وreshow (يصفّر مين شافها). إيقافه
+    يعني /auth/feature-survey/active يرجّع active=False فلا يظهر البوب أب
+    لأي عميل إطلاقاً، بلا فقدان السؤال/الخيارات المكتوبة.
+    """
+    from app.models.feature_survey import FeatureSurvey
+    latest = db.query(FeatureSurvey).order_by(FeatureSurvey.created_at.desc()).first()
+    if not latest:
+        raise HTTPException(400, "لا يوجد استطلاع بعد — انشر واحداً أولاً")
+    latest.is_active = data.active
+    db.commit()
+    logger.info(f"📋 استطلاع #{latest.id} — {'تفعيل' if data.active else 'إيقاف'} بواسطة {admin.email}")
+    return {"success": True, "active": latest.is_active}
 
 
 @router.put("/feature-survey")

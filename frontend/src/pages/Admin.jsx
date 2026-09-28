@@ -457,6 +457,11 @@ export default function Admin() {
   const [emailSending, setEmailSending] = useState(false)
   const [emailMsg, setEmailMsg] = useState(null)
 
+  // Web Push state (2026-09-28)
+  const [pushForm, setPushForm]     = useState({ title:'', body:'', url:'/dashboard', user_id:'' })
+  const [pushSending, setPushSending] = useState(false)
+  const [pushMsg, setPushMsg]       = useState(null)
+
   // Messages state
   const [messageForm, setMessageForm] = useState({ title:'', message:'', user_ids:[] })
   const [messageSending, setMessageSending] = useState(false)
@@ -777,6 +782,18 @@ export default function Admin() {
       setEmailForm(f => ({ ...f, subject:'', body:'' }))
     } catch (err) { setEmailMsg({ type:'err', text: err.response?.data?.detail || 'فشل الإرسال' }) }
     finally { setEmailSending(false) }
+  }
+
+  const sendPush = async (e) => {
+    e.preventDefault(); setPushSending(true); setPushMsg(null)
+    try {
+      const payload = { title: pushForm.title, body: pushForm.body, url: pushForm.url || '/dashboard' }
+      if (pushForm.user_id) payload.user_id = parseInt(pushForm.user_id)
+      const r = await axios.post(`${API}/api/v1/admin/push/send`, payload)
+      setPushMsg({ type:'ok', text: r.data.message })
+      setPushForm(f => ({ ...f, title:'', body:'' }))
+    } catch (err) { setPushMsg({ type:'err', text: err.response?.data?.detail || 'فشل الإرسال' }) }
+    finally { setPushSending(false) }
   }
 
   const sendMessage = async (e) => {
@@ -1679,6 +1696,78 @@ export default function Admin() {
                   </button>
                 </div>
               </form>
+
+              {/* ── إشعارات المتصفح (Web Push) — إرسال يدوي (2026-09-28) ── */}
+              <div className="mt-6">
+                <h1 className="text-xl font-bold mb-4 flex items-center gap-2"><Bell size={20} className="text-indigo-400"/> إرسال إشعار متصفح</h1>
+
+                {pushMsg && (
+                  <div className={`flex items-center gap-2 text-sm rounded-lg px-3 py-2 mb-4 ${pushMsg.type==='ok'?'bg-green-900/30 text-green-400':'bg-red-900/30 text-red-400'}`}>
+                    {pushMsg.type==='ok'?<CheckCircle size={14}/>:<AlertTriangle size={14}/>} {pushMsg.text}
+                  </div>
+                )}
+
+                <form onSubmit={sendPush} className="bg-gray-900 border border-gray-800 rounded-xl p-6 space-y-4">
+                  <div>
+                    <label className="block text-sm text-gray-300 font-medium mb-1">المستلم</label>
+                    <select
+                      value={pushForm.user_id ? 'specific' : 'all'}
+                      onChange={e => setPushForm(f => ({ ...f, user_id: e.target.value === 'all' ? '' : (f.user_id || '') }))}
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white mb-2"
+                    >
+                      <option value="all">كل مشتركي إشعارات المتصفح</option>
+                      <option value="specific">مستخدم معين (بالـ ID)</option>
+                    </select>
+                    {pushForm.user_id !== '' && (
+                      <input
+                        type="number" placeholder="ID المستخدم..." value={pushForm.user_id}
+                        onChange={e => setPushForm(f => ({ ...f, user_id: e.target.value }))}
+                        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"
+                        dir="ltr"
+                      />
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm text-gray-300 font-medium mb-1">العنوان</label>
+                    <input
+                      required type="text" value={pushForm.title}
+                      onChange={e => setPushForm(f => ({ ...f, title: e.target.value }))}
+                      placeholder="🚨 إشارة جديدة — XAUUSD"
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm text-gray-300 font-medium mb-1">النص</label>
+                    <textarea
+                      required rows={3} value={pushForm.body}
+                      onChange={e => setPushForm(f => ({ ...f, body: e.target.value }))}
+                      placeholder="نص قصير يظهر بالإشعار..."
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white resize-y"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm text-gray-300 font-medium mb-1">
+                      الرابط عند الضغط <span className="text-gray-500 font-normal">(اختياري)</span>
+                    </label>
+                    <input
+                      type="text" value={pushForm.url}
+                      onChange={e => setPushForm(f => ({ ...f, url: e.target.value }))}
+                      placeholder="/dashboard"
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white"
+                      dir="ltr"
+                    />
+                  </div>
+
+                  <button type="submit" disabled={pushSending}
+                    className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white px-6 py-2 rounded-lg text-sm transition">
+                    {pushSending ? <RefreshCw size={14} className="animate-spin"/> : <Bell size={14}/>}
+                    {pushSending ? 'جاري الإرسال...' : 'إرسال الإشعار'}
+                  </button>
+                </form>
+              </div>
 
               {/* ── تحذيرات انتهاء الاشتراك ── */}
               <div className="mt-6 bg-gray-900 border border-yellow-800/40 rounded-xl p-5">
@@ -3318,6 +3407,8 @@ function FeatureSurveyPanel() {
   // ── محرر الاستطلاع (سؤال + خيارات قابلة للتعديل) ──────────────────────────
   const emptyOption = () => ({ ar: '', en: '', is_other: false })
   const [surveyId, setSurveyId]         = useState(null)
+  const [surveyActive, setSurveyActive] = useState(true)
+  const [toggling, setToggling]         = useState(false)
   const [questionAr, setQuestionAr]     = useState('')
   const [questionEn, setQuestionEn]     = useState('')
   const [options, setOptions]           = useState([emptyOption()])
@@ -3356,8 +3447,9 @@ function FeatureSurveyPanel() {
     setEditorLoading(true)
     try {
       const res = await axios.get(`${API}/api/v1/admin/feature-survey`)
-      if (res.data?.active) {
+      if (res.data?.exists) {
         setSurveyId(res.data.id)
+        setSurveyActive(!!res.data.active)
         setQuestionAr(res.data.question_ar)
         setQuestionEn(res.data.question_en)
         setOptions((res.data.options || []).map(o => ({ ar: o.ar, en: o.en, is_other: o.key === 'other' })))
@@ -3394,10 +3486,23 @@ function FeatureSurveyPanel() {
         options: options.map(o => ({ ar: o.ar.trim(), en: o.en.trim(), is_other: o.is_other })),
       })
       setSurveyId(res.data.id)
+      setSurveyActive(true)
       setEditorMsg('✅ نُشر بنجاح — سيظهر تلقائياً لكل عميل لم يشاهد هذه النسخة بعد')
     } catch (e) {
       setEditorMsg('❌ ' + (e.response?.data?.detail || 'تعذّر النشر'))
     } finally { setPublishing(false) }
+  }
+
+  const toggleSurveyActive = async () => {
+    setToggling(true); setEditorMsg('')
+    const next = !surveyActive
+    try {
+      await axios.post(`${API}/api/v1/admin/feature-survey/toggle`, { active: next })
+      setSurveyActive(next)
+      setEditorMsg(next ? '✅ الاستطلاع مفعّل — يظهر للعملاء' : '⏸️ الاستطلاع موقَف — لن يظهر لأي عميل حتى تفعّله من جديد')
+    } catch (e) {
+      setEditorMsg('❌ ' + (e.response?.data?.detail || 'تعذّر التنفيذ'))
+    } finally { setToggling(false) }
   }
 
   const reshow = async () => {
@@ -3435,10 +3540,22 @@ function FeatureSurveyPanel() {
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h2 className="text-sm font-semibold text-gray-300">تعديل السؤال والخيارات</h2>
           {surveyId && (
-            <button onClick={reshow} disabled={reshowing}
-              className="flex items-center gap-1.5 text-xs bg-purple-900/30 text-purple-300 border border-purple-700/40 hover:bg-purple-900/50 disabled:opacity-60 px-3 py-1.5 rounded-full transition">
-              <RefreshCw size={12} className={reshowing ? 'animate-spin' : ''} /> إعادة إظهاره لكل العملاء
-            </button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button onClick={toggleSurveyActive} disabled={toggling}
+                className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border transition disabled:opacity-60 ${
+                  surveyActive
+                    ? 'bg-green-900/30 text-green-300 border-green-700/40 hover:bg-green-900/50'
+                    : 'bg-gray-800 text-gray-400 border-gray-700 hover:bg-gray-700'
+                }`}>
+                {surveyActive ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
+                {surveyActive ? 'مفعّل — اضغط للإيقاف' : 'موقَف — اضغط للتفعيل'}
+              </button>
+              <button onClick={reshow} disabled={reshowing || !surveyActive}
+                title={!surveyActive ? 'فعّل الاستطلاع أولاً' : ''}
+                className="flex items-center gap-1.5 text-xs bg-purple-900/30 text-purple-300 border border-purple-700/40 hover:bg-purple-900/50 disabled:opacity-40 px-3 py-1.5 rounded-full transition">
+                <RefreshCw size={12} className={reshowing ? 'animate-spin' : ''} /> إعادة إظهاره لكل العملاء
+              </button>
+            </div>
           )}
         </div>
 

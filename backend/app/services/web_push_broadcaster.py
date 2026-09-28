@@ -86,11 +86,15 @@ async def web_push_broadcaster():
                     title  = f"🚨 إشارة جديدة — {sig.market}"
                     body   = f"{rec_ar} {sig.market} ({sig.timeframe}) — افتح التطبيق لرؤية التفاصيل"
 
+                    # (2026-09-28) بلاغ حقيقي: الضغط على الإشعار كان يفتح
+                    # الداشبورد العامة دايماً بدل الإشارة نفسها بالضبط —
+                    # Dashboard.jsx يقرأ ?signal=ID ويفتح نافذة التحليل لها مباشرة.
+                    signal_url = f"/dashboard?signal={sig.id}"
                     for u in users:
                         wl = u.notify_watchlist or []
                         if wl and sig.market.upper() not in [w.upper() for w in wl]:
                             continue
-                        sent_total += send_push(db, u, title, body, url="/dashboard", tag=f"signal-{sig.id}")
+                        sent_total += send_push(db, u, title, body, url=signal_url, tag=f"signal-{sig.id}")
 
                     sig.push_broadcast_sent = True
 

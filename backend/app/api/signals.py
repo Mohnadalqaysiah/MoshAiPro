@@ -395,12 +395,18 @@ async def get_signal_performance(
     # endpoint يُستدعى بكل تحميل للصفحة ويقرأ notify_watchlist وقتها مباشرة.
     symbols_filter = list(user.notify_watchlist) if user.notify_watchlist else []
 
-    # ── Helper: fetch closed signals in date range (raw, no join clipping) ──
+    # (2026-09-28) بلاغ حقيقي: إشارة صدرت الأسبوع الماضي وتحققت نتيجتها
+    # (ربح/خسارة) هالأسبوع كانت تُحتسب بنتائج الأسبوع الحالي (exit_executed)
+    # لا أسبوع صدورها — مُربك وغير دقيق لعميل يقارن "إشارات هالأسبوع" بنتائج
+    # أسبوع تاني. صار التبويب حسب created_at (أسبوع الإصدار) لا exit_executed
+    # (أسبوع التحقق)، بقرار صريح من صاحب المنتج. لسا created_at >= data_floor
+    # مضمونة الموثوقية: أي إشارة تُصدَر بعد data_floor حتماً تتحقق (exit_executed)
+    # بعده هو كمان (التحقق يلي بعد الإصدار زمنياً)، فما في تراجع بموثوقية القياس.
     def _signals_in_range(start_dt, end_dt):
         q = db.query(Signal).filter(
             Signal.status.in_(closed),
-            Signal.exit_executed >= start_dt,
-            Signal.exit_executed < end_dt,
+            Signal.created_at >= start_dt,
+            Signal.created_at < end_dt,
         )
         if symbols_filter:
             q = q.filter(Signal.market.in_(symbols_filter))

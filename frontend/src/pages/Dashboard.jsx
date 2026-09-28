@@ -83,7 +83,7 @@ export default function Dashboard() {
   const [copiedSignal, setCopiedSignal]   = useState(false)
   const [heroSymbol, setHeroSymbol]       = useState('')
   const [heroTf, setHeroTf]               = useState('1h')
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
 
   // جلب آخر الإشارات
   useEffect(() => { fetchSignals(); fetchSignalHistory() }, [])
@@ -94,6 +94,36 @@ export default function Dashboard() {
     const tab = searchParams.get('tab')
     if (cat) { setQuickCat(cat); localStorage.setItem('mosh_quick_cat', cat) }
     if (tab) setActiveTab(tab)
+  }, [searchParams])
+
+  // (2026-09-28) بلاغ حقيقي: إشعار المتصفح كان يفتح الداشبورد العامة
+  // دايماً بدل الإشارة المحدَّدة بالضبط. web_push_broadcaster.py يرسل
+  // رابط ?signal=ID — نفتح نافذة تحليلها هون بنفس شكلها وقت الوصول.
+  useEffect(() => {
+    const signalId = searchParams.get('signal')
+    if (!signalId) return
+    axios.get(`${API}/api/v1/signals/${signalId}`)
+      .then(res => {
+        const d = res.data?.data
+        if (!d) return
+        setQuickResult({
+          ...d,
+          recommendation: d.signal_type,
+          ai_confidence_score: d.ai_confidence,
+          risk_reward: d.risk_reward_ratio,
+          levels: {
+            entry: d.entry_price, stop_loss: d.stop_loss,
+            tp1: d.take_profit_1, tp2: d.take_profit_2,
+            risk_reward: d.risk_reward_ratio,
+          },
+        })
+      })
+      .catch(() => {})
+      .finally(() => {
+        searchParams.delete('signal')
+        setSearchParams(searchParams, { replace: true })
+      })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
 
   const fetchSignals = async () => {
