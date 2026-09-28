@@ -1079,6 +1079,51 @@ class CouponCheckIn(BaseModel):
     code: str
 
 
+@router.get("/promo-popup")
+def get_promo_popup(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    (2026-09-28) بوب أب خصم مفاجئ — الإعداد بالكامل عبر SiteSettings (بلا
+    نشر كود لتغيير الرمز/الباقة)، والتحقق الفعلي عبر نفس validate_coupon
+    المستخدم بكل مسار دفع — لا رقم مكرَّر هون قد ينحرف عن الكوبون الحقيقي.
+    يُعيد enabled=False بصمت لو الإعداد ناقص أو الكوبون غير صالح لهذا
+    المستخدم تحديداً (مستنفَد أو استُخدم مسبقاً) — العرض يختفي، لا خطأ.
+    """
+    from app.services.coupon_service import validate_coupon, apply_discount
+
+    if _setting(db, "promo_popup_enabled", "false").strip().lower() != "true":
+        return {"enabled": False}
+
+    code = _setting(db, "promo_popup_coupon_code", "").strip()
+    plan_key = _setting(db, "promo_popup_plan", "monthly").strip() or "monthly"
+    if not code:
+        return {"enabled": False}
+
+    plans = _resolve_plans(db)
+    plan_info = plans.get(plan_key)
+    if not plan_info:
+        return {"enabled": False}
+
+    coupon, err = validate_coupon(db, code, plan_key, user.id)
+    if err or not coupon:
+        return {"enabled": False}
+
+    base  = float(plan_info["price_usd"])
+    after = apply_discount(base, coupon)
+    return {
+        "enabled":          True,
+        "code":             coupon.code,
+        "discount_percent": coupon.discount_percent,
+        "plan":             plan_key,
+        "plan_name":        plan_info.get("name"),
+        "plan_name_en":     plan_info.get("name_en"),
+        "price_before":     base,
+        "price_after":      after,
+    }
+
+
 @router.post("/validate-coupon")
 def validate_coupon_endpoint(
     data: CouponCheckIn,

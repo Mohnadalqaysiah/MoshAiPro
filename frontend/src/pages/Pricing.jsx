@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
@@ -230,6 +230,31 @@ export default function Pricing() {
   // تغيير الباقة يُبطل الكوبون: قد لا يسري عليها، وإبقاء سعر مخفَّض
   // لباقة أخرى يعرض رقماً لن يُحصَّل.
   useEffect(() => { setCouponApplied(null); setCouponError('') }, [selected])
+
+  // (2026-09-28) وصول من بوب أب الخصم المفاجئ (DiscountPopup.jsx) عبر
+  // ?coupon=CODE&plan=X — نطبّق الرمز تلقائياً بدل ما نطلب منه يكتبه يدوياً.
+  const [searchParams] = useSearchParams()
+  useEffect(() => {
+    const codeFromUrl = searchParams.get('coupon')
+    if (!codeFromUrl) return
+    const planFromUrl = searchParams.get('plan')
+    const plan = ['weekly', 'monthly', 'yearly'].includes(planFromUrl) ? planFromUrl : selected
+    setSelected(plan)
+    setCouponInput(codeFromUrl)
+    ;(async () => {
+      setCouponBusy(true); setCouponError(''); setCouponApplied(null)
+      try {
+        const r = await axios.post(`${API}/api/v1/subscription/validate-coupon`, { plan, code: codeFromUrl })
+        if (r.data.valid) setCouponApplied(r.data)
+        else setCouponError(r.data.error || (isAr ? 'رمز غير صحيح' : 'Invalid code'))
+      } catch (err) {
+        setCouponError(err.response?.data?.detail || (isAr ? 'تعذّر التحقق من الرمز' : 'Could not verify code'))
+      } finally {
+        setCouponBusy(false)
+      }
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // (2026-09-24) تتبّع مسار الاشتراك — راجع DECISIONS.md. لا نتتبّع الزوار
   // غير المسجَّلين (endpoint يتطلب مستخدماً مسجَّلاً، والمهم فعلياً هو

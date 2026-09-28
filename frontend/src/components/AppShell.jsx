@@ -15,6 +15,7 @@ import Logo from './Logo'
 const TrialBanner        = lazy(() => import('./TrialBanner'))
 const TelegramLinkBanner = lazy(() => import('./TelegramLinkBanner'))
 const PushNotificationBanner = lazy(() => import('./PushNotificationBanner'))
+const DiscountPopup      = lazy(() => import('./DiscountPopup'))
 const EmailVerifyBanner  = lazy(() => import('./EmailVerifyBanner'))
 const OnboardingTour     = lazy(() => import('./OnboardingTour'))
 const UpgradeModal       = lazy(() => import('./UpgradeModal'))
@@ -531,6 +532,7 @@ export default function AppShell({ children }) {
             {surveyOpen && !verifyOpen && !upgradeOpen && (
               <FeatureSurveyModal onDone={() => { setSurveyOpen(false); setSurveyDone(true) }} />
             )}
+            {!verifyOpen && !upgradeOpen && !surveyOpen && <DiscountPopup />}
           </Suspense>
 
           <main className="flex-1 min-w-0 px-3 sm:px-5 py-4 sm:py-5 max-w-[1180px] w-full mx-auto">
