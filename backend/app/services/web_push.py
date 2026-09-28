@@ -33,6 +33,12 @@ def send_push(db: Session, user, title: str, body: str, url: str = "/dashboard",
     if not subs:
         return 0
 
+    # (2026-09-28) سجل داخل التطبيق — زر "🔔" يعرض آخر إشعارات المستخدم
+    # حتى لو فاته/رفض إشعار المتصفح نفسه (شائع بالهاتف). مرة واحدة لكل
+    # إشعار بغض النظر عن عدد أجهزته المشترَكة تحت — لا تكرار بكل جهاز.
+    from app.models.notification import Notification
+    db.add(Notification(user_id=user.id, title=title, body=body, url=url, tag=tag))
+
     payload = json.dumps({"title": title, "body": body, "url": url, "tag": tag})
     sent = 0
     for sub in subs:

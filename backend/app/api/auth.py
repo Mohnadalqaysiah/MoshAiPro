@@ -464,6 +464,55 @@ def unsubscribe_push(
     return {"success": True}
 
 
+@router.get("/notifications")
+def list_notifications(
+    limit: int = 7,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    (2026-09-28) زر "🔔" بالتطبيق — آخر إشعارات وصلت للمستخدم فعلياً عبر
+    Web Push (تُسجَّل بـweb_push.py:send_push)، حتى لو فوّتها/رفضها إشعار
+    المتصفح نفسه — مفيد خصوصاً بالهاتف حيث الإشعار يختفي من الشريط بسرعة.
+    """
+    from app.models.notification import Notification
+    limit = max(1, min(int(limit or 7), 30))
+    rows = (
+        db.query(Notification)
+        .filter(Notification.user_id == user.id)
+        .order_by(Notification.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    unread = db.query(Notification).filter(
+        Notification.user_id == user.id, Notification.is_read == False,
+    ).count()
+    return {
+        "unread_count": unread,
+        "notifications": [
+            {
+                "id": n.id, "title": n.title, "body": n.body, "url": n.url or "/dashboard",
+                "read": n.is_read, "created_at": n.created_at.isoformat() if n.created_at else None,
+            }
+            for n in rows
+        ],
+    }
+
+
+@router.post("/notifications/read")
+def mark_notifications_read(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """يعلّم كل إشعارات المستخدم كمقروءة — يُستدعى عند فتح قائمة الجرس."""
+    from app.models.notification import Notification
+    db.query(Notification).filter(
+        Notification.user_id == user.id, Notification.is_read == False,
+    ).update({"is_read": True})
+    db.commit()
+    return {"success": True}
+
+
 # ─── Feature Request Survey (Popup) ────────────────────────────────────────────
 
 @router.get("/feature-survey/active")

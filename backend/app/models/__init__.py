@@ -20,6 +20,7 @@ from app.models.support_chat import SupportChatThread, SupportChatMessage, ChatT
 from app.models.feature_request import FeatureRequest
 from app.models.feature_survey import FeatureSurvey
 from app.models.push_subscription import PushSubscription
+from app.models.notification import Notification
 from app.models.signal_delivery import SignalDelivery
 from app.models.coupon import Coupon, CouponRedemption
 from app.models.funnel_event import FunnelEvent
@@ -40,6 +41,7 @@ __all__ = [
     "FeatureRequest",
     "FeatureSurvey",
     "PushSubscription",
+    "Notification",
     "SignalDelivery",
     "Coupon", "CouponRedemption",
     "FunnelEvent",

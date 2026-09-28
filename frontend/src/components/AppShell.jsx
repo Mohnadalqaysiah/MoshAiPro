@@ -16,6 +16,7 @@ const TrialBanner        = lazy(() => import('./TrialBanner'))
 const TelegramLinkBanner = lazy(() => import('./TelegramLinkBanner'))
 const PushNotificationBanner = lazy(() => import('./PushNotificationBanner'))
 const DiscountPopup      = lazy(() => import('./DiscountPopup'))
+const NotificationBell   = lazy(() => import('./NotificationBell'))
 const EmailVerifyBanner  = lazy(() => import('./EmailVerifyBanner'))
 const OnboardingTour     = lazy(() => import('./OnboardingTour'))
 const UpgradeModal       = lazy(() => import('./UpgradeModal'))
@@ -517,6 +518,9 @@ export default function AppShell({ children }) {
               </span>
               <span className="text-white font-extrabold truncate">{siteSettings.site_name || 'Qaffel AI'}</span>
             </Link>
+            <div className="ms-auto">
+              <Suspense fallback={null}><NotificationBell /></Suspense>
+            </div>
           </header>
 
           {/* On xl+ the profile panel already shows trial credits + the Telegram card,
