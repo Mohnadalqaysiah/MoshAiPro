@@ -2739,10 +2739,30 @@ def feature_requests_summary(
     if active:
         q = q.filter(FeatureRequest.survey_id == active.id)
     rows = q.order_by(FeatureRequest.created_at.desc()).all()
+
+    # (2026-09-29) طلب: معرفة أسماء المصوّتين لكل خيار تحديداً حتى يمكن
+    # استهدافهم بترويج مخصّص (مثلاً كوبون لمن طلبوا ميزة صار متاحة). قبلها
+    # كان الملخّص عدّاداً مجرّداً بلا هوية — كافٍ للاتجاه العام، غير كافٍ
+    # لأي إجراء تسويقي فردي.
+    user_ids = {r.user_id for r in rows}
+    users_by_id = {
+        u.id: u for u in db.query(User).filter(User.id.in_(user_ids)).all()
+    } if user_ids else {}
+
     counts = {}
+    voters = {}
     custom_texts = []
     for r in rows:
         counts[r.selected_option] = counts.get(r.selected_option, 0) + 1
+        u = users_by_id.get(r.user_id)
+        voters.setdefault(r.selected_option, []).append({
+            "user_id":    r.user_id,
+            "full_name":  (u.full_name if u else None) or "",
+            "email":      u.email if u else None,
+            "telegram_username": u.telegram_username if u else None,
+            "plan":       u.plan if u else None,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        })
         if r.custom_text:
             custom_texts.append({
                 "id":         r.id,
@@ -2753,6 +2773,7 @@ def feature_requests_summary(
     return {
         "total":        len(rows),
         "counts":       counts,
+        "voters":       voters,
         "custom_texts": custom_texts,
     }
 

@@ -14,7 +14,7 @@ import {
   X, ExternalLink, Shield, AlertTriangle, Settings, Mail, Upload, Signal, Send,
   FileText, TrendingUp as TrendUp, Bell, Sparkles,
   ShieldCheck, UserCog, MessageCircle, UserMinus, Paperclip, Gift, ChevronRight, Menu,
-  Lightbulb, Ticket, Filter
+  Lightbulb, Ticket, Filter, Copy, ChevronDown
 } from 'lucide-react'
 
 const MAX_SUPPORT_ATTACHMENT_BYTES = 1 * 1024 * 1024
@@ -3416,6 +3416,8 @@ function FeatureSurveyPanel() {
   const [data, setData]       = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState(null)
+  const [expandedOption, setExpandedOption] = useState(null)
+  const [copiedOption, setCopiedOption]     = useState('')
 
   // ── محرر الاستطلاع (سؤال + خيارات قابلة للتعديل) ──────────────────────────
   const emptyOption = () => ({ ar: '', en: '', is_other: false })
@@ -3647,15 +3649,55 @@ function FeatureSurveyPanel() {
             {orderedKeys.map(key => {
               const n = counts[key] || 0
               if (!n) return null
+              const optionVoters = (data?.voters?.[key] || [])
+              const isOpen = expandedOption === key
+              const copyEmails = () => {
+                const emails = optionVoters.map(v => v.email).filter(Boolean).join(', ')
+                navigator.clipboard.writeText(emails)
+                setCopiedOption(key)
+                setTimeout(() => setCopiedOption(''), 1500)
+              }
               return (
                 <div key={key} className="space-y-1">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-300">{OPTION_LABELS[key] || key}</span>
+                  <button
+                    onClick={() => setExpandedOption(isOpen ? null : key)}
+                    className="w-full flex items-center justify-between text-sm text-start"
+                  >
+                    <span className="text-gray-300 flex items-center gap-1.5">
+                      <ChevronDown size={13} className={`text-gray-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                      {OPTION_LABELS[key] || key}
+                    </span>
                     <span className="text-gray-400 font-semibold">{n}</span>
-                  </div>
+                  </button>
                   <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden">
                     <div className="h-full bg-blue-600 rounded-full" style={{ width: `${(n / maxCount) * 100}%` }} />
                   </div>
+                  {isOpen && (
+                    <div className="bg-gray-800/50 border border-gray-700/50 rounded-xl p-3 mt-1.5 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-gray-500">من صوّتوا لهذا الخيار</span>
+                        <button onClick={copyEmails} disabled={!optionVoters.some(v => v.email)}
+                          className="flex items-center gap-1 text-[11px] text-blue-400 hover:text-blue-300 disabled:opacity-40">
+                          {copiedOption === key ? <CheckCircle size={11} className="text-green-400" /> : <Copy size={11} />}
+                          {copiedOption === key ? 'نُسخت' : 'نسخ كل الإيميلات'}
+                        </button>
+                      </div>
+                      <div className="max-h-56 overflow-y-auto space-y-1.5">
+                        {optionVoters.map((v, i) => (
+                          <div key={i} className="flex items-center justify-between text-xs bg-gray-900/50 rounded-lg px-2.5 py-1.5">
+                            <div className="min-w-0">
+                              <span className="text-gray-200">{v.full_name || '—'}</span>
+                              <span className="text-gray-500 mx-1.5" dir="ltr">{v.email || `#${v.user_id}`}</span>
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0 text-gray-500">
+                              {v.telegram_username && <span dir="ltr">@{v.telegram_username}</span>}
+                              <span className="px-1.5 py-0.5 rounded-full bg-gray-700 text-[10px]">{v.plan || '—'}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )
             })}
