@@ -10,6 +10,7 @@ import useBreadcrumbSchema from '../hooks/useBreadcrumbSchema'
 import useFAQSchema from '../hooks/useFAQSchema'
 import PayPalInlineCheckout from '../components/PayPalInlineCheckout'
 import SpaceremitCheckout from '../components/SpaceremitCheckout'
+import DiscountPopup from '../components/DiscountPopup'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -233,18 +234,22 @@ export default function Pricing() {
 
   // (2026-09-28) وصول من بوب أب الخصم المفاجئ (DiscountPopup.jsx) عبر
   // ?coupon=CODE&plan=X — نطبّق الرمز تلقائياً بدل ما نطلب منه يكتبه يدوياً.
+  // (2026-09-29) صار DiscountPopup يُركَّب على /pricing نفسها أيضاً (راجع
+  // تعليق أسفل PublicLayout) — عندها "الضغط على فعّل العرض" ينقل نفس
+  // المسار بمعامِلات جديدة بلا remount فعلي، فيعتمد على searchParams
+  // بدل [] فارغة وإلا ما كان يعيد التحقق من الرمز إطلاقاً بهالحالة.
   const [searchParams] = useSearchParams()
+  const couponFromUrl = searchParams.get('coupon')
   useEffect(() => {
-    const codeFromUrl = searchParams.get('coupon')
-    if (!codeFromUrl) return
+    if (!couponFromUrl) return
     const planFromUrl = searchParams.get('plan')
     const plan = ['weekly', 'monthly', 'yearly'].includes(planFromUrl) ? planFromUrl : selected
     setSelected(plan)
-    setCouponInput(codeFromUrl)
+    setCouponInput(couponFromUrl)
     ;(async () => {
       setCouponBusy(true); setCouponError(''); setCouponApplied(null)
       try {
-        const r = await axios.post(`${API}/api/v1/subscription/validate-coupon`, { plan, code: codeFromUrl })
+        const r = await axios.post(`${API}/api/v1/subscription/validate-coupon`, { plan, code: couponFromUrl })
         if (r.data.valid) setCouponApplied(r.data)
         else setCouponError(r.data.error || (isAr ? 'رمز غير صحيح' : 'Invalid code'))
       } catch (err) {
@@ -254,7 +259,7 @@ export default function Pricing() {
       }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [couponFromUrl])
 
   // (2026-09-24) تتبّع مسار الاشتراك — راجع DECISIONS.md. لا نتتبّع الزوار
   // غير المسجَّلين (endpoint يتطلب مستخدماً مسجَّلاً، والمهم فعلياً هو
@@ -408,6 +413,14 @@ export default function Pricing() {
 
   return (
     <PublicLayout>
+      {/* (2026-09-29) بلاغ: عميل تجربة منتهية يشوف بوب أب التجديد بس، وبمجرد
+          ما يضغط "عرض الباقات" يوصل هون (AppShell.jsx:goPricing) — وبما إنه
+          /pricing صفحة عامة خارج AppShell كلياً، DiscountPopup (المُركَّب هناك
+          فقط) ينمحي مع كل الشجرة قبل ما يوصل لمؤقّته الداخلي (12 ثانية).
+          نفس الطبيعة: أول مكان فعلي يشوف فيه سعراً حقيقياً هو أفضل توقيت
+          لعرض الخصم، لا أسوأه. لا يظهر لو وصل أصلاً بكوبون بالرابط
+          (?coupon=) — عندها الخصم مطبَّق فعلاً، وعرض بوب أب ثاني لنفس الشيء تكرار مربك. */}
+      {!searchParams.get('coupon') && <DiscountPopup />}
       <div className="px-4 py-16 min-h-screen" dir={isAr ? 'rtl' : 'ltr'}>
         <div className="max-w-4xl mx-auto">
 
