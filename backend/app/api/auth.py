@@ -361,6 +361,42 @@ def resend_verification(
     return {"success": True, "message": "تم إرسال رمز تفعيل جديد إلى بريدك الإلكتروني"}
 
 
+@router.post("/verify-email/send-telegram-otp")
+def send_telegram_verification_otp(
+    background_tasks: BackgroundTasks,
+    user: User = Depends(get_current_user),
+):
+    """
+    (2026-09-29) قناة بديلة لرمز تفعيل البريد — بعض مزوّدي البريد (خطط
+    استضافة رخيصة) يرفضون/يؤخّرون رسائل SMTP فتبقى حسابات عالقة بلا سبب
+    يخصّنا. الرمز نفسه يُخزَّن بنفس _verify_otp_store المستخدَم بالبريد —
+    /verify-email يتحقق منه بلا أي علم بمصدر الإرسال، فلا تعديل هناك.
+    يتطلب ربط تلغرام مسبقاً (telegram_id) — لا قيمة لعرضه لحساب غير مربوط.
+    """
+    if user.is_verified:
+        return {"success": True, "message": "الحساب مُفعّل مسبقاً"}
+    if not user.telegram_id:
+        raise HTTPException(400, "اربط حسابك بتلغرام أولاً لاستخدام هذه الطريقة")
+
+    last = _verify_otp_store.get(user.email)
+    if last:
+        elapsed = (datetime.now(timezone.utc) - last["last_sent_at"]).total_seconds()
+        if elapsed < 60:
+            raise HTTPException(429, f"انتظر {int(60 - elapsed)} ثانية قبل طلب رمز جديد")
+
+    otp = str(random.randint(100000, 999999))
+    _verify_otp_store[user.email] = {
+        "otp": otp,
+        "expires_at": datetime.now(timezone.utc) + timedelta(minutes=10),
+        "last_sent_at": datetime.now(timezone.utc),
+    }
+    from app.services.admin_notify import notify_user_telegram
+    msg = f"🔐 رمز تفعيل حسابك بمنصة Qaffel AI:\n\n<code>{otp}</code>\n\nصالح لمدة 10 دقائق."
+    background_tasks.add_task(notify_user_telegram, user.telegram_id, msg)
+    logger.info(f"📲 Verification OTP sent via Telegram to user {user.id}")
+    return {"success": True, "message": "أُرسل رمز التفعيل عبر تلغرام"}
+
+
 # ─── Login ────────────────────────────────────────────────────────────────────
 
 @router.post("/login")
