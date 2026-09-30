@@ -996,25 +996,12 @@ class ICTEngine:
         حساب مستويات الدخول، وقف الخسارة، الأهداف
         بناءً على ATR وبنية السوق الحقيقية (ICT Method)
 
-        (2026-09-16) الأهداف صارت مرتبطة بالمخاطرة (1R/2R) بدل مسافة
-        ثابتة بالـATR (1.5×/3×). الوقف لم يُمسّ.
-
-        السبب: النظام كان يعمل بنمط "قليل الربح كبير العائد"
-        (R/R ≈ 2.5 ⇒ تعادل عند 28.6%) وهو أصعب نمط تسويقياً — المشترك
-        يرى سبع خسائر من عشر ويلغي قبل بلوغ الصفقة الرابحة. ومحاكاة على
-        210 قرارات بشموع السوق الحقيقية (simulate_risk_configs.py) أعطت
-        نسبة ربح 20.2% → 38.7% وتوقّعاً −0.22R → +0.02R، صامدةً في
-        نصفَي الفترة (+23 نقطة بالأول و+18 بالثاني).
-
-        الآلية سببية: هدف على بُعد مسافة الوقف أسهل بلوغاً من هدف على
-        بُعد 2.5 ضعفها.
-
-        ⚠️ أثر جانبي: risk_reward يصير ثابتاً عند 2.0 لكل إشارة فيتعطّل
-        فلتر الحد الأدنى لـR/R عملياً. مقبول لأن شريحة R/R 1.5–2.0 كانت
-        غير مستقرة بتقرير الجودة أصلاً.
-
-        شرط التراجع مكتوب مسبقاً في DECISIONS.md: نسبة ربح < 28% على
-        40+ قراراً بعد 7 أيام من رصد سليم ⇒ يُعاد الأمر كما كان.
+        (2026-09-30) تراجع عن تجربة 1R/2R (16/09) — شرط التراجع المكتوب
+        مسبقاً تحقّق فعلياً: نسبة ربح 22.5% على 71 قراراً نظيفاً بالكامل
+        (0% بيانات ما قبل إصلاح 16/09)، دون حد الـ28%. راجع DECISIONS.md
+        (2026-09-30) للتفصيل الكامل وفحص فرضية بديلة (منطقة خصم/علاوة)
+        نُفيت بالدليل المباشر قبل هذا القرار. عاد الحساب لمسافة ثابتة
+        بالـATR (1.5×/3×/5×) كما كان قبل 16/09.
         """
         current = float(df["close"].iloc[-1])
         atr = float(df["atr"].iloc[-1]) if "atr" in df.columns else current * 0.001
@@ -1034,14 +1021,11 @@ class ICTEngine:
             else:
                 sl = entry - atr * 2
 
-            # الأهداف مرتبطة بالمخاطرة لا بمسافة ثابتة بالـATR — راجع
-            # DECISIONS.md (16/09) للأدلة وشرط التراجع.
-            _risk = abs(entry - sl)
+            # الأهداف: أعلى من entry (محسوبة من entry وليس current)
             bsl = liquidity.get("nearest_bsl")
-            tp1 = entry + _risk * 1.0
-            tp2 = entry + _risk * 2.0
-            # مستوى السيولة يُحفظ بالهدف الثالث فلا تُفقد معلومة ICT
-            tp3 = bsl if bsl and bsl > entry + _risk * 2.0 else entry + _risk * 3.0
+            tp1 = entry + atr * 1.5
+            tp2 = bsl if bsl and bsl > entry else entry + atr * 3
+            tp3 = entry + atr * 5
 
         else:  # SELL
             entry = current
@@ -1056,40 +1040,31 @@ class ICTEngine:
             else:
                 sl = entry + atr * 2
 
-            # نفس منطق الشراء معكوساً — راجع التعليق أعلاه وDECISIONS.md
-            _risk = abs(entry - sl)
+            # الأهداف: أسفل من entry (محسوبة من entry وليس current)
             ssl = liquidity.get("nearest_ssl")
-            tp1 = entry - _risk * 1.0
-            tp2 = entry - _risk * 2.0
-            tp3 = ssl if ssl and ssl < entry - _risk * 2.0 else entry - _risk * 3.0
+            tp1 = entry - atr * 1.5
+            tp2 = ssl if ssl and ssl < entry else entry - atr * 3
+            tp3 = entry - atr * 5
 
         # ─── تحقق إجباري: SL/TP في الاتجاه الصحيح ───────────────────────
-        # (2026-09-16) الأهداف صارت مشتقّة من المخاطرة، فإعادة ضبط الوقف
-        # هنا تُبطل الأهداف المحسوبة قبلها (بُنيت على risk قديم). لذلك
-        # يُعاد اشتقاقها من الوقف المصحَّح بدل تركها متناقضة معه —
-        # وإلا صارت نسبة R/R المسجّلة تصف مستويات لم تُصدَر.
         if direction == "BUY":
             if sl >= entry:
                 sl = entry - atr * 2
-                _r = abs(entry - sl)
-                tp1, tp2, tp3 = entry + _r, entry + _r * 2, entry + _r * 3
             if tp1 <= entry:
-                tp1 = entry + abs(entry - sl)
+                tp1 = entry + atr * 1.5
             if tp2 <= entry:
-                tp2 = entry + abs(entry - sl) * 2
+                tp2 = entry + atr * 3
             if tp3 <= entry:
-                tp3 = entry + abs(entry - sl) * 3
+                tp3 = entry + atr * 5
         else:
             if sl <= entry:
                 sl = entry + atr * 2
-                _r = abs(entry - sl)
-                tp1, tp2, tp3 = entry - _r, entry - _r * 2, entry - _r * 3
             if tp1 >= entry:
-                tp1 = entry - abs(entry - sl)
+                tp1 = entry - atr * 1.5
             if tp2 >= entry:
-                tp2 = entry - abs(entry - sl) * 2
+                tp2 = entry - atr * 3
             if tp3 >= entry:
-                tp3 = entry - abs(entry - sl) * 3
+                tp3 = entry - atr * 5
 
         # Risk/Reward
         risk = abs(entry - sl)
