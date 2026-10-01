@@ -646,4 +646,64 @@
     <priority>0.8</priority>
   </url>
 
+  <!-- مقالة: أفضل استراتيجية للتداول (عربي + English) -->
+  <url>
+    <loc>https://qaffel.com/blog/best-trading-strategy-guide</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/best-trading-strategy-guide" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/best-trading-strategy-guide" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/best-trading-strategy-guide" />
+    <lastmod>2026-10-01</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://qaffel.com/en/blog/best-trading-strategy-guide</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/best-trading-strategy-guide" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/best-trading-strategy-guide" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/best-trading-strategy-guide" />
+    <lastmod>2026-10-01</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- مقالة: أفضل وقت لتداول الذهب (عربي + English) -->
+  <url>
+    <loc>https://qaffel.com/blog/best-time-to-trade-gold</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/best-time-to-trade-gold" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/best-time-to-trade-gold" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/best-time-to-trade-gold" />
+    <lastmod>2026-10-01</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://qaffel.com/en/blog/best-time-to-trade-gold</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/best-time-to-trade-gold" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/best-time-to-trade-gold" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/best-time-to-trade-gold" />
+    <lastmod>2026-10-01</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- مقالة: أفضل وسيلة لتحليل السوق (عربي + English) -->
+  <url>
+    <loc>https://qaffel.com/blog/best-market-analysis-method</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/best-market-analysis-method" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/best-market-analysis-method" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/best-market-analysis-method" />
+    <lastmod>2026-10-01</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://qaffel.com/en/blog/best-market-analysis-method</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/best-market-analysis-method" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/best-market-analysis-method" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/best-market-analysis-method" />
+    <lastmod>2026-10-01</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
 </urlset>

@@ -393,6 +393,9 @@ export default function Landing() {
               { slug: 'build-your-own-trading-strategy', ar: 'ابنِ استراتيجيتك بدون برمجة', en: 'Build Your Own Strategy' },
               { slug: 'ict-strategy-automation',          ar: 'أتمتة استراتيجية ICT على تلجرام', en: 'Automate ICT Strategy on Telegram' },
               { slug: 'trading-strategy-mistakes',        ar: 'أخطاء شائعة بالاستراتيجيات',       en: 'Common Strategy Mistakes' },
+              { slug: 'best-trading-strategy-guide',      ar: 'أفضل استراتيجية للتداول',          en: 'Best Trading Strategy' },
+              { slug: 'best-time-to-trade-gold',          ar: 'أفضل وقت لتداول الذهب',            en: 'Best Time to Trade Gold' },
+              { slug: 'best-market-analysis-method',      ar: 'أفضل وسيلة لتحليل السوق',          en: 'Best Market Analysis Method' },
             ].map(a => (
               <Link key={a.slug} to={isAr ? `/blog/${a.slug}` : `/en/blog/${a.slug}`}
                 className="text-sm q-glass hover:text-white px-4 py-1.5 rounded-full transition-colors" style={{ color: 'var(--q-acc3)' }}>
