@@ -84,6 +84,7 @@ def admin_stats(
     weekly_users  = db.query(User).filter(User.plan == PlanType.WEEKLY).count()
     monthly_users = db.query(User).filter(User.plan == PlanType.MONTHLY).count()
     banned_users  = db.query(User).filter(User.plan == PlanType.BANNED).count()
+    telegram_linked_users = db.query(User).filter(User.telegram_id.isnot(None)).count()
     active_markets = db.query(MarketConfig).filter(MarketConfig.is_active == True).count()
 
     pending_payments = db.query(Payment).filter(
@@ -101,6 +102,7 @@ def admin_stats(
             "weekly":  weekly_users,
             "monthly": monthly_users,
             "banned":  banned_users,
+            "telegram_linked": telegram_linked_users,
         },
         "payments": {
             "pending": pending_payments,

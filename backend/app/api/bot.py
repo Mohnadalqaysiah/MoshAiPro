@@ -493,6 +493,15 @@ async def bot_check_outcomes(
     from app.services.decision_grouping import decision_key
     _perf_counted_this_cycle: set = set()
 
+    # (2026-10-01) بلاغ حقيقي: نفس القرار الواحد (محفوظ كصف Signal منفصل
+    # لكل مستخدم استلمه) كان يُنتج بثّاً كاملاً مستقلاً لكل صف منه يضرب
+    # TP/SL بنفس الدورة — فلو 5 صفوف لنفس القرار انضربت معاً، كل مشترك
+    # نشط (يشمل الأدمن) ياخد 5 رسائل نتيجة مطابقة تماماً بدل رسالة وحدة.
+    # نفس حل ازدواجية update_performance() فوق (dkey/_perf_counted_this_cycle)
+    # يُطبَّق هون: حلقة البث لكل المشتركين تُنفَّذ مرة واحدة فقط لكل قرار
+    # فريد بالدورة، لا مرة لكل صف يمثّله.
+    _broadcast_fanout_done_this_cycle: set = set()
+
     triggered = []
     for sig in active:
         try:
@@ -793,21 +802,25 @@ async def bot_check_outcomes(
                 }
 
                 # إذا كانت الإشارة مُبثّة لكل المشتركين → نُضيف كل المشتركين
+                # (مرة واحدة فقط لكل قرار فريد بالدورة — راجع التعليق فوق
+                # _broadcast_fanout_done_this_cycle)
                 if sig.broadcast_sent:
-                    active_subs = db.query(User).filter(
-                        User.telegram_id != None,
-                        User.is_active == True,
-                        User.plan != PlanType.BANNED,
-                    ).all()
-                    now_utc = datetime.now(timezone.utc)
-                    for sub in active_subs:
-                        valid = False
-                        if sub.plan in [PlanType.WEEKLY, PlanType.MONTHLY]:
-                            valid = sub.subscription_ends_at and sub.subscription_ends_at > now_utc
-                        elif sub.plan == PlanType.TRIAL:
-                            valid = not sub.trial_ends_at or sub.trial_ends_at > now_utc
-                        if valid and sub.telegram_id:
-                            triggered.append({"telegram_id": sub.telegram_id, **payload})
+                    if dkey not in _broadcast_fanout_done_this_cycle:
+                        _broadcast_fanout_done_this_cycle.add(dkey)
+                        active_subs = db.query(User).filter(
+                            User.telegram_id != None,
+                            User.is_active == True,
+                            User.plan != PlanType.BANNED,
+                        ).all()
+                        now_utc = datetime.now(timezone.utc)
+                        for sub in active_subs:
+                            valid = False
+                            if sub.plan in [PlanType.WEEKLY, PlanType.MONTHLY]:
+                                valid = sub.subscription_ends_at and sub.subscription_ends_at > now_utc
+                            elif sub.plan == PlanType.TRIAL:
+                                valid = not sub.trial_ends_at or sub.trial_ends_at > now_utc
+                            if valid and sub.telegram_id:
+                                triggered.append({"telegram_id": sub.telegram_id, **payload})
                 else:
                     # إشارة خاصة بمستخدم واحد
                     user = db.query(User).filter(User.id == sig.user_id).first()

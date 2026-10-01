@@ -1063,12 +1063,13 @@ export default function Admin() {
                   </div>
                 ))}
               </div>
-              <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
+              <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
                 {[
                   { label:'تجريبي', value:stats.users.trial,   color:'gray' },
                   { label:'أسبوعي', value:stats.users.weekly,  color:'blue' },
                   { label:'شهري',   value:stats.users.monthly, color:'purple' },
                   { label:'محظور',  value:stats.users.banned,  color:'red' },
+                  { label:'مربوط بتلغرام', value:stats.users.telegram_linked, color:'indigo' },
                   { label:'أسواق نشطة', value:stats.markets.active, color:'green' },
                 ].map(s => (
                   <div key={s.label} className="bg-gray-900 border border-gray-800 rounded-xl p-3 text-center">
