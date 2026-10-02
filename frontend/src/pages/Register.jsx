@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
 import { Mail, Lock, User, Phone, AlertCircle, CheckCircle, ShieldCheck, Gift } from 'lucide-react'
 import useSEO from '../hooks/useSEO'
+import useTrialLimits from '../hooks/useTrialLimits'
 import useBreadcrumbSchema from '../hooks/useBreadcrumbSchema'
 import { mirrorPath } from '../utils/langRoutes'
 import Logo from '../components/Logo'
@@ -24,7 +25,7 @@ const T = {
     tagline: 'ابدأ تجربتك المجانية',
     referredVia: 'تم التسجيل عبر رابط إحالة — كود:',
     freeTitle: '✨ ما تحصل عليه مجاناً:',
-    freeBenefits: ['7 أيام تجريبية', '10 تحليلات ICT/SMC كاملة', '20 رسالة مع وكيل الذكاء الاصطناعي', 'وصول لجميع الأزواج'],
+    freeBenefits: ['7 أيام تجريبية', '{n} تحليلات ICT/SMC كاملة', '{m} رسالة مع وكيل الذكاء الاصطناعي', 'وصول لجميع الأزواج'],
     heading: 'إنشاء حساب جديد',
     fullName: 'الاسم الكامل',
     fullNamePh: 'محمد أحمد',
@@ -48,7 +49,7 @@ const T = {
     tagline: 'Start your free trial',
     referredVia: 'Signed up via referral link — code:',
     freeTitle: '✨ What you get for free:',
-    freeBenefits: ['7-day trial', '10 full ICT/SMC analyses', '20 messages with the AI agent', 'Access to all pairs'],
+    freeBenefits: ['7-day trial', '{n} full ICT/SMC analyses', '{m} messages with the AI agent', 'Access to all pairs'],
     heading: 'Create a New Account',
     fullName: 'Full Name',
     fullNamePh: 'John Smith',
@@ -75,14 +76,16 @@ export default function Register() {
   const isAr = lang === 'ar'
   const tx = T[isAr ? 'ar' : 'en']
   const location = useLocation()
+  const trial = useTrialLimits()
+  const fmtTrial = (s) => s?.replace('{n}', trial.analyses).replace('{m}', trial.chat)
 
   useSEO({
     title: isAr
-      ? 'إنشاء حساب مجاني | Qaffel AI — ابدأ بـ 10 تحليلات مجانية'
+      ? `إنشاء حساب مجاني | Qaffel AI — ابدأ بـ ${trial.analyses} تحليلات مجانية`
       : 'Create Free Account | Qaffel AI',
     description: isAr
-      ? 'أنشئ حسابك المجاني بـ Qaffel AI واحصل على 10 تحليلات و20 رسالة شات AI مجاناً — بدون بطاقة ائتمان. إشارات تداول ذكية للذهب والبيتكوين والفوركس.'
-      : 'Create your free Qaffel AI account: 10 analyses and 20 AI chat messages free, no credit card. Smart signals for Gold, Bitcoin and Forex.',
+      ? `أنشئ حسابك المجاني بـ Qaffel AI واحصل على ${trial.analyses} تحليلات و${trial.chat} رسالة شات AI مجاناً — بدون بطاقة ائتمان. إشارات تداول ذكية للذهب والبيتكوين والفوركس.`
+      : `Create your free Qaffel AI account: ${trial.analyses} analyses and ${trial.chat} AI chat messages free, no credit card. Smart signals for Gold, Bitcoin and Forex.`,
   })
   useBreadcrumbSchema([
     { name: isAr ? 'الرئيسية' : 'Home', path: isAr ? '/' : '/en' },
@@ -155,7 +158,7 @@ export default function Register() {
           {tx.freeBenefits.map(f => (
             <div key={f} className="flex items-center gap-2 text-xs text-gray-300 mt-1">
               <CheckCircle size={12} className="text-green-400 flex-shrink-0" />
-              <span>{f}</span>
+              <span>{fmtTrial(f)}</span>
             </div>
           ))}
         </div>

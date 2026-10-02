@@ -226,8 +226,13 @@ export default function PerformanceSection() {
         <div className="flex items-center justify-between mb-1 pb-3 border-b border-gray-700/60">
           <div className="text-xs text-gray-400">{tx.thisWeekInline} — {current_week.week_label}</div>
           <div className="flex items-center gap-3">
-            <span className="text-xs text-gray-500">{current_week.wins}/{current_week.total_trades} {tx.wins.toLowerCase()}</span>
-            <span className={`text-sm font-bold font-mono ${ptColor(current_week.total_points)}`}>
+            {/* (2026-10-03) نسبة الربح % صارت الرقم البارز — مقارنة عادلة
+                بين كل الرموز (راجع DECISIONS.md: النقاط فارق مضاعفها
+                1200 ضعف بين الرموز). النقاط تبقى تفصيلاً ثانوياً بعدها. */}
+            <span className={`text-sm font-bold font-mono ${current_week.win_rate >= 50 ? 'text-green-400' : 'text-red-400'}`}>
+              {current_week.win_rate}% <span className="font-normal text-gray-500">({current_week.wins}/{current_week.total_trades})</span>
+            </span>
+            <span className={`text-xs ${ptColor(current_week.total_points)}`}>
               {current_week.total_points > 0 ? '+' : ''}{current_week.total_points} {tx.points}
             </span>
           </div>

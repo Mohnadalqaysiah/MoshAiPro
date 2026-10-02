@@ -1179,46 +1179,29 @@ def bot_user_stats(
 ):
     """إحصائيات المستخدم للبوت
 
-    (2026-09-03) نفس مشكلة get_signal_performance بـsignals.py — حتى
-    ضمن مستخدم واحد، مراقبة الـwatchlist القديمة (قبل إصلاح 2026-08-31
-    اللي ربط التنبيه بصلاحية الصفقة) كانت ممكن تكرر نفس القرار أكتر من
-    مرة لنفس المستخدم. total/wins/pts/best/worst محسوبة الآن على مستوى
-    القرار الفريد الموثوق (verified_unique_decisions). active يبقى عدّ
-    خام — مو ادعاء أداء."""
-    from app.services.decision_grouping import verified_unique_decisions
+    (2026-10-03) صارت تستدعي get_user_lifetime_stats (signals.py) —
+    نفس الدالة المستخدَمة بإحصائيات الداشبورد، بدل فلترة منفصلة كانت
+    تعتمد على Signal.user_id (صفوف مملوكة تاريخياً) لا notify_watchlist
+    الحالي ولا data_floor. راجع تعليق تلك الدالة للتفصيل الكامل — ضَمِن
+    هذا تطابق أرقام البوت مع الداشبورد تماماً لنفس المستخدم بنفس اللحظة."""
+    from app.api.signals import get_user_lifetime_stats
 
     user = _get_linked_user(telegram_id, db)
     if not user:
         return {"linked": False}
 
-    closed = [SignalStatus.TP1_HIT, SignalStatus.TP2_HIT, SignalStatus.SL_HIT]
-    closed_raw = db.query(Signal).filter(Signal.user_id == user.id, Signal.status.in_(closed)).all()
-    decisions  = verified_unique_decisions(closed_raw)
-    decisions.sort(key=lambda d: d["exit_executed"] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+    stats = get_user_lifetime_stats(db, user)
+    total  = stats["total"]
+    wins   = stats["wins"]
+    pts    = stats["total_points"]
+    best   = stats["best_trade"]
+    worst  = stats["worst_trade"]
+    active = stats["active_signals"]
 
-    total   = len(decisions)
-    wins    = sum(1 for d in decisions if d["status"] in ("TP1_HIT", "TP2_HIT"))
-    pts     = sum(d["points"] for d in decisions)
-    win_pts = [d["points"] for d in decisions if d["points"] > 0]
-    loss_pts= [d["points"] for d in decisions if d["points"] < 0]
-    best    = max(win_pts, default=0.0)
-    worst   = min(loss_pts, default=0.0)
-    active  = db.query(Signal).filter(
-                Signal.user_id == user.id,
-                Signal.status == SignalStatus.ACTIVE).count()
-
-    # آخر 5 قرارات مغلقة
     recent = []
-    for d in decisions[:5]:
-        icon = "✅" if d["status"] in ("TP1_HIT", "TP2_HIT") else "❌"
-        recent.append({
-            "market":  d["market"],
-            "type":    d["signal_type"],
-            "status":  d["status"],
-            "icon":    icon,
-            "points":  round(d["points"], 2),
-            "closed_at": d["exit_executed"].strftime("%d/%m %H:%M") if d["exit_executed"] else "",
-        })
+    for r in stats["recent_trades"]:
+        icon = "✅" if r["status"] in ("TP1_HIT", "TP2_HIT") else "❌"
+        recent.append({**r, "icon": icon})
 
     aff_count = 0
     if user.affiliate:
@@ -1240,13 +1223,14 @@ def bot_user_stats(
         "ends_at":        ends_at,
         "total_signals":  total,
         "wins":           wins,
-        "losses":         total - wins,
-        "win_rate":       round(wins / total * 100, 1) if total > 0 else 0.0,
+        "losses":         stats["losses"],
+        "win_rate":       stats["win_rate"],
         "total_points":   round(float(pts), 2),
         "active_signals": active,
         "best_trade":     round(float(best), 2),
         "worst_trade":    round(float(worst), 2),
         "recent_trades":  recent,
+        "watchlist_filter":  stats["watchlist_filter"],
         "referral_count":    aff_count,
         "affiliate_code":    user.affiliate_code,
         "referral_points":   user.referral_points or 0,

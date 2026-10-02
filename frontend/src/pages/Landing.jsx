@@ -20,6 +20,7 @@ import AffiliateSection from '../components/AffiliateSection'
 import PublicPerformance from '../components/PublicPerformance'
 import Logo from '../components/Logo'
 import useSEO from '../hooks/useSEO'
+import useTrialLimits from '../hooks/useTrialLimits'
 
 // ── Scroll reveal hook ───────────────────────────────────────────────
 function useReveal() {
@@ -88,6 +89,11 @@ export default function Landing() {
   const ChevronCta = isAr ? ChevronLeft : ChevronRight
   const location = useLocation()
   const navigate  = useNavigate()
+  // (2026-10-03) حدود التجربة الحقيقية (SiteSettings) — بدل "10/20" ثابتة
+  // بالنصوص التسويقية قد تنحرف عن القيمة الفعلية لو غيّرها الأدمن. كل
+  // نص بـLangContext.jsx يحمل الحدّين كـ{n}/{m} يُستبدَلان هون فقط.
+  const trial = useTrialLimits()
+  const fmtTrial = (s) => s?.replace('{n}', trial.analyses).replace('{m}', trial.chat)
 
   const handleToggleLang = () => {
     const target = isAr ? 'en' : 'ar'
@@ -101,8 +107,8 @@ export default function Landing() {
       ? 'Qaffel AI | إشارات تداول ذكية بالذكاء الاصطناعي'
       : 'Qaffel AI | Smart AI Trading Signals',
     description: isAr
-      ? 'منصة Qaffel AI تحلل الذهب والبيتكوين والفوركس بتقنية ICT/SMC والذكاء الاصطناعي. إشارات دقيقة على Telegram. ابدأ مجاناً بـ10 تحليلات.'
-      : 'Qaffel AI analyzes Gold, Bitcoin and Forex using ICT/SMC and AI. Accurate signals on Telegram. Start free with 10 analyses.',
+      ? `منصة Qaffel AI تحلل الذهب والبيتكوين والفوركس بتقنية ICT/SMC والذكاء الاصطناعي. إشارات دقيقة على Telegram. ابدأ مجاناً بـ${trial.analyses} تحليلات.`
+      : `Qaffel AI analyzes Gold, Bitcoin and Forex using ICT/SMC and AI. Accurate signals on Telegram. Start free with ${trial.analyses} analyses.`,
   })
   const [mobileOpen, setMobileOpen] = useState(false)
   const [livePlans, setLivePlans] = useState({})
@@ -293,7 +299,7 @@ export default function Landing() {
               <ArrowUpRight size={16} />
             </Link>
           </div>
-          <p className="text-gray-400 text-sm mt-5">{t.hero.note}</p>
+          <p className="text-gray-400 text-sm mt-5">{fmtTrial(t.hero.note)}</p>
 
           {/* Trust badges */}
           <div className="flex items-center justify-center gap-6 mt-10 flex-wrap">
@@ -432,7 +438,7 @@ export default function Landing() {
                   <span className="text-blue-300 font-black text-xl">{s.step}</span>
                 </div>
                 <h3 className="font-bold text-white mb-2 text-base">{s.title}</h3>
-                <p className="text-gray-500 text-sm leading-relaxed">{s.desc}</p>
+                <p className="text-gray-500 text-sm leading-relaxed">{fmtTrial(s.desc)}</p>
               </div>
             ))}
           </div>
@@ -516,7 +522,7 @@ export default function Landing() {
               const displayPrice = livePrice ? `$${livePrice}` : p.price
               const liveFeaturesAr = planKey && livePlans[planKey]?.features
               const liveFeaturesEn = planKey && livePlans[planKey]?.features_en
-              const displayFeatures = isFree ? p.features
+              const displayFeatures = isFree ? p.features.map(fmtTrial)
                 : isAr ? (liveFeaturesAr || p.features)
                 : (liveFeaturesEn || p.features)
               return (
@@ -633,7 +639,7 @@ export default function Landing() {
           <h2 className="text-3xl md:text-5xl font-black mb-5 leading-tight">
             <span className="gradient-text">{t.ctaTitle}</span>
           </h2>
-          <p className="text-gray-400 mb-8 text-lg leading-relaxed">{t.ctaSub}</p>
+          <p className="text-gray-400 mb-8 text-lg leading-relaxed">{fmtTrial(t.ctaSub)}</p>
 
           {/* Social proof mini-row */}
           <div className="flex items-center justify-center gap-3 mb-8">

@@ -18,7 +18,7 @@ from app.models.user import User, PlanType, UserRole
 from app.models.site_settings import SiteSettings
 from app.services.auth_service import get_current_user, check_subscription, deduct_trial
 from app.api.bot import _check_loss_streak_breaker, _has_active_signal
-from app.services.decision_grouping import verified_unique_decisions
+from app.services.decision_grouping import verified_unique_decisions, decision_key
 from app.services.quality_report import OUTCOME_FIX_DATE
 
 
@@ -356,6 +356,78 @@ async def get_signal_history(
             "expires_at":  s.expires_at.isoformat() if s.expires_at else None,
         })
     return {"signals": result}
+
+
+def get_user_lifetime_stats(db: Session, user: User) -> dict:
+    """
+    (2026-10-03) بلاغ: إحصائيات المستخدم بالبوت (`/bot/user-stats`) كانت
+    مبنية على فلترة مختلفة تماماً عن إحصائيات الداشبورد (`/performance`
+    تحت) — البوت يفلتر بـ`Signal.user_id == user.id` (الصفوف المملوكة
+    له حرفياً، تاريخية وثابتة)، بينما الداشبورد يفلتر بـ`notify_watchlist`
+    الحالي (حيّ، يعكس أي تعديل بقائمة المراقبة فوراً بأثر رجعي) مع
+    `data_floor`/`join_start`. فعميل غيّر قائمة مراقبته (مثلاً من "الكل"
+    لـ"فوركس فقط") كان يشوف أرقاماً مختلفة بالداشبورد عن البوت لنفس
+    اللحظة — ونسبة ربح بالبوت قد تشمل بيانات قبل إصلاح 16/09 (معطوبة
+    موثَّقاً) رغم إنها مستبعدة بالداشبورد. هذه الدالة تُستخدَم الآن من
+    الاثنين (`/performance` هون و`/bot/user-stats`) فتضمن تطابقاً تاماً
+    بالتصميم، لا بتكرار نفس المنطق بمكانين قابلين للانحراف عن بعض.
+
+    تُعيد إحصائيات "مدى الحياة" (كل الوقت، لا نافذة أسبوع/شهر) — مناسبة
+    لبطاقة إحصائيات البوت، وقابلة للاستخدام لاحقاً لأي عرض "كل الوقت"
+    بالداشبورد لو احتُجنا له.
+    """
+    closed = [SignalStatus.TP1_HIT, SignalStatus.TP2_HIT, SignalStatus.SL_HIT]
+
+    join_start = user.created_at
+    if join_start and join_start.tzinfo is None:
+        join_start = join_start.replace(tzinfo=timezone.utc)
+    data_floor = OUTCOME_FIX_DATE
+    eff_start = max(join_start, data_floor) if join_start else data_floor
+
+    symbols_filter = list(user.notify_watchlist) if user.notify_watchlist else []
+
+    q = db.query(Signal).filter(Signal.status.in_(closed), Signal.created_at >= eff_start)
+    if symbols_filter:
+        q = q.filter(Signal.market.in_(symbols_filter))
+    decisions = verified_unique_decisions(q.all())
+    decisions.sort(key=lambda d: d["exit_executed"] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+
+    wins   = [d for d in decisions if d["points"] > 0]
+    losses = [d for d in decisions if d["points"] < 0]
+    total_points = sum(d["points"] for d in decisions)
+    win_pts  = [d["points"] for d in wins]
+    loss_pts = [d["points"] for d in losses]
+
+    active_q = db.query(Signal).filter(Signal.status.in_([SignalStatus.ACTIVE, SignalStatus.PENDING]))
+    if symbols_filter:
+        active_q = active_q.filter(Signal.market.in_(symbols_filter))
+    active_count = len({
+        decision_key(s.market, s.timeframe, s.signal_type, s.entry_price)
+        for s in active_q.all()
+    })
+
+    recent = []
+    for d in decisions[:5]:
+        recent.append({
+            "market":     d["market"],
+            "type":       d["signal_type"],
+            "status":     d["status"],
+            "points":     round(d["points"], 2),
+            "closed_at":  d["exit_executed"].strftime("%d/%m %H:%M") if d["exit_executed"] else "",
+        })
+
+    return {
+        "total":        len(decisions),
+        "wins":         len(wins),
+        "losses":       len(losses),
+        "win_rate":     round(len(wins) / len(decisions) * 100, 1) if decisions else 0.0,
+        "total_points": round(total_points, 2),
+        "best_trade":   round(max(win_pts, default=0.0), 2),
+        "worst_trade":  round(min(loss_pts, default=0.0), 2),
+        "active_signals": active_count,
+        "recent_trades":  recent,
+        "watchlist_filter": symbols_filter,
+    }
 
 
 @router.get("/performance")

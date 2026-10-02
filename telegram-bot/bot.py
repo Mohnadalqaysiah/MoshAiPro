@@ -573,25 +573,31 @@ def fmt_outcome(o: dict) -> str:
     sign_pts = "+" if pnl >= 0 else ""
     sign_pct = "+" if pnl_pct >= 0 else ""
 
+    # (2026-10-03) النسبة % صارت الرقم الرئيسي لا النقاط — النقاط ليست
+    # عملة موحّدة بين الرموز (فارق المضاعف يبلغ 1200 ضعفاً، راجع
+    # _calc_points بـadmin.py وDECISIONS.md)، فعميل يراقب الفضة بيشوف
+    # نقاطاً صغيرة جداً مقابل نفس جودة صفقة على الذهب تبان نقاطها ضخمة —
+    # فرق مظهري بحت سببه السعر المطلق للرمز، لا جودة القرار. % مقارنة
+    # عادلة بين كل الرموز، فصارت هي البارزة والنقاط تفصيل ثانوي بعدها.
     if status == "TP2_HIT":
         header  = "🏆 *الهدف 2 تحقق!*"
         pnl_line = (
-            f"📈 الربح: *{sign_pts}{_fmt_pts(pnl)} نقطة*"
-            + (f"  │  *{sign_pct}{pnl_pct:.2f}%*" if pnl_pct else "")
+            f"📈 الربح: *{sign_pct}{pnl_pct:.2f}%*"
+            f"  │  {sign_pts}{_fmt_pts(pnl)} نقطة"
         )
         tip = "صفقة ممتازة — الهدف الكامل 🎯"
     elif status == "TP1_HIT":
         header  = "✅ *الهدف 1 تحقق!*"
         pnl_line = (
-            f"📈 الربح: *{sign_pts}{_fmt_pts(pnl)} نقطة*"
-            + (f"  │  *{sign_pct}{pnl_pct:.2f}%*" if pnl_pct else "")
+            f"📈 الربح: *{sign_pct}{pnl_pct:.2f}%*"
+            f"  │  {sign_pts}{_fmt_pts(pnl)} نقطة"
         )
         tip = "فكّر بنقل الإيقاف لنقطة التعادل 💡"
     else:
         header  = "🔴 *وقف الخسارة ضُرب*"
         pnl_line = (
-            f"📉 الخسارة: *{sign_pts}{_fmt_pts(pnl)} نقطة*"
-            + (f"  │  *{sign_pct}{pnl_pct:.2f}%*" if pnl_pct else "")
+            f"📉 الخسارة: *{sign_pct}{pnl_pct:.2f}%*"
+            f"  │  {sign_pts}{_fmt_pts(pnl)} نقطة"
         )
         tip = "الخسارة جزء من التداول — ثق بالاستراتيجية 💪"
 
@@ -999,6 +1005,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ends    = st.get("ends_at", "")
         name    = st.get("full_name", "") or "مستخدم"
         ref_pts = st.get("referral_points", 0)
+        wl      = st.get("watchlist_filter") or []
 
         # ── شريط Win Rate مرئي (10 خانات) ──
         filled_wr  = round(wr / 10)
@@ -1029,17 +1036,27 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pts_fmt = f"`{sign_r}{pts_r:.1f}`"
                 recent_lines += f"  {icon_r} {typ} *{mkt}*  {pts_fmt} نق  _{date}_\n"
 
+        # (2026-10-03) إحصائيات البوت صارت تُحصر تلقائياً برموز قائمة
+        # المراقبة الشخصية (notify_watchlist) — نفس ما يشوفه بالداشبورد
+        # بالضبط (راجع get_user_lifetime_stats بsignals.py). لو مخصّص
+        # رموزاً معيّنة، ننبّهه هون حتى ما يستغرب رقماً أصغر من "الكل".
+        wl_note = (
+            f"📍 _محسوبة على {len(wl)} رمز مخصَّص بقائمة مراقبتك فقط_\n"
+            if wl else ""
+        )
+
         text = (
             f"📊 *لوحة إحصائياتك*\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
             f"👤 *{name}*\n"
             f"{plan_line}\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"{wl_note}"
             f"📦 *الصفقات المغلقة:* {total}\n"
             f"  ✅ رابحة: *{wins}*   ❌ خاسرة: *{loss}*   ⏳ نشطة: *{active}*\n\n"
             f"🏆 *نسبة الربح:* *{wr:.1f}%*\n"
             f"  {wr_bar}\n\n"
-            f"{pts_emoji} *إجمالي النقاط:* `{pts_sign}{pts:.1f}`\n"
+            f"{pts_emoji} إجمالي النقاط: `{pts_sign}{pts:.1f}`\n"
         )
         if best:
             text += f"  🥇 أفضل: `+{best:.1f}` نقطة\n"

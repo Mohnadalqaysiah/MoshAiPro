@@ -230,7 +230,7 @@ def _provision_trial_user(
     smtp_pass = settings.SMTP_PASSWORD
     if smtp_pass:
         from app.services.email_service import send_email, welcome_email_body
-        body = welcome_email_body(user.full_name or user.email, trial_days=TRIAL_DAYS, trial_analyses=10)
+        body = welcome_email_body(user.full_name or user.email, trial_days=TRIAL_DAYS, trial_analyses=user.trial_analyses_left)
         background_tasks.add_task(send_email, user.email, "مرحباً بك في Qaffel AI 🎉", body, smtp_pass)
 
     return user

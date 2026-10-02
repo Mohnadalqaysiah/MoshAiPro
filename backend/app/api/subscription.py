@@ -323,8 +323,25 @@ def get_plans(db: Session = Depends(get_db)):
     spaceremit_cfg = _spaceremit_config(db)
     spaceremit_ready = spaceremit_cfg["enabled"] and bool(spaceremit_cfg["secret_key"]) and bool(spaceremit_cfg["public_key"])
 
+    # (2026-10-03) بلاغ: بطاقة الباقة المجانية بصفحات التسويق (Landing،
+    # Register، ...) كانت تعرض "10 تحليلات / 20 رسالة" ثابتة بالكود —
+    # نفس الرقمين اللذين يُضبطان فعلياً عبر SiteSettings
+    # (trial_analysis_limit/trial_chat_limit، يقرأهما auth.py._provision_trial_user
+    # عند التسجيل الفعلي). لو الأدمن غيّر الحد من لوحة الإعدادات، كانت
+    # صفحات التسويق تبقى تعرض الرقم القديم — فجوة مصداقية حقيقية بين
+    # الوعد والواقع. مصدر الحقيقة الوحيد الآن هنا، تُقرأ منه كل الواجهات.
+    try:
+        trial_analyses = int(db_settings.get("trial_analysis_limit") or 10)
+    except (TypeError, ValueError):
+        trial_analyses = 10
+    try:
+        trial_chat = int(db_settings.get("trial_chat_limit") or 20)
+    except (TypeError, ValueError):
+        trial_chat = 20
+
     return {
         "plans": plans,
+        "trial": {"analyses": trial_analyses, "chat": trial_chat},
         "wallet": wallet,
         "network": USDT_NETWORK,
         "note": "أرسل المبلغ بالضبط بالـ USDT ثم أدخل رقم المعاملة (TxID) للتحقق",
