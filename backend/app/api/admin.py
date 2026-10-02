@@ -1693,6 +1693,8 @@ class ReportSendIn(BaseModel):
     days: int = 7           # عدد الأيام للتقرير (7=أسبوع، 1=يوم، 30=شهر)
     channel: str = "telegram"  # "telegram" أو "email"
     include_expired: bool = True  # يشمل المستخدمين منتهي الاشتراك
+    category: Optional[str] = None  # forex/crypto/commodity/index/gulf — بلا تحديد = الكل
+    symbols: Optional[str] = None   # رموز محدّدة مفصولة بفاصلة، تفوق category
 
 
 # (2026-09-03) منطق تجميع "القرار الفريد" انتقل لملف مشترك
@@ -1818,9 +1820,26 @@ def _build_performance_report(signals: list, days: int, db: Session) -> tuple[st
     return tg_text, email_html
 
 
+def _resolve_report_market_filter(db: Session, category: Optional[str], symbols: Optional[str]) -> Optional[set]:
+    """
+    (2026-10-03) يحدّد مجموعة الرموز التي يُحصر بها تقرير الأداء (ومستلموه)
+    — None يعني "كل الرموز" (السلوك القديم، بلا تغيير). `symbols` يفوق
+    `category` عند توفّر الاثنين معاً (تحديد أدق: مثلاً XAUUSD فقط بدل
+    فئة "سلع" كاملة التي تخلط الذهب بالنفط والنحاس).
+    """
+    if symbols:
+        return {s.strip().upper() for s in symbols.split(",") if s.strip()}
+    if category:
+        rows = db.query(MarketConfig.symbol).filter(MarketConfig.category == category).all()
+        return {r[0].upper() for r in rows}
+    return None
+
+
 @router.get("/performance-report")
 def get_performance_report(
     days: int = Query(default=7, ge=1, le=90),
+    category: Optional[str] = Query(default=None, description="forex/crypto/commodity/index/gulf — بلا تحديد = الكل"),
+    symbols: Optional[str] = Query(default=None, description="رموز محدّدة مفصولة بفاصلة، مثلاً XAUUSD,XAGUSD — تفوق category"),
     admin: User = Depends(get_admin_user),
     db: Session = Depends(get_db),
 ):
@@ -1833,13 +1852,12 @@ def get_performance_report(
     now       = datetime.now(timezone.utc)
     start_dt  = now - timedelta(days=days)
     closed    = [SignalStatus.TP1_HIT, SignalStatus.TP2_HIT, SignalStatus.SL_HIT]
+    market_filter = _resolve_report_market_filter(db, category, symbols)
 
-    signals = (
-        db.query(Signal)
-        .filter(Signal.status.in_(closed), Signal.exit_executed >= start_dt)
-        .order_by(Signal.exit_executed.desc())
-        .all()
-    )
+    q = db.query(Signal).filter(Signal.status.in_(closed), Signal.exit_executed >= start_dt)
+    if market_filter:
+        q = q.filter(func.upper(Signal.market).in_(market_filter))
+    signals = q.order_by(Signal.exit_executed.desc()).all()
 
     decisions = _group_unique_decisions(signals)
 
@@ -1910,24 +1928,39 @@ def send_performance_report(
     admin: User = Depends(get_admin_user),
     db: Session = Depends(get_db),
 ):
-    """إرسال تقرير الأداء لكل المستخدمين عبر تيليجرام أو إيميل"""
+    """إرسال تقرير الأداء لكل المستخدمين عبر تيليجرام أو إيميل
+
+    (2026-10-03) دعم تخصيص التقرير برمز/فئة (مثلاً ذهب فقط، أو فوركس فقط)
+    — المحتوى يُحصر بقرارات تلك الرموز، والمستلمون يُحصرون بمن يهمّه
+    الأمر: من حدّد قائمة مراقبة شخصية تتقاطع مع الرموز المختارة، أو من
+    لم يخصّص شيئاً إطلاقاً (notify_watchlist فاضي = نفس اتفاقية "كل
+    الرموز" المستخدمة بكل مكان آخر بالمشروع — بوت.py، web_push_broadcaster
+    إلخ، راجع DECISIONS.md). من خصّص رموزاً أخرى لا تتقاطع يُستبعد — هو
+    بالضبط الهدف المطلوب: عميل يراقب الفوركس بس لا يصله تقرير مخصّص للذهب."""
     now      = datetime.now(timezone.utc)
     start_dt = now - timedelta(days=data.days)
     closed   = [SignalStatus.TP1_HIT, SignalStatus.TP2_HIT, SignalStatus.SL_HIT]
+    market_filter = _resolve_report_market_filter(db, data.category, data.symbols)
 
-    signals  = (
-        db.query(Signal)
-        .filter(Signal.status.in_(closed), Signal.exit_executed >= start_dt)
-        .order_by(Signal.exit_executed.desc())
-        .all()
-    )
+    sig_q = db.query(Signal).filter(Signal.status.in_(closed), Signal.exit_executed >= start_dt)
+    if market_filter:
+        sig_q = sig_q.filter(func.upper(Signal.market).in_(market_filter))
+    signals = sig_q.order_by(Signal.exit_executed.desc()).all()
 
     tg_text, email_html = _build_performance_report(signals, data.days, db)
     period = "اليوم" if data.days == 1 else f"آخر {data.days} يوم" if data.days < 30 else "الشهر"
+    if market_filter:
+        label = data.symbols or data.category
+        tg_text = f"🎯 تقرير مخصَّص — {label}\n\n{tg_text}"
 
     # ── جمع المستلمين ────────────────────────────────────────────────────────
     q = db.query(User).filter(User.is_active == True, User.plan != PlanType.BANNED)
     users = q.all()
+    if market_filter:
+        users = [
+            u for u in users
+            if not u.notify_watchlist or (set(s.upper() for s in u.notify_watchlist) & market_filter)
+        ]
 
     if data.channel == "telegram":
         if not _get_bot_token(db):

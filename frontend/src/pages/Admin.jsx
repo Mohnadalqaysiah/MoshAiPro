@@ -474,11 +474,31 @@ export default function Admin() {
   const [reportLoading, setReportLoading] = useState(false)
   const [reportSending, setReportSending] = useState(false)
   const [reportMsg, setReportMsg]         = useState(null)
+  // (2026-10-03) تخصيص التقرير برمز/فئة — "" = الكل. القيم الخاصة
+  // GOLD/SILVER تُرسَل كـsymbols مباشرة (أدقّ من فئة "commodity" التي
+  // تخلط الذهب بالنفط والنحاس)، وباقي الخيارات تُرسَل كـcategory.
+  const [reportFilter, setReportFilter]   = useState('')
+  const REPORT_FILTERS = [
+    { key:'',         label:'كل الرموز' },
+    { key:'g:GOLD',   label:'الذهب (XAUUSD)' },
+    { key:'g:SILVER', label:'الفضة (XAGUSD)' },
+    { key:'c:forex',  label:'فوركس' },
+    { key:'c:crypto', label:'كريبتو' },
+    { key:'c:commodity', label:'سلع (غير الذهب/الفضة)' },
+    { key:'c:index',  label:'مؤشرات' },
+    { key:'c:gulf',   label:'أسواق خليجية' },
+  ]
+  const _reportFilterParams = () => {
+    if (!reportFilter) return {}
+    if (reportFilter === 'g:GOLD')   return { symbols: 'XAUUSD' }
+    if (reportFilter === 'g:SILVER') return { symbols: 'XAGUSD' }
+    return { category: reportFilter.slice(2) }
+  }
 
   const loadReport = async (days) => {
     setReportLoading(true); setReportData(null); setReportMsg(null)
     try {
-      const r = await axios.get(`${API}/api/v1/admin/performance-report`, { params: { days } })
+      const r = await axios.get(`${API}/api/v1/admin/performance-report`, { params: { days, ..._reportFilterParams() } })
       setReportData(r.data)
     } catch { setReportMsg({ type:'err', text:'فشل جلب التقرير' }) }
     finally { setReportLoading(false) }
@@ -488,7 +508,7 @@ export default function Admin() {
     setReportSending(true); setReportMsg(null)
     try {
       const r = await axios.post(`${API}/api/v1/admin/performance-report/send`, {
-        days: reportDays, channel, include_expired: true
+        days: reportDays, channel, include_expired: true, ..._reportFilterParams()
       })
       setReportMsg({ type:'ok', text: r.data.message })
     } catch (err) { setReportMsg({ type:'err', text: err.response?.data?.detail || 'فشل الإرسال' }) }
@@ -2252,6 +2272,20 @@ export default function Admin() {
                     placeholder="أيام"
                   />
                 </div>
+                <h2 className="text-sm font-semibold text-gray-300 mb-2">تخصيص التقرير (اختياري)</h2>
+                <div className="flex flex-wrap gap-2 mb-1">
+                  {REPORT_FILTERS.map(f => (
+                    <button key={f.key} onClick={() => setReportFilter(f.key)}
+                      className={`px-3 py-1.5 rounded-lg text-xs transition ${reportFilter===f.key?'bg-purple-600 text-white':'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'}`}>
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+                {reportFilter && (
+                  <p className="text-[11px] text-gray-500 mb-3">
+                    عند الإرسال: يصل لمن حدّد رموزاً تتقاطع مع هذا الاختيار بقائمة مراقبته، ولمن لم يخصّص أي رمز (يراقب الكل افتراضياً) — لا يصل لمن حدّد رموزاً أخرى لا تتقاطع.
+                  </p>
+                )}
                 <button onClick={() => loadReport(reportDays)} disabled={reportLoading}
                   className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-5 py-2 rounded-lg text-sm transition">
                   {reportLoading ? <RefreshCw size={14} className="animate-spin"/> : <FileText size={14}/>}
@@ -2264,6 +2298,7 @@ export default function Admin() {
                 <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 mb-5">
                   <h2 className="text-sm font-semibold text-gray-300 mb-4">
                     📊 تقرير آخر {reportDays} يوم
+                    {reportFilter && <span className="text-purple-400"> — {REPORT_FILTERS.find(f => f.key === reportFilter)?.label}</span>}
                   </h2>
 
                   {/* الإحصائيات */}
