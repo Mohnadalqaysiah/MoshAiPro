@@ -187,7 +187,11 @@ def _fmt_pts(v) -> str:
 # نفس الجدول المستخدم فعلياً بالخادم عند حفظ الإشارة (save-alert-signal/
 # signals.py) — مكرَّر عمداً هون لأن telegram-bot عملية منفصلة بلا وصول
 # مباشر لكود الباك-إند.
-_EXPIRY_HOURS = {"1m": 2, "5m": 4, "15m": 8, "30m": 12, "1h": 24, "4h": 72, "1d": 168, "1w": 336}
+# (2026-10-03) 15m نزلت من 8 لـ3 ساعات (32× حجم الشمعة كانت شذوذاً عن
+# الانحدار المتدرّج حولها: 5m=48×، 30m=24× — بنية 15m تتغيّر فعلياً خلال
+# ساعات قليلة). نفس القيمة محدَّثة بالخادم (bot.py/signals.py) — الثلاثة
+# لازم يبقوا متطابقين دائماً.
+_EXPIRY_HOURS = {"1m": 2, "5m": 4, "15m": 3, "30m": 12, "1h": 24, "4h": 72, "1d": 168, "1w": 336}
 
 
 def _fmt_expiry(expires_at_iso: str | None) -> str:
@@ -198,7 +202,13 @@ def _fmt_expiry(expires_at_iso: str | None) -> str:
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
         local = dt.astimezone(timezone(timedelta(hours=3)))
-        return f"⏳ صالحة حتى: `{local.strftime('%H:%M')}` ({local.strftime('%d/%m')})\n"
+        # (2026-10-03) "صالحة حتى" كانت توحي بضمان صلاحية الإعداد لحظة
+        # بلحظة لحد هالوقت — والسوق متقلب، البنية ممكن تتغيّر قبلها
+        # بكثير. "أقصى مهلة" + تنبيه صريح يوضّح إنه سقف احترازي لا وعد.
+        return (
+            f"⏳ أقصى مهلة: `{local.strftime('%H:%M')}` ({local.strftime('%d/%m')})"
+            f" — راقب السوق، الإعداد قد يتغيّر قبلها\n"
+        )
     except Exception:
         return ""
 
@@ -431,6 +441,10 @@ def fmt_analysis(data: dict, symbol: str, timeframe: str) -> str:
     if tp2: msg += f"✅ هدف 2: `{_fmt_price(tp2)}`\n"
     if rr:  msg += f"⚖️ R/R:   `{float(rr):.2f}x`\n"
     if rec in ("BUY", "SELL"):
+        # (2026-10-03) نفس تنبيه "تأمين الصفقة" بـfmt_new_signal — موحَّد
+        # عبر كل مصادر الإشارة الأولى (بث تلقائي أو تحليل يدوي)، لا رسالة
+        # تحقق الهدف بعد فوات الأوان.
+        msg += "💡 عند تحقيق الهدف 1، فكّر بنقل وقف الخسارة لنقطة الدخول لتأمين الصفقة\n"
         # لا expires_at فعلي هون (data تحليل حي، لا صف Signal محفوظ بعد) —
         # نفس tf_hours المستخدم فعلياً عند save-alert-signal بالخادم لحظات لاحقاً.
         _exp_h  = _EXPIRY_HOURS.get(timeframe, 24)
@@ -510,6 +524,11 @@ def fmt_new_signal(s: dict) -> str:
     )
     if rr:
         msg += f"⚖️ R/R:   `{float(rr):.1f}x`\n"
+    # (2026-10-03) نقل تنبيه "تأمين الصفقة" (نقل الوقف لنقطة الدخول) من
+    # رسالة تحقق الهدف 1 (كان بعد فوات الأوان لمن ما يتابع تلغرام لحظياً)
+    # لنفس الإشارة الأولى — المتداول يعرف الخطة مسبقاً بدل ما يُفاجأ فيها
+    # بعد تحقق الهدف.
+    msg += "💡 عند تحقيق الهدف 1، فكّر بنقل وقف الخسارة لنقطة الدخول لتأمين الصفقة\n"
     msg += _fmt_expiry(s.get("expires_at"))
     if tt_warning:
         msg += f"{tt_warning}\n"
@@ -592,7 +611,7 @@ def fmt_outcome(o: dict) -> str:
             f"📈 الربح: *{sign_pct}{pnl_pct:.2f}%*"
             f"  │  {sign_pts}{_fmt_pts(pnl)} نقطة"
         )
-        tip = "فكّر بنقل الإيقاف لنقطة التعادل 💡"
+        tip = "الهدف التالي هدف 2 — استمر بالمتابعة 🎯"
     else:
         header  = "🔴 *وقف الخسارة ضُرب*"
         pnl_line = (

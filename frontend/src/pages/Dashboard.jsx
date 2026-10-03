@@ -7,6 +7,7 @@ import useMarkets from '../hooks/useMarkets'
 import { useLang } from '../contexts/LangContext'
 import PerformanceSection from '../components/PerformanceSection'
 import ExpiryCountdown from '../components/ExpiryCountdown'
+import TradingViewChart from '../components/TradingViewChart'
 import ReferralWidget from '../components/ReferralWidget'
 import PriceAlertWidget from '../components/PriceAlertWidget'
 import SignalScorecard from '../components/SignalScorecard'
@@ -78,6 +79,7 @@ export default function Dashboard() {
   const [activeTab,       setActiveTab]       = useState('home')
   const [confluenceSymbol, setConfluenceSymbol] = useState(null)  // ConfluenceModal
   const [showCalc, setShowCalc]           = useState(false)      // position size calc
+  const [showChart, setShowChart]         = useState(false)      // TradingView chart
   const [calcBalance, setCalcBalance]     = useState(1000)
   const [calcRisk, setCalcRisk]           = useState(1)
   const [copiedSignal, setCopiedSignal]   = useState(false)
@@ -382,6 +384,25 @@ export default function Dashboard() {
                 <span>{result.news_context}</span>
               </div>
             )}
+
+            {/* ── TradingView Chart — عرض بصري بحت، لا يلمس أي رقم/إشارة عندنا ── */}
+            <div className="border border-gray-700/60 rounded-xl overflow-hidden">
+              <button
+                onClick={() => setShowChart(v => !v)}
+                className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-800/60 hover:bg-gray-800 transition-colors text-sm"
+              >
+                <span className="flex items-center gap-2 text-gray-300 font-medium">
+                  <BarChart2 size={14} className="text-blue-400" />
+                  {isAr ? 'الشارت' : 'Chart'}
+                </span>
+                {showChart ? <ChevronUp size={14} className="text-gray-500" /> : <ChevronDown size={14} className="text-gray-500" />}
+              </button>
+              {showChart && (
+                <div className="p-2 bg-gray-800/30">
+                  <TradingViewChart symbol={sym} height={360} />
+                </div>
+              )}
+            </div>
 
             {/* ── Position Size Calculator ──────────────────────────── */}
             <div className="border border-gray-700/60 rounded-xl overflow-hidden">

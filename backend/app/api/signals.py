@@ -174,7 +174,9 @@ async def analyze_market(
                     and analysis.get("market_open", True) and _sd.is_market_open(symbol):
 
                 sig_type  = SignalType.BUY if rec == "BUY" else SignalType.SELL
-                tf_hours  = {"1m":2,"5m":4,"15m":8,"30m":12,"1h":24,"4h":72,"1d":168,"1w":336}
+                # (2026-10-03) 15m نزلت من 8 لـ3 ساعات — راجع تعليق bot.py
+                # (bot_save_alert_signal) لنفس التعديل والسبب الكامل.
+                tf_hours  = {"1m":2,"5m":4,"15m":3,"30m":12,"1h":24,"4h":72,"1d":168,"1w":336}
                 expires_h = tf_hours.get(timeframe, 24)
                 expires_at = datetime.now(timezone.utc) + timedelta(hours=expires_h)
                 # (2026-09-27) analysis يُعاد للفرونت مباشرة بلا مرور بـ/latest —

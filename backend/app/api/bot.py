@@ -247,7 +247,9 @@ async def bot_analyze(
                     and signal_user_id is not None:
 
                 sig_type  = SignalType.BUY if rec == "BUY" else SignalType.SELL
-                tf_hours  = {"1m":2,"5m":4,"15m":8,"30m":12,"1h":24,"4h":72,"1d":168,"1w":336}
+                # (2026-10-03) 15m نزلت من 8 لـ3 ساعات — راجع تعليق
+                # bot_save_alert_signal أسفل بنفس الملف للسبب الكامل.
+                tf_hours  = {"1m":2,"5m":4,"15m":3,"30m":12,"1h":24,"4h":72,"1d":168,"1w":336}
                 expires_h = tf_hours.get(timeframe, 24)
                 expires_at = datetime.now(timezone.utc) + timedelta(hours=expires_h)
 
@@ -1280,7 +1282,12 @@ def bot_save_alert_signal(
     if _user_has_active_signal(db, user.id, symbol, timeframe):
         return {"saved": False, "reason": "duplicate active position, waiting for resolution"}
 
-    tf_hours   = {"1m": 2, "5m": 4, "15m": 8, "30m": 12, "1h": 24, "4h": 72, "1d": 168}
+    # (2026-10-03) 15m كانت 8 ساعات (32× حجم الشمعة — شذوذ مقارنة بالجدول
+    # المتدرّج حولها: 5m=48×، 30m=24×). بنية السوق يلي بُنيت عليها إشارة
+    # 15m تتغيّر فعلياً خلال ساعات قليلة، فـ8 ساعات تعني إشارة "صالحة"
+    # لإعداد عملياً انتهى بحكم الواقع. نزلت لـ3 ساعات (12× — أقرب لانحدار
+    # الجدول). بتفويض صريح من صاحب المنتج.
+    tf_hours   = {"1m": 2, "5m": 4, "15m": 3, "30m": 12, "1h": 24, "4h": 72, "1d": 168}
     expires_at = datetime.now(timezone.utc) + timedelta(hours=tf_hours.get(timeframe, 24))
 
     sig_hash = hashlib.md5(
