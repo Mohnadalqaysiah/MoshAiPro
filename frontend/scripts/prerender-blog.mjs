@@ -34,25 +34,26 @@ function sub(html, re, replacement, label) {
 }
 
 // نفس معالجة renderInline بـBlogPost.jsx: [نص](رابط) → <a>
-function inline(text) {
+// prefix = '' | '/en' — روابط داخلية بلغة الصفحة، مثل renderInline بالكلاينت
+function inline(text, prefix) {
   return esc(text).replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, url) => {
     const external = !url.startsWith('/')
-    return `<a href="${url}"${external ? ' rel="noopener noreferrer" target="_blank"' : ''}>${label}</a>`
+    return `<a href="${external ? url : prefix + url}"${external ? ' rel="noopener noreferrer" target="_blank"' : ''}>${label}</a>`
   })
 }
 
-function renderBody(items) {
+function renderBody(items, prefix) {
   const out = []
   for (let i = 0; i < items.length; i++) {
     const it = items[i]
     if (it.type === 'ul' || it.type === 'ol') {
       const lis = []
-      while (items[i + 1]?.type === 'li') lis.push(`<li>${inline(items[++i].text)}</li>`)
+      while (items[i + 1]?.type === 'li') lis.push(`<li>${inline(items[++i].text, prefix)}</li>`)
       out.push(`<${it.type}>${lis.join('')}</${it.type}>`)
     } else if (it.type === 'h2' || it.type === 'h3') {
       out.push(`<${it.type}>${esc(it.text)}</${it.type}>`)
     } else if (it.type === 'p') {
-      out.push(`<p>${inline(it.text)}</p>`)
+      out.push(`<p>${inline(it.text, prefix)}</p>`)
     } else if (it.type === 'quote') {
       out.push(`<blockquote><p>${esc(it.text)}</p></blockquote>`)
     }
@@ -119,7 +120,7 @@ function build(post, lang) {
   // ids مطابقة لـuseJsonLd ⇒ الكلاينت يحدّث نفس الوسم بدل ما يضيف نسخة ثانية
   h = sub(h, /<\/head>/, `${ld('ld-article', article)}\n    ${ld('ld-breadcrumb', breadcrumb)}\n  </head>`, 'head end')
   h = sub(h, /<div id="root"><\/div>/,
-    `<div id="root"><article><h1>${esc(title)}</h1><p>${esc(desc)}</p>\n${renderBody(content)}</article></div>`, 'root')
+    `<div id="root"><article><p>${isAr ? 'نُشر' : 'Published'}: <time datetime="${post.date}">${post.date}</time>${post.updated && post.updated !== post.date ? ` · ${isAr ? 'آخر تحديث' : 'Last updated'}: <time datetime="${post.updated}">${post.updated}</time>` : ''}</p><h1>${esc(title)}</h1><p>${esc(desc)}</p>\n${renderBody(content, isAr ? '' : '/en')}</article></div>`, 'root')
   return { path, html: h }
 }
 
