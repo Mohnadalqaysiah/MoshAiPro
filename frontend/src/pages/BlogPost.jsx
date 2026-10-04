@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Link, useParams, Navigate } from 'react-router-dom'
+import { Link, useParams, useLocation, Navigate } from 'react-router-dom'
 import { useLang } from '../contexts/LangContext'
 import { getPost, BLOG_POSTS } from '../data/blogPosts'
 import { Clock, ChevronLeft, ChevronRight, Tag, ArrowLeft, ArrowRight } from 'lucide-react'
@@ -8,6 +8,8 @@ import useArticleSchema from '../hooks/useArticleSchema'
 import useBreadcrumbSchema from '../hooks/useBreadcrumbSchema'
 import { OrderBlockDiagram, FVGDiagram, BosChochDiagram } from '../components/BlogDiagrams'
 import PublicLayout from '../components/PublicLayout'
+import useTrialLimits from '../hooks/useTrialLimits'
+import { pathLangInfo } from '../utils/langRoutes'
 
 const DIAGRAMS = {
   orderblock: OrderBlockDiagram,
@@ -16,7 +18,8 @@ const DIAGRAMS = {
 }
 
 // ── Inline markdown-style links: [label](/path) → <Link>, [label](https://…) → <a>
-function renderInline(text) {
+// prefix = '' | '/en' — روابط المقال الداخلية تبقى بنفس لغة الصفحة (/en/blog/x من صفحة /en/*)
+function renderInline(text, prefix = '') {
   if (!text || !text.includes('[')) return text
   const parts = []
   const re = /\[([^\]]+)\]\(([^)]+)\)/g
@@ -25,7 +28,7 @@ function renderInline(text) {
     if (m.index > last) parts.push(text.slice(last, m.index))
     const [, label, url] = m
     if (url.startsWith('/')) {
-      parts.push(<Link key={m.index} to={url} className="text-blue-400 hover:text-blue-300 underline underline-offset-2">{label}</Link>)
+      parts.push(<Link key={m.index} to={prefix + url} className="text-blue-400 hover:text-blue-300 underline underline-offset-2">{label}</Link>)
     } else {
       parts.push(<a key={m.index} href={url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline underline-offset-2">{label}</a>)
     }
@@ -36,17 +39,17 @@ function renderInline(text) {
 }
 
 // ── Render individual content block ─────────────────────────────────────────
-function ContentBlock({ item }) {
+function ContentBlock({ item, prefix }) {
   switch (item.type) {
     case 'h2':    return <h2 className="text-2xl font-black text-white mt-10 mb-4 leading-snug">{item.text}</h2>
     case 'h3':    return <h3 className="text-lg font-bold text-blue-300 mt-7 mb-3">{item.text}</h3>
-    case 'p':     return <p className="text-gray-300 leading-relaxed mb-4">{renderInline(item.text)}</p>
+    case 'p':     return <p className="text-gray-300 leading-relaxed mb-4">{renderInline(item.text, prefix)}</p>
     case 'ul':    return null   // container for li items — handled below
     case 'ol':    return null
     case 'li':    return (
       <li className="flex items-start gap-2.5 text-gray-300 mb-2">
         <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0" />
-        <span>{renderInline(item.text)}</span>
+        <span>{renderInline(item.text, prefix)}</span>
       </li>
     )
     case 'quote': return (
@@ -63,7 +66,7 @@ function ContentBlock({ item }) {
 }
 
 // ── Group consecutive li items into ul/ol containers ────────────────────────
-function renderContent(items) {
+function renderContent(items, prefix) {
   const out = []
   let i = 0
   while (i < items.length) {
@@ -73,7 +76,7 @@ function renderContent(items) {
       const lis = []
       i++
       while (i < items.length && items[i].type === 'li') {
-        lis.push(<ContentBlock key={i} item={items[i]} />)
+        lis.push(<ContentBlock key={i} item={items[i]} prefix={prefix} />)
         i++
       }
       out.push(
@@ -82,7 +85,7 @@ function renderContent(items) {
         </Tag>
       )
     } else {
-      out.push(<ContentBlock key={i} item={item} />)
+      out.push(<ContentBlock key={i} item={item} prefix={prefix} />)
       i++
     }
   }
@@ -97,16 +100,20 @@ export default function BlogPost() {
   const ArrowBack  = isAr ? ArrowRight  : ArrowLeft
 
   const post = getPost(slug)
+  const trial = useTrialLimits()
+  const { pathname } = useLocation()
+  // المسار الفعلي المعروض (يشمل /en) — للـschema والروابط الداخلية
+  const prefix = pathLangInfo(pathname).isEn ? '/en' : ''
 
   useSEO({
     title: post ? (isAr ? post.metaTitleAr : post.metaTitleEn) : undefined,
     description: post ? (isAr ? post.metaDescAr : post.metaDescEn) : undefined,
   })
-  useArticleSchema(post, isAr, `/blog/${slug}`)
+  useArticleSchema(post, isAr, `${prefix}/blog/${slug}`)
   useBreadcrumbSchema(post ? [
-    { name: isAr ? 'الرئيسية' : 'Home', path: '/' },
-    { name: isAr ? 'المدونة' : 'Blog', path: '/blog' },
-    { name: isAr ? post.titleAr : post.titleEn, path: `/blog/${slug}` },
+    { name: isAr ? 'الرئيسية' : 'Home', path: prefix || '/' },
+    { name: isAr ? 'المدونة' : 'Blog', path: `${prefix}/blog` },
+    { name: isAr ? post.titleAr : post.titleEn, path: `${prefix}/blog/${slug}` },
   ] : null)
 
   useEffect(() => {
@@ -119,6 +126,7 @@ export default function BlogPost() {
   const desc    = isAr ? post.descAr  : post.descEn
   const content = isAr ? post.contentAr : post.contentEn
   const cat     = isAr ? post.category.ar : post.category.en
+  const fmtDate = (d) => new Date(d).toLocaleDateString(isAr ? 'ar-SA' : 'en-US', { year: 'numeric', month: 'long', day: 'numeric' })
 
   // Related posts (same category, exclude current)
   const related = BLOG_POSTS
@@ -130,9 +138,9 @@ export default function BlogPost() {
       {/* ── Breadcrumb ── */}
       <div className="border-b border-white/5 bg-[#070b14]/80">
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-2 text-sm text-gray-500 flex-wrap">
-          <Link to="/" className="hover:text-blue-400 transition-colors">{isAr ? 'الرئيسية' : 'Home'}</Link>
+          <Link to={prefix || '/'} className="hover:text-blue-400 transition-colors">{isAr ? 'الرئيسية' : 'Home'}</Link>
           <ChevronBtn size={13} />
-          <Link to="/blog" className="hover:text-blue-400 transition-colors">{isAr ? 'المدونة' : 'Blog'}</Link>
+          <Link to={`${prefix}/blog`} className="hover:text-blue-400 transition-colors">{isAr ? 'المدونة' : 'Blog'}</Link>
           <ChevronBtn size={13} />
           <span className="text-gray-400 truncate max-w-[200px]">{title}</span>
         </div>
@@ -140,7 +148,7 @@ export default function BlogPost() {
 
       <article className="max-w-3xl mx-auto px-4 py-12">
         {/* Back link */}
-        <Link to="/blog"
+        <Link to={`${prefix}/blog`}
           className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-blue-400 transition-colors mb-8">
           <ArrowBack size={15} />
           {isAr ? 'العودة للمدونة' : 'Back to Blog'}
@@ -156,8 +164,15 @@ export default function BlogPost() {
             {post.readTime} {isAr ? 'دقائق قراءة' : 'min read'}
           </span>
           <span className="text-xs text-gray-400">
-            {new Date(post.date).toLocaleDateString(isAr ? 'ar-SA' : 'en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+            {isAr ? 'نُشر: ' : 'Published: '}
+            <time dateTime={post.date}>{fmtDate(post.date)}</time>
           </span>
+          {post.updated && post.updated !== post.date && (
+            <span className="text-xs text-gray-400">
+              {isAr ? 'آخر تحديث: ' : 'Last updated: '}
+              <time dateTime={post.updated}>{fmtDate(post.updated)}</time>
+            </span>
+          )}
         </div>
 
         {/* Title */}
@@ -172,7 +187,7 @@ export default function BlogPost() {
 
         {/* Content */}
         <div className="prose-custom">
-          {renderContent(content)}
+          {renderContent(content, prefix)}
         </div>
 
         {/* Tags */}
@@ -198,9 +213,9 @@ export default function BlogPost() {
               ? 'بدلاً من التحليل اليدوي — احصل على إشارة كاملة مع الدخول والوقف والأهداف مباشرة على Telegram'
               : 'Instead of manual analysis — get a complete signal with entry, SL, and TPs directly on Telegram'}
           </p>
-          <Link to="/register"
+          <Link to={`${prefix}/register`}
             className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white px-8 py-3 rounded-xl font-bold transition-all hover:scale-105 shadow-lg shadow-blue-500/20 text-sm">
-            {isAr ? 'ابدأ مجاناً — 10 تحليلات' : 'Start Free — 10 Analyses'}
+            {isAr ? `ابدأ مجاناً — ${trial.analyses} تحليلات` : `Start Free — ${trial.analyses} Analyses`}
             <ChevronBtn size={15} />
           </Link>
         </div>
@@ -213,7 +228,7 @@ export default function BlogPost() {
             </h3>
             <div className="grid md:grid-cols-2 gap-4">
               {related.map(rp => (
-                <Link key={rp.slug} to={`/blog/${rp.slug}`}
+                <Link key={rp.slug} to={`${prefix}/blog/${rp.slug}`}
                   className="group flex flex-col border border-white/8 hover:border-blue-500/30 rounded-xl p-5 transition-all hover:-translate-y-0.5">
                   <span className="text-xs text-gray-400 mb-2 flex items-center gap-1">
                     <Clock size={10} /> {rp.readTime} {isAr ? 'دقائق' : 'min'}

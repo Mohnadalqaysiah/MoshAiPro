@@ -14,7 +14,8 @@ export default function useArticleSchema(post, isAr, path) {
     description: desc,
     image: `${ORIGIN}/og-image.png`,
     datePublished: post.date,
-    dateModified: post.date,
+    // updated حقل اختياري يُملأ فقط عند تحديث حقيقي للمحتوى — لا يُغيَّر لإيهام الحداثة
+    dateModified: post.updated || post.date,
     inLanguage: isAr ? 'ar' : 'en',
     author: {
       '@type': 'Organization',

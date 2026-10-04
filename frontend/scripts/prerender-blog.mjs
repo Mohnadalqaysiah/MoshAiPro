@@ -78,7 +78,7 @@ function build(post, lang) {
   const article = {
     '@context': 'https://schema.org', '@type': 'Article',
     headline: title, description: desc, image: `${ORIGIN}/og-image.png`,
-    datePublished: post.date, dateModified: post.date, inLanguage: lang,
+    datePublished: post.date, dateModified: post.updated || post.date, inLanguage: lang,
     author: { '@type': 'Organization', name: 'Qaffel AI', url: ORIGIN },
     publisher: { '@type': 'Organization', name: 'Qaffel AI',
       logo: { '@type': 'ImageObject', url: `${ORIGIN}/brand/logo-icon-only.png` } },

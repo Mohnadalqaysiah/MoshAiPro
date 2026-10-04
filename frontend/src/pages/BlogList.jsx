@@ -1,14 +1,18 @@
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { useLang } from '../contexts/LangContext'
 import { BLOG_POSTS } from '../data/blogPosts'
 import { BookOpen, Clock, ChevronLeft, ChevronRight, Tag } from 'lucide-react'
 import useSEO from '../hooks/useSEO'
 import useBreadcrumbSchema from '../hooks/useBreadcrumbSchema'
 import PublicLayout from '../components/PublicLayout'
+import useTrialLimits from '../hooks/useTrialLimits'
+import { pathLangInfo } from '../utils/langRoutes'
 
 export default function BlogList() {
   const { lang } = useLang()
   const isAr = lang === 'ar'
+  const trial = useTrialLimits()
+  const prefix = pathLangInfo(useLocation().pathname).isEn ? '/en' : ''
   const ChevronBtn = isAr ? ChevronLeft : ChevronRight
 
   useSEO({
@@ -21,9 +25,9 @@ export default function BlogList() {
   })
 
   useBreadcrumbSchema([
-    { name: isAr ? 'الرئيسية' : 'Home', path: '/' },
-    { name: isAr ? 'المدونة' : 'Blog', path: '/blog' },
-  ], isAr)
+    { name: isAr ? 'الرئيسية' : 'Home', path: prefix || '/' },
+    { name: isAr ? 'المدونة' : 'Blog', path: `${prefix}/blog` },
+  ])
 
   const sorted = [...BLOG_POSTS].sort((a, b) => new Date(b.date) - new Date(a.date))
 
@@ -32,7 +36,7 @@ export default function BlogList() {
       {/* ── Header ── */}
       <div className="border-b border-white/5 bg-[#070b14]/80">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center gap-3 text-sm text-gray-500">
-          <Link to="/" className="hover:text-blue-400 transition-colors">
+          <Link to={prefix || '/'} className="hover:text-blue-400 transition-colors">
             {isAr ? 'الرئيسية' : 'Home'}
           </Link>
           <ChevronBtn size={14} />
@@ -67,7 +71,7 @@ export default function BlogList() {
             const desc  = isAr ? post.descAr  : post.descEn
             const cat   = isAr ? post.category.ar : post.category.en
             return (
-              <Link key={post.slug} to={`/blog/${post.slug}`}
+              <Link key={post.slug} to={`${prefix}/blog/${post.slug}`}
                 className="group relative flex flex-col bg-gradient-to-br from-white/4 to-white/[0.01] border border-white/8 hover:border-blue-500/30 rounded-2xl p-6 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-blue-500/10">
 
                 {/* Category + read time */}
@@ -123,10 +127,10 @@ export default function BlogList() {
           </h3>
           <p className="text-gray-400 mb-6">
             {isAr
-              ? 'Qaffel AI يطبق كل هذه المفاهيم تلقائياً — احصل على 10 تحليلات مجانية الآن'
-              : 'Qaffel AI applies all these concepts automatically — get 10 free analyses now'}
+              ? `Qaffel AI يطبق كل هذه المفاهيم تلقائياً — احصل على ${trial.analyses} تحليلات مجانية الآن`
+              : `Qaffel AI applies all these concepts automatically — get ${trial.analyses} free analyses now`}
           </p>
-          <Link to="/register"
+          <Link to={`${prefix}/register`}
             className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white px-8 py-3.5 rounded-xl font-bold transition-all hover:scale-105 shadow-lg shadow-blue-500/20">
             {isAr ? 'ابدأ مجاناً' : 'Start Free'}
             <ChevronBtn size={16} />

@@ -18,6 +18,13 @@ function setOrRemoveAlternate(hreflang, href) {
   }
 }
 
+// og:/twitter: — بدونها كل صفحة تُشارَك ببطاقة الرئيسية (قيم index.html الثابتة)
+function setMeta(attr, key, content) {
+  if (!content) return
+  const el = document.querySelector(`meta[${attr}="${key}"]`)
+  if (el) el.setAttribute('content', content)
+}
+
 export default function useSEO({ title, description, canonical, extraHreflang }) {
   useEffect(() => {
     if (title) document.title = title
@@ -38,6 +45,12 @@ export default function useSEO({ title, description, canonical, extraHreflang })
       document.head.appendChild(link)
     }
     link.href = canonical || `${ORIGIN}${path}`
+
+    setMeta('property', 'og:url', link.href)
+    setMeta('property', 'og:title', title)
+    setMeta('property', 'og:description', description)
+    setMeta('name', 'twitter:title', title)
+    setMeta('name', 'twitter:description', description)
 
     // hreflang — بس للصفحات اللي فعلاً إلها نسخة إنجليزية حقيقية على /en/*
     // (مش كل الصفحات، تفادياً لتكرار مشكلة hreflang يشاور لرابط بدون محتوى)

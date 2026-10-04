@@ -82,7 +82,10 @@ function LangRouteSync() {
   const { setLangDirect } = useLang()
   useEffect(() => {
     const isEn = location.pathname === '/en' || location.pathname.startsWith('/en/')
-    setLangDirect(isEn ? 'en' : (localStorage.getItem('qaffel_lang') || 'ar'))
+    const lang = isEn ? 'en' : (localStorage.getItem('qaffel_lang') || 'ar')
+    setLangDirect(lang)
+    // lang على <html> يتبع لغة المحتوى المعروض (كان ثابتاً "ar" حتى لصفحات /en)
+    document.documentElement.lang = lang
   }, [location.pathname, setLangDirect])
   return null
 }
