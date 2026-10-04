@@ -79,19 +79,23 @@ def admin_stats(
     admin: User = Depends(get_admin_user),
     db: Session = Depends(get_db)
 ):
-    total_users   = db.query(User).count()
-    trial_users   = db.query(User).filter(User.plan == PlanType.TRIAL).count()
-    weekly_users  = db.query(User).filter(User.plan == PlanType.WEEKLY).count()
-    monthly_users = db.query(User).filter(User.plan == PlanType.MONTHLY).count()
-    banned_users  = db.query(User).filter(User.plan == PlanType.BANNED).count()
-    telegram_linked_users = db.query(User).filter(User.telegram_id.isnot(None)).count()
+    # (2026-10-04) حسابات الإدارة (اختبار/شخصية) ما تُحسب كمشتركين ولا
+    # إيرادات — الإحصائيات تعكس العملاء الفعليين فقط.
+    non_admin = User.role != UserRole.ADMIN
+    total_users   = db.query(User).filter(non_admin).count()
+    trial_users   = db.query(User).filter(non_admin, User.plan == PlanType.TRIAL).count()
+    weekly_users  = db.query(User).filter(non_admin, User.plan == PlanType.WEEKLY).count()
+    monthly_users = db.query(User).filter(non_admin, User.plan == PlanType.MONTHLY).count()
+    banned_users  = db.query(User).filter(non_admin, User.plan == PlanType.BANNED).count()
+    telegram_linked_users = db.query(User).filter(non_admin, User.telegram_id.isnot(None)).count()
     active_markets = db.query(MarketConfig).filter(MarketConfig.is_active == True).count()
 
     pending_payments = db.query(Payment).filter(
         Payment.status == PaymentStatus.PENDING
     ).count()
     approved_payments = db.query(Payment).filter(
-        Payment.status == PaymentStatus.APPROVED
+        Payment.status == PaymentStatus.APPROVED,
+        Payment.exclude_from_stats == False,
     ).all()
     total_revenue = sum(p.amount_usd for p in approved_payments)
 
@@ -629,6 +633,27 @@ def list_payments(
     payments = q.order_by(Payment.created_at.desc()).offset(skip).limit(limit).all()
     total = q.count()
     return {"total": total, "payments": [_payment_full(p, db) for p in payments]}
+
+
+class PaymentStatsFlagIn(BaseModel):
+    exclude: bool
+
+
+@router.put("/payments/{payment_id}/exclude-from-stats")
+def set_payment_exclude_from_stats(
+    payment_id: int,
+    data: PaymentStatsFlagIn,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """(2026-10-04) استبعاد/إرجاع دفعة من إحصائيات الإيرادات — بدون حذف السجل."""
+    payment = db.query(Payment).filter(Payment.id == payment_id).first()
+    if not payment:
+        raise HTTPException(404, "الدفع غير موجود")
+    payment.exclude_from_stats = data.exclude
+    db.commit()
+    logger.info(f"💳 Payment #{payment_id} exclude_from_stats={data.exclude} by {admin.email}")
+    return {"success": True, "exclude_from_stats": data.exclude}
 
 
 @router.put("/payments/{payment_id}")
@@ -1638,6 +1663,7 @@ def _payment_info(p: Payment) -> dict:
         "tx_id":      p.tx_id,
         "status":     p.status,
         "admin_note": p.admin_note,
+        "exclude_from_stats": bool(p.exclude_from_stats),
         "created_at": p.created_at.isoformat() if p.created_at else None,
     }
 

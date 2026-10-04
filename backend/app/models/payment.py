@@ -54,6 +54,10 @@ class Payment(Base):
     status      = Column(SAEnum(PaymentStatus), default=PaymentStatus.PENDING)
     admin_note  = Column(String, nullable=True)
     approved_by = Column(Integer, nullable=True)          # admin user id
+    # (2026-10-04) دفعات تجريبية/اختبارية تُستبعد من الإحصائيات (الإيرادات
+    # وعدد الاشتراكات) بدون حذف السجل نفسه — نفس مبدأ الكوبونات: لا نمحو
+    # أثراً مالياً، نوقفه عن الحساب.
+    exclude_from_stats = Column(Boolean, default=False, nullable=False)
 
     created_at  = Column(DateTime(timezone=True), server_default=func.now())
     updated_at  = Column(DateTime(timezone=True), onupdate=func.now())

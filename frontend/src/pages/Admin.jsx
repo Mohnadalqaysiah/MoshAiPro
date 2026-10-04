@@ -1570,6 +1570,19 @@ export default function Admin() {
                             </button>
                           </div>
                         )}
+                        {p.status === 'approved' && (
+                          <button
+                            onClick={async () => {
+                              await axios.put(`${API}/api/v1/admin/payments/${p.id}/exclude-from-stats`, { exclude: !p.exclude_from_stats })
+                              loadPayments(); loadStats()
+                            }}
+                            className={`text-xs px-3 py-1.5 rounded-lg ${p.exclude_from_stats ? 'bg-yellow-700 hover:bg-yellow-600' : 'bg-gray-700 hover:bg-gray-600'} text-white`}>
+                            {p.exclude_from_stats ? '↩ إرجاع للإحصائيات' : '🚫 استبعاد من الإحصائيات'}
+                          </button>
+                        )}
+                        {p.exclude_from_stats && (
+                          <span className="text-[10px] text-yellow-400">مستبعدة من الإيرادات والإحصائيات</span>
+                        )}
                       </div>
                     </div>
                   </div>
