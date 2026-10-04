@@ -82,10 +82,15 @@ def admin_stats(
     # (2026-10-04) حسابات الإدارة (اختبار/شخصية) ما تُحسب كمشتركين ولا
     # إيرادات — الإحصائيات تعكس العملاء الفعليين فقط.
     non_admin = User.role != UserRole.ADMIN
+    # (2026-10-04) الاشتراك المنتهي ما يُعدّ نشطاً حتى لو الحقل ما تحدّث بعد —
+    # التحويل لـتجريبي يصير فقط لما العميل يفتح حسابه (check_subscription)،
+    # فالعدّ يشترط تاريخ انتهاء بالمستقبل بدل الاعتماد على حقل الخطة وحده.
+    now_utc = datetime.now(timezone.utc)
+    sub_active = User.subscription_ends_at > now_utc
     total_users   = db.query(User).filter(non_admin).count()
     trial_users   = db.query(User).filter(non_admin, User.plan == PlanType.TRIAL).count()
-    weekly_users  = db.query(User).filter(non_admin, User.plan == PlanType.WEEKLY).count()
-    monthly_users = db.query(User).filter(non_admin, User.plan == PlanType.MONTHLY).count()
+    weekly_users  = db.query(User).filter(non_admin, User.plan == PlanType.WEEKLY, sub_active).count()
+    monthly_users = db.query(User).filter(non_admin, User.plan == PlanType.MONTHLY, sub_active).count()
     banned_users  = db.query(User).filter(non_admin, User.plan == PlanType.BANNED).count()
     telegram_linked_users = db.query(User).filter(non_admin, User.telegram_id.isnot(None)).count()
     active_markets = db.query(MarketConfig).filter(MarketConfig.is_active == True).count()
