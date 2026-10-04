@@ -302,6 +302,7 @@ export const BLOG_POSTS = [
       { type: 'p',    text: 'من أهم مزايا البوت أنه يراقب أسواقاً كثيرة في وقت واحد لا يستطيع الإنسان متابعتها كلها: الذهب، البيتكوين، أزواج الفوركس الرئيسية، والمؤشرات. تعرّف على طريقة [تحليل الذهب XAUUSD بالذكاء الاصطناعي](/blog/gold-analysis-ai) بالتفصيل.' },
       { type: 'h2',   text: 'ابدأ الآن' },
       { type: 'p',    text: 'يمنحك Qaffel AI أسبوعاً مجانياً كاملاً لتجربة البوت قبل أي اشتراك. [أنشئ حسابك](/register) واربط تيليجرام، وستصلك أول إشارة عند أول إعداد يجتاز شروط الجودة. مهتم بأمان الفكرة نفسها؟ اقرأ [هل التداول بالذكاء الاصطناعي آمن؟](/blog/is-ai-trading-safe).' },
+      { type: 'p',    text: 'اقرأ أيضاً: [أين يتاح التداول بالذكاء الاصطناعي في الخليج ومصر والأردن والعراق](/blog/ai-trading-middle-east-gulf-guide).' },
     ],
     contentEn: [
       { type: 'p',    text: '"AI trading bot on Telegram" is now one of the most searched terms among retail traders — Telegram is simply the fastest way to receive a signal the moment it forms. But the gap between a bot that truly analyzes the market and a group that copy-pastes signals is enormous.' },
@@ -322,6 +323,7 @@ export const BLOG_POSTS = [
       { type: 'li',   text: 'Free trial: can you test it before paying?' },
       { type: 'h2',   text: 'Get Started' },
       { type: 'p',    text: 'Qaffel AI gives you a full free week to test the bot before any subscription. [Create your account](/register), link Telegram, and you\'ll receive your first signal on the first setup that passes the quality filters. Curious about the safety of the idea itself? Read [Is AI Trading Safe?](/blog/is-ai-trading-safe).' },
+      { type: 'p',    text: 'Read also: [where AI trading is available across the Gulf, Egypt, Jordan and Iraq](/blog/ai-trading-middle-east-gulf-guide).' },
     ],
   },
 
@@ -423,6 +425,7 @@ export const BLOG_POSTS = [
       { type: 'p',    text: 'إذا أردت تعلّم التحليل يدوياً خطوة بخطوة، اقرأ [كيف تتداول الذهب XAUUSD بتقنية ICT](/blog/how-to-trade-gold-xauusd-ict). هذا المقال يشرح ما تؤتمته المنصة نيابةً عنك.' },
       { type: 'h2',   text: 'جرّب التحليل الآلي للذهب' },
       { type: 'p',    text: 'يحلل [بوت Qaffel AI على تيليجرام](/blog/ai-trading-bot-telegram) الذهب تلقائياً ويرسل الإشارة كاملة. [أنشئ حسابك](/register) وجرّب مجاناً لأسبوع. راجع أيضاً: [توصيات مجانية لتداول الذهب — كيف تفرّق الحقيقي من الطعم التسويقي](/blog/free-gold-trading-signals).' },
+      { type: 'p',    text: 'اقرأ أيضاً: [كيف يستخدم المتداولون في السعودية بوت تداول الذهب بالذكاء الاصطناعي فعلياً](/blog/ai-gold-trading-bot-saudi-arabia) و[هل يتوقع الذكاء الاصطناعي سعر الذهب فعلاً؟](/blog/ai-gold-price-predictions).' },
     ],
     contentEn: [
       { type: 'p',    text: 'Gold (XAUUSD) is a fast, trap-heavy market, which is why "gold analysis with AI" has become a common search: the idea is to automate the institutional analysis steps so emotion doesn\'t interfere and you don\'t miss setups while you sleep.' },
@@ -442,6 +445,7 @@ export const BLOG_POSTS = [
       { type: 'p',    text: 'If you want to learn manual analysis step by step, read [How to Trade Gold XAUUSD with ICT](/blog/how-to-trade-gold-xauusd-ict). This article explains what the platform automates for you.' },
       { type: 'h2',   text: 'Try Automated Gold Analysis' },
       { type: 'p',    text: 'The [Qaffel AI Telegram bot](/blog/ai-trading-bot-telegram) analyzes Gold automatically and sends the full signal. [Create your account](/register) and try free for a week. See also: [Free Gold Trading Signals — Real vs. Marketing Hook](/blog/free-gold-trading-signals).' },
+      { type: 'p',    text: 'Read also: [how traders in Saudi Arabia actually use an AI gold trading bot](/blog/ai-gold-trading-bot-saudi-arabia) and [whether AI can really predict the gold price](/blog/ai-gold-price-predictions).' },
     ],
   },
 
@@ -478,6 +482,7 @@ export const BLOG_POSTS = [
       { type: 'p',    text: 'يحلل [بالذكاء الاصطناعي على تيليجرام](/blog/ai-trading-bot-telegram) الذهب والفوركس والكريبتو والمؤشرات بتقنية ICT/SMC، يرفض الإعداد الضعيف، ويرسل الإشارة كاملة مع تتبّع نتيجة كل صفقة على صفحة الأداء العامة. تعرّف أكثر: [ما هي منصة Qaffel AI](/blog/what-is-qaffel-ai).' },
       { type: 'h2',   text: 'ابدأ التجربة' },
       { type: 'p',    text: '[سجّل مجاناً](/register) واطّلع على [الباقات](/pricing). أسبوع كامل للتجربة قبل أي اشتراك. مهتم بالذهب تحديداً؟ اقرأ [توصيات مجانية لتداول الذهب](/blog/free-gold-trading-signals).' },
+      { type: 'p',    text: 'اقرأ أيضاً: [تحويل استراتيجية ICT إلى تنبيهات آلية على تلجرام](/blog/ict-strategy-automation) و[مقارنة أدوات التداول بالذكاء الاصطناعي](/blog/best-ai-trading-tools).' },
     ],
     contentEn: [
       { type: 'p',    text: '"Trading signals bot" is a broad term — from someone posting an opinion in a channel, to a full automated system that analyzes and tracks results. That gap is the difference between blowing an account and protecting one.' },
@@ -496,6 +501,7 @@ export const BLOG_POSTS = [
       { type: 'p',    text: 'It analyzes Gold, Forex, Crypto and Indices with ICT/SMC [via an AI bot on Telegram](/blog/ai-trading-bot-telegram), rejects weak setups, and sends the full signal while tracking every outcome on a public performance page. Learn more: [What is Qaffel AI](/blog/what-is-qaffel-ai).' },
       { type: 'h2',   text: 'Start the Trial' },
       { type: 'p',    text: '[Sign up free](/register) and check [pricing](/pricing). A full week to test before any subscription. Interested in gold specifically? Read [Free Gold Trading Signals](/blog/free-gold-trading-signals).' },
+      { type: 'p',    text: 'Read also: [turning your ICT strategy into automated Telegram alerts](/blog/ict-strategy-automation) and [a comparison of AI trading tools](/blog/best-ai-trading-tools).' },
     ],
   },
 
@@ -545,6 +551,7 @@ export const BLOG_POSTS = [
       { type: 'p',    text: 'بعد انتهاء الأسبوع، تختار بنفسك إن كنت تريد الاستمرار — راجع [الأسعار والباقات](/pricing). لا تجديد تلقائي مفاجئ ولا التزام بدون علمك. لمزيد حول كيفية عمل البوت بالكامل: [بوت التداول بالذكاء الاصطناعي على تيليجرام](/blog/ai-trading-bot-telegram) و[بوت إشارات التداول — كيف تختار بوتاً موثوقاً](/blog/trading-signals-bot-guide).' },
       { type: 'h2',   text: 'ابدأ الآن' },
       { type: 'p',    text: '[أنشئ حسابك مجاناً](/register)، اربط تيليجرام، وفعّل مراقبة الذهب. أول توصية حقيقية تصلك عند أول إعداد يجتاز شروط الجودة — لا قبل ولا بعد. تعرّف أكثر على المنصة: [ما هي منصة Qaffel AI](/blog/what-is-qaffel-ai).' },
+      { type: 'p',    text: 'اقرأ أيضاً: [مقارنة صريحة لأفضل توصيات الذهب المجانية بالذكاء الاصطناعي في 2026](/blog/best-free-ai-gold-signals-2026) و[بوت الذهب بالذكاء الاصطناعي للمتداولين في السعودية](/blog/ai-gold-trading-bot-saudi-arabia).' },
     ],
     contentEn: [
       { type: 'p',    text: '"Free trading signals" is one of the first things any new gold trader searches for — but most of what shows up under that name is either a hook to sell a subscription after the first two signals, or a channel posting opinions with no real outcome tracking. This article explains how to tell the difference, why Gold (XAUUSD) specifically is the most searched market for free signals, and how to try real AI-powered gold signals for free, with no commitment.' },
@@ -577,6 +584,7 @@ export const BLOG_POSTS = [
       { type: 'p',    text: 'Once the week ends, you decide whether to continue — check [pricing](/pricing). No surprise auto-renewal, no commitment without your knowledge. For more on how the full bot works: [AI Trading Bot on Telegram](/blog/ai-trading-bot-telegram) and [Trading Signals Bot — How to Choose](/blog/trading-signals-bot-guide).' },
       { type: 'h2',   text: 'Get Started' },
       { type: 'p',    text: '[Create your free account](/register), link Telegram, and enable gold monitoring. Your first real signal arrives on the first setup that passes the quality bar — no sooner, no later. Learn more: [What is Qaffel AI](/blog/what-is-qaffel-ai).' },
+      { type: 'p',    text: 'Read also: [an honest comparison of the best free AI gold signals in 2026](/blog/best-free-ai-gold-signals-2026) and [the AI gold bot for traders in Saudi Arabia](/blog/ai-gold-trading-bot-saudi-arabia).' },
     ],
   },
 
@@ -619,6 +627,7 @@ export const BLOG_POSTS = [
       { type: 'p',    text: 'حتى مع أفضل تحليل، إدارة حجم الصفقة ونسبة المخاطرة من رأس مالك تبقى قراراً بيدك أنت لا بيد أي أداة. القاعدة العامة: لا تخاطر بأكثر من 1-2% من رأس مالك بصفقة واحدة، بغض النظر عن مدى ثقتك بالإشارة.' },
       { type: 'h2',   text: 'الخلاصة' },
       { type: 'p',    text: 'التداول بالذكاء الاصطناعي آمن بقدر ما تكون الأداة شفافة وواضحة الحدود — تحليل يخدمك أنت تتخذ القرار، لا نظام يتحكم بحسابك دون رقابة. جرّب [بوت Qaffel AI](/blog/ai-trading-bot-telegram) بنفسك: [أنشئ حسابك](/register) مجاناً بدون بطاقة ائتمان.' },
+      { type: 'p',    text: 'اقرأ أيضاً: [كيف تقارن أدوات التداول بالذكاء الاصطناعي](/blog/best-ai-trading-tools) و[حقيقة توقعات الذكاء الاصطناعي لسعر الذهب](/blog/ai-gold-price-predictions).' },
     ],
     contentEn: [
       { type: 'p',    text: '"Is AI trading safe?" is a fair question, especially with so many ads promising guaranteed profits from "robots." The honest answer: there is no single answer that covers everything called "AI trading" — safety depends entirely on the type of tool, and the kind of access you grant it.' },
@@ -644,6 +653,7 @@ export const BLOG_POSTS = [
       { type: 'p',    text: 'Even with the best analysis, sizing your position and the percentage of your capital at risk remains your decision, not any tool\'s. General rule: never risk more than 1-2% of your capital on a single trade, regardless of how confident a signal looks.' },
       { type: 'h2',   text: 'Bottom Line' },
       { type: 'p',    text: 'AI trading is as safe as the tool is transparent and clear about its limits — analysis that serves your decision, not a system that controls your account unchecked. Try the [Qaffel AI bot](/blog/ai-trading-bot-telegram) yourself: [create your account](/register) free, no credit card required.' },
+      { type: 'p',    text: 'Read also: [how to compare AI trading tools](/blog/best-ai-trading-tools) and [the truth about AI gold price forecasts](/blog/ai-gold-price-predictions).' },
     ],
   },
 
@@ -758,6 +768,7 @@ export const BLOG_POSTS = [
       { type: 'p',    text: 'يحلل [Qaffel AI](/blog/gold-analysis-ai) الذهب تلقائياً بمنهجية ICT/SMC، يحدد [Order Blocks](/blog/order-blocks-explained) و[فجوات القيمة العادلة FVG](/blog/fvg-fair-value-gap-trading)، ويرسل القرار الكامل (دخول، وقف، هدفان) على تيليجرام دون الحاجة لمراقبة الشاشة كل دقيقة.' },
       { type: 'h2',   text: 'جرّب مجاناً' },
       { type: 'p',    text: '[أنشئ حسابك](/register) واختبر إشارات الذهب المبنية على ICT/SMC مجاناً بدون بطاقة ائتمان. راجع أيضاً: [توصيات مجانية لتداول الذهب](/blog/free-gold-trading-signals).' },
+      { type: 'p',    text: 'اقرأ أيضاً: [أفضل وقت لتداول الذهب بتوقيت السعودية والخليج](/blog/best-time-to-trade-gold) و[دليل اختيار أفضل استراتيجية للتداول عموماً](/blog/best-trading-strategy-guide).' },
     ],
     contentEn: [
       { type: 'p',    text: 'There is no single "best strategy for everyone" in gold trading — each strategy fits a different market environment and time commitment. This guide honestly compares four common XAUUSD strategies: where each works, and where it fails.' },
@@ -782,6 +793,7 @@ export const BLOG_POSTS = [
       { type: 'p',    text: '[Qaffel AI](/blog/gold-analysis-ai) automatically analyzes Gold with ICT/SMC methodology, identifies [Order Blocks](/blog/order-blocks-explained) and [Fair Value Gaps](/blog/fvg-fair-value-gap-trading), and sends the complete decision (entry, stop, two targets) on Telegram without needing to watch the screen every minute.' },
       { type: 'h2',   text: 'Try It Free' },
       { type: 'p',    text: '[Create your account](/register) and test ICT/SMC-based gold signals for free, no credit card required. See also: [Free Gold Trading Signals](/blog/free-gold-trading-signals).' },
+      { type: 'p',    text: 'Read also: [the best time to trade gold (XAUUSD)](/blog/best-time-to-trade-gold) and [the general guide to choosing a trading strategy](/blog/best-trading-strategy-guide).' },
     ],
   },
 
@@ -1081,6 +1093,7 @@ export const BLOG_POSTS = [
       { type: 'h2',   text: 'كيف يعمل Qaffel AI للمتداول بالسعودية؟' },
       { type: 'p',    text: 'المحرك يحلل الذهب (وبقية الأسواق) تلقائياً على أكتر من إطار زمني، يحدّد Order Blocks وFVG ومناطق السيولة ومناطق Premium/Discount بمنهجية ICT/SMC — نفس التفاصيل يلي نشرحها بـ[تحليل الذهب XAUUSD بالذكاء الاصطناعي](/blog/gold-analysis-ai) — ويرسل التنبيه كاملاً (دخول، وقف، هدفين، نسبة المخاطرة للعائد) مباشرة على تلجرام بالعربي.' },
       { type: 'p',    text: 'مهم توضيحه: Qaffel AI أداة **تحليل وتنبيهات فقط** — ما ينفّذ صفقات ولا يحتفظ بأموالك، التنفيذ يصير عندك بحساب الوسيط اللي تختاره أنت. [ابدأ تجربتك المجانية](/register) بدون بطاقة ائتمان، واقرأ أيضاً: [توصيات مجانية لتداول الذهب](/blog/free-gold-trading-signals).' },
+      { type: 'p',    text: 'اقرأ أيضاً: [دليل التداول بالذكاء الاصطناعي في الخليج ومصر والأردن والعراق](/blog/ai-trading-middle-east-gulf-guide) و[مقارنة أفضل توصيات الذهب المجانية بالذكاء الاصطناعي](/blog/best-free-ai-gold-signals-2026).' },
     ],
     contentEn: [
       { type: 'p',    text: 'Gold (XAUUSD) is the most searched and traded market among Saudi and Gulf traders — and that is not a coincidence. A long-standing cultural relationship with gold as a store of value, combined with its large daily moves across three trading sessions, opens real opportunity around the clock. The recurring question is always the same: how do you actually trade it, and which bot can you trust?' },
@@ -1098,6 +1111,7 @@ export const BLOG_POSTS = [
       { type: 'h2',   text: 'How Qaffel AI Works for Saudi Traders' },
       { type: 'p',    text: 'The engine automatically analyzes gold (and other markets) across multiple timeframes, identifying Order Blocks, FVGs, liquidity zones and Premium/Discount areas using ICT/SMC methodology — the same detail covered in [Gold XAUUSD Analysis with AI](/blog/gold-analysis-ai) — then sends the complete alert (entry, stop, two targets, risk/reward) directly to Telegram in Arabic.' },
       { type: 'p',    text: 'Important distinction: Qaffel AI is an **analysis and alerts tool only** — it does not execute trades or hold your funds; execution happens on the broker account you choose yourself. [Start your free trial](/register) with no credit card required, and read also: [Free Gold Trading Signals with AI](/blog/free-gold-trading-signals).' },
+      { type: 'p',    text: 'Read also: [the guide to AI trading across the Gulf, Egypt, Jordan and Iraq](/blog/ai-trading-middle-east-gulf-guide) and [a comparison of the best free AI gold signals](/blog/best-free-ai-gold-signals-2026).' },
     ],
   },
 
@@ -1131,6 +1145,7 @@ export const BLOG_POSTS = [
       { type: 'h2',   text: 'كيف يساعدك Qaffel AI بغض النظر عن بلدك؟' },
       { type: 'p',    text: 'تحليل تلقائي متعدد الأطر على الذهب والفوركس والكريبتو والمؤشرات، بشرح عربي كامل، وتنبيهات تلجرام تصل مباشرة بمستويات كاملة (دخول، وقف، هدفين). المنصة أداة تحليل وتنبيهات فقط — التنفيذ يبقى عندك بحساب الوسيط اللي تختاره، بغض النظر عن بلدك.' },
       { type: 'p',    text: '[ابدأ تجربتك المجانية اليوم](/register) بدون بطاقة ائتمان، واربط تلجرام مباشرة. اقرأ أيضاً: [بوت التداول بالذكاء الاصطناعي على تيليجرام](/blog/ai-trading-bot-telegram) و[هل التداول بالذكاء الاصطناعي آمن؟](/blog/is-ai-trading-safe).' },
+      { type: 'p',    text: 'اقرأ أيضاً: [بوت تداول الذهب بالذكاء الاصطناعي في السعودية، مثال تفصيلي](/blog/ai-gold-trading-bot-saudi-arabia).' },
     ],
     contentEn: [
       { type: 'p',    text: 'A question that keeps coming from readers in the UAE, Egypt, Jordan, Iraq, Algeria and Morocco: "does this bot work in my country?" The short answer: AI analysis is not bound by geography — it is a tool that reads the market and sends you an alert, applied to your account at whichever international broker you already use.' },
@@ -1147,6 +1162,7 @@ export const BLOG_POSTS = [
       { type: 'h2',   text: 'How Qaffel AI Helps, Wherever You Are' },
       { type: 'p',    text: 'Automatic multi-timeframe analysis on gold, forex, crypto and indices, with full Arabic explanations, and Telegram alerts delivering complete levels — entry, stop, two targets. The platform is an analysis and alerts tool only — execution stays on the broker account you choose, regardless of your country.' },
       { type: 'p',    text: '[Start your free trial today](/register) with no credit card required, and link Telegram directly. Read also: [AI Trading Bot on Telegram](/blog/ai-trading-bot-telegram) and [Is AI Trading Safe?](/blog/is-ai-trading-safe).' },
+      { type: 'p',    text: 'Read also: [the AI gold trading bot in Saudi Arabia, a detailed example](/blog/ai-gold-trading-bot-saudi-arabia).' },
     ],
   },
 
@@ -1252,6 +1268,7 @@ export const BLOG_POSTS = [
       { type: 'p',    text: 'منصة كفيل (Qaffel AI) تطبّق منهجية ICT/Smart Money تلقائياً على عشرات الأسواق — ذهب، فوركس، كريبتو، مؤشرات — وترسل القرار الكامل (دخول، وقف، هدفان، نسبة المخاطرة للعائد) مباشرة على تلجرام بالعربي. بدل ما تبحث عن "أفضل استراتيجية" وتختبرها بنفسك شهوراً، تحصل على منهجية مؤسسية جاهزة ومشروحة بكل تفاصيلها.' },
       { type: 'h2',   text: 'جرّب مجاناً' },
       { type: 'p',    text: '[أنشئ حسابك على كفيل مجاناً](/register) وجرّب إشارات ICT/SMC أسبوعاً كاملاً بلا بطاقة ائتمان. راجع أيضاً: [ما هي أفضل استراتيجية لتداول الذهب؟](/blog/best-gold-trading-strategy).' },
+      { type: 'p',    text: 'اقرأ أيضاً: [المقارنة بين مناهج تحليل السوق الأربعة](/blog/best-market-analysis-method) و[أتمتة استراتيجية ICT عملياً](/blog/ict-strategy-automation).' },
     ],
     contentEn: [
       { type: 'p',    text: '"Best trading strategy" is one of the most searched questions among new traders — yet there is no single correct answer. The theoretically "best" strategy can be the worst in practice if it does not fit your available time, personality, or capital. This guide compares the common types and gives you real criteria for choosing.' },
@@ -1285,6 +1302,7 @@ export const BLOG_POSTS = [
       { type: 'p',    text: 'Qaffel AI applies ICT/Smart Money methodology automatically across dozens of markets — gold, forex, crypto, indices — and sends the complete decision (entry, stop, two targets, risk/reward) directly to Telegram. Instead of searching for the "best strategy" and testing it yourself for months, you get a ready-made, fully explained institutional methodology.' },
       { type: 'h2',   text: 'Try It Free' },
       { type: 'p',    text: '[Create your free Qaffel AI account](/register) and test ICT/SMC signals for a full week, no credit card required. See also: [What Is the Best Gold Trading Strategy?](/blog/best-gold-trading-strategy).' },
+      { type: 'p',    text: 'Read also: [the comparison of four market analysis approaches](/blog/best-market-analysis-method) and [automating an ICT strategy in practice](/blog/ict-strategy-automation).' },
     ],
   },
 
@@ -1385,6 +1403,7 @@ export const BLOG_POSTS = [
       { type: 'p',    text: 'يطبّق محرك كفيل منهجية ICT/Smart Money تلقائياً (Order Blocks، FVG، سحب السيولة، مناطق الخصم والعلاوة) على عدة أطر زمنية وعشرات الأسواق في نفس الوقت، ويرسل لك القرار الكامل — دخول، وقف، هدفان، ونسبة المخاطرة للعائد — مباشرة على تلجرام بالعربي.' },
       { type: 'h2',   text: 'جرّب مجاناً' },
       { type: 'p',    text: '[أنشئ حسابك المجاني الآن](/register) واختبر التحليل بنفسك أسبوعاً كاملاً بلا بطاقة ائتمان. راجع أيضاً: [أفضل أدوات التداول بالذكاء الاصطناعي](/blog/best-ai-trading-tools).' },
+      { type: 'p',    text: 'اقرأ أيضاً: [كيف تختار استراتيجيتك بعد أن تحدد منهج التحليل](/blog/best-trading-strategy-guide).' },
     ],
     contentEn: [
       { type: 'p',    text: '"What is the best way to analyze the market?" is a question every new trader asks, and the honest answer is that each approach plays a different role. This article compares four common methods honestly — no single one "wins" every time.' },
@@ -1403,6 +1422,7 @@ export const BLOG_POSTS = [
       { type: 'p',    text: 'Qaffel AI\'s engine automatically applies ICT/Smart Money methodology (Order Blocks, FVG, liquidity sweeps, discount and premium zones) across multiple timeframes and dozens of markets at once, then sends you the complete decision — entry, stop, two targets, and risk/reward — directly to Telegram in Arabic.' },
       { type: 'h2',   text: 'Try It Free' },
       { type: 'p',    text: '[Create your free account now](/register) and test the analysis yourself for a full week, no credit card required. See also: [Best AI Trading Tools](/blog/best-ai-trading-tools).' },
+      { type: 'p',    text: 'Read also: [how to choose your strategy once you have picked an analysis approach](/blog/best-trading-strategy-guide).' },
     ],
   },
 ]

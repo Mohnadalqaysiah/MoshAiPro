@@ -19,6 +19,10 @@ const TRIAL_SLUGS = [
   'best-trading-strategy-guide',
   'best-time-to-trade-gold',
   'best-market-analysis-method',
+  // الذراع الثاني (2026-10-05): صفحات "زُحف ولم تُفهرس" بـGSC — لا شيء مفهرس لنخسره
+  'ai-trading-middle-east-gulf-guide',
+  'ai-gold-trading-bot-saudi-arabia',
+  'ict-strategy-automation',
 ]
 
 const { BLOG_POSTS } = await import(pathToFileURL(resolve(ROOT, 'src/data/blogPosts.js')).href)
