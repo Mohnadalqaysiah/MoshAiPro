@@ -63,7 +63,15 @@ const StatusBadge = ({ status }) => {
 const RENEW_DAY_PRESETS = [7, 14, 30, 60, 90]
 const RENEW_REASON_PRESETS = ['تحويل بنكي', 'دفع كاش', 'PayPal يدوي', 'تعويض/مكافأة']
 
+const USER_MODAL_TABS = [
+  { key: 'details',      label: 'التفاصيل',    icon: Users },
+  { key: 'subscription', label: 'الاشتراك',    icon: CreditCard },
+  { key: 'contact',      label: 'التواصل',     icon: MessageCircle },
+  { key: 'actions',      label: 'الإجراءات',   icon: Shield },
+]
+
 function UserModal({ user: u, onClose, onUpdate }) {
+  const [activeUserTab, setActiveUserTab] = useState('details')
   const [extraDays, setExtraDays] = useState(7)
   const [loading, setLoading] = useState('')
   const [msg, setMsg] = useState(null)
@@ -152,13 +160,43 @@ function UserModal({ user: u, onClose, onUpdate }) {
 
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between p-5 border-b border-gray-800">
-          <h2 className="font-bold text-white">تفاصيل المستخدم</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white"><X size={18}/></button>
+      <div className="bg-gray-900 border border-gray-700 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+        {/* Header — ثابت مهما كان التبويب المفتوح */}
+        <div className="flex items-center justify-between p-5 border-b border-gray-800 flex-shrink-0">
+          <div className="min-w-0 flex-1">
+            <h2 className="font-bold text-white flex items-center gap-2 min-w-0">
+              <span className="truncate">{u.full_name || u.email}</span>
+              <span className="flex-shrink-0"><PlanBadge plan={u.plan}/></span>
+            </h2>
+            <p className="text-xs text-gray-500 truncate">{u.email}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-white flex-shrink-0"><X size={18}/></button>
         </div>
-        <div className="p-5 space-y-5">
-          {/* Info */}
+
+        {/* Tabs */}
+        <div className="flex gap-1 px-5 pt-3 border-b border-gray-800 flex-shrink-0 overflow-x-auto">
+          {USER_MODAL_TABS.map(t => (
+            <button key={t.key} onClick={() => setActiveUserTab(t.key)}
+              className={`flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium border-b-2 transition -mb-px whitespace-nowrap ${
+                activeUserTab === t.key
+                  ? 'border-blue-500 text-white'
+                  : 'border-transparent text-gray-500 hover:text-gray-300'
+              }`}>
+              <t.icon size={13}/> {t.label}
+            </button>
+          ))}
+        </div>
+
+        {msg && (
+          <div className={`mx-5 mt-3 flex items-center gap-2 text-sm rounded-lg px-3 py-2 flex-shrink-0 ${msg.type==='ok'?'bg-green-900/30 text-green-400':'bg-red-900/30 text-red-400'}`}>
+            {msg.type==='ok'?<CheckCircle size={14}/>:<AlertTriangle size={14}/>} {msg.text}
+          </div>
+        )}
+
+        <div className="p-5 overflow-y-auto flex-1 space-y-5">
+          {/* ══ تبويب: التفاصيل ══ */}
+          {activeUserTab === 'details' && (
+          <>
           <div className="grid grid-cols-2 gap-3 text-sm">
             {[
               ['الاسم', u.full_name || '—'],
@@ -206,13 +244,16 @@ function UserModal({ user: u, onClose, onUpdate }) {
               <p className="text-[11px] text-gray-500 mt-1.5">الفريم: {u.notify_timeframes.join(', ')}</p>
             )}
           </div>
+          </>
+          )}
 
-          {/* تواصل موحّد — قناة واحدة بدل التنقّل بين تبويبات منفصلة */}
+          {/* ══ تبويب: التواصل ══ */}
+          {activeUserTab === 'contact' && (
           <div className="rounded-2xl p-4 border border-blue-700/30 bg-gradient-to-br from-blue-950/30 to-gray-900/40">
             <p className="text-sm text-blue-400 font-bold flex items-center gap-1.5 mb-3">
               <MessageCircle size={14}/> تواصل مباشر مع المستخدم
             </p>
-            <div className="flex gap-1.5 mb-3">
+            <div className="flex gap-1.5 mb-3 flex-wrap">
               {[
                 { key: 'telegram', label: '📨 تيليجرام', disabled: !u.telegram_id },
                 { key: 'email',    label: '📧 إيميل' },
@@ -250,14 +291,10 @@ function UserModal({ user: u, onClose, onUpdate }) {
               </button>
             </div>
           </div>
-
-          {msg && (
-            <div className={`flex items-center gap-2 text-sm rounded-lg px-3 py-2 ${msg.type==='ok'?'bg-green-900/30 text-green-400':'bg-red-900/30 text-red-400'}`}>
-              {msg.type==='ok'?<CheckCircle size={14}/>:<AlertTriangle size={14}/>} {msg.text}
-            </div>
           )}
 
-          {/* Actions */}
+          {/* ══ تبويب: الاشتراك ══ */}
+          {activeUserTab === 'subscription' && (
           <div className="space-y-3">
             {/* Change Plan */}
             <div>
@@ -330,17 +367,17 @@ function UserModal({ user: u, onClose, onUpdate }) {
 
               {/* ملخص حي قبل التنفيذ */}
               <div className="bg-black/20 rounded-lg px-3 py-2 mb-3 text-[11px] space-y-1">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-x-2">
                   <span className="text-gray-400">سينتهي الاشتراك الجديد بتاريخ</span>
                   <span className="text-emerald-300 font-mono font-semibold" dir="ltr">{renewNewEnd.toISOString().slice(0,10)}</span>
                 </div>
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-x-2">
                   <span className="text-gray-400">سيُسجَّل بتبويب المدفوعات كـ</span>
                   <span className="text-emerald-300 font-mono font-semibold" dir="ltr">${renewAmount} · manual</span>
                 </div>
               </div>
 
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
                   <input type="checkbox" checked={renewNotify} onChange={e => setRenewNotify(e.target.checked)}
                     className="accent-emerald-500"/>
@@ -358,7 +395,7 @@ function UserModal({ user: u, onClose, onUpdate }) {
             <div className="bg-gray-800/40 rounded-xl p-3 border border-gray-700/50">
               <p className="text-xs text-gray-300 font-semibold mb-1">تعديل الأيام (+/-)</p>
               <p className="text-[11px] text-gray-500 mb-2">لتصحيح غلطة إدارية — يزيد أو ينقص من تاريخ الانتهاء مباشرة، بدون سجل دفع أو إشعار تلغرام للعميل.</p>
-              <div className="flex gap-2 mb-2">
+              <div className="flex flex-wrap gap-2 mb-2">
                 <button type="button" onClick={() => setExtraDays(d => -Math.abs(d || 1))}
                   className={`px-3 py-1.5 rounded-lg border text-sm font-bold transition ${extraDays < 0 ? 'border-red-500 bg-red-900/30 text-red-300' : 'border-gray-700 text-gray-500 hover:text-gray-300'}`}>
                   −
@@ -386,9 +423,15 @@ function UserModal({ user: u, onClose, onUpdate }) {
                 </p>
               )}
             </div>
+          </div>
+          )}
 
-            {/* Quick Actions */}
-            <div className="flex gap-2 flex-wrap">
+          {/* ══ تبويب: الإجراءات ══ */}
+          {activeUserTab === 'actions' && (
+          <div className="space-y-4">
+            <div>
+              <p className="text-xs text-gray-400 mb-2">إجراءات سريعة</p>
+              <div className="flex gap-2 flex-wrap">
               <button disabled={loading==='reset_trial'}
                 onClick={() => doAction('reset_trial')}
                 className="flex items-center gap-1 text-xs bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded-lg transition">
@@ -405,18 +448,27 @@ function UserModal({ user: u, onClose, onUpdate }) {
                 className={`flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg transition ${u.is_active?'bg-orange-800/50 hover:bg-orange-700/50 text-orange-300':'bg-green-800/50 hover:bg-green-700/50 text-green-300'}`}>
                 {u.is_active ? '⏸ تعليق' : '▶ تفعيل'}
               </button>
-              <button disabled={loading==='ban'}
-                onClick={() => doAction('ban')}
-                className="flex items-center gap-1 text-xs bg-red-900/50 hover:bg-red-800/50 text-red-300 px-3 py-1.5 rounded-lg transition border border-red-700/50">
-                <Shield size={12}/> حظر دائم
-              </button>
-              <button disabled={loading==='delete'}
-                onClick={() => doAction('delete')}
-                className="flex items-center gap-1 text-xs bg-red-950/60 hover:bg-red-900/60 text-red-400 px-3 py-1.5 rounded-lg transition border border-red-800/50">
-                <Trash2 size={12}/> حذف نهائي
-              </button>
+              </div>
+            </div>
+
+            {/* منطقة خطر — إجراءات لا تراجع عنها، معزولة بصرياً عن الإجراءات الروتينية */}
+            <div className="rounded-2xl p-4 border border-red-900/50 bg-red-950/10">
+              <p className="text-xs text-red-400 font-bold mb-2">⚠️ منطقة خطر — لا تراجع بعد التنفيذ</p>
+              <div className="flex gap-2 flex-wrap">
+                <button disabled={loading==='ban'}
+                  onClick={() => doAction('ban')}
+                  className="flex items-center gap-1 text-xs bg-red-900/50 hover:bg-red-800/50 text-red-300 px-3 py-1.5 rounded-lg transition border border-red-700/50">
+                  <Shield size={12}/> حظر دائم
+                </button>
+                <button disabled={loading==='delete'}
+                  onClick={() => doAction('delete')}
+                  className="flex items-center gap-1 text-xs bg-red-950/60 hover:bg-red-900/60 text-red-400 px-3 py-1.5 rounded-lg transition border border-red-800/50">
+                  <Trash2 size={12}/> حذف نهائي
+                </button>
+              </div>
             </div>
           </div>
+          )}
         </div>
       </div>
     </div>
@@ -583,6 +635,7 @@ export default function Admin() {
   const supportFileRef = useRef(null)
   const supportRecorderRef = useRef(null)
   const supportChunksRef   = useRef([])
+  const supportBodyRef = useRef(null)
   const maxSupportAttachmentBytes =
     (Number(siteSettings['support_attachment_max_mb']?.value) || FALLBACK_SUPPORT_ATTACHMENT_MB) * 1024 * 1024
 
@@ -641,6 +694,11 @@ export default function Admin() {
     const id = setInterval(() => openSupportThread(activeThreadId, true), 4000)
     return () => clearInterval(id)
   }, [tab, activeThreadId])
+
+  // عند فتح محادثة أو وصول رسالة جديدة — ينزل مباشرة لآخر رسالة (مش أول رسالة بالمحادثة)
+  useEffect(() => {
+    if (supportBodyRef.current) supportBodyRef.current.scrollTop = supportBodyRef.current.scrollHeight
+  }, [activeThreadId, activeThreadMsgs])
 
   const loadStats    = async () => { const r = await axios.get(`${API}/api/v1/admin/stats`); setStats(r.data) }
   const loadFunnel   = async (days = funnelDays) => {
@@ -1508,7 +1566,7 @@ export default function Admin() {
                           {activeThreadInfo?.status === 'open' ? 'إغلاق المحادثة' : 'إعادة فتح'}
                         </button>
                       </div>
-                      <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
+                      <div ref={supportBodyRef} className="flex-1 overflow-y-auto p-4 space-y-2.5">
                         {activeThreadMsgs.map(m => (
                           <div key={m.id} className={`flex ${m.sender_role==='admin' ? 'justify-start' : 'justify-end'}`}>
                             <div className={`max-w-[75%] rounded-xl px-3 py-2 text-sm whitespace-pre-wrap break-words ${m.sender_role==='admin' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-100'}`}>
