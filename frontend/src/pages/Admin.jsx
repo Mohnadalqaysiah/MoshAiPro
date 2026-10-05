@@ -14,7 +14,7 @@ import {
   X, ExternalLink, Shield, AlertTriangle, Settings, Mail, Upload, Signal, Send,
   FileText, TrendingUp as TrendUp, Bell, Sparkles,
   ShieldCheck, UserCog, MessageCircle, UserMinus, Paperclip, Gift, ChevronRight, Menu,
-  Lightbulb, Ticket, Filter, Copy, ChevronDown, Mic, Square
+  Lightbulb, Ticket, Filter, Copy, ChevronDown, Mic, Square, BellOff
 } from 'lucide-react'
 
 // (2026-10-05) الحد ثابت هون بس كاحتياط لحظة ما قبل تحميل الإعدادات —
@@ -65,14 +65,38 @@ const RENEW_REASON_PRESETS = ['تحويل بنكي', 'دفع كاش', 'PayPal ي
 
 const USER_MODAL_TABS = [
   { key: 'details',      label: 'التفاصيل',    icon: Users },
+  { key: 'trades',       label: 'الصفقات',     icon: TrendingUp },
   { key: 'subscription', label: 'الاشتراك',    icon: CreditCard },
   { key: 'contact',      label: 'التواصل',     icon: MessageCircle },
   { key: 'actions',      label: 'الإجراءات',   icon: Shield },
 ]
 
+const SIGNAL_STATUS_STYLE = {
+  ACTIVE:  'bg-green-900/40 text-green-300',
+  PENDING: 'bg-yellow-900/40 text-yellow-300',
+  TP1_HIT: 'bg-blue-900/40 text-blue-300',
+  TP2_HIT: 'bg-purple-900/40 text-purple-300',
+  SL_HIT:  'bg-red-900/40 text-red-300',
+  EXPIRED: 'bg-gray-700/60 text-gray-400',
+}
+
 function UserModal({ user: u, onClose, onUpdate }) {
   const [activeUserTab, setActiveUserTab] = useState('details')
   const [extraDays, setExtraDays] = useState(7)
+  const [deliveries, setDeliveries] = useState(null)
+  const [deliveriesLoading, setDeliveriesLoading] = useState(false)
+
+  // (2026-10-05) يُجلب مرة وحدة أول ما تُفتح تبويب "الصفقات" — من سجل
+  // التسليم الفعلي (SignalDelivery)، فهو يعكس بالضبط ما وصل للمستخدم
+  // وقتها حسب تخصيص قائمة مراقبته يومها، لا تخمين بأثر رجعي بقائمته الحالية.
+  useEffect(() => {
+    if (activeUserTab !== 'trades' || deliveries !== null) return
+    setDeliveriesLoading(true)
+    axios.get(`${API}/api/v1/admin/users/${u.id}/deliveries`)
+      .then(r => setDeliveries(r.data.deliveries || []))
+      .catch(() => setDeliveries([]))
+      .finally(() => setDeliveriesLoading(false))
+  }, [activeUserTab, deliveries, u.id])
   const [loading, setLoading] = useState('')
   const [msg, setMsg] = useState(null)
   // تواصل موحّد — تيليجرام مباشر / إيميل / رسالة دعم، من نفس المكان
@@ -151,6 +175,9 @@ function UserModal({ user: u, onClose, onUpdate }) {
       } else if (action === 'toggle') {
         await axios.put(`${API}/api/v1/admin/users/${u.id}`, { is_active: !u.is_active })
         setMsg({ type:'ok', text: u.is_active ? 'تم تعليق الحساب' : 'تم تفعيل الحساب' })
+      } else if (action === 'notifications') {
+        await axios.put(`${API}/api/v1/admin/users/${u.id}`, { notifications_enabled: !u.notifications_enabled })
+        setMsg({ type:'ok', text: u.notifications_enabled ? '🔕 تم إطفاء إشعاراته' : '🔔 تم تفعيل إشعاراته' })
       }
       onUpdate()
     } catch (e) {
@@ -210,6 +237,7 @@ function UserModal({ user: u, onClose, onUpdate }) {
               ['الأيام المتبقية', `${u.days_left ?? '—'} يوم`],
               ['تاريخ التسجيل', u.created_at?.slice(0,10) || '—'],
               ['آخر زيارة', u.last_seen_at?.slice(0,10) || '—'],
+              ['ثبّت التطبيق (PWA)', u.pwa_installed_at ? `✅ ${u.pwa_installed_at.slice(0,10)}` : '❌ لأ'],
               ['انتهاء الاشتراك', u.subscription_ends_at?.slice(0,10) || '—'],
               ['تحليلات تجريبية', u.trial_analyses_left],
               ['محادثات تجريبية', u.trial_chat_left],
@@ -245,6 +273,51 @@ function UserModal({ user: u, onClose, onUpdate }) {
             )}
           </div>
           </>
+          )}
+
+          {/* ══ تبويب: الصفقات ══ */}
+          {activeUserTab === 'trades' && (
+          <div className="space-y-2.5">
+            <p className="text-[11px] text-gray-500 bg-gray-800/60 border border-gray-700 rounded-lg px-3 py-2 leading-relaxed">
+              من سجل التسليم الفعلي — تعكس بالضبط ما وصله وقتها حسب تخصيص قائمة مراقبته يومها، مش حساب حالي بأثر رجعي.
+            </p>
+            {deliveriesLoading && (
+              <p className="text-center text-gray-500 text-sm py-6">جاري التحميل...</p>
+            )}
+            {!deliveriesLoading && deliveries?.length === 0 && (
+              <p className="text-center text-gray-500 text-sm py-6">لا توجد صفقات وصلت لهذا المستخدم بعد</p>
+            )}
+            {!deliveriesLoading && deliveries?.map(d => {
+              const typeColor = d.signal_type === 'BUY'
+                ? 'bg-green-900/50 text-green-300'
+                : d.signal_type === 'SELL'
+                ? 'bg-red-900/50 text-red-300'
+                : 'bg-gray-700 text-gray-300'
+              const statusCls = SIGNAL_STATUS_STYLE[d.status] || 'bg-gray-700 text-gray-400'
+              const pts = d.points_earned
+              const ptColor = pts > 0 ? 'text-green-400' : pts < 0 ? 'text-red-400' : 'text-gray-400'
+              return (
+                <div key={d.id} className="bg-gray-800 rounded-lg px-3 py-2 flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-semibold text-white text-xs">{d.market}</span>
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${typeColor}`}>{d.signal_type}</span>
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${statusCls}`}>{d.status}</span>
+                      {!d.delivery_ok && (
+                        <span className="text-[10px] text-red-400" title={d.delivery_error || ''}>⚠️ فشل الإرسال</span>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-gray-500 mt-0.5 font-mono">
+                      {d.delivered_at ? `${d.delivered_at.slice(0,10)} ${d.delivered_at.slice(11,16)}` : '—'}
+                    </div>
+                  </div>
+                  <div className={`text-xs font-mono font-semibold flex-shrink-0 ${ptColor}`}>
+                    {pts != null ? (pts > 0 ? '+' : '') + pts : '—'}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
           )}
 
           {/* ══ تبويب: التواصل ══ */}
@@ -447,6 +520,12 @@ function UserModal({ user: u, onClose, onUpdate }) {
                 onClick={() => doAction('toggle')}
                 className={`flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg transition ${u.is_active?'bg-orange-800/50 hover:bg-orange-700/50 text-orange-300':'bg-green-800/50 hover:bg-green-700/50 text-green-300'}`}>
                 {u.is_active ? '⏸ تعليق' : '▶ تفعيل'}
+              </button>
+              <button disabled={loading==='notifications'}
+                onClick={() => doAction('notifications')}
+                title={u.notifications_enabled ? 'يطفي كل تنبيهاته (تلغرام/بريد)' : 'يرجّع تنبيهاته'}
+                className={`flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg transition ${u.notifications_enabled?'bg-gray-700 hover:bg-gray-600 text-white':'bg-green-800/50 hover:bg-green-700/50 text-green-300'}`}>
+                {u.notifications_enabled ? <><BellOff size={12}/> إطفاء الإشعارات</> : <><Bell size={12}/> تفعيل الإشعارات</>}
               </button>
               </div>
             </div>
@@ -908,6 +987,15 @@ export default function Admin() {
       setEmailForm(f => ({ ...f, subject:'', body:'' }))
     } catch (err) { setEmailMsg({ type:'err', text: err.response?.data?.detail || 'فشل الإرسال' }) }
     finally { setEmailSending(false) }
+  }
+
+  // فتح مودال مستخدم بالتفصيل من أي مكان بس عنده الـid (مثلاً من قائمة المتصلين الآن)
+  const openUserById = async (id) => {
+    try {
+      const r = await axios.get(`${API}/api/v1/admin/users/${id}`)
+      setSelectedUser(r.data)
+      setShowOnline(false)
+    } catch (e) {}
   }
 
   const loadPushSubCount = async () => {
@@ -3561,7 +3649,7 @@ export default function Admin() {
 
           {tab === 'diagnostic' && <DiagnosticPanel />}
 
-          {showOnline && <OnlineUsersModal onClose={() => setShowOnline(false)} />}
+          {showOnline && <OnlineUsersModal onClose={() => setShowOnline(false)} onSelectUser={openUserById} />}
 
           {/* ── Feature Survey ── */}
           {tab === 'feature-survey' && <FeatureSurveyPanel />}

@@ -81,6 +81,11 @@ class User(Base):
     language              = Column(String, default="ar")
     notifications_enabled = Column(Boolean, default=True)
 
+    # (2026-10-05) أول لحظة شُغّل فيها الموقع بوضع standalone (أي فعلاً من
+    # أيقونة الشاشة الرئيسية لا من المتصفح) — تثبيت PWA حقيقي موثّق،
+    # لا مجرد ظهور بانر التثبيت. null = لسا ما ثبّت.
+    pwa_installed_at      = Column(DateTime(timezone=True), nullable=True)
+
     # Feature-request survey popup — يُعرض مرة واحدة فقط (إرسال أو تخطٍّ)
     feature_survey_dismissed = Column(Boolean, default=False, nullable=False)
     # (2026-09-27) استطلاع قابل للتعديل من لوحة الأدمن (FeatureSurvey) —

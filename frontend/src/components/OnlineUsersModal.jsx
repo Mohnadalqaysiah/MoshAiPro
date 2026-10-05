@@ -34,7 +34,7 @@ const PLAN_STYLE = {
   MONTHLY: 'bg-green-900/40 text-green-300',
 }
 
-export default function OnlineUsersModal({ onClose }) {
+export default function OnlineUsersModal({ onClose, onSelectUser }) {
   const [data, setData]       = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError]     = useState(null)
@@ -157,7 +157,9 @@ export default function OnlineUsersModal({ onClose }) {
                 </thead>
                 <tbody>
                   {data.users.map((u) => (
-                    <tr key={u.id} className="border-b border-gray-800">
+                    <tr key={u.id}
+                      onClick={() => onSelectUser?.(u.id)}
+                      className={`border-b border-gray-800 ${onSelectUser ? 'cursor-pointer hover:bg-gray-800/50' : ''}`}>
                       <td className="py-2.5 pr-3">
                         <div className="flex items-center gap-2">
                           <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${

@@ -43,6 +43,7 @@ class UserUpdateIn(BaseModel):
     is_active:  Optional[bool] = None
     extra_days: Optional[int] = None   # تمديد الاشتراك
     admin_note: Optional[str] = None   # ملاحظة الإدارة
+    notifications_enabled: Optional[bool] = None  # إطفاء/تشغيل إشعارات المستخدم من الأدمن مباشرة
 
 class PaymentActionIn(BaseModel):
     action:     str   # approve | reject
@@ -262,6 +263,42 @@ def get_user(
     return info
 
 
+@router.get("/users/{user_id}/deliveries")
+def admin_user_deliveries(
+    user_id: int,
+    limit: int = 50,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """الإشارات التي وصلت فعلياً لهذا المستخدم بالضبط — من سجل التسليم
+    الحقيقي (SignalDelivery)، لا من إعادة تطبيق قائمة مراقبته الحالية
+    بأثر رجعي (القائمة ممكن تكون تغيّرت بعد وصول الإشارة فتعطي نتيجة
+    مغلوطة). هذا يعكس بالضبط ما وصله وقتها حسب تخصيصه يومها."""
+    from app.models.signal_delivery import SignalDelivery
+    from sqlalchemy.orm import joinedload
+
+    if not db.query(User.id).filter(User.id == user_id).first():
+        raise HTTPException(404, "المستخدم غير موجود")
+
+    rows = (db.query(SignalDelivery)
+              .options(joinedload(SignalDelivery.signal))
+              .filter(SignalDelivery.user_id == user_id)
+              .order_by(SignalDelivery.sent_at.desc())
+              .limit(limit).all())
+
+    out = []
+    for r in rows:
+        if not r.signal:
+            continue
+        info = _signal_info(r.signal)
+        info["delivery_ok"]    = r.ok
+        info["delivery_error"] = r.error
+        info["delivered_at"]   = r.sent_at.isoformat() if r.sent_at else None
+        out.append(info)
+
+    return {"user_id": user_id, "total": len(out), "deliveries": out}
+
+
 @router.put("/users/{user_id}")
 def update_user(
     user_id: int,
@@ -289,6 +326,9 @@ def update_user(
 
     if data.is_active is not None:
         user.is_active = data.is_active
+
+    if data.notifications_enabled is not None:
+        user.notifications_enabled = data.notifications_enabled
 
     if data.extra_days:
         base = user.subscription_ends_at or now
@@ -1687,6 +1727,7 @@ def _user_info(u: User) -> dict:
         "notify_watchlist":      u.notify_watchlist or [],
         "notify_timeframes":     u.notify_timeframes or ([u.notify_timeframe] if u.notify_timeframe else []),
         "notifications_enabled": bool(u.notifications_enabled),
+        "pwa_installed_at":      u.pwa_installed_at.isoformat() if u.pwa_installed_at else None,
     }
 
 

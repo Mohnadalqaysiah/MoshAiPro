@@ -479,6 +479,22 @@ export default function AppShell({ children }) {
     try { sessionStorage.setItem('verify_modal_seen', '1') } catch { /* noop */ }
   }
 
+  // (2026-10-05) رصد التثبيت الفعلي كـPWA على الشاشة الرئيسية — للأدمن،
+  // عشان "مين ثبّت التطبيق" يصير سؤال له جواب حقيقي بدل تخمين. appinstalled
+  // لا تدعمها iOS Safari إطلاقاً، فالإشارة الموثوقة الوحيدة اللي تغطي
+  // المنصتين هي standalone-mode وقت التشغيل الفعلي (يعني المستخدم فعلاً
+  // فتح التطبيق من أيقونة الشاشة الرئيسية لا من المتصفح). تُرسَل مرة وحدة
+  // بالجلسة فقط؛ السيرفر نفسه idempotent (ما يلمس التاريخ إذا مسجّل أصلاً).
+  useEffect(() => {
+    if (!user) return
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+      || window.navigator.standalone === true
+    if (!isStandalone) return
+    try { if (sessionStorage.getItem('pwa_install_reported')) return } catch { /* noop */ }
+    axios.post(`${API}/api/v1/auth/pwa-installed`).catch(() => {})
+    try { sessionStorage.setItem('pwa_install_reported', '1') } catch { /* noop */ }
+  }, [user])
+
   // (2026-09-13) استطلاع "ساعدنا نطور المنصة لك" — مرة واحدة فقط لكل حساب.
   // المصدر الحقيقي هو user.feature_survey_dismissed (يُحدَّث بالسيرفر عند
   // إرسال/تخطّي)، وsurveyDone محلي فقط لمنع ظهوره ثانية فوراً بنفس الجلسة

@@ -500,6 +500,20 @@ def unsubscribe_push(
     return {"success": True}
 
 
+@router.post("/pwa-installed")
+def report_pwa_installed(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """الفرونت يناديها مرة وحدة لما يكتشف إنه يشتغل بوضع standalone فعلاً
+    (أي مفتوح من أيقونة الشاشة الرئيسية لا من المتصفح) — idempotent،
+    ما يلمس التاريخ إذا كان مسجّل أصلاً."""
+    if user.pwa_installed_at is None:
+        user.pwa_installed_at = datetime.now(timezone.utc)
+        db.commit()
+    return {"success": True}
+
+
 @router.get("/notifications")
 def list_notifications(
     limit: int = 7,
