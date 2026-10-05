@@ -88,6 +88,24 @@ def check_subscription(user: User, db: Session) -> dict:
     from app.models.user import PlanType
     now = datetime.now(timezone.utc)
 
+    # (2026-10-05) بلاغ حقيقي: مشترك أسبوعي بـ4 أيام متبقية وصله "وصلت
+    # للحد اليومي (50 رسالة). يتجدد غداً" — وما كان يتجدد أبداً. السبب:
+    # عمود last_usage_reset موجود بالجدول من الأساس (server_default=now())
+    # بالضبط لهالغرض، لكن ولا سطر كود بكل المشروع كان يقارنه بـ"اليوم"
+    # ويصفّر chat_used_today/analyses_used_today — فالعدّاد "اليومي" كان
+    # تراكمياً مدى الحياة منذ إنشاء الحساب، لا يومياً كما يوحي اسمه ورسالة
+    # الخطأ نفسها. يُصفَّر هون كصلاحية واحدة مشتركة — check_subscription
+    # تُستدعى فعلاً بأول كل طلب شات/تحليل/`/me`، فلا حاجة لمهمة مجدولة
+    # جديدة ولا نقطة استدعاء إضافية بأي مكان آخر.
+    _last_reset = user.last_usage_reset
+    if _last_reset and _last_reset.tzinfo is None:
+        _last_reset = _last_reset.replace(tzinfo=timezone.utc)
+    if _last_reset is None or _last_reset.date() < now.date():
+        user.analyses_used_today = 0
+        user.chat_used_today     = 0
+        user.last_usage_reset    = now
+        db.commit()
+
     # مسؤول = كل شيء مسموح
     from app.models.user import UserRole
     if user.role == UserRole.ADMIN:

@@ -372,6 +372,39 @@ def reset_trial(
     return {"success": True, "message": "تم إعادة تعيين التجربة"}
 
 
+@router.post("/users/{user_id}/reset-usage")
+def reset_usage_limits(
+    user_id: int,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db)
+):
+    """
+    (2026-10-05) إعادة ضبط حدود الاستخدام فقط — بدون لمس الخطة أو تواريخ
+    الاشتراك/التجربة (عكس /reset-trial اللي يعيد تشغيل التجربة كاملة).
+    الحالة الشائعة: مشترك مدفوع وصل لحد الشات اليومي (راجع إصلاح
+    check_subscription بنفس اليوم) وما بدك تنتظر لحد تصفيره التلقائي
+    غداً، أو عميل تجربة بدك تعطيه كريدت إضافي بلا تمديد فترة التجربة.
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(404, "المستخدم غير موجود")
+
+    def _get_int(key: str, default: int) -> int:
+        r = db.query(SiteSettings).filter(SiteSettings.key == key).first()
+        try: return int(r.value) if r and r.value else default
+        except: return default
+
+    user.chat_used_today     = 0
+    user.analyses_used_today = 0
+    user.last_usage_reset    = datetime.now(timezone.utc)
+    if user.plan == PlanType.TRIAL:
+        user.trial_analyses_left = _get_int("trial_analysis_limit", 10)
+        user.trial_chat_left     = _get_int("trial_chat_limit", 20)
+    db.commit()
+    logger.info(f"🔄 Usage limits reset for user {user_id} by {admin.email}")
+    return {"success": True, "message": "تم إعادة ضبط الحدود"}
+
+
 class BulkResetTrialIn(BaseModel):
     notify_telegram: bool = False
 

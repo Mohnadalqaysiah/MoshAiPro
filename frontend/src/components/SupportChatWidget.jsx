@@ -1,11 +1,18 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import axios from 'axios'
-import { MessageCircle, X, Send, LifeBuoy, Paperclip, FileText } from 'lucide-react'
+import { MessageCircle, X, Send, LifeBuoy, Paperclip, FileText, Mic, Square } from 'lucide-react'
 import { useLang } from '../contexts/LangContext'
+import useSiteSettings from '../hooks/useSiteSettings'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-const MAX_ATTACHMENT_BYTES = 1 * 1024 * 1024
-const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'application/pdf']
+// (2026-10-05) الحد الأقصى صار يُقرأ من الإعدادات الحية (يضبطه الأدمن،
+// لا رقم ثابت بالكود) — هذا بس احتياط للحظة ما قبل وصول الرد. التسجيل
+// الصوتي أُضيف هون كنوع مرفق إضافي، بنفس آلية الرفع الموجودة أصلاً.
+const FALLBACK_MAX_BYTES = 5 * 1024 * 1024
+const ALLOWED_TYPES = [
+  'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'application/pdf',
+  'audio/webm', 'audio/ogg', 'audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/x-m4a',
+]
 
 function Attachment({ url, name, type, isAr }) {
   const full = `${API}${url}`
@@ -15,6 +22,9 @@ function Attachment({ url, name, type, isAr }) {
         <img src={full} alt={name || 'attachment'} className="max-w-[200px] max-h-[200px] rounded-lg border border-black/10" />
       </a>
     )
+  }
+  if (type?.startsWith('audio/')) {
+    return <audio controls src={full} className="mt-1.5 max-w-full h-9" style={{ minWidth: 220 }} />
   }
   return (
     <a href={full} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 mt-1.5 text-xs underline opacity-90 hover:opacity-100">
@@ -26,6 +36,8 @@ function Attachment({ url, name, type, isAr }) {
 export default function SupportChatWidget() {
   const { lang } = useLang()
   const isAr = lang === 'ar'
+  const siteSettings = useSiteSettings()
+  const maxAttachmentBytes = (Number(siteSettings.support_attachment_max_mb) || 5) * 1024 * 1024
 
   const [open, setOpen]         = useState(false)
   const [messages, setMessages] = useState([])
@@ -34,9 +46,12 @@ export default function SupportChatWidget() {
   const [sending, setSending]   = useState(false)
   const [file, setFile]         = useState(null)
   const [fileError, setFileError] = useState('')
+  const [recording, setRecording] = useState(false)
   const bodyRef = useRef(null)
   const fileRef = useRef(null)
   const lastIdRef = useRef(0)
+  const mediaRecorderRef = useRef(null)
+  const recordedChunksRef = useRef([])
 
   const poll = useCallback(async (opening = false) => {
     try {
@@ -85,14 +100,42 @@ export default function SupportChatWidget() {
     setFileError('')
     if (!f) { setFile(null); return }
     if (!ALLOWED_TYPES.includes(f.type)) {
-      setFileError(isAr ? 'نوع الملف غير مدعوم — صورة أو PDF فقط' : 'Unsupported file type — image or PDF only')
+      setFileError(isAr ? 'نوع الملف غير مدعوم — صورة، PDF، أو تسجيل صوتي فقط' : 'Unsupported file type — image, PDF, or voice note only')
       return
     }
-    if (f.size > MAX_ATTACHMENT_BYTES) {
-      setFileError(isAr ? 'حجم الملف أكبر من 1 ميجابايت' : 'File is larger than 1MB')
+    if (f.size > maxAttachmentBytes) {
+      const mb = Math.round(maxAttachmentBytes / (1024 * 1024))
+      setFileError(isAr ? `حجم الملف أكبر من ${mb} ميجابايت` : `File is larger than ${mb}MB`)
       return
     }
     setFile(f)
+  }
+
+  // (2026-10-05) تسجيل صوتي — نفس آلية الرفع/الإرسال الموجودة أصلاً
+  // للمرفقات (Blob يُغلَّف كـFile ويُمرَّر لنفس pickFile/send، بلا أي
+  // مسار منفصل جديد).
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mr = new MediaRecorder(stream)
+      recordedChunksRef.current = []
+      mr.ondataavailable = (e) => { if (e.data.size > 0) recordedChunksRef.current.push(e.data) }
+      mr.onstop = () => {
+        stream.getTracks().forEach(t => t.stop())
+        const blob = new Blob(recordedChunksRef.current, { type: mr.mimeType || 'audio/webm' })
+        const ext = (mr.mimeType || 'audio/webm').split('/')[1]?.split(';')[0] || 'webm'
+        pickFile(new File([blob], `voice-note.${ext}`, { type: blob.type }))
+      }
+      mediaRecorderRef.current = mr
+      mr.start()
+      setRecording(true)
+    } catch (e) {
+      setFileError(isAr ? 'تعذّر الوصول للميكروفون' : 'Could not access the microphone')
+    }
+  }
+  const stopRecording = () => {
+    mediaRecorderRef.current?.stop()
+    setRecording(false)
   }
 
   const send = async () => {
@@ -172,6 +215,12 @@ export default function SupportChatWidget() {
                 <input ref={fileRef} type="file" accept={ALLOWED_TYPES.join(',')} className="hidden" onChange={e => pickFile(e.target.files?.[0])} />
                 <button onClick={() => fileRef.current?.click()} title={isAr ? 'إرفاق ملف' : 'Attach file'} className="text-gray-400 hover:text-white p-2 flex-shrink-0">
                   <Paperclip size={16} />
+                </button>
+                <button
+                  onClick={recording ? stopRecording : startRecording}
+                  title={isAr ? (recording ? 'إيقاف التسجيل' : 'تسجيل صوتي') : (recording ? 'Stop recording' : 'Record voice note')}
+                  className={`p-2 flex-shrink-0 rounded-lg ${recording ? 'text-red-400 animate-pulse bg-red-500/10' : 'text-gray-400 hover:text-white'}`}>
+                  {recording ? <Square size={16} /> : <Mic size={16} />}
                 </button>
                 <textarea
                   value={input}

@@ -30,11 +30,16 @@ def _setting(db: Session, key: str, fallback: str) -> str:
         return row.value.strip()
     return fallback
 
-# ── Attachments (images + docs, ≤1MB) ───────────────────────────────────────
-_MAX_ATTACHMENT_BYTES = 1 * 1024 * 1024
+# ── Attachments (images + docs + voice notes) ───────────────────────────────
+# (2026-10-05) الحد الأقصى كان ثابتاً بالكود (1MB) — صار يُقرأ من SiteSettings
+# (مفتاح support_attachment_max_mb، افتراضي 5) فيتحكم فيه الأدمن مباشرة من
+# لوحة الإعدادات بلا نشر كود. التسجيل الصوتي يُرسَل بنفس آلية المرفقات
+# الموجودة أصلاً (الملف نفسه Blob صوتي) — لا مسار رفع منفصل.
+_DEFAULT_MAX_ATTACHMENT_MB = 5
 _ALLOWED_ATTACHMENT_TYPES = {
     "image/png", "image/jpeg", "image/gif", "image/webp",
     "application/pdf",
+    "audio/webm", "audio/ogg", "audio/mpeg", "audio/mp4", "audio/wav", "audio/x-m4a",
 }
 _UPLOAD_DIR = "/app/static/uploads/support"
 
@@ -43,13 +48,23 @@ def _frontend_url() -> str:
     return _settings.ALLOWED_ORIGINS.split(",")[0].strip().rstrip("/")
 
 
-async def _save_attachment(file: UploadFile) -> dict:
-    if file.content_type not in _ALLOWED_ATTACHMENT_TYPES:
-        raise HTTPException(status_code=400, detail="نوع الملف غير مدعوم — صورة (PNG/JPG/GIF/WebP) أو PDF فقط")
+def _max_attachment_bytes(db: Session) -> int:
+    row = db.query(SiteSettings).filter(SiteSettings.key == "support_attachment_max_mb").first()
+    try:
+        mb = float(row.value) if row and row.value else _DEFAULT_MAX_ATTACHMENT_MB
+    except (TypeError, ValueError):
+        mb = _DEFAULT_MAX_ATTACHMENT_MB
+    return int(mb * 1024 * 1024)
 
+
+async def _save_attachment(file: UploadFile, db: Session) -> dict:
+    if file.content_type not in _ALLOWED_ATTACHMENT_TYPES:
+        raise HTTPException(status_code=400, detail="نوع الملف غير مدعوم — صورة، PDF، أو تسجيل صوتي فقط")
+
+    max_bytes = _max_attachment_bytes(db)
     data = await file.read()
-    if len(data) > _MAX_ATTACHMENT_BYTES:
-        raise HTTPException(status_code=400, detail="حجم الملف أكبر من 1 ميجابايت")
+    if len(data) > max_bytes:
+        raise HTTPException(status_code=400, detail=f"حجم الملف أكبر من {max_bytes // (1024*1024)} ميجابايت")
 
     os.makedirs(_UPLOAD_DIR, exist_ok=True)
     ext = (file.filename or "").rsplit(".", 1)[-1].lower() if "." in (file.filename or "") else "bin"
@@ -159,7 +174,7 @@ async def send_my_message(
     if len(body) > 2000:
         raise HTTPException(status_code=400, detail="الرسالة طويلة جداً")
 
-    attachment = await _save_attachment(file) if file is not None else {}
+    attachment = await _save_attachment(file, db) if file is not None else {}
     if not body and not attachment:
         raise HTTPException(status_code=400, detail="الرسالة فارغة")
 
@@ -303,7 +318,7 @@ async def admin_send_message(
     if len(body) > 2000:
         raise HTTPException(status_code=400, detail="الرسالة طويلة جداً")
 
-    attachment = await _save_attachment(file) if file is not None else {}
+    attachment = await _save_attachment(file, db) if file is not None else {}
     if not body and not attachment:
         raise HTTPException(status_code=400, detail="الرسالة فارغة")
 

@@ -303,11 +303,13 @@ async def public_settings(db: Session = Depends(get_db)):
         "site_name", "site_logo_url", "telegram_bot_username",
         "dashboard_announcement_enabled", "dashboard_announcement_text",
         "dashboard_announcement_link", "dashboard_announcement_link_label",
+        "support_attachment_max_mb",
     }
     rows = db.query(SiteSettings).filter(SiteSettings.key.in_(_PUBLIC_KEYS)).all()
     result = {r.key: r.value for r in rows}
     result.setdefault("site_name", "Qaffel AI")
     result.setdefault("site_logo_url", "")
+    result.setdefault("support_attachment_max_mb", "5")
     return result
 
 

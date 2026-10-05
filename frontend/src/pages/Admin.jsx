@@ -14,11 +14,17 @@ import {
   X, ExternalLink, Shield, AlertTriangle, Settings, Mail, Upload, Signal, Send,
   FileText, TrendingUp as TrendUp, Bell, Sparkles,
   ShieldCheck, UserCog, MessageCircle, UserMinus, Paperclip, Gift, ChevronRight, Menu,
-  Lightbulb, Ticket, Filter, Copy, ChevronDown
+  Lightbulb, Ticket, Filter, Copy, ChevronDown, Mic, Square
 } from 'lucide-react'
 
-const MAX_SUPPORT_ATTACHMENT_BYTES = 1 * 1024 * 1024
-const ALLOWED_SUPPORT_ATTACHMENT_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'application/pdf']
+// (2026-10-05) الحد ثابت هون بس كاحتياط لحظة ما قبل تحميل الإعدادات —
+// القيمة الفعلية المستخدَمة تُقرأ حياً من siteSettings['support_attachment_max_mb']
+// (نفس المفتاح اللي يضبطه الأدمن بتبويب الإعدادات).
+const FALLBACK_SUPPORT_ATTACHMENT_MB = 5
+const ALLOWED_SUPPORT_ATTACHMENT_TYPES = [
+  'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'application/pdf',
+  'audio/webm', 'audio/ogg', 'audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/x-m4a',
+]
 
 function SupportAttachment({ url, name, type }) {
   const full = `${API}${url}`
@@ -28,6 +34,9 @@ function SupportAttachment({ url, name, type }) {
         <img src={full} alt={name || 'attachment'} className="max-w-[220px] max-h-[220px] rounded-lg border border-black/10" />
       </a>
     )
+  }
+  if (type?.startsWith('audio/')) {
+    return <audio controls src={full} className="mt-1.5 max-w-full h-9" style={{ minWidth: 220 }} />
   }
   return (
     <a href={full} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 mt-1.5 text-xs underline opacity-90 hover:opacity-100">
@@ -105,6 +114,9 @@ function UserModal({ user: u, onClose, onUpdate }) {
       if (action === 'reset_trial') {
         await axios.post(`${API}/api/v1/admin/users/${u.id}/reset-trial`)
         setMsg({ type:'ok', text:'تم إعادة تعيين التجربة' })
+      } else if (action === 'reset_usage') {
+        await axios.post(`${API}/api/v1/admin/users/${u.id}/reset-usage`)
+        setMsg({ type:'ok', text:'✅ تم إعادة ضبط حدود الاستخدام اليومية' })
       } else if (action === 'renew') {
         const res = await axios.post(`${API}/api/v1/admin/users/${u.id}/renew`, {
           days: renewDays, plan: renewPlan, reason: renewReason, notify_telegram: renewNotify,
@@ -382,6 +394,12 @@ function UserModal({ user: u, onClose, onUpdate }) {
                 className="flex items-center gap-1 text-xs bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded-lg transition">
                 <RefreshCw size={12}/> إعادة التجربة
               </button>
+              <button disabled={loading==='reset_usage'}
+                onClick={() => doAction('reset_usage')}
+                title="يصفّر عدّادات اليوم فقط (شات/تحليلات) بدون لمس الخطة أو تواريخ الاشتراك"
+                className="flex items-center gap-1 text-xs bg-gray-700 hover:bg-gray-600 text-white px-3 py-1.5 rounded-lg transition">
+                <RefreshCw size={12}/> إعادة ضبط الحدود
+              </button>
               <button disabled={loading==='toggle'}
                 onClick={() => doAction('toggle')}
                 className={`flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg transition ${u.is_active?'bg-orange-800/50 hover:bg-orange-700/50 text-orange-300':'bg-green-800/50 hover:bg-green-700/50 text-green-300'}`}>
@@ -561,7 +579,12 @@ export default function Admin() {
   const [supportSending, setSupportSending]   = useState(false)
   const [supportFile,   setSupportFile]       = useState(null)
   const [supportFileError, setSupportFileError] = useState('')
+  const [supportRecording, setSupportRecording] = useState(false)
   const supportFileRef = useRef(null)
+  const supportRecorderRef = useRef(null)
+  const supportChunksRef   = useRef([])
+  const maxSupportAttachmentBytes =
+    (Number(siteSettings['support_attachment_max_mb']?.value) || FALLBACK_SUPPORT_ATTACHMENT_MB) * 1024 * 1024
 
   // "show more" limits
   const [usersLimit,    setUsersLimit]    = useState(10)
@@ -705,14 +728,38 @@ export default function Admin() {
     setSupportFileError('')
     if (!f) { setSupportFile(null); return }
     if (!ALLOWED_SUPPORT_ATTACHMENT_TYPES.includes(f.type)) {
-      setSupportFileError('نوع الملف غير مدعوم — صورة أو PDF فقط')
+      setSupportFileError('نوع الملف غير مدعوم — صورة، PDF، أو تسجيل صوتي فقط')
       return
     }
-    if (f.size > MAX_SUPPORT_ATTACHMENT_BYTES) {
-      setSupportFileError('حجم الملف أكبر من 1 ميجابايت')
+    if (f.size > maxSupportAttachmentBytes) {
+      setSupportFileError(`حجم الملف أكبر من ${Math.round(maxSupportAttachmentBytes / (1024*1024))} ميجابايت`)
       return
     }
     setSupportFile(f)
+  }
+
+  const startSupportRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mr = new MediaRecorder(stream)
+      supportChunksRef.current = []
+      mr.ondataavailable = (e) => { if (e.data.size > 0) supportChunksRef.current.push(e.data) }
+      mr.onstop = () => {
+        stream.getTracks().forEach(t => t.stop())
+        const blob = new Blob(supportChunksRef.current, { type: mr.mimeType || 'audio/webm' })
+        const ext = (mr.mimeType || 'audio/webm').split('/')[1]?.split(';')[0] || 'webm'
+        pickSupportFile(new File([blob], `voice-note.${ext}`, { type: blob.type }))
+      }
+      supportRecorderRef.current = mr
+      mr.start()
+      setSupportRecording(true)
+    } catch (e) {
+      setSupportFileError('تعذّر الوصول للميكروفون')
+    }
+  }
+  const stopSupportRecording = () => {
+    supportRecorderRef.current?.stop()
+    setSupportRecording(false)
   }
   const setThreadStatus = async (threadId, status) => {
     try {
@@ -1490,6 +1537,12 @@ export default function Admin() {
                           <input ref={supportFileRef} type="file" accept={ALLOWED_SUPPORT_ATTACHMENT_TYPES.join(',')} className="hidden" onChange={e => pickSupportFile(e.target.files?.[0])} />
                           <button onClick={() => supportFileRef.current?.click()} title="إرفاق ملف" className="text-gray-400 hover:text-white p-2 flex-shrink-0">
                             <Paperclip size={16}/>
+                          </button>
+                          <button
+                            onClick={supportRecording ? stopSupportRecording : startSupportRecording}
+                            title={supportRecording ? 'إيقاف التسجيل' : 'تسجيل صوتي'}
+                            className={`p-2 flex-shrink-0 rounded-lg ${supportRecording ? 'text-red-400 animate-pulse bg-red-500/10' : 'text-gray-400 hover:text-white'}`}>
+                            {supportRecording ? <Square size={16}/> : <Mic size={16}/>}
                           </button>
                           <textarea
                             value={supportReply}
@@ -3312,6 +3365,7 @@ export default function Admin() {
                     { key:'weekly_analysis_limit',  label:'تحليلات الأسبوعي',   color:'blue' },
                     { key:'monthly_chat_limit',     label:'محادثات الشهري',     color:'purple' },
                     { key:'monthly_analysis_limit', label:'تحليلات الشهري',     color:'purple' },
+                    { key:'support_attachment_max_mb', label:'الحد الأقصى لمرفقات الدعم الفني (ميجابايت) — صور/تسجيل صوتي', color:'gray' },
                   ].map(f => (
                     <div key={f.key} className="bg-gray-900 border border-gray-800 rounded-xl p-3 flex items-center gap-2">
                       <div className="flex-1">
