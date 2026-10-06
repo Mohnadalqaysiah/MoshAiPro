@@ -4,6 +4,7 @@ import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
 import useMarkets from '../hooks/useMarkets'
+import useSiteSettings from '../hooks/useSiteSettings'
 import { User, Mail, Phone, Lock, Save, CheckCircle, AlertCircle, TrendingUp, Bell, Calculator, Gift, Copy, ExternalLink, Users, DollarSign } from 'lucide-react'
 
 import { subscriptionCta } from '../utils/subscriptionCta'
@@ -13,6 +14,7 @@ const TIMEFRAMES = ['15m','30m','1h','4h','1day']
 
 export default function Profile() {
   const { user, token, refreshUser } = useAuth()
+  const siteSettings = useSiteSettings()
   const { lang } = useLang()
   const isAr = lang === 'ar'
   const { markets } = useMarkets()
@@ -184,7 +186,13 @@ export default function Profile() {
     setLotPreview(Math.max(0.01, Math.min(lot, 100)).toFixed(2))
   }
 
-  const planLabels = { trial: isAr ? 'تجريبي' : 'Trial', weekly: isAr ? 'أسبوعي' : 'Weekly', monthly: isAr ? 'شهري' : 'Monthly', banned: isAr ? 'محظور' : 'Banned' }
+  // (2026-10-06) اسم الباقة يُقرأ حياً من إعدادات الأدمن لو غيّره، وإلا الافتراضي
+  const planLabels = {
+    trial: isAr ? 'تجريبي' : 'Trial',
+    weekly: siteSettings[`plan_weekly_name${isAr ? '' : '_en'}`] || (isAr ? 'أسبوعي' : 'Weekly'),
+    monthly: siteSettings[`plan_monthly_name${isAr ? '' : '_en'}`] || (isAr ? 'شهري' : 'Monthly'),
+    banned: isAr ? 'محظور' : 'Banned',
+  }
   const planColors = { trial: 'text-blue-400', weekly: 'text-green-400', monthly: 'text-purple-400', banned: 'text-red-400' }
 
   return (

@@ -522,9 +522,14 @@ export default function Landing() {
               const displayPrice = livePrice ? `$${livePrice}` : p.price
               const liveFeaturesAr = planKey && livePlans[planKey]?.features
               const liveFeaturesEn = planKey && livePlans[planKey]?.features_en
+              const displayName = planKey
+                ? (isAr ? (livePlans[planKey]?.name || p.name) : (livePlans[planKey]?.name_en || p.name))
+                : p.name
               const displayFeatures = isFree ? p.features.map(fmtTrial)
                 : isAr ? (liveFeaturesAr || p.features)
                 : (liveFeaturesEn || p.features)
+              // باقة أوقفها الأدمن عن اشتراكات جديدة — تختفي من هالمعاينة التسويقية كمان
+              if (planKey && livePlans[planKey]?.enabled === false) return null
               return (
                 <div key={i}
                   className={`reveal relative flex flex-col rounded-2xl overflow-hidden transition-all duration-300 hover:-translate-y-1 ${
@@ -547,7 +552,7 @@ export default function Landing() {
                     )}
 
                     {/* Plan name */}
-                    <h3 className="text-base font-bold text-gray-400 mb-1 uppercase tracking-wider">{p.name}</h3>
+                    <h3 className="text-base font-bold text-gray-400 mb-1 uppercase tracking-wider">{displayName}</h3>
 
                     {/* Price */}
                     <div className="flex items-end gap-1.5 mb-6">

@@ -16,6 +16,7 @@ const TrialBanner        = lazy(() => import('./TrialBanner'))
 const TelegramLinkBanner = lazy(() => import('./TelegramLinkBanner'))
 const PushNotificationBanner = lazy(() => import('./PushNotificationBanner'))
 const DiscountPopup      = lazy(() => import('./DiscountPopup'))
+const SpecialAnnouncementPopup = lazy(() => import('./SpecialAnnouncementPopup'))
 const NotificationBell   = lazy(() => import('./NotificationBell'))
 const EmailVerifyBanner  = lazy(() => import('./EmailVerifyBanner'))
 const OnboardingTour     = lazy(() => import('./OnboardingTour'))
@@ -369,8 +370,11 @@ function ReferralMini({ isAr }) {
 
 function ProfilePanel({ isAr }) {
   const { user } = useAuth()
+  const siteSettings = useSiteSettings()
   if (!user) return null
   const badge = planBadge[user.plan]
+  // (2026-10-06) اسم الباقة يُقرأ حياً من إعدادات الأدمن لو غيّره، وإلا يرجع للافتراضي
+  const planNameLive = user.plan && siteSettings[`plan_${user.plan}_name${isAr ? '' : '_en'}`]
   const initial = (user.full_name || user.email || '?').trim().charAt(0).toUpperCase()
   const isTrial = user.plan === 'trial'
   const days = user.days_left
@@ -391,7 +395,7 @@ function ProfilePanel({ isAr }) {
           {user.full_name && <small className="block text-gray-400 truncate">{user.email}</small>}
         </div>
         <div className="flex justify-center flex-wrap gap-2 mt-3">
-          {badge && <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${badge.cls}`}>{isAr ? badge.ar : badge.en}</span>}
+          {badge && <span className={`text-xs px-2.5 py-1 rounded-full font-semibold ${badge.cls}`}>{planNameLive || (isAr ? badge.ar : badge.en)}</span>}
           {days != null && (
             <span className="text-xs px-2.5 py-1 rounded-full bg-amber-400/10 border border-amber-400/30 text-amber-300 tabular-nums">
               {isAr ? `${days} أيام متبقية` : `${days} days left`}
@@ -552,6 +556,7 @@ export default function AppShell({ children }) {
             {surveyOpen && !verifyOpen && !upgradeOpen && (
               <FeatureSurveyModal onDone={() => { setSurveyOpen(false); setSurveyDone(true) }} />
             )}
+            {!verifyOpen && !upgradeOpen && !surveyOpen && <SpecialAnnouncementPopup />}
             {!verifyOpen && !upgradeOpen && !surveyOpen && <DiscountPopup />}
           </Suspense>
 

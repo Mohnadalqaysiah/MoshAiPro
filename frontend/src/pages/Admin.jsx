@@ -7,6 +7,7 @@ import QualityReportPanel from '../components/QualityReportPanel'
 import CombinationsPanel from '../components/CombinationsPanel'
 import OnlineUsersModal from '../components/OnlineUsersModal'
 import CouponsPanel from '../components/CouponsPanel'
+import useSiteSettings from '../hooks/useSiteSettings'
 import {
   Users, CreditCard, BarChart2, CheckCircle, XCircle, Clock,
   Search, Plus, Trash2, ToggleLeft, ToggleRight, TrendingUp,
@@ -48,8 +49,15 @@ function SupportAttachment({ url, name, type }) {
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 const PlanBadge = ({ plan }) => {
+  const publicSettings = useSiteSettings()
   const s = { trial:'bg-gray-700 text-gray-300', weekly:'bg-blue-900/50 text-blue-300 border border-blue-700/50', monthly:'bg-purple-900/50 text-purple-300 border border-purple-700/50', banned:'bg-red-900/50 text-red-300 border border-red-700/50' }
-  const l = { trial:'تجريبي', weekly:'أسبوعي', monthly:'شهري', banned:'محظور' }
+  // (2026-10-06) اسم الباقة يُقرأ حياً من إعدادات الأدمن لو غيّره، وإلا الافتراضي
+  const l = {
+    trial:'تجريبي',
+    weekly: publicSettings.plan_weekly_name || 'أسبوعي',
+    monthly: publicSettings.plan_monthly_name || 'شهري',
+    banned:'محظور',
+  }
   return <span className={`text-xs px-2 py-0.5 rounded-full ${s[plan]||s.trial}`}>{l[plan]||plan}</span>
 }
 
@@ -81,6 +89,9 @@ const SIGNAL_STATUS_STYLE = {
 }
 
 function UserModal({ user: u, onClose, onUpdate }) {
+  const publicSettings = useSiteSettings()
+  const weeklyName = publicSettings.plan_weekly_name || 'أسبوعي'
+  const monthlyName = publicSettings.plan_monthly_name || 'شهري'
   const [activeUserTab, setActiveUserTab] = useState('details')
   const [extraDays, setExtraDays] = useState(7)
   const [deliveries, setDeliveries] = useState(null)
@@ -377,7 +388,7 @@ function UserModal({ user: u, onClose, onUpdate }) {
                   <button key={p} disabled={loading==='plan'||u.plan===p}
                     onClick={() => doAction('plan',{plan:p})}
                     className={`text-xs px-3 py-1.5 rounded-lg border transition ${u.plan===p?'border-blue-500 text-blue-400 bg-blue-900/20':'border-gray-700 text-gray-400 hover:border-gray-500 hover:text-white'}`}>
-                    {p==='trial'?'تجريبي':p==='weekly'?'أسبوعي':'شهري'}
+                    {p==='trial'?'تجريبي':p==='weekly'?weeklyName:monthlyName}
                   </button>
                 ))}
               </div>
@@ -410,7 +421,7 @@ function UserModal({ user: u, onClose, onUpdate }) {
               {/* الباقة */}
               <label className="text-[11px] text-gray-400 block mb-1.5">الباقة</label>
               <div className="flex gap-1.5 mb-3">
-                {[['weekly','أسبوعي'], ['monthly','شهري']].map(([val, label]) => (
+                {[['weekly',weeklyName], ['monthly',monthlyName]].map(([val, label]) => (
                   <button key={val} type="button" onClick={() => setRenewPlanAndPrice(val)}
                     className={`flex-1 text-xs px-3 py-2 rounded-lg border transition font-medium ${renewPlan===val ? 'border-emerald-500 bg-emerald-900/40 text-emerald-300' : 'border-gray-700 text-gray-400 hover:border-gray-500 hover:text-white'}`}>
                     {label}
@@ -558,6 +569,11 @@ function UserModal({ user: u, onClose, onUpdate }) {
 export default function Admin() {
   const { user } = useAuth()
   const navigate  = useNavigate()
+  // (2026-10-06) أسماء الباقات حياً — مفتوحة فوراً بلا انتظار زيارة تبويب
+  // الإعدادات (siteSettings الإداري بالأسفل يُحمَّل كسولاً عند فتح ذاك التبويب بس)
+  const publicSettings = useSiteSettings()
+  const weeklyNameLive = publicSettings.plan_weekly_name || 'أسبوعي'
+  const monthlyNameLive = publicSettings.plan_monthly_name || 'شهري'
   const [tab, setTab]         = useState('stats')
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [stats, setStats]     = useState(null)
@@ -1279,7 +1295,7 @@ export default function Admin() {
               <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
                 {[
                   { label:'تجريبي', value:stats.users.trial,   color:'gray' },
-                  { label:'أسبوعي', value:stats.users.weekly,  color:'blue' },
+                  { label:weeklyNameLive, value:stats.users.weekly,  color:'blue' },
                   { label:'شهري',   value:stats.users.monthly, color:'purple' },
                   { label:'محظور',  value:stats.users.banned,  color:'red' },
                   { label:'مربوط بتلغرام', value:stats.users.telegram_linked, color:'indigo' },
@@ -1397,7 +1413,7 @@ export default function Admin() {
                     {['all','trial','weekly','monthly','banned'].map(p => (
                       <button key={p} onClick={() => setPlanFilter(p)}
                         className={`text-xs px-2.5 py-1 rounded-lg border transition ${planFilter===p?'border-blue-500 text-blue-400 bg-blue-900/20':'border-gray-700 text-gray-500 hover:border-gray-600 hover:text-gray-300'}`}>
-                        {p==='all'?'الكل':p==='trial'?'تجريبي':p==='weekly'?'أسبوعي':p==='monthly'?'شهري':'محظور'}
+                        {p==='all'?'الكل':p==='trial'?'تجريبي':p==='weekly'?weeklyNameLive:p==='monthly'?monthlyNameLive:'محظور'}
                       </button>
                     ))}
                   </div>
@@ -1740,7 +1756,7 @@ export default function Admin() {
                         <div className="font-medium text-white text-sm">{p.user_name || p.user_email}</div>
                         <div className="text-xs text-gray-500 mb-1">{p.user_email}</div>
                         <div className="text-xs text-gray-400 flex items-center gap-1.5 flex-wrap">
-                          {p.plan==='weekly'?'أسبوعي':'شهري'} · <span className="text-green-400 font-bold">${p.amount_usd}</span> ·
+                          {p.plan==='weekly'?weeklyNameLive:monthlyNameLive} · <span className="text-green-400 font-bold">${p.amount_usd}</span> ·
                           {p.provider === 'manual' ? (
                             <span className="inline-flex items-center gap-1 text-emerald-300 bg-emerald-900/30 border border-emerald-700/40 px-2 py-0.5 rounded-full text-[10px] font-semibold">
                               <Gift size={10}/> منح يدوي — خارج المنصة
@@ -3247,6 +3263,93 @@ export default function Admin() {
                       <p className="text-xs text-gray-500">الرابط اختياري — لو تركته فاضي، الشريط بيظهر بلا زر. المستخدم يقدر يسكّره، وبيرجع يظهر تلقائياً لو غيّرت النص.</p>
                     </div>
 
+                    {/* ── بوب أب إعلان خاص (ملء الشاشة) ───────────────────── */}
+                    <div className="bg-gray-900 border border-purple-900/40 rounded-xl p-4 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <label className="block text-sm text-gray-300 font-medium">بوب أب إعلان خاص (ملء الشاشة)</label>
+                          <p className="text-xs text-gray-500">لعرض خاص أو احتفال أو قرار مهم — يظهر فوراً لكل مستخدم مسجّل (بما فيهم التجريبي) مرة وحدة لكل محتوى</p>
+                        </div>
+                        <button
+                          onClick={() => saveSetting('special_popup_enabled', (siteSettings['special_popup_enabled']?.value ?? 'false') === 'true' ? 'false' : 'true')}
+                          disabled={settingSaving === 'special_popup_enabled'}
+                          className={`w-11 h-6 rounded-full flex items-center px-0.5 transition-colors flex-shrink-0 ${
+                            (siteSettings['special_popup_enabled']?.value ?? 'false') === 'true'
+                              ? 'bg-green-600 justify-end'
+                              : 'bg-gray-700 justify-start'
+                          }`}
+                        >
+                          <span className="w-5 h-5 rounded-full bg-white" />
+                        </button>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm text-gray-300 font-medium mb-1">العنوان</label>
+                        <div className="flex gap-2">
+                          <input type="text"
+                            value={settingEdits['special_popup_title'] ?? (siteSettings['special_popup_title']?.value || '')}
+                            onChange={e => setSettingEdits(s => ({...s, special_popup_title: e.target.value}))}
+                            placeholder="🎉 عرض خاص لمدة محدودة"
+                            className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-purple-500"
+                            dir="rtl" />
+                          <button disabled={settingSaving === 'special_popup_title'} onClick={() => saveSetting('special_popup_title')}
+                            className="flex-shrink-0 flex items-center gap-1 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition">
+                            {settingSaving === 'special_popup_title' ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle size={13}/>} حفظ
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm text-gray-300 font-medium mb-1">النص</label>
+                        <div className="flex gap-2">
+                          <textarea rows={3}
+                            value={settingEdits['special_popup_body'] ?? (siteSettings['special_popup_body']?.value || '')}
+                            onChange={e => setSettingEdits(s => ({...s, special_popup_body: e.target.value}))}
+                            placeholder="تفاصيل العرض أو الإعلان هنا..."
+                            className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white resize-y focus:outline-none focus:ring-1 focus:ring-purple-500"
+                            dir="rtl" />
+                          <button disabled={settingSaving === 'special_popup_body'} onClick={() => saveSetting('special_popup_body')}
+                            className="self-start flex items-center gap-1 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition">
+                            {settingSaving === 'special_popup_body' ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle size={13}/>} حفظ
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-sm text-gray-300 font-medium mb-1">رابط الزر (اختياري)</label>
+                          <div className="flex gap-2">
+                            <input type="text"
+                              value={settingEdits['special_popup_link'] ?? (siteSettings['special_popup_link']?.value || '')}
+                              onChange={e => setSettingEdits(s => ({...s, special_popup_link: e.target.value}))}
+                              placeholder="/pricing"
+                              className="flex-1 min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white font-mono focus:outline-none focus:ring-1 focus:ring-purple-500"
+                              dir="ltr" />
+                            <button disabled={settingSaving === 'special_popup_link'} onClick={() => saveSetting('special_popup_link')}
+                              className="flex-shrink-0 flex items-center gap-1 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white text-sm px-3 py-2 rounded-lg transition">
+                              {settingSaving === 'special_popup_link' ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle size={13}/>}
+                            </button>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm text-gray-300 font-medium mb-1">نص الزر</label>
+                          <div className="flex gap-2">
+                            <input type="text"
+                              value={settingEdits['special_popup_link_label'] ?? (siteSettings['special_popup_link_label']?.value || '')}
+                              onChange={e => setSettingEdits(s => ({...s, special_popup_link_label: e.target.value}))}
+                              placeholder="التفاصيل"
+                              className="flex-1 min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-purple-500"
+                              dir="rtl" />
+                            <button disabled={settingSaving === 'special_popup_link_label'} onClick={() => saveSetting('special_popup_link_label')}
+                              className="flex-shrink-0 flex items-center gap-1 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white text-sm px-3 py-2 rounded-lg transition">
+                              {settingSaving === 'special_popup_link_label' ? <RefreshCw size={13} className="animate-spin"/> : <CheckCircle size={13}/>}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-500">الرابط اختياري — لو تركته فاضي، البوب أب يظهر بزر "إغلاق" بس. كل مستخدم يشوفه مرة وحدة بالضبط لنفس المحتوى، وبيرجع يظهر تلقائياً لكل الكل لو غيّرت العنوان أو النص.</p>
+                    </div>
+
                     {/* Logo Upload */}
                     <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
                       <label className="block text-sm text-gray-300 font-medium mb-1">شعار الموقع</label>
@@ -3331,13 +3434,33 @@ export default function Admin() {
                   </h2>
                   <p className="text-xs text-gray-400">اتركها فارغة لاستخدام القيم الافتراضية · التغييرات تظهر فوراً في صفحات الأسعار</p>
                   {[
-                    { key: 'weekly',  label: 'الأسبوعية', color: 'blue',   defaultPrice: '7',  defaultDays: '7'  },
-                    { key: 'monthly', label: 'الشهرية',   color: 'purple', defaultPrice: '30', defaultDays: '30' },
+                    { key: 'weekly',  label: 'الأسبوعية', color: 'blue',   defaultPrice: '7',   defaultDays: '7'   },
+                    { key: 'monthly', label: 'الشهرية',   color: 'purple', defaultPrice: '30',  defaultDays: '30'  },
+                    { key: 'yearly',  label: 'السنوية',   color: 'amber',  defaultPrice: '179.9', defaultDays: '365' },
                   ].map(({ key, label, color, defaultPrice, defaultDays }) => (
                     <div key={key} className={`bg-gray-900 border border-${color}-900/40 rounded-xl p-4 space-y-3`}>
                       <div className="flex items-center justify-between">
                         <h3 className={`text-xs font-bold text-${color}-400 uppercase tracking-wider`}>{label}</h3>
                         <span className="text-xs text-gray-400">الافتراضي: ${defaultPrice} / {defaultDays} يوم</span>
+                      </div>
+
+                      {/* متاحة للاشتراكات الجديدة — لا تؤثر إطلاقاً على مشتركين حاليين بهاي الباقة */}
+                      <div className="flex items-center justify-between bg-gray-800/60 rounded-lg px-3 py-2">
+                        <div>
+                          <label className="block text-xs text-gray-300 font-medium">متاحة للاشتراكات الجديدة</label>
+                          <p className="text-[11px] text-gray-500">إطفاؤها يخفيها من صفحة الأسعار ويمنع الدفع الجديد بيها — المشتركون الحاليون غير متأثرين إطلاقاً</p>
+                        </div>
+                        <button
+                          onClick={() => saveSetting(`plan_${key}_enabled`, (siteSettings[`plan_${key}_enabled`]?.value ?? 'true') === 'false' ? 'true' : 'false')}
+                          disabled={settingSaving === `plan_${key}_enabled`}
+                          className={`w-11 h-6 rounded-full flex items-center px-0.5 transition-colors flex-shrink-0 ${
+                            (siteSettings[`plan_${key}_enabled`]?.value ?? 'true') !== 'false'
+                              ? 'bg-green-600 justify-end'
+                              : 'bg-gray-700 justify-start'
+                          }`}
+                        >
+                          <span className="w-5 h-5 rounded-full bg-white" />
+                        </button>
                       </div>
 
                       {/* Price + Days */}

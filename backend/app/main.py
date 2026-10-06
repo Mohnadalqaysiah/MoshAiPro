@@ -304,12 +304,27 @@ async def public_settings(db: Session = Depends(get_db)):
         "dashboard_announcement_enabled", "dashboard_announcement_text",
         "dashboard_announcement_link", "dashboard_announcement_link_label",
         "support_attachment_max_mb",
+        # (2026-10-06) أسماء الباقات — مصدر وحيد تقرأ منه كل شارات/قوائم
+        # الباقة بالموقع (شريط التطبيق، البروفايل، لوحة الأدمن...)، بدل
+        # نسخ ثابتة بالكود بكل مكان ما كانت تتحدّث لما يغيّر الأدمن الاسم.
+        "plan_weekly_name", "plan_weekly_name_en",
+        "plan_monthly_name", "plan_monthly_name_en",
+        "plan_yearly_name", "plan_yearly_name_en",
+        # بوب أب إعلان خاص (عرض/احتفال/قرار) — كل المستخدمين المسجّلين
+        "special_popup_enabled", "special_popup_title", "special_popup_body",
+        "special_popup_link", "special_popup_link_label",
     }
     rows = db.query(SiteSettings).filter(SiteSettings.key.in_(_PUBLIC_KEYS)).all()
     result = {r.key: r.value for r in rows}
     result.setdefault("site_name", "Qaffel AI")
     result.setdefault("site_logo_url", "")
     result.setdefault("support_attachment_max_mb", "5")
+    result.setdefault("plan_weekly_name", "الأسبوعية")
+    result.setdefault("plan_weekly_name_en", "Weekly")
+    result.setdefault("plan_monthly_name", "الشهرية")
+    result.setdefault("plan_monthly_name_en", "Monthly")
+    result.setdefault("plan_yearly_name", "السنوية")
+    result.setdefault("plan_yearly_name_en", "Yearly")
     return result
 
 

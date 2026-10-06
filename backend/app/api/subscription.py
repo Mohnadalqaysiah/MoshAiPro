@@ -99,6 +99,10 @@ def _resolve_plans(db: Session) -> dict:
 
     plans = copy.deepcopy(PLANS)
     for plan_key in PLAN_KEYS:
+        # (2026-10-06) إيقاف اشتراكات جديدة بباقة معيّنة — بلا لمس مشتركيها
+        # الحاليين (ما منغيّر User.plan ولا subscription_ends_at). افتراضياً
+        # مفعّلة؛ "false" فقط توقفها. تُنفَّذ فعلياً بـ_priced() تحت.
+        plans[plan_key]["enabled"] = db_settings.get(f"plan_{plan_key}_enabled", "true").strip().lower() != "false"
         # Price override
         price_val = db_settings.get(f"plan_{plan_key}_price")
         if price_val:
@@ -151,6 +155,8 @@ def _priced(db: Session, plan_key: str, coupon_code: Optional[str],
     if plan_key not in plans:
         raise HTTPException(400, "باقة غير صحيحة")
     plan_info = plans[plan_key]
+    if not plan_info.get("enabled", True):
+        raise HTTPException(400, "هذه الباقة لم تعد متاحة للاشتراكات الجديدة")
     final, coupon, err = price_for(db, plan_info, plan_key, coupon_code, user_id)
     if err:
         raise HTTPException(400, err)

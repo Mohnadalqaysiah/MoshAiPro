@@ -285,18 +285,25 @@ export default function Pricing() {
         setSpaceremitEnabled(!!r.data.spaceremit_enabled)
         setSpaceremitPublicKey(r.data.spaceremit_public_key || '')
         if (r.data.plans) {
-          setPlans(DEFAULT_PLANS.map(p => {
-            const api = r.data.plans[p.key]
-            if (!api) return p
-            return {
-              ...p,
-              price: api.price_usd ?? p.price,
-              nameAr: api.name ?? p.nameAr,
-              nameEn: api.name_en ?? p.nameEn,
-              featuresAr: api.features ?? p.featuresAr,
-              featuresEn: api.features_en ?? p.featuresEn,
-            }
-          }))
+          // (2026-10-06) باقة معطّلة من الأدمن (مثلاً أوقفت اشتراكات أسبوعية
+          // جديدة) تختفي من هنا كلياً — لا تؤثر على مشتركين حاليين فيها،
+          // الإيقاف الفعلي للدفع يُنفَّذ بالخادم (_priced في subscription.py).
+          const resolved = DEFAULT_PLANS
+            .filter(p => r.data.plans[p.key]?.enabled !== false)
+            .map(p => {
+              const api = r.data.plans[p.key]
+              if (!api) return p
+              return {
+                ...p,
+                price: api.price_usd ?? p.price,
+                nameAr: api.name ?? p.nameAr,
+                nameEn: api.name_en ?? p.nameEn,
+                featuresAr: api.features ?? p.featuresAr,
+                featuresEn: api.features_en ?? p.featuresEn,
+              }
+            })
+          setPlans(resolved)
+          setSelected(sel => resolved.some(p => p.key === sel) ? sel : (resolved[0]?.key || sel))
         }
       })
       .catch(() => setWallet('TVh8P92EEjr732frVRpxg1iE4GsfZpLM6E'))

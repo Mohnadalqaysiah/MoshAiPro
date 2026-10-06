@@ -118,14 +118,14 @@ export default function UpgradeModal({ open, onClose, reason = 'trial_expired' }
           <div className="px-6 pt-4 flex items-center justify-center gap-2.5">
             {weekly != null && (
               <div className="flex-1 text-center rounded-xl py-2.5 q-glass border q-line">
-                <div className="text-[11px] text-gray-400">{isAr ? 'أسبوعي' : 'Weekly'}</div>
+                <div className="text-[11px] text-gray-400">{isAr ? (plans?.weekly?.name || 'أسبوعي') : (plans?.weekly?.name_en || 'Weekly')}</div>
                 <div className="text-lg font-bold text-white">${weekly}</div>
               </div>
             )}
             {monthly != null && (
               <div className="flex-1 text-center rounded-xl py-2.5 border"
                 style={{ borderColor: 'var(--q-acc1,#FF4FD8)', background: 'linear-gradient(135deg, rgba(255,79,216,0.12), rgba(124,58,237,0.14))' }}>
-                <div className="text-[11px]" style={{ color: 'var(--q-acc1,#FF4FD8)' }}>{isAr ? 'شهري — الأوفر' : 'Monthly — best value'}</div>
+                <div className="text-[11px]" style={{ color: 'var(--q-acc1,#FF4FD8)' }}>{isAr ? `${plans?.monthly?.name || 'شهري'} — الأوفر` : `${plans?.monthly?.name_en || 'Monthly'} — best value`}</div>
                 <div className="text-lg font-bold text-white">${monthly}</div>
               </div>
             )}
