@@ -308,7 +308,12 @@ class MoshAIEngineV5:
                         analysis = self._classify_trade_mode(
                             analysis, symbol, timeframe, htf_analysis
                         )
-                        self._record_signal_issued(symbol, timeframe)
+                        # (2026-10-07) _confidence_calibration_layer ممكن تهبط
+                        # بالتوصية لـWAIT بعد سقف الثقة ما بعد المعايرة — لا
+                        # تُسجَّل كـ"إشارة صدرت" وإلا نظام رصد الصمت (signal
+                        # drought) يفوّت رمزاً فعلياً ساكتاً.
+                        if analysis.get("recommendation") in ("BUY", "SELL"):
+                            self._record_signal_issued(symbol, timeframe)
 
                         # ── MARKET CONTEXT — optional news/sentiment summary ──
                         # Advisory only, same contract as the Gemini summary
@@ -3028,6 +3033,27 @@ class MoshAIEngineV5:
             f"final={final_conf:.1f}% | {tier}"
             + (f" [penalties: {', '.join(penalty_log)}]" if penalty_log else "")
         )
+
+        # (2026-10-07) Rule 5 بـ_output_safety_gate (Confidence Floor ≥55%)
+        # تتحقق من نتيجة أولية قبل هالمعايرة — وهالمعايرة نفسها (عقوبة
+        # RANGING -5، سقف ≤65 للفريمات الصغيرة، سقف ≤75 لـRR<2) ممكن
+        # تنزل النتيجة تحت 55 من جديد بلا أي تحقق لاحق. تأكّد بتشخيص
+        # diag_ranging.py: 78% من قرارات RANGING (ن=36، توقّع -21.61) كانت
+        # فعلياً تحت 55% بعد هالمعايرة رغم اجتيازها الفحص الأول. هذا
+        # يُطبّق نفس حد الـ55% المُقرَّر أصلاً، بس باللحظة الصحيحة — لا
+        # يخترع قاعدة جديدة، ولا يستثني RANGING تحديداً (أي إشارة تهبط
+        # تحت الحد بعد المعايرة لأي سبب تُمنع بنفس المنطق).
+        if rec in ("BUY", "SELL") and final_conf < 55.0:
+            logger.warning(
+                f"🛑 CONFIDENCE_FLOOR_POST_CALIBRATION [{symbol.upper()}/{timeframe}] "
+                f"{rec} → WAIT | final={final_conf:.1f}% < 55%"
+            )
+            analysis["recommendation"]      = "WAIT"
+            analysis["signal_type"]         = "WAIT"
+            analysis["signal_status"]       = "REJECT"
+            analysis["rejection_reason"]    = f"CONFIDENCE_TOO_LOW_POST_CALIBRATION_{final_conf:.0f}pct"
+            analysis["no_trade_reason"]     = f"CONFIDENCE_TOO_LOW_POST_CALIBRATION_{final_conf:.0f}pct"
+
         return analysis
 
     # ──────────────────────────────────────────────────────────────────────────
