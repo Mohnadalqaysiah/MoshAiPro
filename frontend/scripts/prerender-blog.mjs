@@ -25,6 +25,7 @@ const TRIAL_SLUGS = [
   'ict-strategy-automation',
 ]
 
+const { AUTHOR } = await import(pathToFileURL(resolve(ROOT, 'src/data/author.js')).href)
 const { BLOG_POSTS } = await import(pathToFileURL(resolve(ROOT, 'src/data/blogPosts.js')).href)
 const template = readFileSync(resolve(DIST, 'index.html'), 'utf8')
 
@@ -84,7 +85,7 @@ function build(post, lang) {
     '@context': 'https://schema.org', '@type': 'Article',
     headline: title, description: desc, image: `${ORIGIN}/og-image.png`,
     datePublished: post.date, dateModified: post.updated || post.date, inLanguage: lang,
-    author: { '@type': 'Organization', name: 'Qaffel AI', url: ORIGIN },
+    author: { '@type': 'Person', name: (post.author || AUTHOR).name },
     publisher: { '@type': 'Organization', name: 'Qaffel AI',
       logo: { '@type': 'ImageObject', url: `${ORIGIN}/brand/logo-icon-only.png` } },
     mainEntityOfPage: { '@type': 'WebPage', '@id': url },
@@ -124,7 +125,7 @@ function build(post, lang) {
   // ids مطابقة لـuseJsonLd ⇒ الكلاينت يحدّث نفس الوسم بدل ما يضيف نسخة ثانية
   h = sub(h, /<\/head>/, `${ld('ld-article', article)}\n    ${ld('ld-breadcrumb', breadcrumb)}\n  </head>`, 'head end')
   h = sub(h, /<div id="root"><\/div>/,
-    `<div id="root"><article><p>${isAr ? 'نُشر' : 'Published'}: <time datetime="${post.date}">${post.date}</time>${post.updated && post.updated !== post.date ? ` · ${isAr ? 'آخر تحديث' : 'Last updated'}: <time datetime="${post.updated}">${post.updated}</time>` : ''}</p><h1>${esc(title)}</h1><p>${esc(desc)}</p>\n${renderBody(content, isAr ? '' : '/en')}</article></div>`, 'root')
+    `<div id="root"><article><p>${isAr ? 'بقلم' : 'By'}${isAr ? ': ' : ' '}${esc((post.author || AUTHOR).name)} · ${isAr ? 'نُشر' : 'Published'}: <time datetime="${post.date}">${post.date}</time>${post.updated && post.updated !== post.date ? ` · ${isAr ? 'آخر تحديث' : 'Last updated'}: <time datetime="${post.updated}">${post.updated}</time>` : ''}</p><h1>${esc(title)}</h1><p>${esc(desc)}</p>\n${renderBody(content, isAr ? '' : '/en')}</article></div>`, 'root')
   return { path, html: h }
 }
 

@@ -9,6 +9,7 @@ import useBreadcrumbSchema from '../hooks/useBreadcrumbSchema'
 import { OrderBlockDiagram, FVGDiagram, BosChochDiagram } from '../components/BlogDiagrams'
 import PublicLayout from '../components/PublicLayout'
 import useTrialLimits from '../hooks/useTrialLimits'
+import { AUTHOR } from '../data/author'
 import { pathLangInfo } from '../utils/langRoutes'
 
 const DIAGRAMS = {
@@ -162,6 +163,9 @@ export default function BlogPost() {
           <span className="text-xs text-gray-400 flex items-center gap-1">
             <Clock size={11} />
             {post.readTime} {isAr ? 'دقائق قراءة' : 'min read'}
+          </span>
+          <span className="text-xs text-gray-400">
+            {isAr ? 'بقلم: ' : 'By '}{(post.author || AUTHOR).name}
           </span>
           <span className="text-xs text-gray-400">
             {isAr ? 'نُشر: ' : 'Published: '}

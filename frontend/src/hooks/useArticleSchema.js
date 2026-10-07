@@ -1,4 +1,5 @@
 import useJsonLd from './useJsonLd'
+import { AUTHOR } from '../data/author'
 
 const ORIGIN = 'https://qaffel.com'
 
@@ -17,11 +18,7 @@ export default function useArticleSchema(post, isAr, path) {
     // updated حقل اختياري يُملأ فقط عند تحديث حقيقي للمحتوى — لا يُغيَّر لإيهام الحداثة
     dateModified: post.updated || post.date,
     inLanguage: isAr ? 'ar' : 'en',
-    author: {
-      '@type': 'Organization',
-      name: 'Qaffel AI',
-      url: ORIGIN,
-    },
+    author: { '@type': 'Person', name: (post.author || AUTHOR).name },
     publisher: {
       '@type': 'Organization',
       name: 'Qaffel AI',
