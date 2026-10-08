@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Layers, Zap, Bell, Gauge, Globe, ArrowRight, BookOpen, ChevronDown, Blocks } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import PublicLayout from '../components/PublicLayout'
 import StrategyBuilderDemo from '../components/StrategyBuilderDemo'
 import { useAuth } from '../contexts/AuthContext'
@@ -8,6 +8,29 @@ import { useLang } from '../contexts/LangContext'
 import useSEO from '../hooks/useSEO'
 import useBreadcrumbSchema from '../hooks/useBreadcrumbSchema'
 import useFAQSchema from '../hooks/useFAQSchema'
+
+// (2026-10-08) StrategyBuilderDemo يستخدم class="reveal" (نفس نمط
+// Landing.jsx) — تبدأ opacity:0 وما تظهر إلا لما IntersectionObserver
+// يضيف .visible. بدون هالـhook هون، القسم يحجز مساحته بالصفحة بس يضل
+// شفّافاً بالكامل — بالضبط الفجوة الفارغة يلي ظهرت بالصفحة.
+function useReveal() {
+  useEffect(() => {
+    const els = document.querySelectorAll('.reveal, .reveal-left, .reveal-stagger')
+    const io = new IntersectionObserver(
+      (entries) => entries.forEach((e) => {
+        if (e.isIntersecting) {
+          e.target.classList.add('visible')
+          e.target.querySelectorAll('.stagger-child').forEach((c, i) => {
+            setTimeout(() => c.classList.add('visible'), i * 120)
+          })
+        }
+      }),
+      { threshold: 0.12 }
+    )
+    els.forEach((el) => io.observe(el))
+    return () => io.disconnect()
+  }, [])
+}
 
 // مقالات المدونة المرتبطة مباشرة بهالميزة — نفس التصنيف "باني الاستراتيجيات"
 // بالمدونة، وأقدم مقال SMC عام يفيد يفهم المصطلحات قبل ما يبني
@@ -121,6 +144,7 @@ export default function StrategyBuilderPage() {
   const isAr = lang === 'ar'
   const tx = T[isAr ? 'ar' : 'en']
   const [openFaq, setOpenFaq] = useState(null)
+  useReveal()
 
   useSEO({
     title: isAr
