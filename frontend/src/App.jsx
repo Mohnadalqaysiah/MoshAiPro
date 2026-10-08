@@ -30,6 +30,7 @@ const Terms          = lazy(() => import('./pages/Terms'))
 const Privacy        = lazy(() => import('./pages/Privacy'))
 const Contact        = lazy(() => import('./pages/Contact'))
 const About          = lazy(() => import('./pages/About'))
+const StrategyBuilderPage = lazy(() => import('./pages/StrategyBuilderPage'))
 const Vision         = lazy(() => import('./pages/Vision'))
 const SaudiLanding   = lazy(() => import('./pages/SaudiLanding'))
 const UAELanding     = lazy(() => import('./pages/UAELanding'))
@@ -103,6 +104,7 @@ function AppRoutes() {
         <Route path="/privacy"           element={<Privacy />} />
         <Route path="/contact"           element={<Contact />} />
         <Route path="/about"             element={<About />} />
+        <Route path="/strategy-builder"  element={<StrategyBuilderPage />} />
         <Route path="/vision"            element={<Vision />} />
         <Route path="/forgot-password"   element={<ForgotPassword />} />
         <Route path="/login"             element={user ? <Navigate to="/dashboard" /> : <Login />} />
@@ -123,6 +125,7 @@ function AppRoutes() {
         <Route path="/en/blog"           element={<BlogList />} />
         <Route path="/en/blog/:slug"     element={<BlogPost />} />
         <Route path="/en/about"          element={<About />} />
+        <Route path="/en/strategy-builder" element={<StrategyBuilderPage />} />
         <Route path="/en/vision"         element={<Vision />} />
         <Route path="/en/contact"        element={<Contact />} />
         <Route path="/en/terms"          element={<Terms />} />

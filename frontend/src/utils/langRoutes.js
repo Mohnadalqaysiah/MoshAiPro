@@ -3,6 +3,7 @@
 export const EN_MIRRORED_PREFIXES = [
   '/pricing', '/referral', '/blog',
   '/about', '/vision', '/contact', '/terms', '/privacy', '/login', '/register',
+  '/strategy-builder',
 ]
 
 // pathname -> { isEn, bare, isMirrored }

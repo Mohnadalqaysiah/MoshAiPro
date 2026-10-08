@@ -14,10 +14,8 @@ import {
 } from 'lucide-react'
 import PublicChatBot from '../components/PublicChatBot'
 import DemoSection from '../components/DemoSection'
-import StrategyBuilderDemo from '../components/StrategyBuilderDemo'
 import MarketsShowcase from '../components/MarketsShowcase'
 import AffiliateSection from '../components/AffiliateSection'
-import PublicPerformance from '../components/PublicPerformance'
 import Logo from '../components/Logo'
 import useSEO from '../hooks/useSEO'
 import useTrialLimits from '../hooks/useTrialLimits'
@@ -164,11 +162,17 @@ export default function Landing() {
           <nav className="hidden md:flex items-center gap-7 text-sm text-gray-400">
             {[
               { href: '#features',      label: t.nav.features },
-              { href: '#strategy-builder-demo', label: isAr ? 'بناء الاستراتيجيات' : 'Strategy Builder' },
+              { href: isAr ? '/strategy-builder' : '/en/strategy-builder', label: isAr ? 'بناء الاستراتيجيات' : 'Strategy Builder' },
               { href: '#testimonials',  label: isAr ? 'آراء العملاء' : 'Reviews' },
               { href: '#pricing',       label: t.nav.pricing },
               { href: '#faq',           label: t.nav.faq },
-            ].map(({ href, label }) => (
+            ].map(({ href, label }) => href.startsWith('/') ? (
+              <Link key={href} to={href}
+                className="hover:text-white transition-colors relative group">
+                {label}
+                <span className="absolute -bottom-0.5 right-0 w-0 h-px group-hover:w-full transition-all duration-300" style={{ background: 'var(--q-acc3)' }} />
+              </Link>
+            ) : (
               <a key={href} href={href}
                 className="hover:text-white transition-colors relative group">
                 {label}
@@ -224,11 +228,17 @@ export default function Landing() {
           <div className="md:hidden border-t q-line bg-gray-900/95 backdrop-blur-xl px-4 py-4 space-y-1">
             {[
               { href: '#features',      label: t.nav.features },
-              { href: '#strategy-builder-demo', label: isAr ? 'بناء الاستراتيجيات' : 'Strategy Builder' },
+              { href: isAr ? '/strategy-builder' : '/en/strategy-builder', label: isAr ? 'بناء الاستراتيجيات' : 'Strategy Builder' },
               { href: '#testimonials',  label: isAr ? 'آراء العملاء' : 'Reviews' },
               { href: '#pricing',       label: t.nav.pricing },
               { href: '#faq',           label: t.nav.faq },
-            ].map(({ href, label }) => (
+            ].map(({ href, label }) => href.startsWith('/') ? (
+              <Link key={href} to={href}
+                onClick={() => setMobileOpen(false)}
+                className="block py-2.5 px-3 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-colors">
+                {label}
+              </Link>
+            ) : (
               <a key={href} href={href}
                 onClick={() => setMobileOpen(false)}
                 className="block py-2.5 px-3 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-colors">
@@ -415,8 +425,9 @@ export default function Landing() {
       {/* ── Demo Section ───────────────────────────────────────────────── */}
       <DemoSection isAr={isAr} />
 
-      {/* ── Strategy Builder Interactive Demo ──────────────────────────── */}
-      <StrategyBuilderDemo isAr={isAr} />
+      {/* (2026-10-08) معاينة "بناء الاستراتيجيات" التفاعلية صارت بصفحتها
+          المستقلة /strategy-builder (رابط التنقّل أعلى الصفحة يوصّل لها
+          مباشرة) — بدل ما تثقّل الصفحة الرئيسية بقسم تفاعلي كامل. */}
 
       {/* ── How it works ───────────────────────────────────────────────── */}
       <section className="py-24 px-4 relative overflow-hidden">
@@ -445,8 +456,10 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── Performance ────────────────────────────────────────────────── */}
-      <PublicPerformance isAr={isAr} />
+      {/* (2026-10-08) قسم "نتائج حقيقية" حُذف — كان يعرض أرقاماً غير موثوقة
+          (دقة مُقفَلة عند حد أدنى 85% بالكود بغض النظر عن الأداء الفعلي،
+          وقائمة صفقات تُخفي معظم الخسائر). لا نعرض نسب/أرقام أداء علنية
+          حتى يكون عندنا مصدر صدق حقيقي مبني على تقرير الجودة الداخلي. */}
 
       {/* ── Testimonials ───────────────────────────────────────────────── */}
       <section id="testimonials" className="py-24 px-4 relative overflow-hidden bg-white/[0.01]">
@@ -514,9 +527,10 @@ export default function Landing() {
             {t.plans.map((p, i) => {
               const isHighlight = p.highlight
               const isFree = p.price === 'مجاني' || p.price === 'Free'
-              // Merge live API price for weekly/monthly
+              // Merge live API price for weekly/monthly/yearly
               const planKey = p.name === 'أسبوعي' || p.name === 'Weekly' ? 'weekly'
                             : p.name === 'شهري' || p.name === 'Monthly'  ? 'monthly'
+                            : p.name === 'سنوي' || p.name === 'Yearly'   ? 'yearly'
                             : null
               const livePrice = planKey && livePlans[planKey]?.price_usd
               const displayPrice = livePrice ? `$${livePrice}` : p.price
