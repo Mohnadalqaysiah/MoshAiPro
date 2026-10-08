@@ -257,12 +257,23 @@ async def get_latest_signals(
     """
     try:
         from datetime import timedelta
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+        from sqlalchemy import or_, and_
+        now = datetime.now(timezone.utc)
+        cutoff = now - timedelta(hours=hours)
+        # (2026-10-08) "hours" ثابت كان يُطبَّق على الجميع بغض النظر عن
+        # الفريم — إشارة 4h/1d لسا ACTIVE فعلياً كانت تختفي من "آخر
+        # الإشارات" بعد 12 ساعة رغم صلاحيتها الحقيقية الأطول. الصح: اعتمد
+        # expires_at (صلاحية الإشارة الفعلية المحسوبة وقت الإصدار حسب
+        # فريمها) لما يكون مسجَّلاً، وارجع لـhours كاحتياط فقط للصفوف
+        # القديمة بلا expires_at.
         signals = (
             db.query(Signal)
             .filter(
                 Signal.status.in_(["PENDING", "ACTIVE"]),
-                Signal.created_at >= cutoff,
+                or_(
+                    Signal.expires_at > now,
+                    and_(Signal.expires_at.is_(None), Signal.created_at >= cutoff),
+                ),
             )
             .order_by(Signal.created_at.desc())
             .limit(limit)

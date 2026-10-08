@@ -128,22 +128,37 @@ export default function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
 
-  const fetchSignals = async () => {
+  const fetchSignals = async (limit = 10) => {
     try {
-      const res = await axios.get(`${API}/api/v1/signals/latest?limit=10`)
+      const res = await axios.get(`${API}/api/v1/signals/latest?limit=${limit}`)
       setSignals(res.data.data || [])
     } catch (e) {
       // no signals yet
     }
   }
 
-  const fetchSignalHistory = async () => {
+  // (2026-10-08) "عرض المزيد" كان يكشف بس من نفس أول 10/20 إشارة مجلوبة
+  // مرة وحدة — بعدها ما كان يطلب شي إضافي من السيرفر فعلياً. هلأ كل
+  // ضغطة تجيب تشكيلة أكبر فعلياً.
+  const loadMoreSignals = async () => {
+    const newLimit = signalsLimit + 10
+    if (signals.length < newLimit + 2) await fetchSignals(newLimit + 10)
+    setSignalsLimit(newLimit)
+  }
+
+  const fetchSignalHistory = async (limit = 20) => {
     try {
-      const res = await axios.get(`${API}/api/v1/signals/history?limit=20`)
+      const res = await axios.get(`${API}/api/v1/signals/history?limit=${limit}`)
       setSignalHistory(res.data.signals || [])
     } catch (e) {
       // no history yet
     }
+  }
+
+  const loadMoreHistory = async () => {
+    const newLimit = historyLimit + 10
+    if (signalHistory.length < newLimit) await fetchSignalHistory(newLimit + 10)
+    setHistoryLimit(newLimit)
   }
 
   const analyzeMarket = async (symbol, forceRefresh = false, timeframe = '1h') => {
@@ -1054,7 +1069,7 @@ export default function Dashboard() {
 
             {rest.length > signalsLimit && (
               <button
-                onClick={() => setSignalsLimit(l => l + 10)}
+                onClick={loadMoreSignals}
                 className="w-full py-3 text-sm text-gray-400 hover:text-white hover:bg-gray-700/30 transition-colors flex items-center justify-center gap-2 border-t q-line"
               >
                 <ChevronDown size={15} />
@@ -1149,7 +1164,7 @@ export default function Dashboard() {
 
             {signalHistory.length > historyLimit && (
               <button
-                onClick={() => setHistoryLimit(l => l + 10)}
+                onClick={loadMoreHistory}
                 className="w-full py-3 text-sm text-gray-400 hover:text-white hover:bg-gray-700/30 transition-colors flex items-center justify-center gap-2 border-t border-gray-700/60"
               >
                 <ChevronDown size={15} />
