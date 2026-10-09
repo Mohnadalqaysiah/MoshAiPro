@@ -142,7 +142,7 @@ async def main():
 
         print("\n" + "="*90)
         print(f"📊 النتيجة: رابحة مصحَّحة={fixed_win}  خاسرة مصحَّحة={fixed_loss}  "
-              f"رجّعت ACTIVE={fixed_active}  تُركت EXPIRED (لم يتفعّل/بلا نتيجة ضمن المدة/NO_DATA)={skipped_no_data}")
+              f"رجّعت ACTIVE={fixed_active}  تُركت EXPIRED (لم يتفعّل/أُغلقت عند الانتهاء/NO_DATA)={skipped_no_data}")
         print(f"📊 صافي التغيّر بمجموع النقاط (TP/SL فقط): {total_points_delta:+.2f}")
         if created_dates:
             created_dates.sort()

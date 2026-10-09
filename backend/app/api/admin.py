@@ -1547,8 +1547,8 @@ async def _verify_signal_outcome_core(signal: Signal) -> dict:
             bars = await fetch_tv_history(tv_sym, "5m", bars=1000)
             if bars:
                 df = _pd.DataFrame(
-                    [(b[0], b[2], b[3]) for b in bars],
-                    columns=["_ts_raw", "high", "low"],
+                    [(b[0], b[2], b[3], b[4]) for b in bars],
+                    columns=["_ts_raw", "high", "low", "close"],
                 )
                 df["datetime"] = _pd.to_datetime(df["_ts_raw"], unit="s", utc=True)
     except Exception as _tv_e:
@@ -1579,12 +1579,13 @@ async def _verify_signal_outcome_core(signal: Signal) -> dict:
         expires = expires.replace(tzinfo=timezone.utc)
     now = datetime.now(timezone.utc)
     window_closed = expires is not None and expires <= now
+    closes = df["close"] if "close" in df.columns else df["high"] * 0 + float("nan")
     if "datetime" in df.columns:
         ts_series = _pd.to_datetime(df["datetime"], utc=True)
-        rows = list(zip(ts_series, df["high"], df["low"]))
+        rows = list(zip(ts_series, df["high"], df["low"], closes))
     else:
         idx = _pd.to_datetime(df.index, utc=True)
-        rows = list(zip(idx, df["high"], df["low"]))
+        rows = list(zip(idx, df["high"], df["low"], closes))
 
     if not rows or rows[0][0] > _pd.Timestamp(created):
         return {"detected": "NO_DATA", "reason": "بيانات السوق المتاحة لا تعود لوقت إنشاء الإشارة"}
@@ -1602,7 +1603,8 @@ async def _verify_signal_outcome_core(signal: Signal) -> dict:
     end_ts = _pd.Timestamp(expires) if expires is not None else None
     entry_ts = None
     hit_status, hit_time, hit_price = None, None, None
-    for ts, hi, lo in rows:
+    last_ts, last_close = None, None    # آخر شمعة ضمن المدة بعد الدخول — سعر الإغلاق عند الانتهاء
+    for ts, hi, lo, cl in rows:
         if ts < _pd.Timestamp(created):
             continue
         if end_ts is not None and ts > end_ts:
@@ -1612,6 +1614,8 @@ async def _verify_signal_outcome_core(signal: Signal) -> dict:
             if not (lo <= entry <= hi):
                 continue
             entry_ts = ts
+        if cl == cl:   # ليس NaN
+            last_ts, last_close = ts, float(cl)
         sl_touched = (lo <= sl) if is_buy else (hi >= sl)
         tp2_touched = has_tp2 and ((hi >= tp2) if is_buy else (lo <= tp2))
         tp1_touched = (hi >= tp1) if is_buy else (lo <= tp1)
@@ -1628,6 +1632,13 @@ async def _verify_signal_outcome_core(signal: Signal) -> dict:
             hit_status, hit_time, hit_price = "TP1_HIT", ts, tp1
 
     current = signal.status.value if hasattr(signal.status, "value") else signal.status
+    risk = abs(entry - sl)
+
+    def _r_of(price: float):
+        if not risk:
+            return None
+        move = (price - entry) if is_buy else (entry - price)
+        return round(move / risk, 2)
 
     if entry_ts is None:
         if window_closed:
@@ -1640,10 +1651,31 @@ async def _verify_signal_outcome_core(signal: Signal) -> dict:
 
     if hit_status is None:
         if window_closed:
-            return {"detected": "EXPIRED_NO_RESULT",
-                    "reason": "تفعّل الدخول لكن لم يصل هدف ولا وقف ضمن مدة الإشارة",
-                    "entry_time": entry_ts.isoformat(),
-                    "current_system_status": current}
+            # (2026-10-09) بطلب صاحب المشروع: صفقة تفعّلت ولم تبلغ هدفاً ولا
+            # وقفاً ليست "لا شيء" — من دخلها كان بربح أو خسارة لحظة انتهاء
+            # مدتها. تُقاس كإغلاق بسعر آخر شمعة ضمن المدة وتُعرض مميّزة عن
+            # TP/SL (لا تُخلط بنسبة النجاح الأساسية، تدخل متوسط R).
+            if last_close is None:
+                return {"detected": "EXPIRED_NO_RESULT",
+                        "reason": "تفعّل الدخول ولم يصل هدف ولا وقف — تعذّر معرفة سعر الإغلاق عند الانتهاء",
+                        "entry_time": entry_ts.isoformat(),
+                        "current_system_status": current}
+            r_mult = _r_of(last_close)
+            pts = _calc_points(signal.market, abs(last_close - entry), entry)
+            in_profit = (r_mult or 0) > 0
+            return {
+                "detected": "EXPIRED_PROFIT" if in_profit else "EXPIRED_LOSS",
+                "reason": ("أُغلقت عند انتهاء المدة بربح" if in_profit
+                           else "أُغلقت عند انتهاء المدة بخسارة")
+                          + " — لم تبلغ هدفاً ولا وقفاً",
+                "entry_time": entry_ts.isoformat(),
+                "hit_time": last_ts.isoformat(),
+                "duration_minutes": round((last_ts - entry_ts).total_seconds() / 60),
+                "suggested_closed_price": round(last_close, 8),
+                "r_multiple": r_mult,
+                "points": pts if in_profit else -pts,
+                "current_system_status": current,
+            }
         return {"detected": "STILL_ACTIVE",
                 "reason": "الصفقة مفتوحة ولسا ضمن مدتها",
                 "entry_time": entry_ts.isoformat(),
@@ -1655,6 +1687,7 @@ async def _verify_signal_outcome_core(signal: Signal) -> dict:
         "hit_time": hit_time.isoformat(),
         "duration_minutes": round((hit_time - entry_ts).total_seconds() / 60),
         "suggested_closed_price": round(hit_price, 8),
+        "r_multiple": -1.0 if hit_status == "SL_HIT" else _r_of(hit_price),
         "current_system_status": current,
         "market": signal.market,
         "side": "BUY" if is_buy else "SELL",
@@ -1727,22 +1760,33 @@ async def verify_signals_bulk(
     wins    = _count("TP1_HIT", "TP2_HIT")
     losses  = _count("SL_HIT")
     decided = wins + losses
+    exp_profit = _count("EXPIRED_PROFIT")
+    exp_loss   = _count("EXPIRED_LOSS")
+    all_closed = decided + exp_profit + exp_loss
 
     def _avg_minutes(codes):
         mins = [r["duration_minutes"] for r in results
                 if r["detected"] in codes and r.get("duration_minutes") is not None]
         return round(sum(mins) / len(mins)) if mins else None
 
+    rs = [r["r_multiple"] for r in results if r.get("r_multiple") is not None]
+
     return {
         "results": results,
         "total": len(results),
         "rows_total": len(signals),
         "wins": wins, "losses": losses,
+        "expired_profit": exp_profit,
+        "expired_loss": exp_loss,
         "not_triggered": _count("NOT_TRIGGERED"),
         "expired_no_result": _count("EXPIRED_NO_RESULT"),
         "still_active": _count("STILL_ACTIVE"),
         "no_data": _count("NO_DATA"),
         "winrate_pct": round(wins / decided * 100, 1) if decided else None,
+        # نسبة ثانية تشمل المُغلقة عند الانتهاء (ربح جزئي = رابحة)
+        "winrate_incl_expiry_pct": round((wins + exp_profit) / all_closed * 100, 1) if all_closed else None,
+        "avg_r": round(sum(rs) / len(rs), 2) if rs else None,
+        "total_r": round(sum(rs), 2) if rs else None,
         "avg_minutes_to_win":  _avg_minutes(("TP1_HIT", "TP2_HIT")),
         "avg_minutes_to_loss": _avg_minutes(("SL_HIT",)),
     }

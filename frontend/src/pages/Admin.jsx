@@ -2260,7 +2260,10 @@ export default function Admin() {
                         </div>
                         <div className="bg-gray-800/60 rounded-lg p-3 text-center">
                           <div className="text-lg font-bold text-blue-400">{bulkVerify.winrate_pct != null ? `${bulkVerify.winrate_pct}%` : '—'}</div>
-                          <div className="text-[11px] text-gray-400">نسبة النجاح (من المحسوم فقط)</div>
+                          <div className="text-[11px] text-gray-400">نسبة النجاح (هدف/وقف فقط)</div>
+                          {bulkVerify.winrate_incl_expiry_pct != null && (
+                            <div className="text-[11px] text-sky-300 mt-0.5">{bulkVerify.winrate_incl_expiry_pct}% مع المُغلقة عند الانتهاء</div>
+                          )}
                         </div>
                         <div className="bg-gray-800/60 rounded-lg p-3 text-center">
                           <div className="text-sm font-bold text-gray-300">
@@ -2269,9 +2272,27 @@ export default function Admin() {
                           <div className="text-[11px] text-gray-400">متوسط الوقت للهدف / للوقف</div>
                         </div>
                       </div>
+                      <div className="grid grid-cols-3 gap-3 mb-3">
+                        <div className="bg-sky-900/20 border border-sky-700/30 rounded-lg p-2.5 text-center">
+                          <div className="text-base font-bold text-sky-300">{bulkVerify.expired_profit ?? 0}</div>
+                          <div className="text-[11px] text-gray-400">أُغلقت بربح عند الانتهاء</div>
+                        </div>
+                        <div className="bg-orange-900/20 border border-orange-700/30 rounded-lg p-2.5 text-center">
+                          <div className="text-base font-bold text-orange-300">{bulkVerify.expired_loss ?? 0}</div>
+                          <div className="text-[11px] text-gray-400">أُغلقت بخسارة عند الانتهاء</div>
+                        </div>
+                        <div className="bg-gray-800/60 rounded-lg p-2.5 text-center">
+                          <div className={`text-base font-bold ${bulkVerify.avg_r > 0 ? 'text-green-400' : bulkVerify.avg_r < 0 ? 'text-red-400' : 'text-gray-300'}`}>
+                            {bulkVerify.avg_r != null ? `${bulkVerify.avg_r > 0 ? '+' : ''}${bulkVerify.avg_r}R` : '—'}
+                          </div>
+                          <div className="text-[11px] text-gray-400">متوسط النتيجة لكل صفقة{bulkVerify.total_r != null && ` · المجموع ${bulkVerify.total_r > 0 ? '+' : ''}${bulkVerify.total_r}R`}</div>
+                        </div>
+                      </div>
                       <div className="flex flex-wrap gap-2 mb-3 text-[11px]">
-                        <span className="bg-gray-800/60 text-gray-400 rounded-lg px-2.5 py-1">لم يتفعّل الدخول: {bulkVerify.not_triggered ?? 0}</span>
-                        <span className="bg-gray-800/60 text-gray-400 rounded-lg px-2.5 py-1">تفعّل بلا نتيجة ضمن المدة: {bulkVerify.expired_no_result ?? 0}</span>
+                        <span className="bg-gray-800/60 text-gray-400 rounded-lg px-2.5 py-1">لم يتفعّل الدخول (لا تُحسب): {bulkVerify.not_triggered ?? 0}</span>
+                        {bulkVerify.expired_no_result > 0 && (
+                          <span className="bg-gray-800/60 text-gray-400 rounded-lg px-2.5 py-1">تفعّل وتعذّر سعر الإغلاق: {bulkVerify.expired_no_result}</span>
+                        )}
                         <span className="bg-gray-800/60 text-yellow-400 rounded-lg px-2.5 py-1">لسا ضمن مدتها: {bulkVerify.still_active ?? 0}</span>
                         <span className="bg-gray-800/60 text-gray-500 rounded-lg px-2.5 py-1">بيانات غير كافية: {bulkVerify.no_data ?? 0}</span>
                       </div>
@@ -2285,15 +2306,20 @@ export default function Admin() {
                             <span className={
                               r.detected === 'SL_HIT' ? 'text-red-400' :
                               r.detected?.includes('TP') ? 'text-green-400' :
+                              r.detected === 'EXPIRED_PROFIT' ? 'text-sky-300' :
+                              r.detected === 'EXPIRED_LOSS' ? 'text-orange-300' :
                               r.detected === 'STILL_ACTIVE' ? 'text-yellow-400' : 'text-gray-500'
                             }>
                               {r.detected === 'SL_HIT' ? '❌ ضربت الستوب' :
                                r.detected === 'TP2_HIT' ? '🏆 هدف 2' :
                                r.detected === 'TP1_HIT' ? '✅ هدف 1' :
+                               r.detected === 'EXPIRED_PROFIT' ? '⌛🟢 أُغلقت بربح عند الانتهاء' :
+                               r.detected === 'EXPIRED_LOSS' ? '⌛🟠 أُغلقت بخسارة عند الانتهاء' :
                                r.detected === 'STILL_ACTIVE' ? '⏳ لسا ضمن مدتها' :
                                r.detected === 'NOT_TRIGGERED' ? '⚪ لم يتفعّل الدخول' :
-                               r.detected === 'EXPIRED_NO_RESULT' ? '⌛ بلا نتيجة ضمن المدة' :
+                               r.detected === 'EXPIRED_NO_RESULT' ? '⌛ تفعّلت — تعذّر سعر الإغلاق' :
                                `ℹ️ ${r.reason || 'لا بيانات'}`}
+                              {r.r_multiple != null && <span className="text-gray-400"> ({r.r_multiple > 0 ? '+' : ''}{r.r_multiple}R)</span>}
                               {r.duration_minutes != null && <span className="text-gray-500"> · بعد {fmtMinutes(r.duration_minutes)}</span>}
                             </span>
                           </div>
@@ -2419,6 +2445,13 @@ export default function Admin() {
                                     <span className="text-xs text-gray-400">⚪ {verifyResults[s.id].reason}</span>
                                   ) : verifyResults[s.id].detected === 'EXPIRED_NO_RESULT' ? (
                                     <span className="text-xs text-gray-400">⌛ {verifyResults[s.id].reason}</span>
+                                  ) : ['EXPIRED_PROFIT', 'EXPIRED_LOSS'].includes(verifyResults[s.id].detected) ? (
+                                    <span className={`text-xs ${verifyResults[s.id].detected === 'EXPIRED_PROFIT' ? 'text-sky-300' : 'text-orange-300'}`}>
+                                      {verifyResults[s.id].detected === 'EXPIRED_PROFIT' ? '⌛🟢' : '⌛🟠'} {verifyResults[s.id].reason}
+                                      {' · سعر الإغلاق '}{verifyResults[s.id].suggested_closed_price}
+                                      {verifyResults[s.id].r_multiple != null && ` · ${verifyResults[s.id].r_multiple > 0 ? '+' : ''}${verifyResults[s.id].r_multiple}R`}
+                                      {verifyResults[s.id].duration_minutes != null && ` · بعد ${fmtMinutes(verifyResults[s.id].duration_minutes)} من الدخول`}
+                                    </span>
                                   ) : verifyResults[s.id].detected === 'NO_DATA' ? (
                                     <span className="text-xs text-yellow-400">ℹ️ {verifyResults[s.id].reason || 'تعذّر جلب بيانات السوق التاريخية'}</span>
                                   ) : (

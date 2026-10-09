@@ -10,91 +10,105 @@ _calc_points() الحيّة الحقيقية من app/api/admin.py (مستورد
 من المستخدم إنه فعلاً يريد إعادة حساب البيانات التاريخية — مو تلقائياً
 كجزء من أي نشر عادي.
 
+(2026-10-09) صار DRY-RUN افتراضياً: يطبع فقط الصفوف التي سيتغيّر رقمها
+(قديم → جديد) وملخّصاً لكل رمز، بدون أي كتابة. التنفيذ الفعلي بـ--apply
+صراحة. السبب: جدول النقاط تغيّر (حجم نقطة لكل أداة) وصاحب المشروع طلب
+رؤية الفرق قبل اعتماده.
+
 (2026-09-04) اكتُشف إن الأسهم الأمريكية الفردية (AAPL/GOOGL/...) كانت
 تسقط بدون تصنيف على مضاعف الفوركس ×10000 غلطاً — أُصلح بـ_calc_points
-نفسها (×1، بمعاملة المؤشرات/الكريبتو). صفوف من أبريل 2026 لسا فيها
-الأثر القديم (~22 صف تاريخي، مستبعدة حالياً من bot_user_stats تلقائياً
-لأنها current_price=NULL) — تشغيل هالسكربت هو الطريقة الصحيحة لتصحيحها
-رجعياً لو قرر المستخدم هيك.
+نفسها. تشغيل هالسكربت هو الطريقة الصحيحة لتصحيحها رجعياً لو قرر
+المستخدم هيك.
 
 التشغيل:
   docker cp migrate_recalc_points.py moshapi_backend:/app/
-  docker exec moshapi_backend python /app/migrate_recalc_points.py
+  docker exec moshapi_backend python /app/migrate_recalc_points.py            # معاينة فقط
+  docker exec moshapi_backend python /app/migrate_recalc_points.py --apply    # تطبيق فعلي
 """
-import sys, os
+import sys
+from collections import defaultdict
 sys.path.insert(0, "/app")
 
 from app.database import SessionLocal
 from app.models.signal import Signal, SignalStatus
 
-# (2026-09-04) كانت هون نسخة محلية مستقلة من _calc_points بمعادلة قديمة
-# جداً (معادن ×100 بدل ×10 الحالي، ولا فئة إطلاقاً للمؤشرات/الأسهم
-# الأمريكية/الأسهم الخليجية — كلهم كانوا يسقطوا على ×10000 الفوركس
-# غلطاً). لو هالسكربت انشغّل بهيئته القديمة كان رح يعيد كتابة
-# points_earned لكل صفقة مغلقة بكل النظام بأرقام غلط. صار يستورد
-# الدالة الحقيقية الوحيدة من admin.py (نفس مبدأ decision_grouping.py
-# المشترك) بدل نسخة محلية قابلة للتقادم بصمت.
+# (2026-09-04) يستورد الدالة الحقيقية الوحيدة من admin.py بدل نسخة محلية
+# قابلة للتقادم بصمت.
 from app.api.admin import _calc_points
 
 
-def recalc():
+def recalc(apply: bool):
     db = SessionLocal()
     closed = [SignalStatus.TP1_HIT, SignalStatus.TP2_HIT, SignalStatus.SL_HIT]
 
-    signals = db.query(Signal).filter(Signal.status.in_(closed)).all()
-    print(f"📊 Found {len(signals)} closed signals to recalculate")
+    signals = db.query(Signal).filter(Signal.status.in_(closed)).order_by(Signal.market, Signal.id).all()
+    print(f"📊 صفقات مغلقة: {len(signals)}  —  {'تطبيق فعلي' if apply else 'معاينة فقط (DRY-RUN)'}\n")
 
-    updated = skipped = errors = 0
+    changed = same = skipped = errors = 0
+    # لكل رمز: عدد الصفوف المتغيّرة، مجموع القديم، مجموع الجديد، مثال
+    per_market = defaultdict(lambda: {"n": 0, "old": 0.0, "new": 0.0, "example": None})
 
     for s in signals:
         try:
             entry = s.entry_price
-            sl    = s.stop_loss
-            tp1   = s.take_profit_1
-            tp2   = s.take_profit_2
-
             if not entry:
                 skipped += 1
                 continue
 
             status = s.status.value if hasattr(s.status, 'value') else str(s.status)
-
             if status == "TP1_HIT":
-                diff   = abs((tp1 or entry) - entry)
+                diff   = abs((s.take_profit_1 or entry) - entry)
                 points = _calc_points(s.market, diff, entry)
-
             elif status == "TP2_HIT":
-                diff   = abs((tp2 or tp1 or entry) - entry)
+                diff   = abs((s.take_profit_2 or s.take_profit_1 or entry) - entry)
                 points = _calc_points(s.market, diff, entry)
-
             elif status == "SL_HIT":
-                diff   = abs((sl or entry) - entry)
+                diff   = abs((s.stop_loss or entry) - entry)
                 points = -_calc_points(s.market, diff, entry)
-
             else:
                 skipped += 1
                 continue
 
             old_pts = s.points_earned or 0
-            s.points_earned = points
-            s.profit_loss   = points
+            if abs(old_pts - points) <= 0.01:
+                same += 1
+                continue
 
-            print(f"  Signal #{s.id:4d}  {s.market or '?':8s}  {status:8s}  "
-                  f"old={old_pts:>10.2f}  new={points:>10.2f}  "
-                  f"{'✅ CHANGED' if abs(old_pts - points) > 0.01 else '— same'}")
-            updated += 1
+            changed += 1
+            m = per_market[s.market or "?"]
+            m["n"] += 1
+            m["old"] += old_pts
+            m["new"] += points
+            if m["example"] is None:
+                m["example"] = (s.id, status, entry, diff, old_pts, points)
+
+            print(f"  #{s.id:5d}  {s.market or '?':10s}  {status:8s}  "
+                  f"فرق السعر={diff:<12.6g}  قديم={old_pts:>10.2f}  →  جديد={points:>10.2f}")
+
+            if apply:
+                s.points_earned = points
+                s.profit_loss   = points
 
         except Exception as e:
             print(f"  ⚠️  Signal #{s.id} error: {e}")
             errors += 1
 
-    db.commit()
-    db.close()
+    print(f"\n{'='*90}\nملخّص لكل رمز (الصفوف المتغيّرة فقط):")
+    for mk, m in sorted(per_market.items()):
+        sid, st, entry, diff, o, n = m["example"]
+        print(f"  {mk:10s}  صفوف={m['n']:4d}  مجموع قديم={m['old']:>12.2f}  مجموع جديد={m['new']:>12.2f}"
+              f"   مثال #{sid} {st} دخول={entry} فرق={diff:.6g}: {o:.2f} → {n:.2f}")
 
-    print(f"\n{'='*60}")
-    print(f"✅ Done: {updated} recalculated, {skipped} skipped, {errors} errors")
-    print(f"{'='*60}")
+    print(f"\n{'='*90}")
+    print(f"ستتغيّر: {changed}   بلا تغيير: {same}   متخطّاة: {skipped}   أخطاء: {errors}")
+    if apply:
+        db.commit()
+        print("✅ تم التطبيق.")
+    else:
+        print("ℹ️  معاينة فقط — لم يُكتب شيء. للتطبيق: --apply")
+    print('='*90)
+    db.close()
 
 
 if __name__ == "__main__":
-    recalc()
+    recalc(apply="--apply" in sys.argv)
