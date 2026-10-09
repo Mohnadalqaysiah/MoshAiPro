@@ -713,7 +713,27 @@ async def bot_check_outcomes(
                     # مدى الشمعة مع سعر الدخول (lo<=entry<=hi) — لا SL/TP
                     # قبلها إطلاقاً، بغض النظر عن اتجاه اقتراب السعر.
                     new_entry_ts = None
+                    # (2026-10-09، بتفويض صريح) بلاغ مؤكَّد بالشموع: الدورة
+                    # الأولى تتخطّى ما قبل الدخول صحيحاً، لكن بالدورات التالية
+                    # already_triggered=True من entry_executed المحفوظ، فكانت
+                    # الحلقة تمشي من created_at وتفحص الشموع **قبل** الدخول
+                    # كأنها بعده. بيع دخل بعد أن نزل السعر من فوق الستوب كان
+                    # يُسجَّل SL_HIT بشمعة سبقت فتح الصفقة — #3234 ذهب سُجّل
+                    # خاسراً وسعر الإغلاق المسجّل نفسه (4192) رابح، والشموع
+                    # تؤكد TP2. 5 من ~70 قراراً معادن منذ 24/09، كلها بيع بسوق
+                    # هابط. والعكس ممكن (ربح وهمي من شمعة قبل الدخول).
+                    # الآن: لا شمعة تسبق شمعة التفعيل تُفحص أبداً.
+                    _entry_floor = None
+                    if sig.entry_executed is not None:
+                        _ee = sig.entry_executed
+                        if _ee.tzinfo is None:
+                            _ee = _ee.replace(tzinfo=timezone.utc)
+                        _entry_floor = _ee.timestamp()
                     for _ts, hi, lo in candles:
+                        if _entry_floor is not None:
+                            _c_ts = _ts.timestamp() if hasattr(_ts, "timestamp") else float(_ts)
+                            if _c_ts < _entry_floor:
+                                continue
                         if not already_triggered:
                             if not (lo <= entry <= hi):
                                 continue  # الدخول لسا ما تحقق — هذه الشمعة بلا معنى لصفقة لم تُفتح
