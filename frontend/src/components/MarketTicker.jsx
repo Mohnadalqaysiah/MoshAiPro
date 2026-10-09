@@ -1,34 +1,13 @@
 import { useState, useEffect, useMemo } from 'react'
 import axios from 'axios'
 import { useLang } from '../contexts/LangContext'
+import { SESSIONS, isSessionOpen, isWeekendClosed, minutesUntilClose, fmtHM } from '../utils/marketSessions'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
-// نفس جلسات SessionsClock.jsx بالضبط — لازم يتطابقوا، هاد الشريط ملخّص لهم لا مصدر منفصل
-const SESSIONS = [
-  { id: 'asia',   labelAr: 'آسيا',     labelEn: 'Asia',     openUTC: 0,  closeUTC: 9  },
-  { id: 'london', labelAr: 'لندن',     labelEn: 'London',   openUTC: 8,  closeUTC: 16 },
-  { id: 'ny',     labelAr: 'نيويورك',  labelEn: 'New York', openUTC: 13, closeUTC: 21 },
-]
-
-function getUTCMinutes() {
-  const n = new Date()
-  return n.getUTCHours() * 60 + n.getUTCMinutes()
-}
-function isOpen(s) {
-  const m = getUTCMinutes()
-  const open = s.openUTC * 60, close = s.closeUTC * 60
-  return open < close ? (m >= open && m < close) : (m >= open || m < close)
-}
-function minutesUntil(targetUTCHour) {
-  const diff = targetUTCHour * 60 - getUTCMinutes()
-  return diff <= 0 ? diff + 1440 : diff
-}
-function fmtHM(mins, isAr) {
-  const h = Math.floor(mins / 60), m = mins % 60
-  if (isAr) return h > 0 ? `${h}س ${m}د` : `${m}د`
-  return h > 0 ? `${h}h ${m}m` : `${m}m`
-}
+// أقل عدد بنود بالنسخة الواحدة من الحلقة — لو البنود قليلة تُكرَّر حتى تملأ
+// الشاشات العريضة، وإلا يظهر فراغ قبل ما تبدأ النسخة الثانية
+const MIN_PER_HALF = 6
 
 // (2026-10-09) شريط إخباري علوي بالداشبورد — ملخّص سريع قبل ما يدخل
 // المستخدم بالتفاصيل. كل بند هون مبني على بيانات حقيقية موجودة أصلاً
@@ -54,7 +33,7 @@ export default function MarketTicker() {
     return () => { cancelled = true; clearInterval(id) }
   }, [])
 
-  const [, setTick] = useState(0)
+  const [tick, setTick] = useState(0)
   useEffect(() => {
     const t = setInterval(() => setTick(n => n + 1), 30000)
     return () => clearInterval(t)
@@ -63,23 +42,24 @@ export default function MarketTicker() {
   const items = useMemo(() => {
     const out = []
 
-    // 1) الجلسات — المفتوحة حالياً + أقرب جلسة جاية
-    const active = SESSIONS.filter(isOpen)
-    if (active.length) {
-      const names = active.map(s => isAr ? s.labelAr : s.labelEn).join(isAr ? ' + ' : ' + ')
-      out.push({ key: 'sess-open', dot: 'bg-green-400', text: isAr ? `🟢 جلسة ${names} نشطة الآن` : `🟢 ${names} session active now` })
-    }
-    const next = SESSIONS
-      .filter(s => !isOpen(s))
-      .map(s => ({ s, mins: minutesUntil(s.openUTC) }))
-      .sort((a, b) => a.mins - b.mins)[0]
-    if (next) {
+    // 1) الجلسات — المفتوحة فعلاً فقط (مع الوقت المتبقي لكل واحدة).
+    //    عطلة نهاية الأسبوع تُعلن صراحة بدل جلسات "مفتوحة" والسوق مغلق.
+    const now = new Date()
+    if (isWeekendClosed(now)) {
       out.push({
-        key: 'sess-next', dot: 'bg-gray-500',
-        text: isAr
-          ? `🔴 جلسة ${next.s.labelAr} خلال ${fmtHM(next.mins, true)}`
-          : `🔴 ${next.s.labelEn} session in ${fmtHM(next.mins, false)}`,
+        key: 'weekend', dot: 'bg-amber-400',
+        text: isAr ? '🔒 عطلة نهاية الأسبوع — الفوركس والمعادن مغلقة، الكريبتو فقط يتداول'
+                   : '🔒 Weekend — forex & metals closed, only crypto trading',
       })
+    } else {
+      for (const s of SESSIONS.filter(x => isSessionOpen(x, now))) {
+        const left = fmtHM(minutesUntilClose(s, now), isAr)
+        out.push({
+          key: `sess-${s.id}`, dot: 'bg-green-400',
+          text: isAr ? `🟢 جلسة ${s.labelAr} مفتوحة — تغلق خلال ${left}`
+                     : `🟢 ${s.labelEn} session open — closes in ${left}`,
+        })
+      }
     }
 
     // 2) الاتجاه العام — نسبة إشارات الشراء مقابل البيع بآخر الإشارات الحيّة
@@ -123,18 +103,35 @@ export default function MarketTicker() {
     }
 
     return out
-  }, [signals, isAr])
+  }, [signals, isAr, tick])
 
   if (items.length === 0) return null
 
-  // تكرار القائمة مرتين لعمل حلقة سلسة بالأنيميشن (CSS فقط، بلا مكتبة)
-  const loop = [...items, ...items]
+  // (2026-10-09) إصلاح "الشريط لا يدور ويقف ولا يظهر كل البنود":
+  // 1) المسار كان بعرض الحاوية لا بعرض المحتوى، فـtranslateX(-50%) يحرّك نصف
+  //    الشاشة لا نصف البنود — الحلقة تقفز وتنقطع قبل ظهور البنود الأخيرة.
+  //    w-max يجعل عرضه = المحتوى فعلاً.
+  // 2) باتجاه RTL كان المحتوى الفائض يمتد يساراً خارج الحاوية بينما الحركة
+  //    لليسار أيضاً، فيفرغ الجزء الظاهر. المسار نفسه صار LTR دائماً (النص
+  //    بداخل كل بند يبقى بلغته)، والعربي يتحرك لليمين.
+  // 3) التوقف عند المرور كان يعلق على الهاتف (اللمس يبقي حالة hover) — صار
+  //    للأجهزة ذات الماوس فقط.
+  // 4) المدة تتناسب مع عدد البنود، فالسرعة ثابتة مهما زادت.
+  const half = []
+  while (half.length < MIN_PER_HALF) half.push(...items)
+  const loop = [...half, ...half]
+  const duration = Math.max(20, half.length * 5)
 
   return (
-    <div className="relative overflow-hidden bg-gray-900/70 border border-white/8 rounded-xl mb-4" dir={isAr ? 'rtl' : 'ltr'}>
-      <div className="flex whitespace-nowrap py-2.5 animate-[ticker_32s_linear_infinite] hover:[animation-play-state:paused]">
+    <div className="relative overflow-hidden bg-gray-900/70 border border-white/8 rounded-xl mb-4">
+      <div
+        dir="ltr"
+        className="ticker-track flex w-max whitespace-nowrap py-2.5"
+        style={{ animation: `${isAr ? 'ticker-rtl' : 'ticker-ltr'} ${duration}s linear infinite` }}
+      >
         {loop.map((it, i) => (
-          <span key={`${it.key}-${i}`} className="flex items-center gap-2 px-5 text-xs text-gray-300 flex-shrink-0">
+          <span key={`${it.key}-${i}`} dir={isAr ? 'rtl' : 'ltr'}
+                className="flex items-center gap-2 px-5 text-xs text-gray-300 flex-shrink-0">
             <span className={`w-1.5 h-1.5 rounded-full ${it.dot} flex-shrink-0`} />
             {it.text}
             <span className="text-gray-700 mx-2">•</span>
@@ -142,10 +139,9 @@ export default function MarketTicker() {
         ))}
       </div>
       <style>{`
-        @keyframes ticker {
-          from { transform: translateX(0); }
-          to   { transform: translateX(-50%); }
-        }
+        @keyframes ticker-ltr { from { transform: translateX(0); }    to { transform: translateX(-50%); } }
+        @keyframes ticker-rtl { from { transform: translateX(-50%); } to { transform: translateX(0); } }
+        @media (hover: hover) { .ticker-track:hover { animation-play-state: paused !important; } }
       `}</style>
     </div>
   )

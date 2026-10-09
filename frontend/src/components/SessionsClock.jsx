@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react'
 import { Clock, Zap } from 'lucide-react'
 import { useLang } from '../contexts/LangContext'
+import {
+  SESSIONS as SESSION_TIMES, isSessionOpen, isWeekendClosed,
+  minutesUntilOpen, minutesUntilClose, fmtHM,
+} from '../utils/marketSessions'
 
-const SESSIONS = [
+// الأوقات من utils/marketSessions.js (مصدر واحد مع شريط MarketTicker) — هنا العرض فقط
+const STYLE = [
   {
     id: 'asia',
     labelAr: 'آسيا 🌏',    labelEn: 'Asia 🌏',
-    openUTC: 0,  closeUTC: 9,
     color:   { bg: 'bg-blue-500/10', text: 'text-blue-300', dot: 'bg-blue-400', badge: 'bg-blue-500/20 text-blue-300 border-blue-500/30', bar: 'bg-blue-500' },
     marketsAr: 'JPY · AUD · NZD',
     marketsEn: 'JPY · AUD · NZD',
@@ -14,7 +18,6 @@ const SESSIONS = [
   {
     id: 'london',
     labelAr: 'لندن 🏦',    labelEn: 'London 🏦',
-    openUTC: 8,  closeUTC: 16,
     color:   { bg: 'bg-purple-500/10', text: 'text-purple-300', dot: 'bg-purple-400', badge: 'bg-purple-500/20 text-purple-300 border-purple-500/30', bar: 'bg-purple-500' },
     marketsAr: 'EUR · GBP · ذهب',
     marketsEn: 'EUR · GBP · Gold',
@@ -22,34 +25,12 @@ const SESSIONS = [
   {
     id: 'ny',
     labelAr: 'نيويورك 🗽',  labelEn: 'New York 🗽',
-    openUTC: 13, closeUTC: 21,
     color:   { bg: 'bg-green-500/10', text: 'text-green-300', dot: 'bg-green-400', badge: 'bg-green-500/20 text-green-300 border-green-500/30', bar: 'bg-green-500' },
     marketsAr: 'USD · ذهب · نفط',
     marketsEn: 'USD · Gold · Oil',
   },
 ]
-
-function getUTCMinutes() {
-  const n = new Date()
-  return n.getUTCHours() * 60 + n.getUTCMinutes()
-}
-
-function isOpen(s) {
-  const m = getUTCMinutes()
-  const open = s.openUTC * 60, close = s.closeUTC * 60
-  return open < close ? (m >= open && m < close) : (m >= open || m < close)
-}
-
-function minutesUntil(targetUTCHour) {
-  const diff = targetUTCHour * 60 - getUTCMinutes()
-  return diff <= 0 ? diff + 1440 : diff
-}
-
-function fmtCountdown(mins, isAr) {
-  const h = Math.floor(mins / 60), m = mins % 60
-  if (isAr) return h > 0 ? `${h}س ${m}د` : `${m}د`
-  return h > 0 ? `${h}h ${m}m` : `${m}m`
-}
+const SESSIONS = STYLE.map(st => ({ ...SESSION_TIMES.find(t => t.id === st.id), ...st }))
 
 export default function SessionsClock() {
   const { lang } = useLang()
@@ -64,8 +45,8 @@ export default function SessionsClock() {
   const now = new Date()
   const utcH = now.getUTCHours(), utcM = now.getUTCMinutes()
   const utcStr = `${String(utcH).padStart(2, '0')}:${String(utcM).padStart(2, '0')} UTC`
-  const utcFrac = utcH + utcM / 60
-  const overlap = utcFrac >= 13 && utcFrac < 16   // London + NY
+  const weekend = isWeekendClosed(now)
+  const overlap = SESSIONS.filter(s => s.id !== 'asia').every(s => isSessionOpen(s, now))   // London + NY
 
   return (
     <div className="bg-gray-900/60 border border-white/8 rounded-2xl overflow-hidden">
@@ -90,19 +71,27 @@ export default function SessionsClock() {
         )}
       </div>
 
+      {weekend && (
+        <div className="px-5 py-2.5 text-[11px] text-amber-300 bg-amber-500/10 border-b border-white/6">
+          {isAr
+            ? '🔒 عطلة نهاية الأسبوع — أسواق الفوركس والمعادن مغلقة، الكريبتو فقط يتداول'
+            : '🔒 Weekend — forex & metals are closed, only crypto is trading'}
+        </div>
+      )}
+
       {/* Sessions */}
       <div className="divide-y divide-white/4">
         {SESSIONS.map(s => {
-          const open       = isOpen(s)
+          const open       = isSessionOpen(s, now)
           const c          = s.color
-          const minsLeft   = open ? minutesUntil(s.closeUTC) : minutesUntil(s.openUTC)
-          const countdown  = fmtCountdown(minsLeft, isAr)
+          const minsLeft   = open ? minutesUntilClose(s, now) : (minutesUntilOpen(s, now) ?? 0)
+          const countdown  = fmtHM(minsLeft, isAr)
           const countLabel = open
             ? (isAr ? `يغلق خلال ${countdown}` : `Closes in ${countdown}`)
             : (isAr ? `يفتح خلال ${countdown}` : `Opens in ${countdown}`)
 
           // Progress bar — how far through the session (or gap)
-          const sessionLen = (s.closeUTC - s.openUTC + 24) % 24 * 60 || 1440
+          const sessionLen = (s.closeUTC - s.openUTC) * 60
           const elapsed    = open ? (sessionLen - minsLeft) : 0
           const pct        = open ? Math.round((elapsed / sessionLen) * 100) : 0
 
