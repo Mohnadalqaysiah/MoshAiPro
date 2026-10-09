@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
-import { TrendingUp, TrendingDown, Activity, Zap, AlertCircle, RefreshCw, Send, ExternalLink, Copy, CheckCircle, X, ChevronDown, ChevronUp, BarChart2, User, LayoutDashboard, Share2, Wallet, Calculator, Lock } from 'lucide-react'
+import { TrendingUp, TrendingDown, Activity, Zap, AlertCircle, RefreshCw, Send, ExternalLink, Copy, CheckCircle, X, ChevronDown, ChevronUp, BarChart2, User, LayoutDashboard, Share2, Wallet, Calculator, Lock, Calendar, Bell } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import useMarkets from '../hooks/useMarkets'
 import { useLang } from '../contexts/LangContext'
@@ -22,6 +22,8 @@ import AchievementBadges from '../components/AchievementBadges'
 import PWAInstallBanner from '../components/PWAInstallBanner'
 import WatchlistQuickCard from '../components/WatchlistQuickCard'
 import DashboardAnnouncement from '../components/DashboardAnnouncement'
+import MarketTicker from '../components/MarketTicker'
+import TradingPreferencesPanel from '../components/TradingPreferencesPanel'
 import Sparkline from '../components/Sparkline'
 
 const T = {
@@ -77,6 +79,10 @@ export default function Dashboard() {
   const [historyLimit,    setHistoryLimit]    = useState(10)
   const [signalsLimit,    setSignalsLimit]    = useState(10)
   const [activeTab,       setActiveTab]       = useState('home')
+  // (2026-10-09) تبويب الأسواق كان قائمة طويلة عمودية (جلسات+خريطة+تقويم+
+  // سجل+تنبيهات كلها بصفحة وحدة) — صار تبويبات فرعية، والتقويم الاقتصادي
+  // أول واحد افتراضياً (كان مهمّشاً بالأسفل).
+  const [marketsSubTab,   setMarketsSubTab]   = useState('calendar')
   const [confluenceSymbol, setConfluenceSymbol] = useState(null)  // ConfluenceModal
   const [showCalc, setShowCalc]           = useState(false)      // position size calc
   const [showChart, setShowChart]         = useState(false)      // TradingView chart
@@ -555,6 +561,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-0" dir={isAr ? 'rtl' : 'ltr'}>
+      <MarketTicker />
       <DashboardAnnouncement />
 
       {/* Modals */}
@@ -1082,12 +1089,40 @@ export default function Dashboard() {
 
       {/* ══ TAB: الأسواق ══ */}
       {activeTab === 'markets' && (
-        <div className="space-y-6">
-          <SessionsClock />
-          <MarketHeatmap onAnalyzeResult={(r) => setQuickResult(r)} />
-          <EconomicCalendar />
-          <SignalScorecard />
-          <PriceAlertWidget />
+        <div className="space-y-5">
+          {/* تبويبات فرعية — نفس نمط التبويبات الرئيسية بصرياً */}
+          <div className="flex gap-1 p-1 rounded-2xl q-glass overflow-x-auto">
+            {[
+              { id: 'calendar',  labelAr: 'التقويم الاقتصادي', labelEn: 'Economic Calendar', icon: <Calendar size={14} /> },
+              { id: 'overview',  labelAr: 'نظرة عامة',          labelEn: 'Overview',          icon: <BarChart2 size={14} /> },
+              { id: 'scorecard', labelAr: 'سجل الأداء',         labelEn: 'Scorecard',         icon: <Activity size={14} /> },
+              { id: 'alerts',    labelAr: 'تنبيهات الأسعار',    labelEn: 'Price Alerts',      icon: <Bell size={14} /> },
+            ].map(st => {
+              const isActive = marketsSubTab === st.id
+              return (
+                <button
+                  key={st.id}
+                  onClick={() => setMarketsSubTab(st.id)}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold transition-all active:scale-95 whitespace-nowrap ${
+                    isActive ? 'q-nav-on text-white' : 'text-gray-400 hover:text-white q-glass-hover'
+                  }`}
+                >
+                  <span className={isActive ? 'text-[var(--q-acc3)]' : ''}>{st.icon}</span>
+                  {isAr ? st.labelAr : st.labelEn}
+                </button>
+              )
+            })}
+          </div>
+
+          {marketsSubTab === 'calendar'  && <EconomicCalendar />}
+          {marketsSubTab === 'overview'  && (
+            <div className="space-y-5">
+              <SessionsClock />
+              <MarketHeatmap onAnalyzeResult={(r) => setQuickResult(r)} />
+            </div>
+          )}
+          {marketsSubTab === 'scorecard' && <SignalScorecard />}
+          {marketsSubTab === 'alerts'    && <PriceAlertWidget />}
         </div>
       )}
 
@@ -1257,6 +1292,11 @@ export default function Dashboard() {
           <AchievementBadges />
           <ReferralWidget />
           <RedemptionWidget />
+
+          {/* (2026-10-09) الأزواج + حاسبة اللوت + إدارة رأس المال —
+              كانت موجودة بـ/profile بس، بعيدة عن تبويب "الحساب" هون.
+              نفس المكوّن (TradingPreferencesPanel) مستخدَم بالاثنين. */}
+          <TradingPreferencesPanel />
         </div>
       )}
 
