@@ -113,7 +113,8 @@ export default function MarketTicker() {
   //    w-max يجعل عرضه = المحتوى فعلاً.
   // 2) باتجاه RTL كان المحتوى الفائض يمتد يساراً خارج الحاوية بينما الحركة
   //    لليسار أيضاً، فيفرغ الجزء الظاهر. المسار نفسه صار LTR دائماً (النص
-  //    بداخل كل بند يبقى بلغته)، والعربي يتحرك لليمين.
+  //    بداخل كل بند يبقى بلغته). الحركة بكل اللغات: البنود تدخل من اليمين
+  //    وتتحرك لليسار (طلب صاحب المنتج).
   // 3) التوقف عند المرور كان يعلق على الهاتف (اللمس يبقي حالة hover) — صار
   //    للأجهزة ذات الماوس فقط.
   // 4) المدة تتناسب مع عدد البنود، فالسرعة ثابتة مهما زادت.
@@ -123,11 +124,14 @@ export default function MarketTicker() {
   const duration = Math.max(20, half.length * 5)
 
   return (
-    <div className="relative overflow-hidden bg-gray-900/70 border border-white/8 rounded-xl mb-4">
+    // dir="ltr" على الحاوية نفسها لا المسار فقط: بصفحة RTL كانت الحاوية ترث
+    // الاتجاه فتلصق المسار (الأعرض منها) بحافتها اليمنى ممتداً لليسار، وبداية
+    // الحركة translateX(-50%) تدفعه كاملاً خارج المنطقة الظاهرة — شريط فارغ.
+    <div dir="ltr" className="relative overflow-hidden bg-gray-900/70 border border-white/8 rounded-xl mb-4">
       <div
         dir="ltr"
         className="ticker-track flex w-max whitespace-nowrap py-2.5"
-        style={{ animation: `${isAr ? 'ticker-rtl' : 'ticker-ltr'} ${duration}s linear infinite` }}
+        style={{ animation: `ticker-move ${duration}s linear infinite` }}
       >
         {loop.map((it, i) => (
           <span key={`${it.key}-${i}`} dir={isAr ? 'rtl' : 'ltr'}
@@ -139,8 +143,7 @@ export default function MarketTicker() {
         ))}
       </div>
       <style>{`
-        @keyframes ticker-ltr { from { transform: translateX(0); }    to { transform: translateX(-50%); } }
-        @keyframes ticker-rtl { from { transform: translateX(-50%); } to { transform: translateX(0); } }
+        @keyframes ticker-move { from { transform: translateX(0); } to { transform: translateX(-50%); } }
         @media (hover: hover) { .ticker-track:hover { animation-play-state: paused !important; } }
       `}</style>
     </div>
