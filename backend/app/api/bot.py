@@ -1019,6 +1019,32 @@ def bot_renew_trials(
     return {"renewed_count": len(renewed), "user_ids": renewed}
 
 
+_SAME_TRADE_ENTRY_TOL = 0.0005   # 0.05% — نفس عتبة diag_duplicates.py
+
+
+def _entries_equivalent(a, b) -> bool:
+    try:
+        a, b = float(a), float(b)
+        return a > 0 and abs(a - b) / a <= _SAME_TRADE_ENTRY_TOL
+    except (TypeError, ValueError):
+        return False
+
+
+def _equivalent_open_broadcast(db: Session, s: Signal) -> bool:
+    """هل بُثّت للمشتركين صفقة مكافئة (نفس الرمز والاتجاه، دخول ضمن 0.05%،
+    أي فريم) وما زالت مفتوحة (ACTIVE أو TP1_HIT ضمن مدتها)؟"""
+    now = datetime.now(timezone.utc)
+    others = db.query(Signal).filter(
+        Signal.market == s.market,
+        Signal.signal_type == s.signal_type,
+        Signal.broadcast_sent == True,  # noqa: E712
+        Signal.id != s.id,
+        Signal.status.in_([SignalStatus.ACTIVE, SignalStatus.TP1_HIT]),
+        Signal.expires_at > now,
+    ).all()
+    return any(_entries_equivalent(o.entry_price, s.entry_price) for o in others)
+
+
 @router.get("/new-signals")
 def bot_new_signals(
     _: bool = Depends(verify_bot),
@@ -1066,6 +1092,18 @@ def bot_new_signals(
                 logger.info(f"⏭️  Signal #{s.id} [{s.market}/{s.timeframe}] skipped — age {age_min:.0f}min > {max_age}min")
                 continue
 
+        # (2026-10-10) لا تبث نفس الصفقة مرتين. diag_duplicates.py: 118 زوجاً
+        # خلال 14 يوماً بُثّ كلاهما لكل المشتركين — نفس الرمز والاتجاه ودخول
+        # شبه مطابق، والأولى لسا مفتوحة. مصادرها: نفس المستويات على فريم آخر
+        # (15m و1h)، أو صف مراقبة شخصية لمشترك ثم مسح عام لنفس الإعداد بعد
+        # دقائق. فحص الدفعة تحت كان يقارن (رمز+فريم+اتجاه) داخل الدفعة فقط.
+        # إعادة الدخول بنفس المستوى **بعد** إغلاق الأولى صفقة جديدة — تُبث.
+        if _equivalent_open_broadcast(db, s):
+            s.broadcast_sent = True
+            db.commit()
+            logger.info(f"⏭️  Signal #{s.id} [{s.market}/{s.timeframe}] skipped — نفس صفقة مفتوحة بُثّت سابقاً")
+            continue
+
         # (2026-08-31) إشارات المراقبة الشخصية (save-alert-signal) محفوظة
         # بـuser_id المستخدم الحقيقي، وبتوصله أصلاً كـ"تنبيه مراقبة" منفصل
         # (monitor_watchlists). نجيب تلغرام آيدي صاحبها هون عشان نستثنيه من
@@ -1093,12 +1131,19 @@ def bot_new_signals(
             "expires_at":     s.expires_at.isoformat() if s.expires_at else None,
         })
 
-    # إزالة التكرار: إشارة واحدة فقط لكل (رمز + إطار + اتجاه)
+    # إزالة التكرار داخل الدفعة: إشارة واحدة لكل (رمز + إطار + اتجاه)، و(2026-10-10)
+    # لكل (رمز + اتجاه + دخول شبه مطابق) عبر الفريمات — نفس الصفقة على 15m و1h
+    # بنفس الدفعة كانت تمرّ مرتين.
     seen: set = set()
     deduped = []
     for sig in result:
         key = (sig["market"], sig["timeframe"], sig["signal_type"])
-        if key not in seen:
+        same_trade = any(
+            d["market"] == sig["market"] and d["signal_type"] == sig["signal_type"]
+            and _entries_equivalent(d["entry_price"], sig["entry_price"])
+            for d in deduped
+        )
+        if key not in seen and not same_trade:
             seen.add(key)
             deduped.append(sig)
         else:

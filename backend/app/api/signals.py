@@ -19,7 +19,31 @@ from app.models.site_settings import SiteSettings
 from app.services.auth_service import get_current_user, check_subscription, deduct_trial
 from app.api.bot import _check_loss_streak_breaker, _has_active_signal
 from app.services.decision_grouping import verified_unique_decisions, decision_key
-from app.services.quality_report import OUTCOME_FIX_DATE
+from app.services.quality_report import OUTCOME_FIX_DATE, _r_multiple
+
+
+def _r_stats(decisions: list, raw_rows: list) -> dict:
+    """(2026-10-10) مقاييس الأداء بمضاعف المخاطرة R لا بالنقاط — النقاط فارق
+    مضاعفها 1200 ضعف بين الرموز فأي متوسط/مجموع عابر للرموز اعتباطي. نفس
+    _r_multiple المستخدمة بتقرير الجودة الداخلي (رقم واحد بكل مكان)."""
+    meta = {s.id: s for s in raw_rows}
+    rs, tp2 = [], 0
+    for d in decisions:
+        s = meta.get(d["id"])
+        if s is None:
+            continue
+        r = _r_multiple(s.entry_price, s.stop_loss, s.take_profit_1, s.take_profit_2, d["status"])
+        if r is None:
+            continue
+        rs.append(r)
+        tp2 += d["status"] == "TP2_HIT"
+    wins = [r for r in rs if r > 0]
+    return {
+        "net_r":     round(sum(rs), 1),
+        "avg_r":     round(sum(rs) / len(rs), 2) if rs else 0.0,
+        "avg_win_r": round(sum(wins) / len(wins), 2) if wins else 0.0,
+        "tp2_hits":  tp2,
+    }
 
 
 def _calc_lot_size(account_balance: float, risk_percent: float,
@@ -557,6 +581,7 @@ async def get_signal_performance(
         "active_trades": active_trades,
         "win_rate":      round(len(wins) / len(week_decisions) * 100, 1) if week_decisions else 0.0,
         "expectancy":    round(total_points / len(week_decisions), 2) if week_decisions else 0.0,
+        **_r_stats(week_decisions, week_raw),
     }
 
     # (2026-09-04) نافذة متحركة (اليوم - 30 يوم) بدل أسبوع تقويمي ثابت —
@@ -593,6 +618,7 @@ async def get_signal_performance(
         "window_days":     window_days,
         "min_decisions":   MIN_ROLLING_DECISIONS,
         "sufficient_data": r_count >= MIN_ROLLING_DECISIONS,
+        **_r_stats(rolling_decisions, rolling_raw),
     }
 
     # ── Daily stats: last 14 days ──
@@ -647,6 +673,7 @@ async def get_signal_performance(
             "wins":          len(wk_wins),
             "losses":        len(wk_losses),
             "before_join":   wk_before_join,
+            **_r_stats(wk_decisions, wk_raw),
         })
 
     return {

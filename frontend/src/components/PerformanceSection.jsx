@@ -37,6 +37,14 @@ const T = {
     yourSymbols: 'أداء رموزك المختارة',
     editSymbols: 'تعديل',
     activeTradesNote: '+ {n} إشارة مفتوحة لسا ما تحققت نتيجتها',
+    netResult: 'صافي النتيجة',
+    riskUnits: 'ضعف المخاطرة',
+    perRisk: 'لو خاطرت بـ100$ في كل صفقة: {v}$',
+    payoff: 'الصفقة الرابحة',
+    payoffVal: '{x}× الخاسرة',
+    tp2Hits: 'وصلت للهدف الثاني',
+    whyProfit: 'نسبة النجاح وحدها لا تحكم: متوسط الصفقة الرابحة يساوي {x} أضعاف الخاسرة، لذلك تبقى النتيجة الصافية {sign} رغم أن الرابحة أقل عدداً.',
+    disclaimer: 'محسوبة على كل الإشارات المرسلة بمخاطرة ثابتة لكل صفقة، قبل السبريد والعمولة. الأداء السابق لا يضمن المستقبل.',
   },
   en: {
     title: 'Signal Performance',
@@ -68,6 +76,14 @@ const T = {
     yourSymbols: 'Performance for your selected symbols',
     editSymbols: 'Edit',
     activeTradesNote: '+ {n} signal(s) still open, not yet resolved',
+    netResult: 'Net Result',
+    riskUnits: 'x risk',
+    perRisk: 'Risking $100 per trade: {v}$',
+    payoff: 'Average Win',
+    payoffVal: '{x}× the loss',
+    tp2Hits: 'Reached TP2',
+    whyProfit: 'Win rate alone doesn’t decide it: the average win is {x}× the average loss, so the net result stays {sign} even with fewer winners.',
+    disclaimer: 'Computed over every signal sent, fixed risk per trade, before spread and commission. Past performance does not guarantee future results.',
   },
 }
 
@@ -167,24 +183,45 @@ export default function PerformanceSection() {
               {tx.rolling30.replace('{n}', Math.max(0, Math.round(rolling_30d.window_days ?? 30)))}
               {' '}({rolling_30d.total_trades} {tx.decisions})
             </div>
-            <div className="flex flex-wrap items-end gap-x-8 gap-y-2">
+            {/* (2026-10-10) الأرقام البارزة بمضاعف المخاطرة R لا بالنقاط — "العائد
+                لكل قرار" بالنقاط كان يخلط الذهب بالغاز (فارق المضاعف 1200 ضعف)
+                فلا معنى له. نسبة النجاح وحدها (~34%) توحي بخسارة بينما المنصة
+                رابحة لأن الرابحة أكبر بأضعاف — نعرض الصورة كاملة بأرقام حقيقية. */}
+            <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
+              <div>
+                <div className="text-[11px] text-gray-500 mb-0.5">{tx.netResult}</div>
+                <div className={`text-3xl font-bold ${ptColor(rolling_30d.net_r)}`}>
+                  {rolling_30d.net_r > 0 ? '+' : ''}{rolling_30d.net_r}
+                  <span className="text-sm font-medium text-gray-400"> {tx.riskUnits}</span>
+                </div>
+                <div className="text-[11px] text-gray-400 mt-0.5">
+                  {tx.perRisk.replace('{v}', `${rolling_30d.net_r > 0 ? '+' : ''}${Math.round(rolling_30d.net_r * 100).toLocaleString()}`)}
+                </div>
+              </div>
               <div>
                 <div className="text-[11px] text-gray-500 mb-0.5">{tx.winRate}</div>
-                <div className="text-3xl font-bold text-white">{rolling_30d.win_rate}%</div>
+                <div className="text-2xl font-semibold text-white">{rolling_30d.win_rate}%</div>
               </div>
-              <div>
-                <div className="text-[11px] text-gray-500 mb-0.5">{tx.expectancy}</div>
-                <div className={`text-2xl font-semibold ${ptColor(rolling_30d.expectancy)}`}>
-                  {rolling_30d.expectancy > 0 ? '+' : ''}{rolling_30d.expectancy} {tx.points}
+              {rolling_30d.avg_win_r > 0 && (
+                <div>
+                  <div className="text-[11px] text-gray-500 mb-0.5">{tx.payoff}</div>
+                  <div className="text-2xl font-semibold text-green-400">
+                    {tx.payoffVal.replace('{x}', rolling_30d.avg_win_r)}
+                  </div>
                 </div>
-              </div>
+              )}
               <div>
-                <div className="text-[11px] text-gray-500 mb-0.5">{tx.totalPts}</div>
-                <div className={`text-2xl font-semibold ${ptColor(rolling_30d.total_points)}`}>
-                  {rolling_30d.total_points > 0 ? '+' : ''}{rolling_30d.total_points} {tx.points}
-                </div>
+                <div className="text-[11px] text-gray-500 mb-0.5">{tx.tp2Hits}</div>
+                <div className="text-2xl font-semibold text-purple-300">{rolling_30d.tp2_hits}</div>
               </div>
             </div>
+            {rolling_30d.avg_win_r > 0 && (
+              <p className="text-[12px] text-gray-400 mt-3 leading-relaxed">
+                {tx.whyProfit
+                  .replace('{x}', rolling_30d.avg_win_r)
+                  .replace('{sign}', rolling_30d.net_r >= 0 ? (isAr ? 'موجبة' : 'positive') : (isAr ? 'سالبة' : 'negative'))}
+              </p>
+            )}
             <div className="flex gap-6 mt-3 text-sm">
               <div>
                 <span className="text-gray-400">{tx.wins}: </span>
@@ -195,6 +232,7 @@ export default function PerformanceSection() {
                 <span className="text-red-400 font-semibold">{rolling_30d.losses}</span>
               </div>
             </div>
+            <p className="text-[10px] text-gray-500 mt-2">{tx.disclaimer}</p>
           </div>
         ) : (
           <div className="border border-gray-700 bg-gray-800 rounded-xl p-5">
@@ -229,11 +267,13 @@ export default function PerformanceSection() {
             {/* (2026-10-03) نسبة الربح % صارت الرقم البارز — مقارنة عادلة
                 بين كل الرموز (راجع DECISIONS.md: النقاط فارق مضاعفها
                 1200 ضعف بين الرموز). النقاط تبقى تفصيلاً ثانوياً بعدها. */}
-            <span className={`text-sm font-bold font-mono ${current_week.win_rate >= 50 ? 'text-green-400' : 'text-red-400'}`}>
+            {/* (2026-10-10) اللون من صافي النتيجة لا من نسبة النجاح ≥50% — أسبوع
+                رابح بنسبة 35% كان يظهر أحمر */}
+            <span className="text-sm font-bold font-mono text-gray-200">
               {current_week.win_rate}% <span className="font-normal text-gray-500">({current_week.wins}/{current_week.total_trades})</span>
             </span>
-            <span className={`text-xs ${ptColor(current_week.total_points)}`}>
-              {current_week.total_points > 0 ? '+' : ''}{current_week.total_points} {tx.points}
+            <span className={`text-sm font-semibold ${ptColor(current_week.net_r)}`}>
+              {current_week.net_r > 0 ? '+' : ''}{current_week.net_r} {tx.riskUnits}
             </span>
           </div>
         </div>
@@ -249,22 +289,24 @@ export default function PerformanceSection() {
           if (visibleWeeks.filter(w => w.total_trades > 0).length === 0) {
             return <p className="text-gray-500 text-sm text-center py-4">{tx.noData}</p>
           }
-          const maxPts = Math.max(...visibleWeeks.map(x => Math.abs(x.total_points)), 1)
+          // (2026-10-10) الأعمدة بصافي R لا بالنقاط — أسبوع ذهب يطغى بالنقاط على
+          // أسبوع كريبتو أفضل منه فعلاً
+          const maxR = Math.max(...visibleWeeks.map(x => Math.abs(x.net_r || 0)), 1)
           return (
           <div className="space-y-2">
             {visibleWeeks.map((w, i) => {
-              const barPct = Math.min(100, (Math.abs(w.total_points) / maxPts) * 100)
+              const barPct = Math.min(100, (Math.abs(w.net_r || 0) / maxR) * 100)
               return (
                 <div key={i} className="flex items-center gap-3">
                   <div className="text-xs text-gray-400 w-16 flex-shrink-0 text-left ltr:text-left rtl:text-right">{w.week}</div>
                   <div className="flex-1 h-5 bg-gray-700 rounded-full overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all ${w.total_points >= 0 ? 'bg-green-600' : 'bg-red-600'}`}
+                      className={`h-full rounded-full transition-all ${(w.net_r || 0) >= 0 ? 'bg-green-600' : 'bg-red-600'}`}
                       style={{ width: `${barPct}%` }}
                     />
                   </div>
-                  <div className={`text-xs font-mono w-20 text-right ${ptColor(w.total_points)}`}>
-                    {w.total_points > 0 ? '+' : ''}{w.total_points}
+                  <div className={`text-xs font-mono w-20 text-right ${ptColor(w.net_r || 0)}`}>
+                    {(w.net_r || 0) > 0 ? '+' : ''}{w.net_r || 0} R
                   </div>
                   <div className="text-xs text-gray-500 w-16 text-right">{w.total_trades} {tx.trades}</div>
                 </div>
