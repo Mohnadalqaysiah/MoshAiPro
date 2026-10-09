@@ -443,6 +443,26 @@ async def bot_check_outcomes(
         db.commit()
         logger.info(f"⏰ {len(expired_untriggered)} إشارة انتهت بلا تفعيل دخول → EXPIRED")
 
+    # (2026-10-09) الفجوة التالية المكتشَفة بنفس العائلة: صفقة تفعّل دخولها
+    # فعلاً (entry_executed مسجَّل) بس انتهت مدتها بلا ما تصل TP ولا SL —
+    # الكتلة فوق تستثنيها عمداً (entry_executed.is_(None) بس)، والاستعلام
+    # التالي (active) يستثنيها كمان (expires_at > now) — فتضل ACTIVE للأبد
+    # بلا أي مسار يقفلها. integrity_checker.py يكتشف هذي الحالة وينبّه
+    # الأدمن فقط، لا يصلحها. نفس معاملة الحالة الشقيقة فوق بالضبط: صفقة
+    # بلا نتيجة حاسمة ضمن مدتها الزمنية = EXPIRED (لا ربح ولا خسارة)، لا
+    # SL_HIT وهمي — تُستثنى من حساب نسبة الربح بنفس الطريقة، لا نقاط تُسجَّل
+    # لها لأنه لم يُحسم أي شيء فعلياً.
+    expired_unresolved = db.query(Signal).filter(
+        Signal.status == SignalStatus.ACTIVE,
+        Signal.expires_at <= now,
+        Signal.entry_executed.isnot(None),
+    ).all()
+    for _s in expired_unresolved:
+        _s.status = SignalStatus.EXPIRED
+    if expired_unresolved:
+        db.commit()
+        logger.info(f"⏰ {len(expired_unresolved)} صفقة مفتوحة انتهت مدتها بلا TP/SL → EXPIRED")
+
     active = db.query(Signal).filter(
         Signal.status == SignalStatus.ACTIVE,
         Signal.expires_at > now,
