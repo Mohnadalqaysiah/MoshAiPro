@@ -331,7 +331,7 @@ export default function PerformanceSection() {
                 <th className="pb-2 text-right font-medium">{tx.trades}</th>
                 <th className="pb-2 text-right font-medium">{isAr ? 'رابح' : 'Wins'}</th>
                 <th className="pb-2 text-right font-medium">{isAr ? 'خاسر' : 'Losses'}</th>
-                <th className="pb-2 text-right font-medium">{tx.totalPts}</th>
+                <th className="pb-2 text-right font-medium">{tx.netResult}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-700/40">
@@ -341,8 +341,8 @@ export default function PerformanceSection() {
                   <td className="py-1.5 text-gray-300">{d.trades}</td>
                   <td className="py-1.5 text-green-400">{d.wins}</td>
                   <td className="py-1.5 text-red-400">{d.losses}</td>
-                  <td className={`py-1.5 font-semibold font-mono ${ptColor(d.points)}`}>
-                    {d.points > 0 ? '+' : ''}{d.points}
+                  <td className={`py-1.5 font-semibold font-mono ${ptColor(d.net_r || 0)}`} dir="ltr">
+                    {(d.net_r || 0) > 0 ? '+' : ''}{d.net_r || 0} R
                   </td>
                 </tr>
               ))}

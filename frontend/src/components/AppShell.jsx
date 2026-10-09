@@ -269,9 +269,13 @@ function PerformanceMini({ isAr }) {
             <div className="text-[11px] text-gray-500">{isAr ? 'نسبة النجاح' : 'Win rate'}</div>
             <div className="text-2xl font-extrabold text-white tabular-nums">{r.win_rate}%</div>
           </div>
+          {/* (2026-10-10) صافي R بدل "العائد / قرار" بالنقاط — متوسط نقاط عابر
+              للرموز بلا معنى (راجع PerformanceSection) */}
           <div>
-            <div className="text-[11px] text-gray-500">{isAr ? 'العائد / قرار' : 'Expectancy'}</div>
-            <div className={`text-xl font-bold tabular-nums ${ptColor(r.expectancy)}`}>{r.expectancy > 0 ? '+' : ''}{r.expectancy}</div>
+            <div className="text-[11px] text-gray-500">{isAr ? 'صافي النتيجة' : 'Net result'}</div>
+            <div className={`text-xl font-bold tabular-nums ${ptColor(r.net_r)}`}>
+              {r.net_r > 0 ? '+' : ''}{r.net_r}<span className="text-[11px] font-medium text-gray-400"> R</span>
+            </div>
           </div>
         </div>
       ) : (
@@ -288,7 +292,7 @@ function PerformanceMini({ isAr }) {
       {w && (
         <div className="flex justify-between text-[11px] mt-3 pt-3 border-t q-line tabular-nums">
           <span className="text-gray-500">{w.week_label}</span>
-          <span className="text-gray-300">{w.wins}/{w.total_trades} · <b className={ptColor(w.total_points)}>{w.total_points > 0 ? '+' : ''}{w.total_points}</b></span>
+          <span className="text-gray-300">{w.wins}/{w.total_trades} · <b className={ptColor(w.net_r)}>{w.net_r > 0 ? '+' : ''}{w.net_r} R</b></span>
         </div>
       )}
     </div>

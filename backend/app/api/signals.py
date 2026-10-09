@@ -651,6 +651,7 @@ async def get_signal_performance(
             "losses":        len(day_losses),
             "trades_detail": trades_detail,
             "before_join":   day_before_join,
+            **_r_stats(day_decisions, day_raw),
         })
 
     # ── Weekly stats: last 8 weeks ──

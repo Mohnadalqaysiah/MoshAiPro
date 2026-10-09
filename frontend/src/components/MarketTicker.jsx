@@ -25,7 +25,16 @@ export default function MarketTicker() {
     const load = async () => {
       try {
         const res = await axios.get(`${API}/api/v1/signals/latest?limit=200`)
-        if (!cancelled) setSignals(res.data.data || [])
+        // (2026-10-10) نفس الإشارة محفوظة صفاً لكل مشترك — "50 إشارة حيّة على
+        // الذهب" كانت نسخاً لبضع صفقات. نعدّ كل صفقة مرة (رمز + اتجاه + دخول).
+        const seen = new Set()
+        const unique = (res.data.data || []).filter(s => {
+          const k = `${s.market || s.symbol}|${s.recommendation || s.signal_type}|${Number(s.entry_price ?? s.entry ?? 0).toPrecision(6)}`
+          if (seen.has(k)) return false
+          seen.add(k)
+          return true
+        })
+        if (!cancelled) setSignals(unique)
       } catch { /* الشريط اختياري — فشل الجلب يخفيه بصمت */ }
     }
     load()
