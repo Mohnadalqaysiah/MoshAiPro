@@ -45,6 +45,9 @@ BUG_SINCE = datetime(2026, 9, 24, tzinfo=timezone.utc)   # بوابة تفعيل
 SPOT_TV = {"XAUUSD", "XAGUSD"}                            # = _SPOT_SYMBOLS بـbot.py
 ALIGN_TOL = timedelta(minutes=10)
 APPLY = "--apply" in sys.argv
+# --exclude=US30,NAS100 — رموز تُستثنى من التطبيق (مرجع سعرها قيد التحقق)
+EXCLUDE = {x.strip().upper() for a in sys.argv if a.startswith("--exclude=")
+           for x in a.split("=", 1)[1].split(",") if x.strip()}
 WIN = ("TP1_HIT", "TP2_HIT")
 
 
@@ -120,7 +123,10 @@ async def main():
 
         by_market = defaultdict(list)
         for s in rows:
-            by_market[s.market.upper()].append(s)
+            if s.market.upper() not in EXCLUDE:
+                by_market[s.market.upper()].append(s)
+        if EXCLUDE:
+            print(f"⛔ مستثناة بالكامل: {', '.join(sorted(EXCLUDE))}\n")
 
         now = datetime.now(timezone.utc)
         changes, uncertain = [], []

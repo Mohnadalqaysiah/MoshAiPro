@@ -463,8 +463,13 @@ async def bot_check_outcomes(
         db.commit()
         logger.info(f"⏰ {len(expired_unresolved)} صفقة مفتوحة انتهت مدتها بلا TP/SL → EXPIRED")
 
+    # (2026-10-10، بتفويض صريح) TP1_HIT ضمن مدتها تبقى تحت الرصد بحثاً عن
+    # TP2. قبلها كان تسجيل TP1 يُخرج الصفقة من الرصد نهائياً، فكل TP2 يأتي
+    # بعد دورة تسجيل TP1 يضيع — تشخيص 2026-10-09 وجد ~200 صف وصل TP2 فعلياً
+    # بالشموع ومسجّل TP1. للصف المقفول على TP1: لا ترقية إلا لـTP2، ولمس
+    # الستوب بعد TP1 يُنهي الرصد ويُبقي TP1 (راجع _tp1_locked تحت).
     active = db.query(Signal).filter(
-        Signal.status == SignalStatus.ACTIVE,
+        Signal.status.in_([SignalStatus.ACTIVE, SignalStatus.TP1_HIT]),
         Signal.expires_at > now,
     ).all()
 
@@ -627,6 +632,10 @@ async def bot_check_outcomes(
             # (2026-09-24) خارج try/range_check عمداً — لازم تُقرأ بالفحص
             # اللحظي تحت كمان (range_check=False)، لا فقط بالمشي بالشموع.
             already_triggered = sig.entry_executed is not None
+            _tp1_locked = sig.status == SignalStatus.TP1_HIT
+            if _tp1_locked:
+                already_triggered = True   # TP1 مسجّل ⇒ الدخول تفعّل حتماً
+            _sl_after_tp1 = False
             if range_check:
                 try:
                     created = sig.created_at
@@ -724,8 +733,9 @@ async def bot_check_outcomes(
                     # هابط. والعكس ممكن (ربح وهمي من شمعة قبل الدخول).
                     # الآن: لا شمعة تسبق شمعة التفعيل تُفحص أبداً.
                     _entry_floor = None
-                    if sig.entry_executed is not None:
-                        _ee = sig.entry_executed
+                    _floor_src = sig.entry_executed or (sig.exit_executed if _tp1_locked else None)
+                    if _floor_src is not None:
+                        _ee = _floor_src
                         if _ee.tzinfo is None:
                             _ee = _ee.replace(tzinfo=timezone.utc)
                         _entry_floor = _ee.timestamp()
@@ -742,6 +752,16 @@ async def bot_check_outcomes(
                         sl_touch  = (lo <= sl) if is_buy else (hi >= sl)
                         tp2_touch = has_tp2 and ((hi >= tp2) if is_buy else (lo <= tp2))
                         tp1_touch = (hi >= tp1) if is_buy else (lo <= tp1)
+                        if _tp1_locked:
+                            # مقفول على TP1: الستوب بعده يُنهي الرصد (الهدف الأول
+                            # يبقى)، وTP2 قبله يرقّي. لا شيء غيرهما.
+                            if sl_touch:
+                                _sl_after_tp1 = True
+                                break
+                            if tp2_touch:
+                                new_status = SignalStatus.TP2_HIT
+                                break
+                            continue
                         if sl_touch:
                             new_status = new_status or SignalStatus.SL_HIT
                             break
@@ -790,7 +810,32 @@ async def bot_check_outcomes(
             # سعر لحظي واحد لا يكفي لإثبات "لُمس الدخول ثم استمر" بأمان — لو
             # لسا غير مؤكَّد، ننتظر الدورة العميقة القادمة (تفحص الشموع
             # وترتيبها الزمني الصحيح) بدل تخمين قد يُخطئ بنفس الثغرة الأصلية.
-            if new_status is None and not walked and already_triggered:
+            # (2026-10-10، بتفويض صريح) الفحص اللحظي للذهب والفضة فقط. السعر
+            # اللحظي يُقرأ من TV لكل رمز بـTV_SYMBOL_MAP، بينما مستويات غير
+            # المعادن مبنية على get_ohlcv (عقود آجلة للمؤشرات) — فخالف هذا
+            # المسار قاعدة 16/09 نفسها ("تُقاس النتيجة بنفس مرجع بناء
+            # المستويات"). US30 النقدي (TV) أدنى من الآجل بمئات النقاط، فبيع
+            # أقدم من نافذة المشي (2.5 ساعة) كان يُحسم TP2 بسعر لم يوجد بمرجعه
+            # — ~35 صفاً US30/SP500 مسجّلة TP2 والشموع تقول SL. غير المعادن
+            # تُحسم بالشموع وحدها (دورة عميقة كل ~13.5 دقيقة، نافذتها 2.5 ساعة
+            # فلا فجوة) — الثمن تأخّر إشعار النتيجة حتى 13.5 دقيقة.
+            if _tp1_locked and new_status is None and not _sl_after_tp1 \
+                    and not walked and market_upper in _SPOT_SYMBOLS:
+                if (price >= tp2) if is_buy else (price <= tp2):
+                    if has_tp2:
+                        new_status = SignalStatus.TP2_HIT
+                elif (price <= sl) if is_buy else (price >= sl):
+                    _sl_after_tp1 = True
+
+            if _sl_after_tp1:
+                # الصفقة أُغلقت بالستوب بعد TP1 — النتيجة تبقى TP1 وينتهي الرصد
+                # (وإلا قد ترى نافذة لاحقة TP2 بعد خروج شمعة الستوب منها)
+                sig.expires_at = now
+                db.commit()
+                continue
+
+            if new_status is None and not walked and already_triggered \
+                    and not _tp1_locked and market_upper in _SPOT_SYMBOLS:
                 if is_buy:
                     if   price <= sl:  new_status = SignalStatus.SL_HIT
                     elif price >= tp2: new_status = SignalStatus.TP2_HIT
@@ -818,7 +863,8 @@ async def bot_check_outcomes(
                 # تحديث performance tracker في المحرك (Task 6) — مرة وحدة
                 # لكل قرار فريد، مو لكل صف/مستخدم (انظر التعليق فوق الحلقة)
                 dkey = decision_key(sig.market, sig.timeframe, sig.signal_type, sig.entry_price)
-                if dkey not in _perf_counted_this_cycle:
+                # ترقية TP1→TP2 ليست قراراً جديداً — حُسب WIN عند TP1 أصلاً
+                if dkey not in _perf_counted_this_cycle and not _tp1_locked:
                     _perf_counted_this_cycle.add(dkey)
                     perf_result = "WIN" if new_status in (SignalStatus.TP1_HIT, SignalStatus.TP2_HIT) else "LOSS"
                     mosh_ai_engine_v5.update_performance(perf_result)
