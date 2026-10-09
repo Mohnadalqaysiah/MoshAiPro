@@ -2468,6 +2468,22 @@ class MoshAIEngineV5:
         tp_dist = abs(tp1 - entry)
         if sl_dist <= 0:
             return self._hard_reject(analysis, "ZERO_SL_DISTANCE")
+        # Rule 7a (2026-10-09, بتفويض صريح من صاحب المنتج): حد أدنى لمسافة
+        # الستوب = 3× سبريد الأداة الواقعي. Rule 9 أدناه يقدّر السبريد كـATR×0.05
+        # (يصغر مع هدوء السوق) ويكتفي بتحذير، فمرّت ستوبات داخل التذبذب العادي
+        # (#4361 NATGAS ستوب 0.0048 وسبريده ~0.006). التشخيص على 566 قراراً:
+        # الشريحة < 3× = 149 قراراً، 24% نجاح، −0.12R، و113 خسارة (30% من كل
+        # الخسائر)؛ كل الشرائح الأوسع رابحة. رفض صريح لا توسيع للستوب — التوسيع
+        # لم يُقَس. الذهب لا يتأثر (لا قرار ذهب تحت 5×). غير قابل للإنقاذ
+        # (RESCUABLE_PREFIXES = DELTA_ فقط).
+        from app.services.spread_table import typical_spread, MIN_SL_SPREAD_MULT
+        _spread = typical_spread(symbol, entry)
+        if _spread and sl_dist < _spread * MIN_SL_SPREAD_MULT:
+            logger.info(
+                f"GATE: SL_INSIDE_SPREAD_NOISE [{symbol}/{timeframe}] "
+                f"sl_dist={sl_dist:.6g} < {MIN_SL_SPREAD_MULT:g}×spread({_spread:g})"
+            )
+            return self._hard_reject(analysis, "SL_INSIDE_SPREAD_NOISE")
         # Rule 7b: Metals-only SL distance cap (XAUUSD/XAGUSD) — adaptive to
         # current volatility via ATR, not a bare fixed %.
         # Backtest that validated the original static 0.5%: rejected 7
