@@ -68,6 +68,16 @@ const StatusBadge = ({ status }) => {
 }
 
 // ── User Detail Modal ──────────────────────────────────────────────────────────
+// مدة الصفقة بالدقائق → نص مختصر (45د · 3س 20د · 2ي 5س)
+const fmtMinutes = (m) => {
+  if (m == null) return '—'
+  const mins = Math.round(m)
+  if (mins < 60) return `${mins}د`
+  const h = Math.floor(mins / 60)
+  if (h < 24) return `${h}س${mins % 60 ? ` ${mins % 60}د` : ''}`
+  return `${Math.floor(h / 24)}ي${h % 24 ? ` ${h % 24}س` : ''}`
+}
+
 const RENEW_DAY_PRESETS = [7, 14, 30, 60, 90]
 const RENEW_REASON_PRESETS = ['تحويل بنكي', 'دفع كاش', 'PayPal يدوي', 'تعويض/مكافأة']
 
@@ -2227,10 +2237,18 @@ export default function Admin() {
                     <p className="text-sm text-red-400">⚠️ {bulkVerify.error}</p>
                   ) : (
                     <>
-                      <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-sm font-semibold text-purple-300">نتيجة التحقق الجماعي — {bulkVerify.total} إشارة EXPIRED (آخر 30 يوم)</h3>
+                      <div className="flex items-center justify-between mb-1">
+                        <h3 className="text-sm font-semibold text-purple-300">
+                          نتيجة التحقق الجماعي — {bulkVerify.total} قرار فريد
+                          {bulkVerify.rows_total != null && bulkVerify.rows_total !== bulkVerify.total && (
+                            <span className="text-gray-500 font-normal"> (من {bulkVerify.rows_total} صف — نفس القرار مرسَل لعدة مشتركين يُحسب مرة)</span>
+                          )}
+                        </h3>
                         <button onClick={() => setBulkVerify(null)} className="text-gray-500 hover:text-white"><X size={15}/></button>
                       </div>
+                      <p className="text-[11px] text-gray-500 mb-3">
+                        الرصد يبدأ فقط بعد تفعيل الدخول وينتهي عند انتهاء مدة الإشارة — أي هدف/وقف بعد الانتهاء لا يُحسب.
+                      </p>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
                         <div className="bg-green-900/20 border border-green-700/30 rounded-lg p-3 text-center">
                           <div className="text-lg font-bold text-green-400">{bulkVerify.wins}</div>
@@ -2241,18 +2259,29 @@ export default function Admin() {
                           <div className="text-[11px] text-gray-400">خاسرة</div>
                         </div>
                         <div className="bg-gray-800/60 rounded-lg p-3 text-center">
-                          <div className="text-lg font-bold text-yellow-400">{bulkVerify.still_active}</div>
-                          <div className="text-[11px] text-gray-400">لسا نشطة فعلياً</div>
+                          <div className="text-lg font-bold text-blue-400">{bulkVerify.winrate_pct != null ? `${bulkVerify.winrate_pct}%` : '—'}</div>
+                          <div className="text-[11px] text-gray-400">نسبة النجاح (من المحسوم فقط)</div>
                         </div>
                         <div className="bg-gray-800/60 rounded-lg p-3 text-center">
-                          <div className="text-lg font-bold text-blue-400">{bulkVerify.winrate_pct != null ? `${bulkVerify.winrate_pct}%` : '—'}</div>
-                          <div className="text-[11px] text-gray-400">نسبة النجاح</div>
+                          <div className="text-sm font-bold text-gray-300">
+                            {fmtMinutes(bulkVerify.avg_minutes_to_win)} / {fmtMinutes(bulkVerify.avg_minutes_to_loss)}
+                          </div>
+                          <div className="text-[11px] text-gray-400">متوسط الوقت للهدف / للوقف</div>
                         </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2 mb-3 text-[11px]">
+                        <span className="bg-gray-800/60 text-gray-400 rounded-lg px-2.5 py-1">لم يتفعّل الدخول: {bulkVerify.not_triggered ?? 0}</span>
+                        <span className="bg-gray-800/60 text-gray-400 rounded-lg px-2.5 py-1">تفعّل بلا نتيجة ضمن المدة: {bulkVerify.expired_no_result ?? 0}</span>
+                        <span className="bg-gray-800/60 text-yellow-400 rounded-lg px-2.5 py-1">لسا ضمن مدتها: {bulkVerify.still_active ?? 0}</span>
+                        <span className="bg-gray-800/60 text-gray-500 rounded-lg px-2.5 py-1">بيانات غير كافية: {bulkVerify.no_data ?? 0}</span>
                       </div>
                       <div className="max-h-64 overflow-y-auto space-y-1">
                         {bulkVerify.results.map(r => (
-                          <div key={r.id} className="flex items-center justify-between text-xs bg-gray-800/40 rounded-lg px-3 py-1.5">
-                            <span className="text-gray-300">#{r.id} {r.market} ({r.timeframe}) — {r.signal_type}</span>
+                          <div key={r.id} className="flex items-center justify-between gap-2 text-xs bg-gray-800/40 rounded-lg px-3 py-1.5">
+                            <span className="text-gray-300">
+                              #{r.id} {r.market} ({r.timeframe}) — {r.signal_type}
+                              {r.copies > 1 && <span className="text-gray-500"> ×{r.copies}</span>}
+                            </span>
                             <span className={
                               r.detected === 'SL_HIT' ? 'text-red-400' :
                               r.detected?.includes('TP') ? 'text-green-400' :
@@ -2261,7 +2290,11 @@ export default function Admin() {
                               {r.detected === 'SL_HIT' ? '❌ ضربت الستوب' :
                                r.detected === 'TP2_HIT' ? '🏆 هدف 2' :
                                r.detected === 'TP1_HIT' ? '✅ هدف 1' :
-                               r.detected === 'STILL_ACTIVE' ? '⏳ لسا نشطة' : `ℹ️ ${r.reason || 'لا بيانات'}`}
+                               r.detected === 'STILL_ACTIVE' ? '⏳ لسا ضمن مدتها' :
+                               r.detected === 'NOT_TRIGGERED' ? '⚪ لم يتفعّل الدخول' :
+                               r.detected === 'EXPIRED_NO_RESULT' ? '⌛ بلا نتيجة ضمن المدة' :
+                               `ℹ️ ${r.reason || 'لا بيانات'}`}
+                              {r.duration_minutes != null && <span className="text-gray-500"> · بعد {fmtMinutes(r.duration_minutes)}</span>}
                             </span>
                           </div>
                         ))}
@@ -2381,7 +2414,11 @@ export default function Admin() {
                                   {verifyResults[s.id].error ? (
                                     <span className="text-xs text-red-400">⚠️ {verifyResults[s.id].error}</span>
                                   ) : verifyResults[s.id].detected === 'STILL_ACTIVE' ? (
-                                    <span className="text-xs text-gray-300">⏳ حسب بيانات السوق الحقيقية — لم تلمس الهدف ولا الستوب حتى الآن، الإشارة لسا نشطة فعلاً.</span>
+                                    <span className="text-xs text-gray-300">⏳ حسب بيانات السوق الحقيقية — لم تلمس الهدف ولا الستوب حتى الآن، والإشارة لسا ضمن مدتها.</span>
+                                  ) : verifyResults[s.id].detected === 'NOT_TRIGGERED' ? (
+                                    <span className="text-xs text-gray-400">⚪ {verifyResults[s.id].reason}</span>
+                                  ) : verifyResults[s.id].detected === 'EXPIRED_NO_RESULT' ? (
+                                    <span className="text-xs text-gray-400">⌛ {verifyResults[s.id].reason}</span>
                                   ) : verifyResults[s.id].detected === 'NO_DATA' ? (
                                     <span className="text-xs text-yellow-400">ℹ️ {verifyResults[s.id].reason || 'تعذّر جلب بيانات السوق التاريخية'}</span>
                                   ) : (
@@ -2391,6 +2428,7 @@ export default function Admin() {
                                         {' — '}
                                         {new Date(verifyResults[s.id].hit_time).toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' })}
                                         {' · سعر '}{verifyResults[s.id].suggested_closed_price}
+                                        {verifyResults[s.id].duration_minutes != null && ` · بعد ${fmtMinutes(verifyResults[s.id].duration_minutes)} من الدخول`}
                                       </span>
                                       <button
                                         onClick={() => applyVerified(s.id)}

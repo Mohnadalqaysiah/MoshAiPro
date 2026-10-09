@@ -1243,14 +1243,12 @@ class SignalOutcomeIn(BaseModel):
 
 def _calc_points(market: str, price_diff: float, entry_price: float = None) -> float:
     """
-    Unified pip/points per market:
-    Metals  ×10   → $0.1 move = 1 pt  (XAUUSD $47 move = 470 pts)
-    Crypto  → نسبة مئوية من سعر الدخول × 10000 (basis points) — راجع تعليق
-              أسفل فرع الكريبتو، هذا مو "$1 = نقطة" متل باقي الفئات.
-    Indices ×1    → 1 index point = 1 pt (NAS100 +40 = 40 pts)
-    US stocks ×1  → $1 move = 1 pt (same treatment as crypto/indices)
-    Oil/Gas ×10   → $0.1 move = 1 pt
-    Gulf    ×10   → نفس مقياس المعادن (أسهم بأسعار مشابهة النطاق: عشرات الريال/الدرهم)
+    نقطة = البيب المعياري للأداة (2026-10-09):
+    XAUUSD/XPTUSD/XPDUSD 0.1 · XAGUSD 0.01 · COPPER 0.001
+    USOIL/BRENT 0.01 · NATGAS 0.001 · DXY 0.01
+    Crypto  → نسبة مئوية من سعر الدخول × 10000 (basis points)
+    Indices (+TASI) → 1 index point = 1 pt
+    US + Gulf stocks → 0.01 (سنت/هللة/فلس) = 1 pt
     JPY     ×100  → standard yen pips
     Forex   ×10000→ standard pips (0.0001 = 1 pip)
 
@@ -1263,8 +1261,24 @@ def _calc_points(market: str, price_diff: float, entry_price: float = None) -> f
     المؤشرات/الكريبتو (×1) لأنها مو مسعّرة بنظام pip.
     """
     symbol = (market or "").upper()
-    if symbol in ("XAUUSD", "XAGUSD", "XPTUSD", "XPDUSD", "COPPER"):
-        return round(price_diff * 10, 2)     # metals: $0.1 per point
+
+    # (2026-10-09) مضاعف موحّد لكل فئة كان يعطي هدفاً محققاً بأجزاء من
+    # النقطة لأدوات بنفس الفئة وسعرها أصغر بكثير: النحاس (~$4.5) بنفس
+    # مضاعف الذهب (~$4000) فحركة هدفه 0.026 = 0.26 نقطة، ونفس الشي للغاز
+    # (~$3) وDXY (~100) والأسهم الخليجية. صارت النقطة = البيب المعياري
+    # للأداة نفسها عند الوسطاء (MT4/MT5) لا مضاعف الفئة.
+    PIP_SIZE = {
+        "XAUUSD": 0.1,  "XPTUSD": 0.1,  "XPDUSD": 0.1,
+        "XAGUSD": 0.01,
+        "COPPER": 0.001,
+        "USOIL": 0.01,  "OIL": 0.01,    "BRENT": 0.01,
+        "NATGAS": 0.001,
+        "DXY": 0.01,
+    }
+    if symbol in PIP_SIZE:
+        return round(price_diff / PIP_SIZE[symbol], 2)
+    if symbol == "TASI":                         # مؤشر لا سهم
+        return round(price_diff * 1.0, 2)
     elif symbol in (
         # (2026-09-10) ADAUSD/DOGEUSD كانوا ناقصين هون فيسقطوا على مضاعف
         # الفوركس ×10000 غلط. أُضيفوا + باقي رموز CRYPTO_MARKETS للتحصين
@@ -1283,16 +1297,14 @@ def _calc_points(market: str, price_diff: float, entry_price: float = None) -> f
         if entry_price and entry_price > 0:
             return round((price_diff / entry_price) * 10000, 2)   # % move × 10000 (basis points)
         return round(price_diff * 1.0, 2)    # fallback إذا entry_price غير متوفر (لا يجب يصير بالمسارات الحالية)
-    elif symbol in ("NAS100", "US30", "SP500", "US100", "NASDAQ", "DOW", "DXY"):
-        return round(price_diff * 1.0, 2)    # indices (+ DXY): 1 index point = 1 pt
+    elif symbol in ("NAS100", "US30", "SP500", "US100", "NASDAQ", "DOW"):
+        return round(price_diff * 1.0, 2)    # indices: 1 index point = 1 pt
     elif symbol in ("AAPL", "TSLA", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "AMD", "NFLX"):
-        return round(price_diff * 1.0, 2)    # US stocks: $1 move = 1 pt
-    elif symbol in ("USOIL", "OIL", "NATGAS", "BRENT"):
-        return round(price_diff * 10, 2)     # oil/gas: $0.1 per point
-    elif symbol in ("ARAMCO", "RAJHI", "SABIC", "STC", "TASI", "SNB", "MAADEN", "ALMARAI",
+        return round(price_diff * 100, 2)    # US stocks: 1 cent = 1 pt
+    elif symbol in ("ARAMCO", "RAJHI", "SABIC", "STC", "SNB", "MAADEN", "ALMARAI",
                      "BAHRI", "ALINMA", "EMAAR", "DFMGI", "EMIRATESNBD", "DIB",
                      "FAB", "ADNOCDIST", "QNBK"):
-        return round(price_diff * 10, 2)     # أسهم خليجية: 0.1 ريال/درهم لكل نقطة
+        return round(price_diff * 100, 2)    # أسهم خليجية: هللة/فلس (0.01) = نقطة
     elif symbol.endswith("JPY"):
         return round(price_diff * 100, 2)    # yen pairs
     else:
@@ -1562,6 +1574,11 @@ async def _verify_signal_outcome_core(signal: Signal) -> dict:
     created = signal.created_at
     if created.tzinfo is None:
         created = created.replace(tzinfo=timezone.utc)
+    expires = signal.expires_at
+    if expires is not None and expires.tzinfo is None:
+        expires = expires.replace(tzinfo=timezone.utc)
+    now = datetime.now(timezone.utc)
+    window_closed = expires is not None and expires <= now
     if "datetime" in df.columns:
         ts_series = _pd.to_datetime(df["datetime"], utc=True)
         rows = list(zip(ts_series, df["high"], df["low"]))
@@ -1575,18 +1592,31 @@ async def _verify_signal_outcome_core(signal: Signal) -> dict:
     # tp2 يُفحص فقط لو فعلاً هدف أبعد من tp1 (لبعض الإشارات tp2==tp1 أو مفقود)
     has_tp2 = (tp2 > tp1) if is_buy else (tp2 < tp1)
 
+    # (2026-10-09) نفس قواعد حلقة الرصد الحية بالضبط (bot_check_outcomes):
+    # 1) لا رصد قبل تفعيل الدخول (lo<=entry<=hi) — أمر لم يُفتح لا ربح
+    #    ولا خسارة. قبلها كانت الأداة تحكم من لحظة الإنشاء فتحسب خسارة
+    #    لأوامر معلّقة لم تتفعّل أصلاً.
+    # 2) الرصد ينتهي عند expires_at — قبلها كانت تمشي لحد "هلأ"، فهدف
+    #    لُمس بعد انتهاء الإشارة بأيام كان يُحسب "رابحة" (نتيجة مضخّمة:
+    #    السعر مع وقت كافٍ يصل تقريباً لأي مستوى).
+    end_ts = _pd.Timestamp(expires) if expires is not None else None
+    entry_ts = None
     hit_status, hit_time, hit_price = None, None, None
     for ts, hi, lo in rows:
         if ts < _pd.Timestamp(created):
             continue
+        if end_ts is not None and ts > end_ts:
+            break
         hi, lo = float(hi), float(lo)
+        if entry_ts is None:
+            if not (lo <= entry <= hi):
+                continue
+            entry_ts = ts
         sl_touched = (lo <= sl) if is_buy else (hi >= sl)
         tp2_touched = has_tp2 and ((hi >= tp2) if is_buy else (lo <= tp2))
         tp1_touched = (hi >= tp1) if is_buy else (lo <= tp1)
-        # (2026-09-16) نفس إصلاح bot_check_outcomes: TP1 ليس نهائياً.
-        # التوقف عند أول لمسة كان يمنع رؤية TP2 إذا جاء بشمعة لاحقة،
-        # فتُسجَّل الصفقة "هدف أول" وهي بلغت الثاني — نقص منهجي بالأرباح،
-        # وكان يصيب أداة "🔍 تحقق" نفسها فلا تُصلح الخطأ بل تعيد إنتاجه.
+        # (2026-09-16) نفس إصلاح bot_check_outcomes: TP1 ليس نهائياً —
+        # نكمل لنرى هل يبلغ TP2 قبل SL.
         if sl_touched:
             if hit_status is None:
                 hit_status, hit_time, hit_price = "SL_HIT", ts, sl
@@ -1596,20 +1626,36 @@ async def _verify_signal_outcome_core(signal: Signal) -> dict:
             break
         if tp1_touched and hit_status is None:
             hit_status, hit_time, hit_price = "TP1_HIT", ts, tp1
-            # بلا break — نكمل لنرى هل يبلغ TP2 قبل SL
+
+    current = signal.status.value if hasattr(signal.status, "value") else signal.status
+
+    if entry_ts is None:
+        if window_closed:
+            return {"detected": "NOT_TRIGGERED",
+                    "reason": "لم يلمس السعر الدخول ضمن مدة الإشارة — لم تُفتح، لا تُحسب",
+                    "current_system_status": current}
+        return {"detected": "STILL_ACTIVE",
+                "reason": "الدخول لم يتفعّل بعد والإشارة لسا ضمن مدتها",
+                "current_system_status": current}
 
     if hit_status is None:
-        return {
-            "detected": "STILL_ACTIVE",
-            "reason": "لم يلمس السعر الهدف ولا الستوب حتى الآن (حسب بيانات 5m)",
-            "current_system_status": signal.status.value if hasattr(signal.status, "value") else signal.status,
-        }
+        if window_closed:
+            return {"detected": "EXPIRED_NO_RESULT",
+                    "reason": "تفعّل الدخول لكن لم يصل هدف ولا وقف ضمن مدة الإشارة",
+                    "entry_time": entry_ts.isoformat(),
+                    "current_system_status": current}
+        return {"detected": "STILL_ACTIVE",
+                "reason": "الصفقة مفتوحة ولسا ضمن مدتها",
+                "entry_time": entry_ts.isoformat(),
+                "current_system_status": current}
 
     return {
         "detected": hit_status,
+        "entry_time": entry_ts.isoformat(),
         "hit_time": hit_time.isoformat(),
+        "duration_minutes": round((hit_time - entry_ts).total_seconds() / 60),
         "suggested_closed_price": round(hit_price, 8),
-        "current_system_status": signal.status.value if hasattr(signal.status, "value") else signal.status,
+        "current_system_status": current,
         "market": signal.market,
         "side": "BUY" if is_buy else "SELL",
         "entry": entry, "sl": sl, "tp1": tp1,
@@ -1655,29 +1701,50 @@ async def verify_signals_bulk(
             .all()
         )
 
+    # (2026-10-09) القرار الواحد يُحفظ صفاً لكل مشترك استلمه — كانت الأداة
+    # تفحص وتعدّ كل صف كصفقة مستقلة (ETHUSD واحدة ظهرت 8 مرات رابحة، FAB
+    # واحدة 6 مرات خاسرة). تُجمَّع الآن بنفس group_unique_decisions
+    # المستخدمة بكل تقارير الأداء، ويُفحص ممثل واحد لكل قرار.
+    by_id = {s.id: s for s in signals}
+    groups = _group_unique_decisions(signals)
+
     results = []
-    for i, s in enumerate(signals):
+    for i, g in enumerate(groups):
+        s = by_id[g["id"]]
         if i > 0:
             await _asyncio.sleep(0.3)
         r = await _verify_signal_outcome_core(s)
         results.append({
             "id": s.id, "market": s.market, "timeframe": s.timeframe,
             "signal_type": s.signal_type.value if hasattr(s.signal_type, "value") else s.signal_type,
+            "copies": g.get("user_count", 1),
             **r,
         })
 
-    wins    = sum(1 for r in results if r["detected"] in ("TP1_HIT", "TP2_HIT"))
-    losses  = sum(1 for r in results if r["detected"] == "SL_HIT")
-    pending = sum(1 for r in results if r["detected"] == "STILL_ACTIVE")
-    no_data = sum(1 for r in results if r["detected"] == "NO_DATA")
+    def _count(*codes):
+        return sum(1 for r in results if r["detected"] in codes)
+
+    wins    = _count("TP1_HIT", "TP2_HIT")
+    losses  = _count("SL_HIT")
     decided = wins + losses
+
+    def _avg_minutes(codes):
+        mins = [r["duration_minutes"] for r in results
+                if r["detected"] in codes and r.get("duration_minutes") is not None]
+        return round(sum(mins) / len(mins)) if mins else None
 
     return {
         "results": results,
         "total": len(results),
+        "rows_total": len(signals),
         "wins": wins, "losses": losses,
-        "still_active": pending, "no_data": no_data,
+        "not_triggered": _count("NOT_TRIGGERED"),
+        "expired_no_result": _count("EXPIRED_NO_RESULT"),
+        "still_active": _count("STILL_ACTIVE"),
+        "no_data": _count("NO_DATA"),
         "winrate_pct": round(wins / decided * 100, 1) if decided else None,
+        "avg_minutes_to_win":  _avg_minutes(("TP1_HIT", "TP2_HIT")),
+        "avg_minutes_to_loss": _avg_minutes(("SL_HIT",)),
     }
 
 

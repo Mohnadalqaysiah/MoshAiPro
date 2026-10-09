@@ -109,12 +109,17 @@ docker compose -f docker-compose.prod.yml up -d backend
 
 ## حساب النقاط (_calc_points في admin.py)
 
-| النوع | المضاعف |
+نقاط = فرق السعر ÷ حجم النقطة (منذ 2026-10-09 — راجع DECISIONS.md)
+
+| النوع | حجم النقطة / المضاعف |
 |-------|---------|
-| معادن (XAUUSD, XAGUSD...) | ×10 |
-| كريبتو | ×1.0 |
-| مؤشرات (NAS100, US30, SP500) | ×1.0 |
-| نفط (USOIL, BRENT) | ×10 |
+| XAUUSD, XPTUSD, XPDUSD | 0.1 |
+| XAGUSD | 0.01 |
+| COPPER, NATGAS | 0.001 |
+| USOIL, OIL, BRENT, DXY | 0.01 |
+| كريبتو | كما هو |
+| مؤشرات (NAS100, US30, SP500) + TASI | ×1 |
+| أسهم أمريكية وخليجية | ×100 |
 | JPY pairs | ×100 |
 | فوركس عادي | ×10000 |
 
