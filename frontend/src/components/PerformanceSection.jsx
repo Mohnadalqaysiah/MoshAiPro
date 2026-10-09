@@ -148,7 +148,11 @@ export default function PerformanceSection() {
     : { label: tx.sell, cls: 'bg-red-900/50 text-red-300' }
 
   // Collect all closed trades from daily_stats for "recent trades"
-  const allRecentTrades = daily_stats.flatMap(d => d.trades_detail)
+  // (2026-10-10) الأحدث أولاً — daily_stats مرتّبة من الأقدم للأحدث، فكانت
+  // "آخر الصفقات" تبدأ بصفقة من قبل أسبوعين
+  const allRecentTrades = daily_stats
+    .flatMap(d => d.trades_detail)
+    .sort((a, b) => (b.exit || '').localeCompare(a.exit || ''))
 
   return (
     <div className="space-y-4" dir={isAr ? 'rtl' : 'ltr'}>

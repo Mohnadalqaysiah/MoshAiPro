@@ -1136,7 +1136,9 @@ export default function Dashboard() {
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-700/60">
               <h2 className="text-white font-semibold flex items-center gap-2">
                 <Activity size={16} className="text-purple-400" />
-                {isAr ? 'سجل الصفقات المغلقة' : 'Closed Trades History'}
+                {/* (2026-10-10) كانت "سجل الصفقات المغلقة" وهي تعرض كل إشارات
+                    المشترك بما فيها المفتوحة — العنوان صار يطابق المحتوى */}
+                {isAr ? 'سجل إشاراتك' : 'Your Signals History'}
                 {signalHistory.length > 0 && <span className="text-xs text-gray-500 font-normal">({signalHistory.length})</span>}
               </h2>
             </div>
