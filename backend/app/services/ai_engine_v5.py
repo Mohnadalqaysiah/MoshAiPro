@@ -293,6 +293,30 @@ class MoshAIEngineV5:
             # ── DECISION FINALIZER — resolves conflicts → BUY/SELL/NO TRADE ──
             analysis = self._decision_finalizer(analysis, symbol, timeframe, htf_analysis)
 
+            # ── COMMODITY 4H TREND FILTER (2026-10-10، بتفويض صريح) ──────────
+            # diag_trend.py على 491 قراراً/21 رمزاً (14 يوماً، بعد تصحيح نتائج
+            # الرصد): السلع وحدها تخسر عكس اتجاه 4h — ذهب −5.3R، فضة −3.9R،
+            # نفط −8.1R، نحاس −2.4R، بلاتين −0.3R (مجموع −20R على 64 صفقة)
+            # مقابل +30R مع الاتجاه. على مستوى المنصة الفرضية **سقطت**: عكس
+            # الاتجاه هو الأربح (+0.43R، الكريبتو والين ارتداديان) — فالفلتر
+            # محصور بهذه الرموز عمداً. قلب الصفقة بدل منعها قيس ورُفض (20% نجاح).
+            # الاتجاه = نفس تعريف التشخيص: آخر 6 شموع 4h، السعر فوق/تحت EMA50
+            # مع ميلها. FLAT لا يُمنع. غير قابل للإنقاذ (ليس DELTA_).
+            if analysis.get("recommendation") in ("BUY", "SELL") \
+                    and symbol.upper() in self._COMMODITY_TREND_FILTER:
+                try:
+                    df_4h = df_htf if htf_timeframe == "4h" else \
+                        await smart_data.get_ohlcv(symbol, "4h", bars=100)
+                    trend = self._ema50_4h_trend(df_4h)
+                    rec_now = analysis.get("recommendation")
+                    analysis["commodity_4h_trend"] = trend
+                    if (trend == "UP" and rec_now == "SELL") or (trend == "DOWN" and rec_now == "BUY"):
+                        logger.info(f"GATE: COMMODITY_COUNTER_4H_TREND [{symbol}/{timeframe}] rec={rec_now} 4h={trend}")
+                        analysis = self._hard_reject(analysis, "COMMODITY_COUNTER_4H_TREND")
+                except Exception as _tf_e:
+                    # فشل جلب 4h لا يمنع الإشارة — نفس سلوك المحرك قبل الفلتر
+                    logger.warning(f"   commodity trend filter skipped [{symbol}]: {_tf_e}")
+
             # ── INSTITUTIONAL GATE — validates levels if decision was made ────
             if analysis.get("recommendation") in ("BUY", "SELL"):
                 analysis = self._institutional_gate(analysis, symbol, timeframe, htf_analysis)
@@ -2316,6 +2340,25 @@ class MoshAIEngineV5:
         "EURUSD": 0.0001, "GBPUSD": 0.0002, "USDJPY": 0.02, "USDCHF": 0.0002,
         "NAS100": 1.0, "US30": 2.0, "USOIL": 0.04, "BRENT": 0.04,
     }
+
+    # (2026-10-10) فلتر اتجاه 4h — راجع analyze_market. NATGAS مستثنى عمداً:
+    # صفقاته عكس الاتجاه لم تخسر بالقياس (+0.26R، n=5).
+    _COMMODITY_TREND_FILTER = {"XAUUSD", "XAGUSD", "XPTUSD", "COPPER", "USOIL"}
+
+    @staticmethod
+    def _ema50_4h_trend(df_4h) -> str:
+        """UP / DOWN / FLAT — نفس تعريف diag_trend.py حرفياً: آخر 6 شموع 4h،
+        السعر فوق EMA50 وميلها موجب = UP، تحتها وميلها سالب = DOWN."""
+        if df_4h is None or len(df_4h) < 56:
+            return "FLAT"
+        close = df_4h["close"].astype(float)
+        ema = close.ewm(span=50, adjust=False).mean()
+        px, e_now, e_then = float(close.iloc[-1]), float(ema.iloc[-1]), float(ema.iloc[-6])
+        if px > e_now and e_now > e_then:
+            return "UP"
+        if px < e_now and e_now < e_then:
+            return "DOWN"
+        return "FLAT"
 
     def _institutional_gate(
         self,
