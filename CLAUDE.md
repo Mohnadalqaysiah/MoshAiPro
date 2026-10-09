@@ -119,7 +119,8 @@ docker compose -f docker-compose.prod.yml up -d backend
 | USOIL, OIL, BRENT, DXY | 0.01 |
 | كريبتو | كما هو |
 | مؤشرات (NAS100, US30, SP500) + TASI | ×1 |
-| أسهم أمريكية وخليجية | ×100 |
+| أسهم خليجية | ×100 (هللة) |
+| أسهم أمريكية | ×1 (دولار) |
 | JPY pairs | ×100 |
 | فوركس عادي | ×10000 |
 

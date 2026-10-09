@@ -1248,7 +1248,7 @@ def _calc_points(market: str, price_diff: float, entry_price: float = None) -> f
     USOIL/BRENT 0.01 · NATGAS 0.001 · DXY 0.01
     Crypto  → نسبة مئوية من سعر الدخول × 10000 (basis points)
     Indices (+TASI) → 1 index point = 1 pt
-    US + Gulf stocks → 0.01 (سنت/هللة/فلس) = 1 pt
+    US stocks → $1 = 1 pt · Gulf stocks → 0.01 (هللة/فلس) = 1 pt
     JPY     ×100  → standard yen pips
     Forex   ×10000→ standard pips (0.0001 = 1 pip)
 
@@ -1300,7 +1300,10 @@ def _calc_points(market: str, price_diff: float, entry_price: float = None) -> f
     elif symbol in ("NAS100", "US30", "SP500", "US100", "NASDAQ", "DOW"):
         return round(price_diff * 1.0, 2)    # indices: 1 index point = 1 pt
     elif symbol in ("AAPL", "TSLA", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "AMD", "NFLX"):
-        return round(price_diff * 100, 2)    # US stocks: 1 cent = 1 pt
+        # US stocks: $1 = 1 pt. (2026-10-09) جُرّب السنت (×100) فخرجت صفقة AMD
+        # واحدة 3263 نقطة — رقم يبدو مبالغة للمتداول. أسعارها كبيرة ($75-$500)
+        # فالدولار يعطي أرقاماً مقروءة، بعكس أسهم الخليج (~$4-$65) التي تبقى بالهللة.
+        return round(price_diff * 1.0, 2)
     elif symbol in ("ARAMCO", "RAJHI", "SABIC", "STC", "SNB", "MAADEN", "ALMARAI",
                      "BAHRI", "ALINMA", "EMAAR", "DFMGI", "EMIRATESNBD", "DIB",
                      "FAB", "ADNOCDIST", "QNBK"):
