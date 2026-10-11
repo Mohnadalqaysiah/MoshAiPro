@@ -1412,6 +1412,45 @@ async def outcome_checker(app: Application):
         await asyncio.sleep(OUTCOME_CHECK_INTERVAL)
 
 
+# ─── Background: Breakeven alerts ─────────────────────────────────────────────
+# (2026-10-11) تنبيه "حرّك الستوب للدخول" حين تبلغ صفقة مفتوحة ربحاً يساوي
+# مخاطرتها (+1R). الباك إند يحدد الصفقات والمستلمين ويعلّمها مرة واحدة — هنا
+# الإرسال فقط. اقتراح إدارة مخاطر لا أمر؛ النتيجة المقاسة لا تتغيّر.
+BREAKEVEN_CHECK_INTERVAL = 300   # ثانية
+
+def fmt_breakeven(a: dict) -> str:
+    side = "شراء 🟢" if a.get("signal_type") == "BUY" else "بيع 🔴"
+    return (
+        f"🛡️ *حماية صفقة — {a.get('market')}*\n"
+        f"صفقة {side} ({a.get('timeframe')}) وصلت لربح يساوي مخاطرتها (+1R).\n\n"
+        f"💡 يُنصح بنقل وقف الخسارة إلى سعر الدخول `{a.get('entry')}` — "
+        f"هكذا لا تخسر شيئاً لو انعكس السعر، وتبقى الصفقة مفتوحة نحو الهدف `{a.get('tp1')}`.\n\n"
+        f"_اقتراح لإدارة المخاطر، والقرار لك._"
+    )
+
+async def breakeven_alerts(app: Application):
+    logger.info("🛡️ بدء حلقة تنبيهات حماية الصفقات (كل 5 دقائق)…")
+    await asyncio.sleep(50)
+    while True:
+        try:
+            alerts = (await _get("/api/v1/bot/breakeven-alerts", timeout=60)).get("alerts", [])
+            for a in alerts:
+                try:
+                    await app.bot.send_message(
+                        chat_id=int(a["telegram_id"]),
+                        text=fmt_breakeven(a),
+                        parse_mode="Markdown",
+                    )
+                    await asyncio.sleep(0.05)
+                except Exception as _e:
+                    logger.warning(f"breakeven send error: {_e}")
+            if alerts:
+                logger.info(f"🛡️ أُرسل {len(alerts)} تنبيه حماية")
+        except Exception as e:
+            logger.error(f"breakeven_alerts: {e}", exc_info=True)
+        await asyncio.sleep(BREAKEVEN_CHECK_INTERVAL)
+
+
 # ─── Background: Monitor watchlists ───────────────────────────────────────────
 async def monitor_watchlists(app: Application):
     logger.info("🔍 بدء مراقبة قوائم المشتركين…")
@@ -1954,6 +1993,7 @@ def main():
         ])
         asyncio.create_task(broadcast_new_signals(application))
         asyncio.create_task(outcome_checker(application))
+        asyncio.create_task(breakeven_alerts(application))
         asyncio.create_task(monitor_watchlists(application))
         asyncio.create_task(notify_expiry(application))
         asyncio.create_task(market_session_notifier(application))

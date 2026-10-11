@@ -5,6 +5,7 @@ Endpoints خاصة بالبوت (تتحقق من BOT_SECRET بدلاً من JWT 
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Header, Body
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from typing import Optional
 from loguru import logger
 
@@ -1017,6 +1018,117 @@ def bot_renew_trials(
         db.commit()
 
     return {"renewed_count": len(renewed), "user_ids": renewed}
+
+
+@router.get("/breakeven-alerts")
+async def bot_breakeven_alerts(
+    _: bool = Depends(verify_bot),
+    db: Session = Depends(get_db),
+):
+    """(2026-10-11) تنبيه "حرّك الستوب للدخول" لمن استلم الصفقة كاملة، حين
+    تبلغ ربحاً يساوي مخاطرتها (+1R) وهي ما زالت مفتوحة.
+
+    الدليل (diag_gold.py): 9 من خسائر الذهب و7 من الفضة بلغت +1R ثم انعكست
+    للستوب؛ نقل الستوب للدخول بعد +1R حسّن الذهب −4.7R→+1.5R والفضة
+    +8.0R→+9.9R على نفس الشموع.
+
+    منفصل عمداً عن bot_check_outcomes (حلقة الرصد المجمّدة): لا يغيّر حالة
+    ولا نقاطاً — الإحصاء يبقى على الستوب الأصلي. المصدر نفس قاعدة الحلقة:
+    الذهب والفضة شموع TV الفورية، وغيرهما get_ohlcv (مرجع بناء المستويات).
+    يُعلَّم be_alert_sent قبل الإرسال (مرة واحدة على الأكثر لكل قرار)."""
+    from app.services.tv_price_feed import TV_SYMBOL_MAP, fetch_tv_history
+    from app.services.decision_grouping import decision_key
+    from app.models.signal_delivery import SignalDelivery
+
+    now = datetime.now(timezone.utc)
+    rows = db.query(Signal).filter(
+        Signal.status == SignalStatus.ACTIVE,
+        Signal.entry_executed.isnot(None),
+        or_(Signal.be_alert_sent.is_(None), Signal.be_alert_sent == False),  # noqa: E712
+        Signal.expires_at > now,
+    ).all()
+
+    groups: dict = {}
+    for s in rows:
+        groups.setdefault(decision_key(s.market, s.timeframe, s.signal_type, s.entry_price), []).append(s)
+
+    candle_cache: dict = {}
+
+    async def _candles(market: str):
+        """[(epoch, high, low), ...] لآخر ~5 ساعات من شموع 5m، بمرجع المستويات."""
+        if market in candle_cache:
+            return candle_cache[market]
+        out = []
+        try:
+            if market in ("XAUUSD", "XAGUSD") and market in TV_SYMBOL_MAP:
+                bars = await fetch_tv_history(TV_SYMBOL_MAP[market], "5m", bars=60)
+                out = [(float(b[0]), float(b[2]), float(b[3])) for b in (bars or [])]
+            else:
+                df = await _smart_data.get_ohlcv(market, "5m", bars=60)
+                if df is not None and len(df):
+                    import pandas as _pd
+                    ts = _pd.to_datetime(df["datetime"] if "datetime" in df.columns else df.index, utc=True)
+                    out = [(t.timestamp(), float(h), float(l)) for t, h, l in zip(ts, df["high"], df["low"])]
+        except Exception as _ce:
+            logger.warning(f"breakeven-alerts candles {market}: {_ce}")
+        candle_cache[market] = out
+        return out
+
+    alerts = []
+    for _dkey, grp in groups.items():
+        rep = grp[0]
+        market = rep.market.upper()
+        if not _smart_data.is_market_open(rep.market):
+            continue
+        entry, sl = float(rep.entry_price), float(rep.stop_loss)
+        risk = abs(entry - sl)
+        if not risk:
+            continue
+        is_buy = rep.signal_type.value == "BUY"
+        ee = rep.entry_executed if rep.entry_executed.tzinfo else rep.entry_executed.replace(tzinfo=timezone.utc)
+        floor = ee.timestamp()
+
+        best = 0.0
+        stopped = False
+        for ts, hi, lo in await _candles(market):
+            if ts < floor:
+                continue
+            if (lo <= sl) if is_buy else (hi >= sl):
+                stopped = True          # الحلقة ستحسمها خسارة — لا تنبيه
+                break
+            best = max(best, ((hi - entry) if is_buy else (entry - lo)) / risk)
+        if stopped or best < 1.0:
+            continue
+
+        # المستلمون: من استلم النسخة الكاملة فعلاً + صاحب صف المراقبة الشخصية
+        row_ids = [r.id for r in grp]
+        tids = {t for (t,) in db.query(SignalDelivery.telegram_id).filter(
+            SignalDelivery.signal_id.in_(row_ids),
+            SignalDelivery.ok == True,       # noqa: E712
+            SignalDelivery.variant == "full",
+        ).all() if t}
+        owners = db.query(User).filter(User.id.in_({r.user_id for r in grp if r.user_id})).all()
+        tids |= {str(u.telegram_id) for u in owners if u.telegram_id}
+
+        for r in grp:
+            r.be_alert_sent = True
+        db.commit()
+
+        for tid in tids:
+            alerts.append({
+                "telegram_id": tid,
+                "signal_id":   rep.id,
+                "market":      rep.market,
+                "timeframe":   rep.timeframe,
+                "signal_type": rep.signal_type.value,
+                "entry":       entry,
+                "sl":          sl,
+                "tp1":         float(rep.take_profit_1),
+                "tp2":         float(rep.take_profit_2) if rep.take_profit_2 else None,
+            })
+        logger.info(f"🛡️ breakeven alert {market} #{rep.id} +{best:.2f}R → {len(tids)} مستلم")
+
+    return {"alerts": alerts, "count": len(alerts)}
 
 
 _SAME_TRADE_ENTRY_TOL = 0.0005   # 0.05% — نفس عتبة diag_duplicates.py

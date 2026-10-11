@@ -87,6 +87,10 @@ class Signal(Base):
     # المؤكد (current_price IS NULL و outcome_verified=False). معايرة المحرك
     # تبقى صارمة: تلقائي بحت فقط (current_price IS NOT NULL).
     outcome_verified      = Column(Boolean, default=False, nullable=True)
+    # (2026-10-11) أُرسل تنبيه "حرّك الستوب للدخول" عند بلوغ +1R — مرة واحدة
+    # لكل قرار (يُعلَّم على كل صفوف المجموعة). إداري فقط: لا يغيّر النتيجة
+    # المقاسة، فالإحصاء يبقى على الستوب الأصلي.
+    be_alert_sent         = Column(Boolean, default=False, nullable=True)
     entry_executed = Column(DateTime(timezone=True), nullable=True)
     exit_executed = Column(DateTime(timezone=True), nullable=True)
     
