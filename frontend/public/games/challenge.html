@@ -265,6 +265,14 @@ canvas{touch-action:pan-y;-webkit-user-select:none;user-select:none;-webkit-tap-
 .site-links a{color:var(--gold-hi);text-decoration:none;font-weight:600}
 .site-links a.cta{background:var(--gold);color:#1a1200;border-radius:10px;padding:8px 14px}
 .embed .site-links{display:none}
+.lb{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.lb li{display:flex;justify-content:space-between;gap:8px;font-size:13px;padding:6px 10px;border-radius:10px;background:rgba(255,255,255,.03)}
+.lb li.me{outline:1px solid var(--gold);background:rgba(201,166,103,.08)}
+.lb .rk{color:var(--gold);font-family:'JetBrains Mono',ui-monospace,monospace;min-width:22px}
+.lb .nm{flex:1}
+.lb .pt{font-family:'JetBrains Mono',ui-monospace,monospace}
+.sync{margin-top:8px}
+.sync a{color:var(--gold-hi)}
 .embed body{padding-block:8px 24px}
 </style>
 </head>
@@ -329,6 +337,12 @@ canvas{touch-action:pan-y;-webkit-user-select:none;user-select:none;-webkit-tap-
         <h3>الشارات</h3>
         <ul class="badges" id="badges"></ul>
       </section>
+      <section class="panel" id="lbPanel">
+        <h3>متصدّرو الأسبوع</h3>
+        <ol class="lb" id="lb"><li class="sm">جارٍ التحميل…</li></ol>
+        <p class="sm" id="lbMe"></p>
+        <p class="sm sync" id="syncTxt"></p>
+      </section>
     </aside>
   </div>
 
@@ -375,7 +389,11 @@ function sgnR(v){return (v>0?'+':v<0?'−':'')+fmtR(Math.abs(v))+'R'}
 function dirName(d){return d>0?'صاعدة':d<0?'هابطة':'—'}
 
 /* ---------- candle helpers ---------- */
-var V=2.2;
+/* (2026-10-11) سعر الذهب المرجعي للشارتات والمسائل — كان 2300-2450 والذهب ~4170،
+   فبدا المحتوى قديماً لمن يتابع السوق. التقلّب V يُقاس بنفس النسبة (2.2 عند ~2400)
+   حتى تبقى الشموع بنفس الشكل. حدّث XAU إن ابتعد السعر كثيراً. */
+var XAU=4150;
+var V=2.2*XAU/2400;
 function mk(o,c,w){return{o:o,c:c,h:Math.max(o,c)+R()*w,l:Math.min(o,c)-R()*w}}
 function walk(n,start,drift,vol){var a=[],p=start;for(var i=0;i<n;i++){var c=p+drift+gauss()*vol*0.8;a.push(mk(p,c,vol*0.6));p=c}return a}
 
@@ -424,10 +442,10 @@ var PAT={
   none:{en:'NO PATTERN',ar:'لا نمط',n:0}
 };
 var EXP={
-  bull_engulf:'شمعة ابتلاعية صعودية: جسمها ابتلع جسم الشمعة الهابطة قبلها بعد هبوط، وهذا يرجّح عودة المشترين.',
-  bear_engulf:'شمعة ابتلاعية هبوطية: جسمها ابتلع جسم الشمعة الصاعدة قبلها بعد صعود، وهذا يرجّح عودة البائعين.',
-  hammer:'مطرقة (Hammer): ذيل سفلي طويل بعد هبوط يعني أن البائعين دُفعوا للخلف.',
-  shooting_star:'نجمة هابطة (Shooting Star): ذيل علوي طويل بعد صعود يعني أن الأسعار المرتفعة قوبلت بالرفض.',
+  bull_engulf:'شمعة ابتلاعية صعودية: جسمها ابتلع جسم الشمعة الهابطة قبلها بعد هبوط، وهذا يرجّح عودة المشترين. تذكّر: الشارت هنا تعليمي، وفي السوق الحقيقي ينجح النمط وحده أقل بكثير، فلا تدخل به إلا عند مستوى واتجاه يدعمانه.',
+  bear_engulf:'شمعة ابتلاعية هبوطية: جسمها ابتلع جسم الشمعة الصاعدة قبلها بعد صعود، وهذا يرجّح عودة البائعين. تذكّر: الشارت هنا تعليمي، وفي السوق الحقيقي ينجح النمط وحده أقل بكثير، فلا تدخل به إلا عند مستوى واتجاه يدعمانه.',
+  hammer:'مطرقة (Hammer): ذيل سفلي طويل بعد هبوط يعني أن البائعين دُفعوا للخلف. تذكّر: الشارت هنا تعليمي، وفي السوق الحقيقي ينجح النمط وحده أقل بكثير، فلا تدخل به إلا عند مستوى واتجاه يدعمانه.',
+  shooting_star:'نجمة هابطة (Shooting Star): ذيل علوي طويل بعد صعود يعني أن الأسعار المرتفعة قوبلت بالرفض. تذكّر: الشارت هنا تعليمي، وفي السوق الحقيقي ينجح النمط وحده أقل بكثير، فلا تدخل به إلا عند مستوى واتجاه يدعمانه.',
   none:'لا يوجد نمط واضح هنا والحركة أقرب للعشوائية. ليس كل شارت فيه إشارة، وتجاهل الشارت الغامض جزء من اللعبة.'
 };
 var CSTEPS={
@@ -571,7 +589,70 @@ var P={points:0,bestStreak:0,hits:0,fvg:0,ob:0,bos:0,strong:0,expert:0,risk:0,te
 try{var raw=localStorage.getItem(KEY);if(raw){var o=JSON.parse(raw);if(o&&typeof o==='object')P=Object.assign(P,o)}}catch(e){}
 P.lvH=Object.assign({1:0,2:0,3:0},P.lvH||{});P.lvT=Object.assign({1:0,2:0,3:0},P.lvT||{});
 if(!Array.isArray(P.played))P.played=[];if(!Array.isArray(P.badges))P.badges=[];
-function save(){try{localStorage.setItem(KEY,JSON.stringify(P))}catch(e){}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(P))}catch(e){}schedulePush()}
+
+/* ---------- account sync (2026-10-11) ----------
+   كانت النقاط في localStorage فقط — تضيع بتغيير الجهاز ولا علاقة لها بالحساب.
+   المستخدم المسجّل (mosh_token من نفس الأصل) تُحفظ نقاطه بحسابه وتدخل لوحة
+   متصدّري الأسبوع. الخادم يقصّ أي زيادة فوق معدّل لاعب حقيقي ويعيد رقمه. */
+var API_BASE=(function(){
+  // ⚠️ api= يأتي من الرابط — لا يُقبل إلا من قائمة مسموحة، وإلا أمكن لرابط
+  // مُعدّ أن يرسل mosh_token لخادم غريب.
+  function ok(u){try{var h=new URL(u).hostname;return h===location.hostname||/(^|\.)qaffel\.com$/.test(h)||h==='localhost'||h==='127.0.0.1'}catch(e){return false}}
+  var m=location.search.match(/[?&]api=([^&]+)/);
+  if(m){var u=decodeURIComponent(m[1]).replace(/\/+$/,'');if(ok(u))return u}
+  if(/(^|\.)qaffel\.com$/.test(location.hostname))return 'https://api.qaffel.com';
+  return '';
+})();
+var TOKEN=null;try{TOKEN=localStorage.getItem('mosh_token')}catch(e){}
+var pushTimer=null,synced=false;
+function api(path,opts){
+  opts=opts||{};opts.headers=Object.assign({'Content-Type':'application/json'},opts.headers||{});
+  if(TOKEN)opts.headers.Authorization='Bearer '+TOKEN;
+  return fetch(API_BASE+'/api/v1/games'+path,opts).then(function(r){if(r.status===401){TOKEN=null;throw new Error('auth')}if(!r.ok)throw new Error(String(r.status));return r.json()});
+}
+function setSync(html){var el=$('#syncTxt');if(el)el.innerHTML=html}
+function schedulePush(){
+  if(!TOKEN||!synced)return;
+  clearTimeout(pushTimer);
+  pushTimer=setTimeout(function(){
+    api('/progress',{method:'PUT',body:JSON.stringify({data:P})}).then(function(r){
+      if(r&&r.ok&&typeof r.points==='number'&&r.points!==P.points){P.points=r.points;try{localStorage.setItem(KEY,JSON.stringify(P))}catch(e){}renderStats()}
+      setSync('✓ نقاطك محفوظة بحسابك');loadBoard();
+    }).catch(function(){setSync('تعذّر الحفظ الآن — ستُحفظ مع الإجابة التالية')});
+  },2500);
+}
+function pullProgress(){
+  if(!TOKEN){setSync('<a href="/register">سجّل مجانًا</a> لتحفظ نقاطك وتدخل لوحة المتصدّرين');return}
+  api('/progress').then(function(r){
+    var d=r&&r.data;
+    if(d&&typeof d==='object'&&(d.points||0)>=(P.points||0)){
+      P=Object.assign(P,d);
+      P.lvH=Object.assign({1:0,2:0,3:0},P.lvH||{});P.lvT=Object.assign({1:0,2:0,3:0},P.lvT||{});
+      if(!Array.isArray(P.played))P.played=[];if(!Array.isArray(P.badges))P.badges=[];
+      try{localStorage.setItem(KEY,JSON.stringify(P))}catch(e){}
+      synced=true;render();setSync('✓ نقاطك محفوظة بحسابك');
+    }else{synced=true;schedulePush()}   // نقاط المتصفح أعلى (لعب قبل التسجيل) — تُرفع
+  }).catch(function(){setSync('<a href="/login">سجّل الدخول</a> لتحفظ نقاطك بحسابك')});
+}
+/* قياس الأثر — عدّادات يومية مجهولة الهوية: زيارة، جولة مكتملة، ضغط "سجّل" */
+var EMBED=/[?&]embed=1/.test(location.search);
+function track(ev){
+  try{fetch(API_BASE+'/api/v1/games/event',{method:'POST',keepalive:true,headers:{'Content-Type':'application/json'},body:JSON.stringify({event:ev,embed:EMBED})}).catch(function(){})}catch(e){}
+}
+document.addEventListener('click',function(e){var a=e.target.closest('a[href^="/register"]');if(a)track('signup_click')});
+function loadBoard(){
+  api('/leaderboard').then(function(r){
+    var top=(r&&r.top)||[],me=r&&r.me;
+    $('#lb').innerHTML=top.length?top.map(function(x){
+      var mine=me&&me.rank===x.rank;
+      return '<li'+(mine?' class="me"':'')+'><span class="rk">'+x.rank+'</span><span class="nm"></span><span class="pt">'+x.points+'</span></li>';
+    }).join(''):'<li class="sm">كن أول من يتصدّر هذا الأسبوع</li>';
+    // الأسماء نصّاً لا HTML — تأتي من حسابات المستخدمين
+    var names=$('#lb').querySelectorAll('.nm');top.forEach(function(x,i){if(names[i])names[i].textContent=x.name});
+    $('#lbMe').textContent=me?('ترتيبك هذا الأسبوع: '+me.rank+' · '+me.points+' نقطة'):'';
+  }).catch(function(){$('#lb').innerHTML='<li class="sm">لوحة المتصدّرين غير متاحة الآن</li>'});
+}
 
 var S={mode:'candle',level:1,streak:0};
 var M={};
@@ -642,7 +723,7 @@ function genCandle(){
   var p=LV.candle[S.level],kind=pick(p.kinds),nv=p.nv;
   var bull=kind==='bull_engulf'||kind==='hammer',bear=kind==='bear_engulf'||kind==='shooting_star';
   var drift=bull?-p.drift:bear?p.drift:(R()-0.5)*0.8;
-  var arr=walk(24,2380+R()*70,drift,V*nv),pat=null,q;
+  var arr=walk(24,XAU-35+R()*70,drift,V*nv),pat=null,q;
   if(kind==='bull_engulf'){
     q=arr[arr.length-2].c;var a1=mk(q,q-V*(0.5+R()*0.5),V*0.2);arr[arr.length-1]=a1;
     pat=mk(a1.c-V*0.15,a1.o+V*(0.4+R()*0.6),V*0.2);
@@ -665,7 +746,7 @@ function genCandle(){
 
 /* ---------- generators: zone ---------- */
 function genZone(){
-  var p=LV.zone[S.level],type=pick(p.types),nv=p.nv,dir=R()<.5?1:-1,base=2380+R()*70,candles,target,i;
+  var p=LV.zone[S.level],type=pick(p.types),nv=p.nv,dir=R()<.5?1:-1,base=XAU-35+R()*70,candles,target,i;
   if(type==='fvg'){
     var pre=walk(13,base,-dir*0.35,V*0.8*nv),pp=pre[pre.length-1].c;
     var A=mk(pp,pp+dir*V*0.6,V*0.2),B=mk(A.c,A.c+dir*V*2.2,V*0.15),C=mk(B.c-dir*V*0.2,B.c+dir*V*0.5,V*0.2);
@@ -725,7 +806,7 @@ var RISK={
     });
   },
   rr:function(){
-    var buy=R()<.5,entry=r1(rnd(2300,2450)),d=pick([4,5,6,8,10]),rr=pick([1,1.5,2,2.5,3]);
+    var buy=R()<.5,entry=r1(rnd(XAU-75,XAU+75)),d=pick([4,5,6,8,10]),rr=pick([1,1.5,2,2.5,3]);
     var sl=buy?entry-d:entry+d,tp=buy?entry+d*rr:entry-d*rr;
     return makeQ({
       title:'ما نسبة العائد إلى المخاطرة؟',
@@ -741,7 +822,7 @@ var RISK={
   lot:function(){
     var bal,pct,d,risk,lots,tries=0;
     do{bal=pick([2000,5000,10000,25000]);pct=pick([0.5,1,2]);d=r1(rnd(3,12));risk=bal*pct/100;lots=Math.floor(risk/(d*100)*100)/100;tries++}while(lots<0.05&&tries<40);
-    var buy=R()<.5,entry=r1(rnd(2300,2450)),sl=buy?entry-d:entry+d;
+    var buy=R()<.5,entry=r1(rnd(XAU-75,XAU+75)),sl=buy?entry-d:entry+d;
     return makeQ({
       title:'ما حجم اللوت المناسب؟',
       def:'ذهب XAU/USD. تريد ألا تتجاوز خسارتك المحددة إذا ضُرب الوقف. احسب حجم اللوت.',
@@ -1108,7 +1189,7 @@ function checkOrder(){
 function nextRound(){
   var m=M[S.mode],n=rounds();
   if(m.done>=n){
-    m.summary=true;stopTimer();
+    m.summary=true;stopTimer();track('round_done');
     if(m.hits>=Math.ceil(n*.75))P.strong++;
     if(S.level===3&&m.hits>=Math.ceil(n*.6))P.expert++;
     save();checkBadges();render();
@@ -1132,7 +1213,7 @@ var SLTP_LV={1:{slb:2.0,tpb:1.6,nv:.7},2:{slb:1.5,tpb:1.2,nv:1},3:{slb:1.2,tpb:.
 
 /* builds a buy setup: equal highs (liquidity) above, a structure low below, entry after a rally and pullback */
 function buildBuySetup(nv){
-  var a=[],i,q,B=2380+R()*60;
+  var a=[],i,q,B=XAU-30+R()*60;
   a=a.concat(walk(6,B,0.35,V*0.6*nv));
   var p0=a[a.length-1].c,e1c=p0+V*0.8,T1=e1c+V*0.6;
   var i1=a.length;a.push({o:p0,c:e1c,h:T1,l:p0-V*0.15});
@@ -1252,7 +1333,7 @@ function genTrade(){
   var rows=items.map(function(t){var bad=!!flaw&&flaw.t===t;return{k:t.k,l:t.l,v:bad?flaw.b.v(d):t.good(d),bad:bad,why:bad?flaw.b.why:''}});
   function row(k){return rows.filter(function(r){return r.k===k})[0]}
   var rr=parseFloat(row('rr').v.split(':')[1]),slv=row('sl'),noSL=slv.v==='بدون وقف',tight=slv.bad&&!noSL;
-  var cs=walk(28,2380+R()*60,d*0.22,V*0.7),entry=cs[cs.length-1].c,dist=(tight?0.3:1.3)*V;
+  var cs=walk(28,XAU-30+R()*60,d*0.22,V*0.7),entry=cs[cs.length-1].c,dist=(tight?0.3:1.3)*V;
   return{d:d,rows:rows,good:!flaw,flaw:flaw?rows.filter(function(r){return r.bad})[0]:null,candles:cs,entry:entry,
     sl:noSL?null:entry-d*dist,tp:entry+d*dist*rr,rr:rr,stage:'decide',choice:null,tapped:-1,answered:false,shown:false,ok:false,timeout:false,gain:0};
 }
@@ -1726,6 +1807,9 @@ if(document.fonts&&document.fonts.ready)document.fonts.ready.then(function(){dra
 
 buildStatic();
 startRound();
+pullProgress();
+loadBoard();
+track('visit');
 })();
 </script>
 </body>
