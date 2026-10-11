@@ -200,7 +200,7 @@ async def real_trades(limit: int = 6, db: Session = Depends(get_db)):
     return {"trades": pick, "pool": len(items), "pool_wins": wins}
 
 
-_EVENTS = {"visit", "round_done", "signup_click"}
+_EVENTS = {"visit", "round_done", "signup_click", "share"}
 
 
 @router.post("/event")
@@ -238,7 +238,7 @@ def game_stats(
     rows = db.query(GameEventDaily).filter(GameEventDaily.day >= since).order_by(GameEventDaily.day).all()
     by_day: dict = {}
     for r in rows:
-        d = by_day.setdefault(r.day.isoformat(), {"visit": 0, "round_done": 0, "signup_click": 0,
+        d = by_day.setdefault(r.day.isoformat(), {"visit": 0, "round_done": 0, "signup_click": 0, "share": 0,
                                                    "visit_public": 0, "signup_click_public": 0})
         d[r.event] += r.count
         if not r.embed and r.event in ("visit", "signup_click"):
