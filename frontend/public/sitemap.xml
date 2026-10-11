@@ -13,6 +13,14 @@
     <priority>1.0</priority>
   </url>
 
+  <!-- الألعاب التعليمية (صفحة مستقلة، عربي فقط) -->
+  <url>
+    <loc>https://qaffel.com/games/challenge</loc>
+    <lastmod>2026-10-11</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
   <!-- الصفحة الرئيسية (English) -->
   <url>
     <loc>https://qaffel.com/en</loc>

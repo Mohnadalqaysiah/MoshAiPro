@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-do
 import axios from 'axios'
 import {
   Activity, Zap, History, Globe, BarChart2, TrendingUp, BookOpen, Sparkles, Shield,
-  Gift, LogOut, Sun, Moon, Menu, X, Send, CheckCircle, Copy, ExternalLink, Settings, Plus,
+  Gift, LogOut, Sun, Moon, Menu, X, Send, CheckCircle, Copy, ExternalLink, Settings, Plus, Gamepad2,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
@@ -190,6 +190,7 @@ function SidebarContent({ isAr, onNavigate }) {
     { path: '/analytics',       ar: 'التحليلات',         en: 'Analytics',   icon: <TrendingUp size={17} /> },
     { path: '/journal',         ar: 'يومية التداول',     en: 'Journal',     icon: <BookOpen size={17} /> },
     { path: '/strategies',      ar: 'بناء الاستراتيجيات', en: 'Strategies', icon: <Sparkles size={17} /> },
+    { path: '/games',           ar: 'الألعاب التعليمية',  en: 'Learn & Play', icon: <Gamepad2 size={17} />, tag: 'جديد' },
     { path: '/affiliate',       ar: 'إحالاتي',           en: 'Referrals',   icon: <Gift size={17} /> },
   ]
   const isActive = p => location.pathname === p || (p === '/dashboard' && location.pathname === '/')

@@ -50,6 +50,7 @@ const AffiliatePage  = lazy(() => import('./pages/AffiliatePage'))
 const MarketOverview = lazy(() => import('./pages/MarketOverview'))
 const Backtesting    = lazy(() => import('./pages/Backtesting'))
 const TradeJournal   = lazy(() => import('./pages/TradeJournal'))
+const Games          = lazy(() => import('./pages/Games'))
 const ChatBot        = lazy(() => import('./components/ChatBot'))
 const SupportChatWidget = lazy(() => import('./components/SupportChatWidget'))
 
@@ -158,6 +159,7 @@ function AppRoutes() {
                 <Route path="/market-overview" element={<MarketOverview />} />
                 <Route path="/backtesting"     element={<Backtesting />} />
                 <Route path="/journal"         element={<TradeJournal />} />
+                <Route path="/games"           element={<Games />} />
               </Routes>
               <ChatBot />
               <SupportChatWidget />

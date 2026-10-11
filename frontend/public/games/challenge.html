@@ -1,0 +1,1732 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#07080b">
+<title>تحدي قفيل | ألعاب تعليمية لقراءة الشارت وإدارة المخاطرة</title>
+<meta name="description" content="ألعاب تفاعلية مجانية من قفيل: توقّع الشمعة، اصطد FVG وOrder Block وBOS، احسب حجم اللوت، ضع الوقف والهدف، وقرّر صفقة أو لا صفقة. ثلاثة مستويات من المبتدئ إلى الخبير.">
+<link rel="canonical" href="https://qaffel.com/games/challenge">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://qaffel.com/games/challenge">
+<meta property="og:title" content="تحدي قفيل: ألعاب تعليمية للمتداولين">
+<meta property="og:description" content="درّب عينك على قراءة الشارت وإدارة المخاطرة بألعاب قصيرة بثلاثة مستويات.">
+<meta property="og:image" content="https://qaffel.com/og-image.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Readex+Pro:wght@500;600;700&display=swap">
+<script>if(/[?&]embed=1/.test(location.search))document.documentElement.classList.add('embed')</script>
+<style>
+/* Layout: level picker, game tabs, then one stage (question, play area, controls, result) beside a side rail of progress and badges.
+   Single dark look by choice: it matches the Qaffel terminal (charcoal, gold, teal, red). */
+:root{
+  --bg:#07080b; --bg2:#0b0d12; --surface:#0f1116; --surface-hi:#151822;
+  --line:#1e222d; --line-soft:#171a23;
+  --text:#edeef3; --sub:#8b92a5; --muted:#5d6475;
+  --gold:#c9a667; --gold-hi:#e4c589; --gold-dim:rgba(201,166,103,.14);
+  --teal:#2fd8c4; --teal-dim:rgba(47,216,196,.13);
+  --red:#e5555c; --red-dim:rgba(229,85,92,.13);
+  --f-display:'Readex Pro','IBM Plex Sans Arabic',system-ui,sans-serif;
+  --f-body:'IBM Plex Sans Arabic',system-ui,sans-serif;
+  --f-mono:'JetBrains Mono',ui-monospace,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+[hidden]{display:none!important}
+body{
+  background:radial-gradient(900px 380px at 50% -140px,rgba(201,166,103,.08),transparent 70%) no-repeat,var(--bg);
+  color:var(--text);font:15px/1.6 var(--f-body);
+  padding-inline:16px;padding-block:20px 44px;
+}
+button{font-family:inherit;color:inherit}
+button:focus-visible,canvas:focus-visible,summary:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.app{max-width:960px;margin:0 auto;display:grid;gap:16px;min-width:0}
+.n{direction:ltr;unicode-bidi:isolate;display:inline-block;font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+
+.top{display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between}
+.brand{display:flex;gap:12px;align-items:center;min-width:0}
+.logo{width:44px;height:44px;flex:none}
+h1{font:600 21px/1.2 var(--f-display);margin:0}
+.brand p{margin:3px 0 0;color:var(--sub);font-size:13px}
+.stats{display:flex;gap:8px;margin:0;padding:0;flex-wrap:wrap}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 14px;min-width:92px}
+.stat dt{font-size:11.5px;color:var(--sub)}
+.stat dd{margin:2px 0 0;font:500 18px/1.3 var(--f-mono);font-variant-numeric:tabular-nums}
+.stat dd.rank{font:600 15px/1.6 var(--f-display);color:var(--gold-hi)}
+
+.levels{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.lv{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;text-align:right;cursor:pointer;display:grid;gap:6px;min-width:0;transition:border-color .15s,background .15s}
+.lv:hover{border-color:#2f3546}
+.lv[aria-pressed="true"]{border-color:var(--gold);background:linear-gradient(180deg,var(--gold-dim),transparent 85%),var(--surface)}
+.lv .lt{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.lv b{font:600 15px var(--f-display)}
+.bars{display:flex;gap:3px;align-items:flex-end;height:14px}
+.bars i{width:4px;border-radius:1px;background:var(--line)}
+.bars i:nth-child(1){height:6px}.bars i:nth-child(2){height:10px}.bars i:nth-child(3){height:14px}
+.bars i.on{background:var(--gold)}
+.lv .ld{font-size:12px;color:var(--sub);line-height:1.5}
+.lv .lm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font:11.5px var(--f-mono);color:var(--muted)}
+.lv .mx{color:var(--gold-hi);direction:ltr}
+.lv .rec{font:500 11px var(--f-body);color:var(--teal);background:var(--teal-dim);border-radius:999px;padding:1px 8px}
+@media(max-width:560px){.lv .ld{display:none}.lv{padding:10px 11px}}
+
+.modes{display:flex;gap:2px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tab{flex:none;white-space:nowrap;background:none;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;color:var(--sub);padding:10px 14px;font:500 14px var(--f-body);cursor:pointer;transition:color .15s,border-color .15s}
+.tab:hover{color:var(--text)}
+.tab[aria-selected="true"]{color:var(--gold-hi);border-color:var(--gold)}
+
+.board{display:grid;grid-template-columns:minmax(0,1fr) 270px;gap:18px;align-items:start}
+@media(max-width:820px){.board{grid-template-columns:minmax(0,1fr)}}
+
+.stage{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;display:grid;gap:14px;min-width:0}
+.q{display:grid;gap:8px;min-width:0}
+.q-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between}
+.chip{font:500 12px var(--f-mono);color:var(--gold-hi);background:var(--gold-dim);border:1px solid rgba(201,166,103,.35);border-radius:999px;padding:3px 11px;direction:ltr}
+.rt{display:flex;gap:12px;align-items:center;font:12px var(--f-mono);color:var(--sub);direction:ltr;font-variant-numeric:tabular-nums}
+.rt #timerTxt{color:var(--gold-hi)}
+.tbar{height:3px;background:var(--line);border-radius:2px;overflow:hidden}
+.tbar i{display:block;height:100%;width:100%;background:var(--gold);transition:width .1s linear}
+.tbar.low i{background:var(--red)}
+.q h2{font:600 18px/1.5 var(--f-display);margin:0;text-wrap:balance}
+.q p{margin:0;color:var(--sub);font-size:14px;line-height:1.8;max-width:64ch}
+
+.chartwrap{position:relative;border:1px solid var(--line-soft);border-radius:10px;background:var(--bg2);overflow:hidden;min-width:0}
+canvas{display:block;width:100%;touch-action:manipulation;cursor:crosshair}
+.meta{position:absolute;top:8px;left:10px;font:11px var(--f-mono);color:var(--sub);pointer-events:none;direction:ltr}
+
+.datacard{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:10px}
+.dc{background:var(--bg2);border:1px solid var(--line-soft);border-radius:10px;padding:9px 12px;min-width:0}
+.dc span{display:block;font-size:11.5px;color:var(--sub)}
+.dc b{font:500 15px var(--f-mono)}
+.opts{display:grid;gap:8px}
+.opt{display:grid;gap:4px;text-align:right;background:var(--surface-hi);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font:500 15px/1.6 var(--f-body);cursor:pointer;transition:border-color .15s,background .15s;min-width:0}
+.opt:hover:not(:disabled){border-color:var(--gold)}
+.opt:disabled{cursor:default}
+.opt .l{display:flex;gap:10px;align-items:center}
+.opt .k{flex:none;width:24px;height:24px;border-radius:7px;border:1px solid var(--line);display:grid;place-items:center;font:500 12px var(--f-body);color:var(--sub)}
+.opt .sub{display:flex;gap:6px;align-items:center;font-size:12.5px;font-weight:400;color:var(--sub);line-height:1.7;padding-inline-start:34px}
+.opt.good{border-color:rgba(47,216,196,.7);background:var(--teal-dim)}
+.opt.good .sub{color:var(--teal)}
+.opt.bad{border-color:rgba(229,85,92,.7);background:var(--red-dim)}
+.opt.bad .sub{color:var(--red)}
+
+.slots{list-style:none;margin:0 0 12px;padding:0;display:grid;gap:8px}
+.slot{width:100%;display:flex;gap:10px;align-items:center;min-height:46px;text-align:right;background:transparent;border:1px dashed var(--line);border-radius:10px;padding:8px 12px;color:var(--muted);font:14px/1.6 var(--f-body);cursor:pointer}
+.slot:disabled{cursor:default}
+.slot .no{flex:none;width:24px;height:24px;border-radius:50%;border:1px solid var(--line);display:grid;place-items:center;font:500 12px var(--f-mono);color:var(--sub)}
+.slot .tx{flex:1;min-width:0}
+.slot.filled{border-style:solid;border-color:rgba(201,166,103,.45);color:var(--text);background:var(--surface-hi)}
+.slot.good{border-color:rgba(47,216,196,.6);background:var(--teal-dim);color:var(--text)}
+.slot.bad{border-color:rgba(229,85,92,.6);background:var(--red-dim);color:var(--text)}
+.pool{display:flex;flex-wrap:wrap;gap:8px}
+.pc{background:var(--surface-hi);border:1px solid var(--line);border-radius:10px;padding:9px 13px;font:14px/1.6 var(--f-body);cursor:pointer;text-align:right;transition:border-color .15s}
+.pc:hover{border-color:var(--gold)}
+
+.controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;min-height:46px}
+.call{flex:1 1 150px;display:flex;gap:8px;align-items:center;justify-content:center;padding:13px 16px;border-radius:10px;border:1px solid;font:600 15.5px var(--f-display);cursor:pointer;transition:filter .15s,transform .1s}
+.call:hover:not(:disabled){filter:brightness(1.2)}
+.call:active:not(:disabled){transform:translateY(1px)}
+.call:disabled{opacity:.45;cursor:default}
+.call.up{color:var(--teal);background:var(--teal-dim);border-color:rgba(47,216,196,.4)}
+.call.down{color:var(--red);background:var(--red-dim);border-color:rgba(229,85,92,.4)}
+.btn{display:inline-flex;gap:8px;align-items:center;padding:10px 16px;border-radius:10px;border:1px solid var(--line);background:var(--surface-hi);font:500 14px var(--f-body);cursor:pointer;transition:filter .15s,border-color .15s}
+.btn:hover:not(:disabled){border-color:var(--gold)}
+.btn:disabled{opacity:.45;cursor:default}
+.btn.gold{background:var(--gold);border-color:var(--gold);color:#1a1200;font-weight:600}
+.btn.gold:hover:not(:disabled){filter:brightness(1.08)}
+.help{color:var(--sub);font-size:12.5px;line-height:1.7;flex:1 1 220px}
+svg.i{flex:none}
+
+.result{border-radius:10px;padding:14px 16px;border:1px solid var(--line);background:var(--surface-hi);display:grid;gap:10px;min-width:0}
+.result.ok{border-color:rgba(47,216,196,.5)}
+.result.no{border-color:rgba(229,85,92,.5)}
+.result.sum{border-color:rgba(201,166,103,.5)}
+.result h3{margin:0;font:600 16.5px var(--f-display);display:flex;gap:8px;align-items:center}
+.result.ok h3{color:var(--teal)}
+.result.no h3{color:var(--red)}
+.result.sum h3{color:var(--gold-hi)}
+.result h3 .gain{margin-inline-start:auto;font:600 14px var(--f-mono);color:var(--gold-hi)}
+.result p{margin:0;color:var(--sub);line-height:1.85;font-size:14px;max-width:66ch}
+.result p b{color:var(--text);font-weight:600}
+.cmp{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
+.cell{background:var(--bg2);border:1px solid var(--line-soft);border-radius:8px;padding:8px 12px;min-width:0}
+.cell span{display:block;font-size:11.5px;color:var(--sub)}
+.cell b{font:600 14px/1.6 var(--f-body)}
+.cell.good b{color:var(--teal)}
+.cell.bad b{color:var(--red)}
+.mistake{border-inline-start:3px solid var(--red);padding-inline-start:12px}
+.tip{display:flex;gap:8px;align-items:flex-start;color:var(--gold-hi)!important}
+.tip svg{margin-top:5px}
+.lesson{background:var(--bg2);border:1px solid var(--line-soft);border-radius:8px;padding:10px 14px}
+.lesson summary{cursor:pointer;font:600 13.5px var(--f-display);color:var(--gold-hi)}
+.lesson ol{margin:10px 0 2px;padding-inline-start:22px;display:grid;gap:6px;color:var(--sub);font-size:13.5px;line-height:1.8}
+.lesson li b{color:var(--text);font-weight:500}
+.rev{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.rev li{border-inline-start:3px solid var(--red);padding-inline-start:12px;color:var(--sub);font-size:13.5px;line-height:1.8}
+.stage.is-summary .q,.stage.is-summary .chartwrap,.stage.is-summary .mcq,.stage.is-summary .order{display:none}
+
+.side{display:grid;gap:14px;align-content:start;min-width:0}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px}
+.panel h3{font:600 13px var(--f-display);margin:0 0 12px;color:var(--sub);letter-spacing:.03em}
+.dots{display:flex;gap:6px}
+.dot{flex:1;height:6px;border-radius:3px;background:var(--line)}
+.dot.hit{background:var(--teal)}
+.dot.miss{background:var(--red)}
+.dot.now{background:var(--gold)}
+.sm{margin:10px 0 0;font-size:12.5px;color:var(--sub)}
+.badges{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.badge{display:flex;gap:10px;align-items:center;opacity:.5;filter:grayscale(1);transition:opacity .2s}
+.badge.on{opacity:1;filter:none}
+.badge .bi{width:30px;height:30px;flex:none}
+.badge b{display:block;font:600 13.5px/1.4 var(--f-display)}
+.badge span.d{display:block;font-size:12px;color:var(--sub);line-height:1.5}
+
+.note{font-size:12.5px;color:var(--sub);line-height:1.9;border-top:1px solid var(--line);padding-top:14px;max-width:80ch}
+.toast{position:fixed;left:16px;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));margin-inline:auto;max-width:340px;background:var(--surface-hi);border:1px solid rgba(201,166,103,.5);border-radius:10px;padding:10px 14px;text-align:center;font-size:14px;z-index:5;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+canvas{touch-action:pan-y;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+.btn.grow{flex:1 1 180px;justify-content:center}
+.controls:empty{display:none}
+
+@keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes inUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes pop{0%{transform:scale(.94)}55%{transform:scale(1.035)}100%{transform:scale(1)}}
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-7px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(3px)}}
+@keyframes ring{0%{box-shadow:0 0 0 0 rgba(47,216,196,.45)}100%{box-shadow:0 0 0 14px rgba(47,216,196,0)}}
+@keyframes bump{0%{transform:scale(1)}40%{transform:scale(1.3);color:var(--gold-hi)}100%{transform:scale(1)}}
+.stat dd{transform-origin:right center}
+.stat dd.bump{animation:bump .45s ease}
+.q h2.anim,.q p.anim{animation:inUp .35s ease both}
+.q p.anim{animation-delay:.06s}
+.result{animation:rise .38s cubic-bezier(.2,.8,.2,1) both}
+.cell{animation:inUp .35s ease both}
+.cell:nth-child(2){animation-delay:.08s}
+.cell:nth-child(3){animation-delay:.16s}
+.result h3 .gain{animation:pop .5s .15s ease both}
+.opt.enter,.pc.enter{animation:inUp .32s ease both;animation-delay:calc(var(--i,0)*70ms)}
+.opt.good{animation:pop .45s ease both,ring .9s ease-out}
+.opt.bad{animation:shake .4s ease both}
+.opt:active:not(:disabled),.pc:active,.call:active:not(:disabled){transform:scale(.98)}
+.slot.fresh{animation:pop .28s ease both}
+.slot.good{animation:pop .35s ease both}
+.slot.bad{animation:shake .38s ease both}
+.dot{transition:background .3s}
+.dot.new{animation:pop .4s ease both}
+.lv{transition:border-color .2s,background .2s,transform .15s}
+.lv:active{transform:scale(.98)}
+
+@media(max-width:820px){
+  .controls{position:sticky;bottom:calc(8px + env(safe-area-inset-bottom,0px));z-index:3;background:rgba(15,17,22,.94);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border:1px solid var(--line);border-radius:12px;padding:8px;box-shadow:0 8px 24px rgba(0,0,0,.45)}
+  .help{flex-basis:100%;font-size:12px}
+  .toast{bottom:auto;top:calc(12px + env(safe-area-inset-top,0px))}
+}
+@media(max-width:560px){
+  body{padding-inline:12px;padding-block:14px 32px}
+  h1{font-size:19px}
+  .top{gap:12px}
+  .stats{width:100%}
+  .stat{flex:1;min-width:0;padding:7px 10px}
+  .stat dd{font-size:16px}
+  .stage{padding:12px;gap:12px}
+  .q h2{font-size:17px}
+  .call{min-height:56px;font-size:17px}
+  .btn{min-height:48px;justify-content:center}
+  .controls .btn.gold{flex:1 1 180px}
+  .opt{padding:14px 12px;font-size:15.5px}
+  .slot,.pc{min-height:48px}
+  .pc{flex:1 1 100%}
+  .tab{padding:12px 14px}
+  .side{grid-template-columns:minmax(0,1fr)}
+}
+
+.tbox{display:grid;gap:6px}
+.tcap{font:600 12.5px var(--f-display);color:var(--gold-hi);padding:2px 2px 4px}
+.trow{display:flex;gap:10px;align-items:center;justify-content:space-between;background:var(--bg2);border:1px solid var(--line-soft);border-radius:10px;padding:10px 12px;font:14px/1.6 var(--f-body);text-align:right;width:100%;color:var(--text);animation:inUp .3s ease both;animation-delay:calc(var(--i,0)*45ms)}
+.trow .tl{color:var(--sub);font-size:13px;flex:none}
+.trow .tv{font-weight:600;text-align:left;min-width:0;flex:1}
+.trow.pickable{cursor:pointer;border-color:rgba(201,166,103,.4);background:var(--surface-hi);min-height:48px}
+.trow.pickable:hover{border-color:var(--gold)}
+.trow.good{border-color:rgba(47,216,196,.35)}
+.trow.good svg{color:var(--teal)}
+.trow.bad{border-color:rgba(229,85,92,.7);background:var(--red-dim);animation:shake .4s ease both}
+.trow.bad svg{color:var(--red)}
+.trow.miss{outline:2px dashed rgba(229,85,92,.6);outline-offset:2px}
+.btn.tool{flex:1 1 110px;justify-content:space-between}
+.btn.tool .n{font-size:13px;color:var(--sub)}
+.btn.tsl[aria-pressed="true"]{border-color:var(--red);background:var(--red-dim)}
+.btn.ttp[aria-pressed="true"]{border-color:var(--teal);background:var(--teal-dim)}
+.stage.is-summary .tbox{display:none}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+.site-links{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.site-links a{color:var(--gold-hi);text-decoration:none;font-weight:600}
+.site-links a.cta{background:var(--gold);color:#1a1200;border-radius:10px;padding:8px 14px}
+.embed .site-links{display:none}
+.embed body{padding-block:8px 24px}
+</style>
+</head>
+<body>
+
+<div class="app" dir="rtl" lang="ar">
+  <header class="top">
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 48 48" aria-hidden="true">
+        <defs><linearGradient id="sg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f1f3f8"/><stop offset=".5" stop-color="#9aa3b5"/><stop offset="1" stop-color="#d9dde8"/></linearGradient></defs>
+        <rect width="48" height="48" rx="11" fill="#0d1424"/>
+        <rect x=".5" y=".5" width="47" height="47" rx="10.5" fill="none" stroke="#2a3350"/>
+        <text x="24" y="33" text-anchor="middle" font-family="Readex Pro,sans-serif" font-size="27" font-weight="700" fill="url(#sg)">Q</text>
+      </svg>
+      <div>
+        <h1>تحدي قفيل</h1>
+        <p>درّب عينك وحسّن قراراتك في دقائق</p>
+      </div>
+    </div>
+    <dl class="stats">
+      <div class="stat"><dt>النقاط</dt><dd id="sPts">0</dd></div>
+      <div class="stat"><dt>السلسلة</dt><dd id="sStreak">0</dd></div>
+      <div class="stat"><dt>الرتبة</dt><dd id="sRank" class="rank">متدرّب</dd></div>
+    </dl>
+  </header>
+
+  <div class="levels" id="levels" role="group" aria-label="مستوى الصعوبة"></div>
+  <div class="modes" id="modes" role="tablist" aria-label="نوع التحدي"></div>
+
+  <div class="board">
+    <section class="stage" id="stage" role="tabpanel">
+      <div class="q">
+        <div class="q-row"><span class="chip" id="chip"></span><span class="rt"><span id="timerTxt"></span><span id="roundTxt"></span></span></div>
+        <div class="tbar" id="tbar" hidden><i id="tfill"></i></div>
+        <h2 id="qTitle"></h2>
+        <p id="qDef"></p>
+      </div>
+      <div class="chartwrap" id="chartBox">
+        <canvas id="chart" tabindex="0" role="application" aria-label="شارت تعليمي. في تحدي المنطقة استخدم الأسهم لتحريك المؤشر ثم Enter للاختيار."></canvas>
+        <span class="meta">XAU/USD · 15m · بيانات تعليمية مولّدة</span>
+      </div>
+      <div class="tbox" id="tradeBox" hidden></div>
+      <div class="mcq" id="mcqBox" hidden>
+        <div class="datacard" id="dataCard"></div>
+        <div class="opts" id="opts"></div>
+      </div>
+      <div class="order" id="orderBox" hidden>
+        <ol class="slots" id="slots"></ol>
+        <div class="pool" id="pool"></div>
+      </div>
+      <div class="controls" id="controls"></div>
+      <div class="result" id="result" hidden aria-live="polite"></div>
+    </section>
+
+    <aside class="side">
+      <section class="panel">
+        <h3>تقدّم الجولة</h3>
+        <div class="dots" id="dots" aria-hidden="true"></div>
+        <p class="sm" id="progTxt"></p>
+      </section>
+      <section class="panel">
+        <h3>الشارات</h3>
+        <ul class="badges" id="badges"></ul>
+      </section>
+    </aside>
+  </div>
+
+  <p class="note">ألعاب تعليمية للتسلية. الشموع والأرقام مولّدة للتدريب ولا تمثل بيانات سوق حقيقية، ونتائجها لا تعني نتائج التداول الحقيقي. لا توجد جوائز مالية ولا رهان، فقط نقاط وشارات ورتب.</p>
+  <div class="site-links"><a class="cta" href="/register">سجّل مجانًا في قفيل</a><a href="/">الصفحة الرئيسية</a><a href="/blog">المدونة</a></div>
+</div>
+
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(function(){
+'use strict';
+var $=function(s){return document.querySelector(s)};
+var css=getComputedStyle(document.documentElement);
+var tok=function(n){return css.getPropertyValue(n).trim()};
+var COL={up:tok('--teal'),down:tok('--red'),gold:tok('--gold'),goldHi:tok('--gold-hi'),axis:tok('--sub'),bg:tok('--bg2'),grid:'rgba(139,146,165,.14)'};
+var MONO="'JetBrains Mono',ui-monospace,monospace";
+
+/* ---------- icons ---------- */
+function ic(d,s){return '<svg class="i" width="'+(s||18)+'" height="'+(s||18)+'" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="'+d+'"/></svg>'}
+var ICON={
+  check:ic('M4 10.5l4 4 8-9'),
+  x:ic('M5 5l10 10M15 5L5 15'),
+  up:ic('M10 16V4M5 9l5-5 5 5'),
+  down:ic('M10 4v12M5 11l5 5 5-5'),
+  bulb:ic('M7 14h6M8 17h4M10 2a5 5 0 0 0-3 9c.6.5 1 1.2 1 2h4c0-.8.4-1.5 1-2a5 5 0 0 0-3-9z',16),
+  next:ic('M16 10H4M9 5l-5 5 5 5'),
+  again:ic('M4 10a6 6 0 0 1 10.2-4.2L16 8M16 4v4h-4M16 10a6 6 0 0 1-10.2 4.2L4 12M4 16v-4h4'),
+  medal:'<svg class="bi" viewBox="0 0 28 28" aria-hidden="true"><path d="M14 2l10 6v12l-10 6-10-6V8z" fill="rgba(201,166,103,.16)" stroke="#c9a667" stroke-width="1.5" stroke-linejoin="round"/><path d="M9.5 14.5l3 3 6-6.5" fill="none" stroke="#e4c589" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+};
+
+/* ---------- random helpers ---------- */
+function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+var R=mulberry((Math.random()*4294967296)>>>0);
+function gauss(){return(R()+R()+R()-1.5)/0.75}
+function rnd(a,b){return a+R()*(b-a)}
+function r1(x){return Math.round(x*10)/10}
+function pick(arr){return arr[Math.floor(R()*arr.length)]}
+function shuffle(a){a=a.slice();for(var i=a.length-1;i>0;i--){var j=Math.floor(R()*(i+1)),t=a[i];a[i]=a[j];a[j]=t}return a}
+function fnum(v,dp){return Number(v).toLocaleString('en-US',{minimumFractionDigits:dp||0,maximumFractionDigits:dp||0})}
+function usd(v,dp){return '$'+fnum(v,dp)}
+function fmtR(v){return v%1===0?String(v):v.toFixed(1)}
+function sgnR(v){return (v>0?'+':v<0?'−':'')+fmtR(Math.abs(v))+'R'}
+function dirName(d){return d>0?'صاعدة':d<0?'هابطة':'—'}
+
+/* ---------- candle helpers ---------- */
+var V=2.2;
+function mk(o,c,w){return{o:o,c:c,h:Math.max(o,c)+R()*w,l:Math.min(o,c)-R()*w}}
+function walk(n,start,drift,vol){var a=[],p=start;for(var i=0;i<n;i++){var c=p+drift+gauss()*vol*0.8;a.push(mk(p,c,vol*0.6));p=c}return a}
+
+/* ---------- games and levels ---------- */
+var GAMES=[
+  {id:'candle',name:'توقّع الشمعة',rounds:8},
+  {id:'zone',name:'اصطد المنطقة',rounds:8},
+  {id:'risk',name:'حاسبة المخاطرة',rounds:6},
+  {id:'terms',name:'اختبار المصطلحات',rounds:8},
+  {id:'order',name:'رتّب الصفقة',rounds:3},
+  {id:'sltp',name:'ضع الوقف والهدف',rounds:6},
+  {id:'trade',name:'صفقة أو لا صفقة',rounds:8}
+];
+var GAME={};GAMES.forEach(function(g){GAME[g.id]=g});
+var LEVELS=[
+  {id:1,name:'مبتدئ',mult:1,desc:'أنماط واضحة وتلميحات ظاهرة على الشارت'},
+  {id:2,name:'متوسط',mult:1.5,desc:'بدون تلميحات مع حالات ملتبسة'},
+  {id:3,name:'خبير',mult:2,desc:'مؤقّت وشارت مزدحم ومسائل أصعب'}
+];
+var LV={
+  candle:{
+    1:{kinds:['bull_engulf','bear_engulf','hammer','shooting_star'],follow:.88,drift:.95,nv:.8},
+    2:{kinds:['bull_engulf','bear_engulf','hammer','shooting_star','none','none'],follow:.74,drift:.7,nv:1},
+    3:{kinds:['bull_engulf','bear_engulf','hammer','shooting_star','none','none','none'],follow:.62,drift:.45,nv:1.35}
+  },
+  zone:{
+    1:{types:['fvg','ob'],nv:.7,hint:'auto'},
+    2:{types:['fvg','ob','bos'],nv:1,hint:'btn'},
+    3:{types:['fvg','ob','bos'],nv:1.4,hint:'none'}
+  }
+};
+var TIMES={candle:20,zone:30,risk:75,terms:20,sltp:45,trade:25};
+var RK={
+  1:['riskAmt','rr','riskAmt','rr','riskAmt','rr'],
+  2:['rr','lot','breakeven','lot','rr','lot'],
+  3:['lot','netR','drawdown','lot','breakeven','drawdown']
+};
+var LET=['أ','ب','ج','د'];
+
+/* ---------- texts: candle ---------- */
+var PAT={
+  bull_engulf:{en:'BULLISH ENGULFING',ar:'ابتلاعية صعودية',n:2},
+  bear_engulf:{en:'BEARISH ENGULFING',ar:'ابتلاعية هبوطية',n:2},
+  hammer:{en:'HAMMER',ar:'مطرقة',n:1},
+  shooting_star:{en:'SHOOTING STAR',ar:'نجمة هابطة',n:1},
+  none:{en:'NO PATTERN',ar:'لا نمط',n:0}
+};
+var EXP={
+  bull_engulf:'شمعة ابتلاعية صعودية: جسمها ابتلع جسم الشمعة الهابطة قبلها بعد هبوط، وهذا يرجّح عودة المشترين.',
+  bear_engulf:'شمعة ابتلاعية هبوطية: جسمها ابتلع جسم الشمعة الصاعدة قبلها بعد صعود، وهذا يرجّح عودة البائعين.',
+  hammer:'مطرقة (Hammer): ذيل سفلي طويل بعد هبوط يعني أن البائعين دُفعوا للخلف.',
+  shooting_star:'نجمة هابطة (Shooting Star): ذيل علوي طويل بعد صعود يعني أن الأسعار المرتفعة قوبلت بالرفض.',
+  none:'لا يوجد نمط واضح هنا والحركة أقرب للعشوائية. ليس كل شارت فيه إشارة، وتجاهل الشارت الغامض جزء من اللعبة.'
+};
+var CSTEPS={
+  bull_engulf:['ابحث عن شمعة هابطة صغيرة بعد موجة هبوط.','تليها شمعة صاعدة جسمها أكبر ويغطي جسم السابقة بالكامل.','اعتبرها إشارة محتملة لعودة المشترين، وأكّدها بدعم أو FVG.'],
+  bear_engulf:['ابحث عن شمعة صاعدة صغيرة بعد موجة صعود.','تليها شمعة هابطة جسمها أكبر ويغطي جسم السابقة بالكامل.','اعتبرها إشارة محتملة لعودة البائعين، وأكّدها بمقاومة أو FVG.'],
+  hammer:['ابحث عن شمعة جسمها صغير في أعلى مدى الشمعة.','ذيلها السفلي طويل، نحو ضعف الجسم أو أكثر.','ظهورها بعد هبوط يعني رفض الأسعار المنخفضة.'],
+  shooting_star:['ابحث عن شمعة جسمها صغير في أسفل مدى الشمعة.','ذيلها العلوي طويل، نحو ضعف الجسم أو أكثر.','ظهورها بعد صعود يعني رفض الأسعار المرتفعة.'],
+  none:['الشموع متقاربة بلا ابتلاع ولا ذيول طويلة واضحة.','لا تدخل لمجرد أنك تريد الدخول.','انتظر نمطًا واضحًا عند مستوى مهم.']
+};
+
+/* ---------- texts: zone ---------- */
+var TITLES={
+  fvg:['اضغط على الفجوة السعرية الصاعدة','اضغط على الفجوة السعرية الهابطة'],
+  ob:['اضغط على الأوردر بلوك الصاعد','اضغط على الأوردر بلوك الهابط'],
+  bos:['اضغط على الشمعة التي كسرت الهيكل صعودًا','اضغط على الشمعة التي كسرت الهيكل هبوطًا']
+};
+var DEFS={
+  fvg:['ثلاث شموع متتالية تترك فراغًا بين قمة الأولى وقاع الثالثة. اضغط داخل هذا الفراغ.','ثلاث شموع متتالية تترك فراغًا بين قاع الأولى وقمة الثالثة. اضغط داخل هذا الفراغ.'],
+  ob:['آخر شمعة هابطة قبل حركة صاعدة قوية.','آخر شمعة صاعدة قبل حركة هابطة قوية.'],
+  bos:['الشمعة التي أغلقت فوق أعلى قمة سابقة.','الشمعة التي أغلقت تحت أدنى قاع سابق.']
+};
+var ZEXP={
+  fvg:['FVG صاعد: الشمعة الوسطى اندفعت بقوة وتركت فراغًا بين قمة الأولى وقاع الثالثة. يعود السعر غالبًا لملء جزء منه.','FVG هابط: الشمعة الوسطى اندفعت بقوة وتركت فراغًا بين قاع الأولى وقمة الثالثة. يعود السعر غالبًا لملء جزء منه.'],
+  ob:['Order Block صاعد: آخر شمعة هابطة قبل الاندفاع الصاعد. دخلت هنا أوامر كبيرة، وقد يعود السعر لاختبار المنطقة.','Order Block هابط: آخر شمعة صاعدة قبل الاندفاع الهابط. دخلت هنا أوامر كبيرة، وقد يعود السعر لاختبار المنطقة.'],
+  bos:['BOS صاعد: هذه الشمعة أغلقت فوق القمة السابقة المرسومة بالخط المتقطع، فتأكد استمرار الاتجاه الصاعد.','BOS هابط: هذه الشمعة أغلقت تحت القاع السابق المرسوم بالخط المتقطع، فتأكد استمرار الاتجاه الهابط.']
+};
+var ZSTEPS={
+  fvg:['ابحث عن شمعة اندفاع كبيرة بجسم طويل.','قارن ذيل الشمعة التي قبلها بذيل الشمعة التي بعدها.','إذا لم يتداخل الذيلان فالفراغ بينهما هو الـ FVG.'],
+  ob:['حدّد حركة اندفاع قوية في اتجاه واحد.','ارجع إلى الشمعة التي سبقت الاندفاع مباشرة.','هي الأوردر بلوك: آخر شمعة معاكسة قبل الحركة (هابطة للصاعد، وصاعدة للهابط).'],
+  bos:['حدّد آخر قمة (للصعود) أو قاع (للهبوط) واضح.','انتظر شمعة تغلق خلفه بجسمها، وليس بذيلها فقط.','الشمعة التي أغلقت هي نقطة الكسر BOS.']
+};
+
+/* ---------- texts: terms ---------- */
+var ITEMS=[
+ [1,'Support','مستوى سعري يتوقف عنده الهبوط غالبًا لأن المشترين يظهرون عنده.'],
+ [1,'Resistance','مستوى سعري يتوقف عنده الصعود غالبًا لأن البائعين يظهرون عنده.'],
+ [1,'Stop Loss','أمر يغلق الصفقة تلقائيًا عند سعر محدد ليحدّ من الخسارة.'],
+ [1,'Take Profit','أمر يغلق الصفقة تلقائيًا عند سعر الهدف لتأمين الربح.'],
+ [1,'Risk/Reward (RR)','مقارنة الربح المتوقع بالخسارة المحتملة، مثل 1:2.'],
+ [1,'Trend','اتجاه السعر العام، سلسلة قمم وقيعان صاعدة أو هابطة.'],
+ [1,'Lot','وحدة قياس حجم الصفقة.'],
+ [1,'Spread','الفرق بين سعر الشراء وسعر البيع، وهو تكلفة الدخول.'],
+ [1,'Long','صفقة شراء، تربح عندما يرتفع السعر.'],
+ [1,'Short','صفقة بيع، تربح عندما ينخفض السعر.'],
+ [1,'Timeframe','المدة الزمنية التي تمثلها كل شمعة على الشارت.'],
+ [1,'Volume','عدد العقود أو الوحدات المتداولة خلال فترة محددة.'],
+ [2,'BOS','إغلاق شمعة خلف قمة أو قاع سابق، يؤكد استمرار الاتجاه.'],
+ [2,'CHoCH','أول كسر هيكلي عكس الاتجاه السائد، يلمّح لاحتمال تغيّر الاتجاه.'],
+ [2,'FVG','فجوة سعرية تتركها حركة اندفاعية بين ذيول ثلاث شموع متتالية.'],
+ [2,'Order Block','آخر شمعة معاكسة قبل حركة اندفاعية قوية، منطقة دخول أوامر كبيرة.'],
+ [2,'Liquidity','تجمع أوامر وقف الخسارة فوق القمم وتحت القيعان.'],
+ [2,'Liquidity Sweep','اختراق سريع لمستوى سيولة ثم عودة السعر، لالتقاط أوامر الوقف.'],
+ [2,'Premium / Discount','النصف الأعلى من النطاق علاوة تناسب البيع، والنصف الأدنى خصم يناسب الشراء.'],
+ [2,'Kill Zone','نافذة زمنية يزداد فيها النشاط، مثل افتتاح لندن ونيويورك.'],
+ [2,'Equal Highs','قمتان أو أكثر عند مستوى متقارب، تتجمع فوقهما سيولة.'],
+ [2,'Retest','عودة السعر لاختبار مستوى تم اختراقه سابقًا.'],
+ [2,'Divergence','اختلاف اتجاه السعر عن اتجاه المؤشر، ويحذّر من ضعف الحركة.'],
+ [2,'Fibonacci 0.618','مستوى تصحيح يُعرف بالنسبة الذهبية، تبحث عنده عن ارتداد.'],
+ [3,'MSS','تحوّل في هيكل السوق مصحوب باندفاع، يقوّي الإشارة على تغيّر الاتجاه.'],
+ [3,'Displacement','حركة اندفاعية بشموع كبيرة متتالية تترك غالبًا FVG.'],
+ [3,'IFVG','فجوة سعرية فشلت في دعم الحركة فتنقلب وتعمل كمنطقة في الاتجاه المعاكس.'],
+ [3,'Breaker Block','Order Block فشل وتم كسره، فيتحول إلى منطقة معاكسة.'],
+ [3,'OTE','Optimal Trade Entry: منطقة دخول مثالية بين تصحيح 0.62 و0.79.'],
+ [3,'Dealing Range','النطاق بين آخر قمة وقاع رئيسيين، يُقاس عليه الخصم والعلاوة.'],
+ [3,'Judas Swing','حركة مضللة عند افتتاح الجلسة عكس الاتجاه الحقيقي لسحب السيولة.'],
+ [3,'Turtle Soup','انعكاس يعقب اختراقًا كاذبًا لقمة أو قاع سابق.'],
+ [3,'Inducement','قمة أو قاع صغير يستدرج المتداولين للدخول مبكرًا قبل الحركة الحقيقية.'],
+ [3,'SMT Divergence','اختلاف سلوك أصلين مترابطين عند القمم أو القيعان، كتأكيد لانعكاس.'],
+ [3,'Confluence','تلاقي عدة أدلة مستقلة في نفس المنطقة لرفع احتمال نجاح الصفقة.'],
+ [3,'Expectancy','متوسط ربح الصفقة الواحدة بوحدات R بعد احتساب الرابحة والخاسرة.']
+];
+
+/* ---------- texts: order sequences ---------- */
+function S_(t,why){return{t:t,why:why}}
+var SEQ={
+ 1:[
+  {title:'خطوات تحليل الشارت من الأعلى للأسفل',steps:[
+    S_('افتح الفريم اليومي وحدّد الاتجاه العام','الاتجاه الكبير يحدد الجهة التي تبحث فيها عن الصفقات.'),
+    S_('انزل لفريم الساعة وحدّد مناطق الدعم والمقاومة','تحدد أين قد يتفاعل السعر قبل أن تبحث عن دخول.'),
+    S_('انزل لفريم 15 دقيقة وانتظر إشارة الدخول عند المنطقة','الدخول على فريم أصغر يجعل الوقف قريبًا.'),
+    S_('نفّذ الصفقة مع وقف الخسارة والهدف','التنفيذ آخر خطوة بعد اكتمال الصورة.')]},
+  {title:'قبل الضغط على زر الشراء',steps:[
+    S_('حدّد نسبة المخاطرة من الرصيد، مثل 1%','المخاطرة تُقرَّر قبل كل شيء، وليس بعد الدخول.'),
+    S_('حدّد سعر الدخول وسعر وقف الخسارة','المسافة بينهما تحدد حجم الصفقة.'),
+    S_('احسب حجم اللوت المناسب','اللوت = مبلغ المخاطرة ÷ خسارة اللوت الواحد.'),
+    S_('افتح الصفقة وضع الوقف فورًا','لا تترك صفقة مفتوحة بلا وقف.')]},
+  {title:'بناء صفقة شراء عند دعم',steps:[
+    S_('تأكد أن الاتجاه العام صاعد','لا تشترِ عكس الاتجاه الكبير.'),
+    S_('انتظر وصول السعر إلى منطقة دعم','الدعم هو المكان الذي يُتوقع ظهور المشترين فيه.'),
+    S_('انتظر شمعة تأكيد صاعدة عند الدعم','التأكيد يقلل الدخول المبكر.'),
+    S_('ضع الوقف تحت الدعم والهدف عند أقرب مقاومة','الوقف تحت المنطقة يلغي الفكرة إذا كُسرت.')]}
+ ],
+ 2:[
+  {title:'سيناريو شراء ICT',steps:[
+    S_('الاتجاه صاعد على فريم 4 ساعات','يحدد أنك تبحث عن الشراء فقط.'),
+    S_('السعر يعود إلى منطقة خصم','الشراء من الخصم يعطي نسبة عائد أفضل.'),
+    S_('سحب سيولة تحت قاع سابق','أوامر البائعين تُلتقط ثم ينعكس السعر.'),
+    S_('كسر هيكل صاعد على فريم 15 دقيقة (BOS)','يؤكد أن المشترين سيطروا بعد سحب السيولة.'),
+    S_('الدخول عند FVG أو Order Block مع الوقف تحت القاع','منطقة دخول دقيقة بوقف قريب.')]},
+  {title:'سيناريو بيع ICT',steps:[
+    S_('الاتجاه هابط على فريم 4 ساعات','يحدد أنك تبحث عن البيع فقط.'),
+    S_('السعر يصعد إلى منطقة علاوة','البيع من العلاوة يعطي نسبة عائد أفضل.'),
+    S_('سحب سيولة فوق قمم متساوية','أوامر المشترين تُلتقط ثم ينعكس السعر.'),
+    S_('CHoCH هبوطي على فريم 15 دقيقة','يلمّح إلى أن البائعين بدأوا السيطرة.'),
+    S_('الدخول من Order Block هابط مع الوقف فوق القمة','وقف قريب خلف نقطة السحب.')]},
+  {title:'إدارة المخاطرة قبل التنفيذ',steps:[
+    S_('حدّد مبلغ المخاطرة بالدولار','هو الأساس الذي يُحسب عليه كل شيء.'),
+    S_('ضع وقف الخسارة خلف الهيكل','الوقف يوضع حيث تبطل الفكرة، وليس حيث تريد.'),
+    S_('ضع الهدف عند السيولة المقابلة','السعر ينجذب غالبًا إلى السيولة.'),
+    S_('تأكد أن نسبة RR مناسبة لخطتك','إن لم تكفِ النسبة فتجاهل الصفقة.'),
+    S_('احسب حجم اللوت ونفّذ','الحجم يخرج من المخاطرة والوقف معًا.')]}
+ ],
+ 3:[
+  {title:'نموذج جلسة لندن',steps:[
+    S_('حدّد الـ Bias من الفريمين اليومي و4 ساعات','يحدد الجهة المسموح بها.'),
+    S_('علّم الـ Dealing Range وحدّد منطقة الخصم','تحدد أين تشتري وأين تتجنب.'),
+    S_('انتظر دخول Kill Zone لندن','النشاط يرتفع ويقل الضجيج.'),
+    S_('راقب Judas Swing أو سحب سيولة الجلسة الآسيوية','الحركة المضللة تسبق الاتجاه الحقيقي.'),
+    S_('انتظر MSS مع Displacement','يؤكد أن التحول حقيقي.'),
+    S_('ادخل عند عودة السعر إلى OTE أو FVG','دخول بعد التأكيد بوقف قريب.')]},
+  {title:'إدارة صفقة رابحة',steps:[
+    S_('ادخل الصفقة بوقف وهدف محددين مسبقًا','القرار يُتخذ قبل أن تتدخل العواطف.'),
+    S_('انقل الوقف إلى التعادل بعد ربح 1R','تحمي رأس المال من الانعكاس.'),
+    S_('أغلق جزءًا عند أول سيولة مقابلة','تؤمّن ربحًا عند أول منطقة متوقعة.'),
+    S_('اترك الباقي نحو الهدف الرئيسي','يعطي الصفقة فرصة لتحقيق RR أعلى.'),
+    S_('أغلق عند الهدف أو عند MSS معاكس','الإشارة المعاكسة تلغي الفكرة.'),
+    S_('سجّل الصفقة وراجعها في يومياتك','المراجعة هي ما يحسّن الأداء مع الوقت.')]},
+  {title:'تجنّب فخ الـ Inducement',steps:[
+    S_('يتكوّن قاع صغير يبدو كدعم واضح','هذا هو الطُّعم الذي يراه الجميع.'),
+    S_('المتداولون يشترون مبكرًا ويضعون وقفاتهم تحته','تتجمع سيولة يستهدفها السوق.'),
+    S_('السعر يسحب هذه السيولة بحركة سريعة','تُضرب الوقفات قبل الحركة الحقيقية.'),
+    S_('يظهر Displacement صاعد يكسر الهيكل','تأكيد أن الحركة الحقيقية بدأت.'),
+    S_('تنتظر عودة السعر إلى Order Block','دخول بسعر أفضل بدل مطاردة الحركة.'),
+    S_('تدخل بعد التأكيد ووقفك خلف نقطة السحب','وقف منطقي تحت أدنى نقطة السحب.')]}
+ ]
+};
+
+/* ---------- state ---------- */
+var KEY='qaffel-challenge-v1';
+var P={points:0,bestStreak:0,hits:0,fvg:0,ob:0,bos:0,strong:0,expert:0,risk:0,terms:0,order:0,sltp:0,traps:0,played:[],badges:[],lvH:{1:0,2:0,3:0},lvT:{1:0,2:0,3:0}};
+try{var raw=localStorage.getItem(KEY);if(raw){var o=JSON.parse(raw);if(o&&typeof o==='object')P=Object.assign(P,o)}}catch(e){}
+P.lvH=Object.assign({1:0,2:0,3:0},P.lvH||{});P.lvT=Object.assign({1:0,2:0,3:0},P.lvT||{});
+if(!Array.isArray(P.played))P.played=[];if(!Array.isArray(P.badges))P.badges=[];
+function save(){try{localStorage.setItem(KEY,JSON.stringify(P))}catch(e){}}
+
+var S={mode:'candle',level:1,streak:0};
+var M={};
+function fresh(){return{done:0,hits:0,pts:0,res:[],log:[],cur:null,summary:false,bag:null}}
+function resetAll(){GAMES.forEach(function(g){M[g.id]=fresh()})}
+resetAll();
+function rounds(){return GAME[S.mode].rounds}
+
+var RANKS=[[0,'متدرّب'],[80,'محلل'],[220,'متداول'],[450,'ماستر SMC']];
+function rankOf(p){var r=RANKS[0][1];for(var i=0;i<RANKS.length;i++){if(p>=RANKS[i][0])r=RANKS[i][1]}return r}
+
+var BADGES=[
+  {id:'first',name:'أول إصابة',desc:'أجب إجابة صحيحة واحدة',test:function(){return P.hits>=1}},
+  {id:'streak5',name:'سلسلة 5',desc:'خمس إجابات صحيحة متتالية',test:function(){return P.bestStreak>=5}},
+  {id:'fvg',name:'عين الـ FVG',desc:'اصطد ثلاث فجوات سعرية',test:function(){return P.fvg>=3}},
+  {id:'ob',name:'صائد OB',desc:'حدّد ثلاثة أوردر بلوك',test:function(){return P.ob>=3}},
+  {id:'bos',name:'قارئ الهيكل',desc:'حدّد ثلاث شموع كسر هيكل',test:function(){return P.bos>=3}},
+  {id:'risk',name:'سيد المخاطرة',desc:'أجب 4 مسائل مخاطرة صحيحة',test:function(){return P.risk>=4}},
+  {id:'terms',name:'لغة السوق',desc:'أجب 6 أسئلة مصطلحات صحيحة',test:function(){return P.terms>=6}},
+  {id:'order',name:'مخطّط الصفقة',desc:'رتّب صفقتين ترتيبًا كاملًا',test:function(){return P.order>=2}},
+  {id:'expert',name:'خبير ميداني',desc:'أنهِ جولة في مستوى الخبير بنتيجة جيدة',test:function(){return P.expert>=1}},
+  {id:'sltp',name:'مهندس الصفقة',desc:'ضع الوقف والهدف صحيحين 3 مرات',test:function(){return P.sltp>=3}},
+  {id:'traps',name:'عين الفخ',desc:'تجاهل 3 صفقات فخ بالسبب الصحيح',test:function(){return P.traps>=3}},
+  {id:'explorer',name:'مستكشف',desc:'جرّب الألعاب السبع',test:function(){return P.played.length>=7}}
+];
+var toastTimer=null;
+function toast(msg){var t=$('#toast');t.textContent=msg;t.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(function(){t.hidden=true},2800)}
+function checkBadges(){
+  var f=[];
+  BADGES.forEach(function(b){if(P.badges.indexOf(b.id)<0&&b.test()){P.badges.push(b.id);f.push(b.name)}});
+  if(f.length){save();toast('شارة جديدة: '+f.join('، '))}
+}
+function played(){if(P.played.indexOf(S.mode)<0)P.played.push(S.mode)}
+
+function award(m,ok,base,partial){
+  var mult=LEVELS[S.level-1].mult,gain=0;
+  P.lvT[S.level]=(P.lvT[S.level]||0)+1;
+  if(ok){
+    gain=Math.round((base+Math.min(10,2*S.streak))*mult);
+    S.streak++;P.hits++;P.lvH[S.level]=(P.lvH[S.level]||0)+1;m.hits++;
+    if(S.streak>P.bestStreak)P.bestStreak=S.streak;
+  }else{
+    S.streak=0;gain=Math.round((partial||0)*mult);
+  }
+  P.points+=gain;m.pts+=gain;m.res.push(ok);m.done++;
+  played();
+  return gain;
+}
+
+/* ---------- timer ---------- */
+var T={id:null,end:0,dur:0};
+function stopTimer(){clearInterval(T.id);T.id=null;$('#tbar').hidden=true;$('#timerTxt').textContent=''}
+function startTimer(sec,onEnd){
+  stopTimer();if(!sec)return;
+  T.dur=sec*1000;T.end=performance.now()+T.dur;
+  var bar=$('#tbar'),fill=$('#tfill');bar.hidden=false;bar.classList.remove('low');fill.style.width='100%';
+  T.id=setInterval(function(){
+    var left=T.end-performance.now();
+    if(left<=0){stopTimer();onEnd();return}
+    fill.style.width=(left/T.dur*100)+'%';
+    bar.classList.toggle('low',left/T.dur<.25);
+    $('#timerTxt').textContent=Math.ceil(left/1000)+'s';
+  },100);
+}
+
+/* ---------- generators: candle ---------- */
+function genCandle(){
+  var p=LV.candle[S.level],kind=pick(p.kinds),nv=p.nv;
+  var bull=kind==='bull_engulf'||kind==='hammer',bear=kind==='bear_engulf'||kind==='shooting_star';
+  var drift=bull?-p.drift:bear?p.drift:(R()-0.5)*0.8;
+  var arr=walk(24,2380+R()*70,drift,V*nv),pat=null,q;
+  if(kind==='bull_engulf'){
+    q=arr[arr.length-2].c;var a1=mk(q,q-V*(0.5+R()*0.5),V*0.2);arr[arr.length-1]=a1;
+    pat=mk(a1.c-V*0.15,a1.o+V*(0.4+R()*0.6),V*0.2);
+  }else if(kind==='bear_engulf'){
+    q=arr[arr.length-2].c;var b1=mk(q,q+V*(0.5+R()*0.5),V*0.2);arr[arr.length-1]=b1;
+    pat=mk(b1.c+V*0.15,b1.o-V*(0.4+R()*0.6),V*0.2);
+  }else if(kind==='hammer'){
+    var p1=arr[arr.length-1].c,c1=p1+V*0.2*(R()<.5?-1:1);
+    pat={o:p1,c:c1,h:Math.max(p1,c1)+V*0.1,l:Math.min(p1,c1)-V*(1.7+R())};
+  }else if(kind==='shooting_star'){
+    var p2=arr[arr.length-1].c,c2=p2+V*0.2*(R()<.5?-1:1);
+    pat={o:p2,c:c2,h:Math.max(p2,c2)+V*(1.7+R()),l:Math.min(p2,c2)-V*0.1};
+  }
+  var vis=pat?arr.concat([pat]):arr,last=vis[vis.length-1];
+  var expected=bull?1:bear?-1:0;
+  var dir=kind==='none'?(R()<.5?1:-1):(R()<p.follow?expected:-expected);
+  var next=mk(last.c,last.c+dir*V*(0.5+R()*1.2),V*0.35);
+  return{kind:kind,candles:vis,next:next,nextDir:dir,expected:expected,answered:false,shown:false,reveal:0,choice:null,ok:false,timeout:false,gain:0};
+}
+
+/* ---------- generators: zone ---------- */
+function genZone(){
+  var p=LV.zone[S.level],type=pick(p.types),nv=p.nv,dir=R()<.5?1:-1,base=2380+R()*70,candles,target,i;
+  if(type==='fvg'){
+    var pre=walk(13,base,-dir*0.35,V*0.8*nv),pp=pre[pre.length-1].c;
+    var A=mk(pp,pp+dir*V*0.6,V*0.2),B=mk(A.c,A.c+dir*V*2.2,V*0.15),C=mk(B.c-dir*V*0.2,B.c+dir*V*0.5,V*0.2);
+    var post=walk(6+Math.floor(R()*3),C.c,dir*0.08,V*0.55*nv);
+    candles=pre.concat([A,B,C],post);i=pre.length;
+    target={type:type,dir:dir,i0:i,i1:i+2,lo:dir===1?A.h:C.h,hi:dir===1?C.l:A.l};
+  }else if(type==='ob'){
+    var pre2=walk(11,base,-dir*0.4,V*0.8*nv),p3=pre2[pre2.length-1].c;
+    var OB=mk(p3,p3-dir*V*0.7,V*0.2),I1=mk(OB.c,OB.c+dir*V*1.7,V*0.15),I2=mk(I1.c,I1.c+dir*V*1.2,V*0.15),I3=mk(I2.c,I2.c+dir*V*0.6,V*0.2);
+    var post2=walk(6+Math.floor(R()*3),I3.c,dir*0.1,V*0.55*nv);
+    candles=pre2.concat([OB,I1,I2,I3],post2);
+    target={type:type,dir:dir,i0:pre2.length,i1:pre2.length};
+  }else{
+    var lead=walk(5,base,dir*0.2,V*0.7*nv),p4=lead[lead.length-1].c;
+    var up=walk(5,p4,dir*0.55,V*0.7*nv);p4=up[up.length-1].c;
+    var o=p4,c=o+dir*V*0.9;
+    var Pk=dir===1?{o:o,c:c,h:c+V*0.3,l:o-V*0.1}:{o:o,c:c,h:o+V*0.1,l:c-V*0.3};
+    var pb=[],q2=Pk.c;
+    for(var k=0;k<4;k++){var cc=q2-dir*V*(0.35+R()*0.25);pb.push(mk(q2,cc,V*0.12));q2=cc}
+    var before=lead.concat(up,[Pk],pb),H=before[0].h,sw=0;
+    for(var j=0;j<before.length;j++){
+      var val=dir===1?before[j].h:before[j].l;
+      if(j===0||(dir===1?val>H:val<H)){H=val;sw=j}
+    }
+    var BR=mk(q2,H+dir*V*0.5,V*0.1);
+    var post3=walk(5,BR.c,dir*0.15,V*0.55*nv);
+    candles=before.concat([BR],post3);
+    target={type:type,dir:dir,i0:before.length,i1:before.length,level:H,swing:sw};
+  }
+  return{candles:candles,target:target,answered:false,shown:false,hint:p.hint==='auto',hintUsed:false,click:null,cursor:null,timeout:false,ok:false,gain:0};
+}
+
+/* ---------- generators: MCQ ---------- */
+function makeQ(o){
+  var seen={},list=[{t:o.correct,ok:true}];
+  seen[o.correct]=1;
+  o.wrongs.forEach(function(w){if(!seen[w[0]]){seen[w[0]]=1;list.push({t:w[0],ok:false,why:w[1]})}});
+  var k=1;
+  while(list.length<4&&o.filler&&k<14){var f=o.filler(k++);if(!seen[f[0]]){seen[f[0]]=1;list.push({t:f[0],ok:false,why:f[1]})}}
+  list=shuffle(list.slice(0,4));
+  list.forEach(function(x){x.n=o.num!==false});
+  o.options=list;
+  return o;
+}
+var RISK={
+  riskAmt:function(){
+    var bal=pick([500,1000,2000,5000,10000]),pct=pick([0.5,1,2,3]),ans=bal*pct/100,dp=ans%1?2:0;
+    return makeQ({
+      title:'كم تخسر لو ضُرب وقف الخسارة؟',
+      def:'رصيدك '+usd(bal)+' وتخاطر بنسبة '+pct+'% في هذه الصفقة. احسب أقصى مبلغ يمكن أن تخسره.',
+      card:[['الرصيد',usd(bal)],['نسبة المخاطرة',pct+'%']],
+      correct:usd(ans,dp),
+      wrongs:[[usd(bal*pct),'نسيت القسمة على 100، فصارت النسبة رقمًا صحيحًا.'],[usd(bal/pct),'قسمت الرصيد على النسبة بدل ضربه فيها.'],[usd(bal*pct/10),'نقلت الفاصلة خانة واحدة بدل خانتين.'],[usd(ans*2,dp),'ضاعفت المبلغ بلا سبب.']],
+      filler:function(k){return[usd(ans*(1+k*0.5),2),'قيمة بعيدة عن الحساب الصحيح.']},
+      steps:['المخاطرة = الرصيد × النسبة المئوية','<span class="n">'+usd(bal)+' × '+pct+'% = '+usd(ans,dp)+'</span>'],
+      tip:'يخاطر معظم المتداولين المنضبطين بنسبة 1% إلى 2% أو أقل من الرصيد في الصفقة الواحدة.'
+    });
+  },
+  rr:function(){
+    var buy=R()<.5,entry=r1(rnd(2300,2450)),d=pick([4,5,6,8,10]),rr=pick([1,1.5,2,2.5,3]);
+    var sl=buy?entry-d:entry+d,tp=buy?entry+d*rr:entry-d*rr;
+    return makeQ({
+      title:'ما نسبة العائد إلى المخاطرة؟',
+      def:'احسب نسبة العائد إلى المخاطرة لهذه الصفقة.',
+      card:[['الاتجاه',buy?'شراء':'بيع'],['الدخول',entry.toFixed(1)],['الوقف',sl.toFixed(1)],['الهدف',tp.toFixed(1)]],
+      correct:'1:'+fmtR(rr),
+      wrongs:[['1:'+fmtR(Math.round(10/rr)/10),'قلبت النسبة: قسمت المخاطرة على الربح بدل العكس.'],['1:'+fmtR(rr+1),'قسمت المسافة بين الوقف والهدف على المخاطرة بدل الربح.'],['1:'+fmtR(rr*2),'ضاعفت الربح المتوقع.']],
+      filler:function(k){return['1:'+fmtR(rr+k*0.5),'حسبت المسافة بشكل غير دقيق.']},
+      steps:['المخاطرة = |الدخول − الوقف| = '+d,'الربح = |الهدف − الدخول| = '+fmtR(d*rr),'RR = الربح ÷ المخاطرة = 1:'+fmtR(rr)],
+      tip:'الصفقة بنسبة أقل من 1:1 تحتاج نسبة نجاح عالية جدًا لتربح.'
+    });
+  },
+  lot:function(){
+    var bal,pct,d,risk,lots,tries=0;
+    do{bal=pick([2000,5000,10000,25000]);pct=pick([0.5,1,2]);d=r1(rnd(3,12));risk=bal*pct/100;lots=Math.floor(risk/(d*100)*100)/100;tries++}while(lots<0.05&&tries<40);
+    var buy=R()<.5,entry=r1(rnd(2300,2450)),sl=buy?entry-d:entry+d;
+    return makeQ({
+      title:'ما حجم اللوت المناسب؟',
+      def:'ذهب XAU/USD. تريد ألا تتجاوز خسارتك المحددة إذا ضُرب الوقف. احسب حجم اللوت.',
+      card:[['الرصيد',usd(bal)],['المخاطرة',pct+'%'],['الدخول',entry.toFixed(1)],['الوقف',sl.toFixed(1)],['حجم العقد','100 أونصة / لوت']],
+      correct:lots.toFixed(2),
+      wrongs:[[(risk/d).toFixed(2),'نسيت أن اللوت الواحد = 100 أونصة.'],[(risk/(d*10)).toFixed(2),'عاملت اللوت كأنه 10 أونصات بدل 100.'],[((bal*pct)/(d*100)).toFixed(2),'استخدمت النسبة المئوية كرقم صحيح بدل نسبة.'],[(lots*2).toFixed(2),'ضاعفت حجم المخاطرة.']],
+      filler:function(k){return[(lots+k*0.05).toFixed(2),'حجم لا يطابق المخاطرة المحددة.']},
+      steps:['المخاطرة = '+usd(bal)+' × '+pct+'% = '+usd(risk,2),'مسافة الوقف = |'+entry.toFixed(1)+' − '+sl.toFixed(1)+'| = '+d.toFixed(1)+' دولار للأونصة','خسارة اللوت الواحد = '+d.toFixed(1)+' × 100 = '+usd(d*100),'اللوت = '+usd(risk,2)+' ÷ '+usd(d*100)+' = '+(risk/(d*100)).toFixed(3)+' ثم نقرّب للأسفل = '+lots.toFixed(2)],
+      tip:'التقريب للأسفل يبقيك ضمن حد المخاطرة. حجم العقد قد يختلف بين الوسطاء، وهنا نفترض 100 أونصة.'
+    });
+  },
+  breakeven:function(){
+    var rr=pick([1,1.5,2,3]),ans=Math.round(100/(1+rr));
+    return makeQ({
+      title:'ما أقل نسبة نجاح تكفي للتعادل؟',
+      def:'تتداول بنسبة عائد إلى مخاطرة 1:'+fmtR(rr)+'. بدون عمولات، ما أقل نسبة صفقات رابحة تكفي لتعادل الحساب؟',
+      card:[['RR','1:'+fmtR(rr)]],
+      correct:ans+'%',
+      wrongs:[[Math.round(100/rr)+'%','قسمت 100 على RR بدل (1 + RR).'],[Math.round(100*rr/(1+rr))+'%','هذه نسبة الربح من المجموع، وليست نسبة النجاح المطلوبة.'],['50%','افترضت أن التعادل يكون دائمًا عند 50%.']],
+      filler:function(k){return[(ans+k*5)+'%','قيمة غير دقيقة.']},
+      steps:['عند التعادل: الربح الكلي = الخسارة الكلية','النسبة × RR = (1 − النسبة) × 1','النسبة = 1 ÷ (1 + '+fmtR(rr)+') = '+ans+'% تقريبًا'],
+      tip:'كلما ارتفعت RR انخفضت نسبة النجاح اللازمة، لكن لا تبنِ استراتيجيتك على RR عالية وحدها.'
+    });
+  },
+  netR:function(){
+    var w=pick([3,4,5]),l=10-w,rr=pick([2,2.5,3]),net=w*rr-l;
+    return makeQ({
+      title:'كم صافي نتيجة 10 صفقات بوحدات R؟',
+      def:'من 10 صفقات ربحت '+w+' وخسرت '+l+'. كل رابحة بنسبة 1:'+fmtR(rr)+' وكل خاسرة تساوي 1R.',
+      card:[['رابحة',String(w)],['خاسرة',String(l)],['RR','1:'+fmtR(rr)]],
+      correct:sgnR(net),
+      wrongs:[[sgnR(w*rr),'نسيت طرح الخسائر.'],[sgnR(w-l),'تجاهلت أن الرابحة تساوي RR وليس 1R.'],[sgnR(w*rr-l*rr),'ضربت الخسائر في RR، والخسارة دائمًا 1R.'],[sgnR(-net),'عكست الإشارة.']],
+      filler:function(k){return[sgnR(net+k),'قيمة غير مطابقة للحساب.']},
+      steps:['كل خسارة = −1R','كل رابحة = +'+fmtR(rr)+'R','الصافي = ('+w+' × '+fmtR(rr)+') − ('+l+' × 1) = '+sgnR(net)],
+      tip:'استراتيجية بنسبة نجاح أقل من 50% قد تربح إذا كانت RR كافية.'
+    });
+  },
+  drawdown:function(){
+    var bal=10000,n=pick([5,8,10]),pct=pick([1,2,3]),f=1-pct/100,rem=bal*Math.pow(f,n);
+    return makeQ({
+      title:'كم يتبقى من رصيدك بعد سلسلة خسائر؟',
+      def:'رصيدك '+usd(bal)+' وتخاطر بـ '+pct+'% من الرصيد الحالي في كل صفقة. خسرت '+n+' صفقات متتالية. كم تقريبًا الرصيد المتبقي؟',
+      card:[['الرصيد',usd(bal)],['المخاطرة',pct+'%'],['خسائر متتالية',String(n)]],
+      correct:usd(rem),
+      wrongs:[[usd(bal*(1-n*pct/100)),'جمعت النسب بدل تركيبها، وكل خسارة تُحسب من الرصيد المتبقي.'],[usd(bal*Math.pow(f,n-1)),'أخطأت بعدد الخسائر بخسارة واحدة.'],[usd(bal-n*pct),'طرحت رقم النسبة من الرصيد كأنه دولار.'],[usd(bal*Math.pow(1+pct/100,n)),'استخدمت نموًا بدل تناقص الرصيد.']],
+      filler:function(k){return[usd(rem+k*137),'قيمة غير مطابقة للحساب.']},
+      steps:['بعد كل خسارة يصبح الرصيد × '+f.toFixed(2),'بعد '+n+' خسائر: 10,000 × '+f.toFixed(2)+'^'+n,'= '+usd(rem)],
+      tip:'سلسلة الخسائر جزء طبيعي من أي استراتيجية، ولهذا نضع حدًا لخسارة اليوم.'
+    });
+  }
+};
+function genRisk(m){var list=RK[S.level];return{q:RISK[list[m.done%list.length]](),answered:false,shown:false,choice:null,ok:false,timeout:false,gain:0}}
+
+function genTerms(m){
+  if(!m.bag||!m.bag.length)m.bag=shuffle(ITEMS.filter(function(i){return i[0]===S.level}));
+  var it=m.bag.pop(),others=shuffle(ITEMS.filter(function(x){return x[0]===S.level&&x!==it})).slice(0,3),a=R()<.5,q;
+  if(a){
+    q=makeQ({title:'ما معنى <bdi class="n">'+it[1]+'</bdi>؟',def:'اختر التعريف الصحيح.',correct:it[2],num:false,
+      wrongs:others.map(function(o){return[o[2],'هذا تعريف «'+o[1]+'».']})});
+  }else{
+    q=makeQ({title:'أي مصطلح يصف هذا التعريف؟',def:it[2],correct:it[1],num:true,
+      wrongs:others.map(function(o){return[o[1],'«'+o[1]+'»: '+o[2]]})});
+  }
+  q.term=it;
+  return{q:q,answered:false,shown:false,choice:null,ok:false,timeout:false,gain:0};
+}
+
+function genOrder(m){
+  if(!m.bag||!m.bag.length)m.bag=shuffle(SEQ[S.level]);
+  var seq=m.bag.pop(),n=seq.steps.length,idx=[],ord,same,k;
+  for(k=0;k<n;k++)idx.push(k);
+  do{ord=shuffle(idx);same=ord.every(function(v,i){return v===i})}while(same);
+  return{seq:seq,order:ord,picked:[],answered:false,shown:false,ok:false,right:0,gain:0};
+}
+
+/* ---------- canvas ---------- */
+var cv=$('#chart'),ctx=cv.getContext('2d'),L=null;
+function setSize(){
+  var w=cv.parentElement.clientWidth;if(!w)return;
+  var mob=w<=560,h=Math.round(Math.min(mob?440:400,Math.max(260,w*(mob?0.95:0.56)))),dpr=Math.min(2,window.devicePixelRatio||1);
+  var cw=Math.round(w*dpr),ch=Math.round(h*dpr);
+  if(cv.width!==cw||cv.height!==ch){cv.width=cw;cv.height=ch}
+  cv.style.height=h+'px';ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+function layout(candles,slots,padF,extra,W,H){
+  var mn=Infinity,mx=-Infinity,all=extra?candles.concat(extra):candles;
+  all.forEach(function(c){if(c.l<mn)mn=c.l;if(c.h>mx)mx=c.h});
+  var pad=(mx-mn)*padF;mn-=pad;mx+=pad;
+  var pl=10,pr=58,pt=16,pb=16,slot=(W-pl-pr)/slots;
+  return{W:W,H:H,mn:mn,mx:mx,pl:pl,pr:pr,pt:pt,pb:pb,slot:slot,
+    x:function(i){return pl+slot*(i+.5)},
+    y:function(v){return pt+(mx-v)/(mx-mn)*(H-pt-pb)}};
+}
+function reduced(){return !!(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches)}
+function clamp01(x){return x<0?0:x>1?1:x}
+function easeOut(t){return 1-Math.pow(1-t,3)}
+function drawCandle(k,i,p){
+  if(p===undefined)p=1;
+  if(p<=0)return;
+  if(p<1)k={o:k.o,c:k.o+(k.c-k.o)*p,h:k.o+(k.h-k.o)*p,l:k.o+(k.l-k.o)*p};
+  var x=L.x(i),col=k.c>=k.o?COL.up:COL.down,bw=Math.max(3,L.slot*.62);
+  ctx.globalAlpha=p;ctx.strokeStyle=col;ctx.fillStyle=col;ctx.lineWidth=1.2;
+  ctx.beginPath();ctx.moveTo(x,L.y(k.h));ctx.lineTo(x,L.y(k.l));ctx.stroke();
+  var y1=L.y(Math.max(k.o,k.c)),y2=L.y(Math.min(k.o,k.c));
+  ctx.fillRect(x-bw/2,y1,bw,Math.max(1.5,y2-y1));
+  ctx.globalAlpha=1;
+}
+function zoneRect(t,c){
+  if(t.type==='fvg')return{x0:L.pl+L.slot*t.i0,x1:L.pl+L.slot*(t.i1+1),y0:L.y(t.hi),y1:L.y(t.lo)};
+  var k=c.candles[t.i0];
+  return{x0:L.pl+L.slot*t.i0,x1:L.pl+L.slot*(t.i0+1),y0:L.y(k.h),y1:L.y(k.l)};
+}
+function box(x,y,w,h,a){
+  ctx.fillStyle='rgba(201,166,103,'+a+')';ctx.fillRect(x,y,w,h);
+  ctx.strokeStyle=COL.gold;ctx.lineWidth=1.2;ctx.setLineDash([]);ctx.strokeRect(x,y,w,h);
+}
+function label(txt,x,y,align){
+  ctx.fillStyle=COL.goldHi;ctx.font='600 11px '+MONO;ctx.textAlign=align||'left';
+  ctx.fillText(txt,x,Math.max(11,y));
+}
+function patBox(c){
+  var info=PAT[c.kind];if(!info.n)return;
+  var n=c.candles.length,i0=n-info.n,hi=-Infinity,lo=Infinity;
+  for(var i=i0;i<n;i++){hi=Math.max(hi,c.candles[i].h);lo=Math.min(lo,c.candles[i].l)}
+  var x0=L.x(i0)-L.slot*.5-3,x1=L.x(n-1)+L.slot*.5+3,y0=L.y(hi)-7,y1=L.y(lo)+7;
+  box(x0,y0,x1-x0,y1-y0,.10);
+  ctx.fillStyle=COL.goldHi;ctx.font='600 10.5px '+MONO;ctx.textAlign='right';
+  var ty=y0-5;if(ty<12)ty=y1+13;
+  ctx.fillText(info.en,x1,ty);
+}
+function priceTag(y,txt,W){
+  ctx.font='600 11px '+MONO;
+  var w=ctx.measureText(txt).width+10;
+  ctx.fillStyle=COL.gold;ctx.fillRect(W-L.pr+2,y-9,w,18);
+  ctx.fillStyle='#1a1200';ctx.textAlign='left';ctx.fillText(txt,W-L.pr+7,y+4);
+}
+function draw(){
+  if(!isCanvas())return;
+  var m=M[S.mode],c=m.cur,W=cv.clientWidth,H=cv.clientHeight;
+  if(!W||!H)return;
+  var rm=reduced(),ph=rm?0:performance.now()/1000;
+  ctx.clearRect(0,0,W,H);ctx.fillStyle=COL.bg;ctx.fillRect(0,0,W,H);
+  if(!c||m.summary)return;
+  if(S.mode==='sltp'||S.mode==='trade'){drawPosGame(m,c,W,H,rm,ph);return}
+  var cs=c.candles,n=cs.length,slots,extra=null,padF=.12;
+  if(S.mode==='candle'){slots=n+1;padF=.22;if(c.reveal>0)extra=[c.next]}else{slots=n}
+  L=layout(cs,slots,padF,extra,W,H);
+
+  ctx.font='11px '+MONO;ctx.textAlign='left';
+  for(var g=0;g<5;g++){
+    var v=L.mn+(L.mx-L.mn)*g/4,yy=L.y(v);
+    ctx.strokeStyle=COL.grid;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(L.pl,yy);ctx.lineTo(W-L.pr+4,yy);ctx.stroke();
+    ctx.fillStyle=COL.axis;ctx.fillText(v.toFixed(2),W-L.pr+8,yy+4);
+  }
+
+  if(S.mode==='zone'&&c.hint&&!c.answered){
+    var t0=c.target,hx0=L.pl+L.slot*(t0.i0-2.5),hx1=L.pl+L.slot*(t0.i1+3.5),pa=.5+.5*Math.sin(ph*3);
+    ctx.fillStyle='rgba(201,166,103,'+(.05+.05*pa)+')';ctx.fillRect(hx0,L.pt-8,hx1-hx0,H-L.pt-L.pb+16);
+    ctx.save();ctx.setLineDash([5,5]);ctx.strokeStyle='rgba(201,166,103,'+(.35+.3*pa)+')';ctx.lineWidth=1;ctx.strokeRect(hx0,L.pt-8,hx1-hx0,H-L.pt-L.pb+16);ctx.restore();
+  }
+
+  var ip=c.intro===undefined?1:c.intro;
+  cs.forEach(function(k,i){drawCandle(k,i,easeOut(clamp01((ip-i/(n+8))*(n+8)/8)))});
+
+  if(S.mode==='candle'){
+    if(S.level===1||c.answered){ctx.globalAlpha=c.answered||rm?1:.65+.35*Math.sin(ph*4);patBox(c);ctx.globalAlpha=1}
+    if(c.reveal>0){
+      var e=1-Math.pow(1-c.reveal,3),nx=c.next,cc=nx.o+(nx.c-nx.o)*e;
+      drawCandle({o:nx.o,c:cc,h:Math.max(nx.o,cc)+(nx.h-Math.max(nx.o,nx.c))*e,l:Math.min(nx.o,cc)-(Math.min(nx.o,nx.c)-nx.l)*e},n,1);
+    }else{
+      var last=cs[n-1],xs=L.x(n),ym=L.y(last.c),bw=Math.max(L.slot*.8,12),qa=c.choice?1:.55+.45*Math.sin(ph*3);
+      ctx.save();ctx.setLineDash([4,4]);ctx.strokeStyle=COL.gold;ctx.globalAlpha=.45+.4*qa;ctx.lineWidth=1.2;
+      ctx.strokeRect(xs-bw/2,ym-34,bw,68);ctx.restore();
+      ctx.fillStyle=COL.goldHi;ctx.globalAlpha=c.choice?.35:1;ctx.font='600 13px '+MONO;ctx.textAlign='center';ctx.fillText('?',xs,ym+5);ctx.globalAlpha=1;
+      if(c.choice){
+        var dv=c.choice>0?-1:1,col=c.choice>0?COL.up:COL.down,pop=easeOut(clamp01((performance.now()-(c.chosenAt||0))/250));
+        ctx.fillStyle=col;ctx.globalAlpha=pop;ctx.beginPath();
+        ctx.moveTo(xs,ym+dv*(10+16*pop));ctx.lineTo(xs-8,ym+dv*10);ctx.lineTo(xs+8,ym+dv*10);ctx.closePath();ctx.fill();ctx.globalAlpha=1;
+      }
+    }
+    return;
+  }
+
+  var t=c.target;
+  if(c.answered){
+    var r=zoneRect(t,c),right=W-L.pr,z=c.zr===undefined?1:easeOut(c.zr);
+    ctx.globalAlpha=Math.max(.15,z);
+    if(t.type==='bos'){
+      var yl=L.y(t.level),xa=L.x(t.swing),xb=L.x(t.i0)+L.slot;
+      ctx.save();ctx.setLineDash([6,4]);ctx.strokeStyle=COL.gold;ctx.lineWidth=1.3;
+      ctx.beginPath();ctx.moveTo(xa,yl);ctx.lineTo(xa+(xb-xa)*z,yl);ctx.stroke();ctx.restore();
+      box(r.x0-3,r.y0-4,r.x1-r.x0+6,r.y1-r.y0+8,.14);label('BOS',r.x0,r.y0-8);
+    }else if(t.type==='fvg'){
+      box(r.x0,r.y0,(right-r.x0)*z,r.y1-r.y0,.16);label('FVG',r.x0+2,r.y0-6);
+    }else{
+      box(r.x0,r.y0,(right-r.x0)*z,r.y1-r.y0,.12);label('OB',r.x0+2,r.y0-6);
+    }
+    ctx.globalAlpha=1;
+    if(c.click){
+      var mc=c.ok?COL.up:COL.down;
+      if(!c.ok){
+        ctx.save();ctx.setLineDash([3,4]);ctx.strokeStyle=COL.down;ctx.globalAlpha=.6*z;ctx.lineWidth=1;
+        ctx.beginPath();ctx.moveTo(c.click.x,c.click.y);ctx.lineTo(c.click.x+((r.x0+r.x1)/2-c.click.x)*z,c.click.y+((r.y0+r.y1)/2-c.click.y)*z);ctx.stroke();ctx.restore();
+      }
+      ctx.strokeStyle=mc;ctx.lineWidth=2;ctx.beginPath();ctx.arc(c.click.x,c.click.y,9,0,6.283);ctx.stroke();
+      ctx.fillStyle=mc;ctx.beginPath();ctx.arc(c.click.x,c.click.y,2.2,0,6.283);ctx.fill();
+      if(c.rip!==undefined&&c.rip<1){ctx.globalAlpha=1-c.rip;ctx.beginPath();ctx.arc(c.click.x,c.click.y,9+30*easeOut(c.rip),0,6.283);ctx.stroke();ctx.globalAlpha=1}
+      ctx.font='600 11px '+MONO;ctx.textAlign='center';
+      ctx.fillText('اختيارك',Math.max(30,Math.min(W-L.pr-20,c.click.x)),c.click.y>26?c.click.y-14:c.click.y+24);
+    }
+  }else if(c.pick){
+    var pk=c.pick,ci=Math.floor((pk.x-L.pl)/L.slot);
+    if(ci>=0&&ci<n){ctx.fillStyle='rgba(201,166,103,.08)';ctx.fillRect(L.pl+L.slot*ci,L.pt-6,L.slot,H-L.pt-L.pb+12)}
+    ctx.save();ctx.setLineDash([3,4]);ctx.strokeStyle='rgba(228,197,137,.6)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(L.pl,pk.y);ctx.lineTo(W-L.pr+4,pk.y);ctx.moveTo(pk.x,L.pt-6);ctx.lineTo(pk.x,H-L.pb+6);ctx.stroke();ctx.restore();
+    priceTag(pk.y,(L.mx-(pk.y-L.pt)/(H-L.pt-L.pb)*(L.mx-L.mn)).toFixed(2),W);
+    var rr=13+(rm?0:2*Math.sin(ph*5));
+    ctx.strokeStyle=COL.goldHi;ctx.lineWidth=2;ctx.beginPath();ctx.arc(pk.x,pk.y,rr,0,6.283);ctx.stroke();
+    ctx.fillStyle=COL.goldHi;ctx.beginPath();ctx.arc(pk.x,pk.y,3,0,6.283);ctx.fill();
+    if(c.rip!==undefined&&c.rip<1){ctx.globalAlpha=1-c.rip;ctx.lineWidth=2;ctx.beginPath();ctx.arc(pk.x,pk.y,13+30*easeOut(c.rip),0,6.283);ctx.stroke();ctx.globalAlpha=1}
+  }else if(c.cursor){
+    var cu=c.cursor;
+    ctx.save();ctx.setLineDash([3,4]);ctx.strokeStyle='rgba(201,166,103,.45)';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(L.pl,cu.y);ctx.lineTo(W-L.pr+4,cu.y);ctx.moveTo(cu.x,L.pt-6);ctx.lineTo(cu.x,H-L.pb+6);ctx.stroke();ctx.restore();
+  }
+}
+
+/* tweens and ambient loop */
+function tween(c,key,dur,done){
+  var tk='_t'+key,id=(c[tk]||0)+1;c[tk]=id;
+  var t0=performance.now(),rm=reduced();
+  (function s(now){
+    if(c[tk]!==id)return;
+    var t=rm?1:Math.min(1,Math.max(0,(now-t0)/dur));
+    c[key]=t;draw();
+    if(t<1)requestAnimationFrame(s);else if(done)done();
+  })(t0);
+}
+var amb=false;
+function ambNeeded(){
+  var m=M[S.mode],c=m.cur;
+  if(!c||c.answered||m.summary||reduced())return false;
+  if(S.mode==='candle'||S.mode==='sltp')return true;
+  if(S.mode==='zone')return !!c.pick||c.hint;
+  return false;
+}
+function ensureAmbient(){
+  if(amb||!ambNeeded())return;
+  amb=true;
+  (function f(){if(!ambNeeded()){amb=false;draw();return}draw();requestAnimationFrame(f)})();
+}
+
+/* ---------- round flow ---------- */
+function startRound(){
+  var m=M[S.mode];stopTimer();
+  if(S.mode==='candle')m.cur=genCandle();
+  else if(S.mode==='zone')m.cur=genZone();
+  else if(S.mode==='risk')m.cur=genRisk(m);
+  else if(S.mode==='terms')m.cur=genTerms(m);
+  else if(S.mode==='sltp')m.cur=genSltp();
+  else if(S.mode==='trade')m.cur=genTrade();
+  else m.cur=genOrder(m);
+  if(isCanvas())m.cur.intro=0;
+  render();armTimer();
+  if(m.cur.intro===0)tween(m.cur,'intro',750);
+}
+function armTimer(){
+  var m=M[S.mode],c=m.cur;
+  if(!c||c.answered||m.summary){stopTimer();return}
+  var sec=TIMES[S.mode];
+  if(S.level===3&&sec)startTimer(sec,timeout);else stopTimer();
+}
+function timeout(){
+  var c=M[S.mode].cur;if(!c||c.answered)return;
+  if(S.mode==='candle')answerCandle(0);
+  else if(S.mode==='zone'){if(c.pick)answerZone(c.pick.x,c.pick.y);else answerZone(null,null)}
+  else if(S.mode==='risk'||S.mode==='terms')answerMCQ(-1);
+  else if(S.mode==='sltp')answerSltp(true);
+  else if(S.mode==='trade')answerTrade(null);
+}
+
+/* candle */
+function candleNote(c){
+  var nm=PAT[c.kind].ar;
+  if(c.timeout)return 'انتهى الوقت. '+(c.kind==='none'?'لم يكن هناك نمط واضح':nm+' كانت ترجّح '+dirName(c.expected))+'، والشمعة التالية '+dirName(c.nextDir)+'.';
+  if(c.kind==='none')return 'شارت بلا نمط واضح، والشمعة التالية كانت '+dirName(c.nextDir)+'.';
+  return nm+' ترجّح '+dirName(c.expected)+' وأنت اخترت '+dirName(c.choice)+'، والشمعة التالية '+dirName(c.nextDir)+'.';
+}
+function answerCandle(dir){
+  var m=M.candle,c=m.cur;if(!c||c.answered)return;
+  stopTimer();
+  c.answered=true;c.choice=dir;c.timeout=dir===0;c.ok=dir!==0&&dir===c.nextDir;
+  c.gain=award(m,c.ok,10,0);
+  m.log.push({ok:c.ok,note:candleNote(c)});
+  save();renderStats();
+  document.querySelectorAll('.call').forEach(function(b){b.disabled=true});
+  c.chosenAt=performance.now();
+  tween(c,'reveal',560,function(){c.shown=true;checkBadges();render()});
+}
+
+/* zone */
+function whereInfo(x,y,c){
+  var t=c.target,r=zoneRect(t,c),ex=9;
+  var inX=x>=r.x0-ex&&x<=r.x1+ex,inY=y>=r.y0-ex&&y<=r.y1+ex;
+  var ci=Math.floor((x-L.pl)/L.slot),gap=ci<t.i0?t.i0-ci:ci>t.i1?ci-t.i1:0;
+  if(inX&&!inY)return['خارج حدود المنطقة سعريًا','اخترت الشمعة الصحيحة تقريبًا لكن السعر الذي ضغطت عليه خارج حدود المنطقة. انتبه للمحور السعري على اليمين.'];
+  if(!inX&&inY)return['شمعة مختلفة','السعر قريب لكن ضغطت عند شمعة مختلفة. المنطقة الصحيحة محددة بالإطار الذهبي.'];
+  if(gap<=2)return['قريب من المنطقة','كنت قريبًا بشمعة أو شمعتين. راجع خطوات التعرف أدناه لتحدد الحدود بدقة.'];
+  return['بعيد عن المنطقة','ضغطت في مكان بعيد عن المنطقة. ابدأ بالبحث عن الاندفاع القوي على الشارت ثم ارجع إلى ما قبله أو ما حوله.'];
+}
+function answerZone(x,y){
+  var m=M.zone,c=m.cur;if(!c||c.answered)return;
+  if(x!==null&&!L)return;
+  stopTimer();
+  var p=LV.zone[S.level],ok=false,w=null;
+  c.answered=true;c.shown=true;c.cursor=null;c.pick=null;
+  if(x===null){c.timeout=true}
+  else{
+    var r=zoneRect(c.target,c),ex=9;
+    ok=x>=r.x0-ex&&x<=r.x1+ex&&y>=r.y0-ex&&y<=r.y1+ex;
+    c.click={x:x,y:y};
+    if(!ok)w=whereInfo(x,y,c);
+  }
+  c.ok=ok;c.where=w;
+  var base=p.hint==='auto'?12:(c.hintUsed?8:15);
+  c.gain=award(m,ok,base,0);
+  if(ok)P[c.target.type]++;
+  var d=c.target.dir>0?0:1;
+  m.log.push({ok:ok,note:(c.timeout?'انتهى الوقت. ':'')+'المطلوب: '+TITLES[c.target.type][d]+'. '+DEFS[c.target.type][d]});
+  save();checkBadges();c.zr=0;c.rip=0;render();
+  tween(c,'zr',750);if(c.click)tween(c,'rip',650);
+}
+
+/* MCQ */
+function answerMCQ(i){
+  var m=M[S.mode],c=m.cur;if(!c||c.answered)return;
+  stopTimer();
+  c.answered=true;c.shown=true;c.choice=i;c.timeout=i<0;
+  c.ok=i>=0&&c.q.options[i].ok;
+  c.gain=award(m,c.ok,S.mode==='risk'?14:9,0);
+  if(c.ok)P[S.mode]++;
+  var good=c.q.options.filter(function(o){return o.ok})[0],bad=i>=0?c.q.options[i]:null;
+  var note;
+  if(S.mode==='terms')note=c.q.term[1]+': '+c.q.term[2];
+  else note=c.q.title+' الصحيح: '+good.t+'. '+(bad&&bad.why?bad.why:(c.timeout?'انتهى الوقت.':''));
+  m.log.push({ok:c.ok,note:note});
+  save();checkBadges();render();
+}
+
+/* order */
+function checkOrder(){
+  var m=M.order,c=m.cur;if(!c||c.answered)return;
+  var n=c.seq.steps.length;if(c.picked.length<n)return;
+  var cnt=0,wrongIdx=-1;
+  c.picked.forEach(function(p,i){if(p===i)cnt++;else if(wrongIdx<0)wrongIdx=i});
+  c.answered=true;c.shown=true;c.right=cnt;c.ok=cnt===n;
+  c.gain=award(m,c.ok,6+n*2,cnt*2);
+  if(c.ok)P.order++;
+  m.log.push({ok:c.ok,note:'في «'+c.seq.title+'» وضعت '+cnt+' من '+n+' في مكانها'+(wrongIdx>=0?'. أول خطأ في المكان رقم '+(wrongIdx+1)+': الصحيح «'+c.seq.steps[wrongIdx].t+'».':'.')});
+  save();checkBadges();render();
+}
+
+/* next / summary / level */
+function nextRound(){
+  var m=M[S.mode],n=rounds();
+  if(m.done>=n){
+    m.summary=true;stopTimer();
+    if(m.hits>=Math.ceil(n*.75))P.strong++;
+    if(S.level===3&&m.hits>=Math.ceil(n*.6))P.expert++;
+    save();checkBadges();render();
+  }else startRound();
+}
+function again(){M[S.mode]=fresh();startRound()}
+function setMode(mode){
+  stopTimer();S.mode=mode;
+  var m=M[mode];
+  if(!m.cur&&!m.summary)startRound();else{render();armTimer()}
+}
+function setLevel(lv){
+  if(lv===S.level)return;
+  S.level=lv;S.streak=0;resetAll();startRound();
+  toast('المستوى: '+LEVELS[lv-1].name);
+}
+
+/* =================== game: SL / TP placer =================== */
+function isCanvas(){return S.mode==='candle'||S.mode==='zone'||S.mode==='sltp'||S.mode==='trade'}
+var SLTP_LV={1:{slb:2.0,tpb:1.6,nv:.7},2:{slb:1.5,tpb:1.2,nv:1},3:{slb:1.2,tpb:.9,nv:1.3}};
+
+/* builds a buy setup: equal highs (liquidity) above, a structure low below, entry after a rally and pullback */
+function buildBuySetup(nv){
+  var a=[],i,q,B=2380+R()*60;
+  a=a.concat(walk(6,B,0.35,V*0.6*nv));
+  var p0=a[a.length-1].c,e1c=p0+V*0.8,T1=e1c+V*0.6;
+  var i1=a.length;a.push({o:p0,c:e1c,h:T1,l:p0-V*0.15});
+  q=e1c;
+  for(i=0;i<3;i++){var cc=q-V*(0.3+R()*0.3);a.push(mk(q,cc,V*0.15*nv));q=cc}
+  var e2c=T1-V*(0.35+R()*0.2);if(e2c<=q+V*0.2)return null;
+  var T2=T1+V*0.06*(R()<.5?1:-1),i2=a.length;
+  a.push({o:q,c:e2c,h:T2,l:q-V*0.1});
+  a=a.concat(walk(8,e2c,-1.37,V*0.6*nv));
+  q=a[a.length-1].c;
+  var lc=q-V*0.4,Lw=lc-V*0.5,si=a.length;
+  a.push({o:q,c:lc,h:q+V*0.1,l:Lw});
+  a=a.concat(walk(4,lc,0.93,V*0.55*nv));
+  a=a.concat(walk(3,a[a.length-1].c,-0.22,V*0.45*nv));
+  var T=Math.max(T1,T2),entry=a[a.length-1].c;
+  for(i=0;i<a.length;i++){
+    if(i!==i1&&i!==i2&&a[i].h>=T-V*0.25)return null;
+    if(i!==si&&a[i].l<=Lw+V*0.1)return null;
+  }
+  if(entry-Lw<V*1.4)return null;
+  var ideal=((T-0.2*V)-entry)/(entry-(Lw-0.3*V));
+  if(ideal<1.4||ideal>4.5)return null;
+  return{candles:a,entry:entry,T:T,Lw:Lw,si:si,eq:[i1,i2]};
+}
+function genSltp(){
+  var p=SLTP_LV[S.level],res=null,tries=0,nv=p.nv;
+  while(!res&&tries<300){res=buildBuySetup(tries>150?0.6:nv);tries++}
+  var d=R()<.5?1:-1,C=0,cs=res.candles;
+  if(d<0){
+    var hi=-Infinity,lo=Infinity;cs.forEach(function(k){hi=Math.max(hi,k.h);lo=Math.min(lo,k.l)});
+    C=(hi+lo)/2;
+    cs=cs.map(function(k){return{o:2*C-k.o,c:2*C-k.c,h:2*C-k.l,l:2*C-k.h}});
+  }
+  var c={dir:d,C:C,candles:cs,bs:{entry:res.entry,T:res.T,Lw:res.Lw},si:res.si,eq:res.eq,
+    sl:null,tp:null,tool:'sl',answered:false,shown:false,ok:false,timeout:false,gain:0};
+  c.entry=fromBuy(c,res.entry);
+  return c;
+}
+function toBuy(c,p){return c.dir>0?p:2*c.C-p}
+function fromBuy(c,p){return c.dir>0?p:2*c.C-p}
+function evalSltp(c){
+  var p=SLTP_LV[S.level],b=c.bs,sl=toBuy(c,c.sl),tp=toBuy(c,c.tp),r={},buy=c.dir>0;
+  if(sl>=b.entry)r.sl=['bad','في الجهة الخطأ','وقف الخسارة في الجهة الخطأ من سعر الدخول. في صفقة '+(buy?'الشراء يكون الوقف تحت الدخول.':'البيع يكون الوقف فوق الدخول.')];
+  else if(sl>=b.Lw-0.02*V)r.sl=['bad','قريب جدًا','وقفك داخل الحركة '+(buy?'فوق القاع':'تحت القمة')+' الذي انطلقت منه، فأي تذبذب طبيعي يضربه قبل أن تبطل فكرة الصفقة.'];
+  else if(sl<b.Lw-p.slb*V)r.sl=['bad','بعيد جدًا','وقفك أبعد من اللازم خلف '+(buy?'القاع':'القمة')+'، فتكبر الخسارة وتضعف نسبة RR.'];
+  else r.sl=['good','في مكانه',''];
+  if(tp<=b.entry)r.tp=['bad','في الجهة الخطأ','الهدف في الجهة الخطأ من سعر الدخول.'];
+  else if(tp>b.T+0.3*V)r.tp=['bad','بعد السيولة','هدفك أبعد من السيولة '+(buy?'فوق القمم المتساوية':'تحت القيعان المتساوية')+'، والسعر غالبًا يتفاعل عندها قبل أن يصل لهدفك.'];
+  else if(tp<b.T-p.tpb*V)r.tp=['bad','قريب جدًا','هدفك قريب جدًا وتركت جزءًا كبيرًا من الحركة المتوقعة حتى السيولة.'];
+  else r.tp=['good','في مكانه',''];
+  r.rr=(tp-b.entry)/(b.entry-sl);
+  r.ideal=((b.T-0.2*V)-b.entry)/(b.entry-(b.Lw-0.3*V));
+  return r;
+}
+function answerSltp(timeout){
+  var m=M.sltp,c=m.cur;if(!c||c.answered)return;
+  var both=c.sl!==null&&c.tp!==null;
+  if(!timeout&&!both)return;
+  stopTimer();
+  c.answered=true;c.shown=true;c.timeout=!both;
+  if(both){c.ev=evalSltp(c);c.ok=c.ev.sl[0]==='good'&&c.ev.tp[0]==='good'}else{c.ev=null;c.ok=false}
+  var part=c.ev?((c.ev.sl[0]==='good'?5:0)+(c.ev.tp[0]==='good'?5:0)):0;
+  c.gain=award(m,c.ok,14,part);
+  if(c.ok)P.sltp++;
+  var buy=c.dir>0;
+  m.log.push({ok:c.ok,note:(c.ev?'الوقف: '+c.ev.sl[1]+'، الهدف: '+c.ev.tp[1]+'. ':'انتهى الوقت قبل وضع الخطين. ')+'الوقف المنطقي خلف '+(buy?'قاع':'قمة')+' الهيكل، والهدف قبل '+(buy?'القمم':'القيعان')+' المتساوية.'});
+  save();checkBadges();c.zr=0;render();tween(c,'zr',750);
+}
+function sltpView(c){
+  var buy=c.dir>0,v={ok:c.ok,gain:c.gain};
+  v.head=c.ok?'الوقف والهدف في مكانهما':c.timeout?'انتهى الوقت':'تحتاج تعديلًا';
+  if(c.ev){
+    var e=c.ev;
+    v.cmp=[['وقف الخسارة',e.sl[1],e.sl[0]],['الهدف',e.tp[1],e.tp[0]],['RR لصفقتك','<span class="n">'+(e.rr>0?'1:'+e.rr.toFixed(1):'—')+'</span>',''],['RR المثالي تقريبًا','<span class="n">1:'+e.ideal.toFixed(1)+'</span>','good']];
+    var ms=[e.sl[2],e.tp[2]].filter(Boolean);if(ms.length)v.mistake=ms.join(' ');
+  }else v.mistake='انتهى الوقت قبل وضع الوقف والهدف.';
+  v.paras=['المنطقة الحمراء على الشارت هي المكان المنطقي للوقف، والخضراء هي المكان المنطقي للهدف.'];
+  v.lesson={h:'كيف تضع الوقف والهدف',items:[
+    buy?'حدّد القاع الذي انطلقت منه الحركة، وضع الوقف تحته بهامش بسيط.':'حدّد القمة التي انطلقت منها الحركة، وضع الوقف فوقها بهامش بسيط.',
+    buy?'ابحث عن السيولة فوقك: قمم متساوية أو قمة سابقة واضحة.':'ابحث عن السيولة تحتك: قيعان متساوية أو قاع سابق واضح.',
+    'ضع الهدف قبل السيولة بقليل، لأن السعر يتفاعل عندها.',
+    'احسب RR، وإذا كان أقل مما تتطلبه خطتك فتجاهل الصفقة.']};
+  v.open=!c.ok;
+  return v;
+}
+
+/* =================== game: trade or skip =================== */
+function G_(v){return function(d){return typeof v==='function'?v(d):v}}
+var TCHK=[
+ {k:'trend',l:'اتجاه فريم 4 ساعات',lv:1,good:function(d){return d>0?'صاعد':'هابط'},
+  bad:[{lv:1,v:function(d){return d>0?'هابط':'صاعد'},why:'الصفقة عكس الاتجاه الأكبر، واحتمال نجاحها أقل.'}]},
+ {k:'rr',l:'نسبة RR',lv:1,good:function(){return '1:'+pick(['2','2.5','3'])},
+  bad:[{lv:1,v:G_('1:0.8'),why:'الربح المتوقع أقل من الخسارة المحتملة.'},{lv:2,v:G_('1:1.1'),why:'نسبة RR ضعيفة تحتاج نسبة نجاح عالية جدًا لتربح.'}]},
+ {k:'sl',l:'وقف الخسارة',lv:1,good:function(d){return d>0?'تحت قاع الهيكل':'فوق قمة الهيكل'},
+  bad:[{lv:1,v:G_('بدون وقف'),why:'صفقة بلا وقف خسارة قد تمسح جزءًا كبيرًا من الحساب.'},{lv:2,v:function(d){return d>0?'داخل الحركة فوق القاع':'داخل الحركة تحت القمة'},why:'الوقف قريب جدًا وأي تذبذب طبيعي يضربه.'}]},
+ {k:'news',l:'الأخبار',lv:1,good:G_('لا أخبار مهمة قريبة'),
+  bad:[{lv:1,v:G_('قرار الفائدة بعد 5 دقائق'),why:'الأخبار القوية تسبب حركة حادة وانزلاقًا في السعر.'}]},
+ {k:'zone',l:'موقع الدخول',lv:2,good:function(d){return d>0?'منطقة خصم':'منطقة علاوة'},
+  bad:[{lv:2,v:function(d){return d>0?'منطقة علاوة':'منطقة خصم'},why:'تدخل من الجهة الخطأ من النطاق، فتسوء نسبة العائد.'}]},
+ {k:'confirm',l:'التأكيد',lv:2,good:G_('سحب سيولة ثم كسر هيكل'),
+  bad:[{lv:2,v:G_('لا يوجد كسر هيكل بعد'),why:'الدخول قبل التأكيد مبكر وقد يكون عكس الحركة.'}]},
+ {k:'risk',l:'المخاطرة من الرصيد',lv:3,good:function(){return pick(['0.5%','1%'])},
+  bad:[{lv:3,v:G_('5%'),why:'مخاطرة كبيرة: خمس خسائر متتالية تأكل نحو ربع الحساب.'}]},
+ {k:'spread',l:'السبريد مقارنة بالوقف',lv:3,good:G_('صغير، نحو 5% من الوقف'),
+  bad:[{lv:3,v:G_('كبير، نحو 40% من الوقف'),why:'السبريد يأكل جزءًا كبيرًا من مسافة الوقف ويضعف RR الفعلي.'}]},
+ {k:'block',l:'بين الدخول والهدف',lv:3,good:G_('لا منطقة معاكسة قريبة'),
+  bad:[{lv:3,v:function(d){return d>0?'Order Block هابط على 4 ساعات قبل الهدف':'Order Block صاعد على 4 ساعات قبل الهدف'},why:'منطقة معاكسة قوية قد توقف السعر قبل الوصول للهدف.'}]}
+];
+function genTrade(){
+  var lv=S.level,d=R()<.5?1:-1,items=TCHK.filter(function(t){return t.lv<=lv}),flaw=null;
+  if(R()>=.45){
+    var cands=[];
+    items.forEach(function(t){t.bad.forEach(function(b){if(b.lv<=lv)cands.push({t:t,b:b})})});
+    var cur=cands.filter(function(x){return x.b.lv===lv});
+    flaw=(lv>1&&cur.length&&R()<.6)?pick(cur):pick(cands);
+  }
+  var rows=items.map(function(t){var bad=!!flaw&&flaw.t===t;return{k:t.k,l:t.l,v:bad?flaw.b.v(d):t.good(d),bad:bad,why:bad?flaw.b.why:''}});
+  function row(k){return rows.filter(function(r){return r.k===k})[0]}
+  var rr=parseFloat(row('rr').v.split(':')[1]),slv=row('sl'),noSL=slv.v==='بدون وقف',tight=slv.bad&&!noSL;
+  var cs=walk(28,2380+R()*60,d*0.22,V*0.7),entry=cs[cs.length-1].c,dist=(tight?0.3:1.3)*V;
+  return{d:d,rows:rows,good:!flaw,flaw:flaw?rows.filter(function(r){return r.bad})[0]:null,candles:cs,entry:entry,
+    sl:noSL?null:entry-d*dist,tp:entry+d*dist*rr,rr:rr,stage:'decide',choice:null,tapped:-1,answered:false,shown:false,ok:false,timeout:false,gain:0};
+}
+function answerTrade(choice,idx){
+  var m=M.trade,c=m.cur;if(!c||c.answered)return;
+  stopTimer();
+  c.answered=true;c.shown=true;c.choice=choice;c.tapped=idx===undefined?-1:idx;c.timeout=choice===null;
+  var part=0;
+  if(choice==='enter')c.ok=c.good;
+  else if(choice==='skip'){
+    if(S.level===1)c.ok=!c.good;
+    else{c.ok=!c.good&&c.rows[c.tapped]&&c.rows[c.tapped].bad;if(!c.good&&!c.ok)part=4}
+  }else c.ok=false;
+  c.gain=award(m,c.ok,12,part);
+  if(c.ok&&!c.good)P.traps++;
+  m.log.push({ok:c.ok,note:c.good?'كانت صفقة مكتملة الشروط وقرارها الصحيح الدخول.':'كانت فخًا بسبب «'+c.flaw.l+': '+c.flaw.v+'». '+c.flaw.why});
+  save();checkBadges();render();
+}
+function tradeView(c){
+  var v={ok:c.ok,gain:c.gain},tap=c.rows[c.tapped];
+  v.head=c.ok?'قرار صحيح':c.timeout?'انتهى الوقت':'قرار غير صحيح';
+  var mine=c.timeout?'لم تقرر':c.choice==='enter'?'دخول':'تجاهل'+(tap?' بسبب «'+tap.l+'»':'');
+  v.cmp=[['قرارك',mine,c.ok?'good':'bad'],['القرار الصحيح',c.good?'ادخل، الصفقة مكتملة':'تجاهل، فيها مشكلة','good']];
+  if(c.flaw)v.cmp.push(['المشكلة',c.flaw.l,'bad']);
+  if(!c.ok&&!c.timeout){
+    if(c.choice==='enter')v.mistake='دخلت صفقة فيها مشكلة: «'+c.flaw.l+'» = '+c.flaw.v+'. '+c.flaw.why;
+    else if(c.good)v.mistake='كانت صفقة مكتملة الشروط. تجاهل الصفقات الجيدة يضيّع الفرص، تمامًا كما يضر الدخول في السيئة.';
+    else v.mistake='قرار التجاهل صحيح، لكن السبب غير دقيق: «'+(tap?tap.l:'')+'» سليم. المشكلة في «'+c.flaw.l+'»: '+c.flaw.why;
+  }
+  v.paras=[c.good?'كل البنود سليمة: الاتجاه والموقع والتأكيد والوقف والمخاطرة.':c.flaw.why];
+  v.lesson={h:'قائمة الفحص قبل أي صفقة',items:['الاتجاه الأكبر في صالح صفقتك.','الدخول من الجهة الصحيحة للنطاق: خصم للشراء وعلاوة للبيع.','وجود تأكيد قبل الدخول، مثل سحب سيولة ثم كسر هيكل.','وقف منطقي خلف الهيكل.','RR يناسب خطتك، ومخاطرة 1% أو أقل من الرصيد.','لا أخبار قوية قريبة.']};
+  v.open=!c.ok;
+  return v;
+}
+function renderTradeBox(c){
+  var why=!c.answered&&c.stage==='why';
+  $('#tradeBox').innerHTML='<div class="tcap">'+(why?'اضغط على البند الذي يجعلها صفقة سيئة':'بطاقة الصفقة · '+(c.d>0?'شراء':'بيع')+' XAU/USD')+'</div>'+c.rows.map(function(r,i){
+    var cls='trow';
+    if(c.answered){cls+=r.bad?' bad':' good';if(i===c.tapped&&!r.bad)cls+=' miss'}
+    var mark=c.answered?(r.bad?ICON.x:ICON.check):'';
+    var inner='<span class="tl">'+r.l+'</span><span class="tv">'+r.v+'</span>'+mark;
+    return why?'<button class="'+cls+' pickable" data-row="'+i+'" style="--i:'+i+'">'+inner+'</button>':'<div class="'+cls+'" style="--i:'+i+'">'+inner+'</div>';
+  }).join('');
+}
+
+/* =================== shared drawing for the position games =================== */
+function drawGrid(W){
+  ctx.font='11px '+MONO;ctx.textAlign='left';
+  for(var g=0;g<5;g++){
+    var v=L.mn+(L.mx-L.mn)*g/4,yy=L.y(v);
+    ctx.strokeStyle=COL.grid;ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(L.pl,yy);ctx.lineTo(W-L.pr+4,yy);ctx.stroke();
+    ctx.fillStyle=COL.axis;ctx.fillText(v.toFixed(2),W-L.pr+8,yy+4);
+  }
+}
+function tag(y,txt,W,bg,fg){
+  ctx.font='600 11px '+MONO;
+  var w=ctx.measureText(txt).width+10;
+  ctx.fillStyle=bg;ctx.fillRect(W-L.pr+2,y-9,w,18);
+  ctx.fillStyle=fg||'#0b0d12';ctx.textAlign='left';ctx.fillText(txt,W-L.pr+7,y+4);
+}
+function txt(s,x,y,col,align,font){ctx.fillStyle=col;ctx.textAlign=align||'center';ctx.font=font||('600 11px '+MONO);ctx.fillText(s,x,y)}
+var RED_A=function(a){return 'rgba(229,85,92,'+a+')'},TEAL_A=function(a){return 'rgba(47,216,196,'+a+')'};
+function posBoxes(entry,sl,tp,x0,x1,W,alpha){
+  var ye=L.y(entry);
+  if(sl!==null&&sl!==undefined){var ys=L.y(sl);ctx.fillStyle=RED_A(.14*alpha);ctx.fillRect(x0,Math.min(ye,ys),x1-x0,Math.abs(ys-ye))}
+  if(tp!==null&&tp!==undefined){var yt=L.y(tp);ctx.fillStyle=TEAL_A(.14*alpha);ctx.fillRect(x0,Math.min(ye,yt),x1-x0,Math.abs(yt-ye))}
+  ctx.save();ctx.setLineDash([5,4]);ctx.strokeStyle=COL.gold;ctx.lineWidth=1.3;ctx.beginPath();ctx.moveTo(L.pl,ye);ctx.lineTo(x1,ye);ctx.stroke();ctx.restore();
+  tag(ye,'ENTRY',W,COL.gold,'#1a1200');
+}
+function drawPosGame(m,c,W,H,rm,ph){
+  var cs=c.candles,n=cs.length,extra=null;
+  if(S.mode==='trade'){var lo=Math.min(c.tp,c.sl===null?c.entry:c.sl),hi=Math.max(c.tp,c.sl===null?c.entry:c.sl);extra=[{h:hi,l:lo}]}
+  L=layout(cs,n+7,S.mode==='sltp'?.28:.14,extra,W,H);
+  drawGrid(W);
+  var ip=c.intro===undefined?1:c.intro;
+  cs.forEach(function(k,i){drawCandle(k,i,easeOut(clamp01((ip-i/(n+8))*(n+8)/8)))});
+  var x0=L.x(n-1),x1=W-L.pr,ea=clamp01(ip*1.4-0.4);
+
+  if(S.mode==='trade'){
+    posBoxes(c.entry,c.sl,c.tp,x0,x1,W,ea);
+    if(c.sl!==null){var ys=L.y(c.sl);ctx.strokeStyle=COL.down;ctx.lineWidth=1.6;ctx.beginPath();ctx.moveTo(x0,ys);ctx.lineTo(x1,ys);ctx.stroke();txt('SL',x0+(x1-x0)/2,ys+(c.d>0?14:-6),COL.down)}
+    else txt('NO SL',x0+(x1-x0)/2,L.y(c.entry)+(c.d>0?16:-8),COL.down);
+    var yt=L.y(c.tp);ctx.strokeStyle=COL.up;ctx.lineWidth=1.6;ctx.beginPath();ctx.moveTo(x0,yt);ctx.lineTo(x1,yt);ctx.stroke();
+    txt('TP · RR 1:'+fmtR(c.rr),x0+(x1-x0)/2,yt+(c.d>0?-6:14),COL.up);
+    return;
+  }
+
+  /* sltp */
+  var buy=c.dir>0,z=c.answered?(c.zr===undefined?1:easeOut(c.zr)):0;
+  var showMarks=S.level===1||c.answered;
+  if(showMarks){
+    var sw=cs[c.si],sy=L.y(buy?sw.l:sw.h),sx=L.x(c.si);
+    ctx.fillStyle=COL.goldHi;ctx.beginPath();ctx.arc(sx,sy+(buy?7:-7),3.5,0,6.283);ctx.fill();
+    txt(buy?'قاع الهيكل':'قمة الهيكل',sx,sy+(buy?22:-14),COL.goldHi,'center','600 11px '+MONO);
+    var liq=fromBuy(c,c.bs.T),yl=L.y(liq),xe=L.x(c.eq[0])-L.slot*.4;
+    ctx.save();ctx.setLineDash([2,4]);ctx.strokeStyle=COL.goldHi;ctx.lineWidth=1.2;ctx.globalAlpha=.85;ctx.beginPath();ctx.moveTo(xe,yl);ctx.lineTo(x1,yl);ctx.stroke();ctx.restore();
+    txt((buy?'EQH':'EQL')+' · سيولة',L.x(c.eq[1])+L.slot*2,yl+(buy?-6:14),COL.goldHi,'center');
+  }
+  if(c.answered){
+    var p=SLTP_LV[S.level],b=c.bs,xs0=L.x(c.si)-L.slot*.5,wb=(x1-xs0)*z;
+    var s1=L.y(fromBuy(c,b.Lw-0.02*V)),s2=L.y(fromBuy(c,b.Lw-p.slb*V));
+    ctx.fillStyle=RED_A(.22);ctx.fillRect(xs0,Math.min(s1,s2),wb,Math.abs(s2-s1));
+    var t1=L.y(fromBuy(c,b.T+0.3*V)),t2=L.y(fromBuy(c,b.T-p.tpb*V));
+    ctx.fillStyle=TEAL_A(.2);ctx.fillRect(xs0,Math.min(t1,t2),wb,Math.abs(t2-t1));
+    ctx.globalAlpha=z;
+    txt('منطقة الوقف',xs0+wb/2,(s1+s2)/2+4,COL.down,'center','600 11px '+MONO);
+    txt('منطقة الهدف',xs0+wb/2,(t1+t2)/2+4,COL.up,'center','600 11px '+MONO);
+    ctx.globalAlpha=1;
+  }
+  posBoxes(c.entry,c.sl,c.tp,x0,x1,W,1);
+  [['sl',COL.down,'SL'],['tp',COL.up,'TP']].forEach(function(o){
+    var pr=c[o[0]];if(pr===null)return;
+    var y=L.y(pr),act=!c.answered&&c.tool===o[0];
+    ctx.strokeStyle=o[1];ctx.lineWidth=act?2.6:1.8;ctx.beginPath();ctx.moveTo(L.pl,y);ctx.lineTo(x1,y);ctx.stroke();
+    tag(y,pr.toFixed(2),W,o[1],'#0b0d12');
+    txt(o[2],x1-(c.answered?14:36),y+(y>L.pt+16?-6:15),o[1],'center','700 11px '+MONO);
+    if(!c.answered){
+      var hx=x1-16,r=act?9+(rm?0:1.5*Math.sin(ph*5)):7;
+      ctx.fillStyle=o[1];ctx.beginPath();ctx.arc(hx,y,r,0,6.283);ctx.fill();
+      ctx.strokeStyle='#0b0d12';ctx.lineWidth=1.5;ctx.beginPath();ctx.moveTo(hx-4,y-2);ctx.lineTo(hx+4,y-2);ctx.moveTo(hx-4,y+2);ctx.lineTo(hx+4,y+2);ctx.stroke();
+    }
+    if(c.answered&&c.ev){
+      var ok=c.ev[o[0]][0]==='good';
+      txt(ok?'✓':'✕',L.pl+12,y+(y>L.pt+14?-5:14),ok?COL.up:COL.down,'center','700 14px '+MONO);
+    }
+  });
+  if(c.sl!==null&&c.tp!==null){
+    var rr=(toBuy(c,c.tp)-c.bs.entry)/(c.bs.entry-toBuy(c,c.sl));
+    var ym=(L.y(c.entry)+L.y(c.tp))/2;
+    ctx.font='700 13px '+MONO;var label='RR '+(rr>0?'1:'+rr.toFixed(1):'—'),tw=ctx.measureText(label).width+14;
+    var bx=x0+(x1-x0)/2-tw/2;
+    ctx.fillStyle='rgba(11,13,18,.85)';ctx.fillRect(bx,ym-11,tw,22);
+    txt(label,x0+(x1-x0)/2,ym+5,rr>=1.5?COL.up:rr>0?COL.goldHi:COL.down,'center','700 13px '+MONO);
+  }
+  if(!c.answered&&c.sl===null&&c.tp===null){
+    var a=rm?1:.55+.45*Math.sin(ph*3);
+    ctx.globalAlpha=a;txt('المس الشارت لوضع وقف الخسارة',(L.pl+x1)/2,L.pt+14,COL.goldHi,'center','600 12px '+MONO);ctx.globalAlpha=1;
+  }
+}
+
+/* sltp input */
+function sc(){var c=M.sltp.cur;return S.mode==='sltp'&&c&&!c.answered?c:null}
+function yToPrice(y){var H=cv.clientHeight;return L.mx-(y-L.pt)/(H-L.pt-L.pb)*(L.mx-L.mn)}
+var slDrag=null;
+function sltpDown(y){
+  var c=sc();if(!c||!L)return;
+  var near=null,best=24;
+  ['sl','tp'].forEach(function(k){if(c[k]!==null){var dy=Math.abs(L.y(c[k])-y);if(dy<best){best=dy;near=k}}});
+  if(near){slDrag=near;c.tool=near}
+  else{
+    var k=c.tool;c[k]=yToPrice(y);slDrag=k;
+  }
+  c[slDrag]=yToPrice(y);
+  draw();syncSltp();
+}
+function sltpMove(y){var c=sc();if(!c||!slDrag)return;c[slDrag]=yToPrice(Math.max(L.pt,Math.min(cv.clientHeight-L.pb,y)));draw();syncSltp()}
+function sltpUp(){
+  var c=sc();if(!c||!slDrag){slDrag=null;return}
+  var k=slDrag;slDrag=null;
+  var other=k==='sl'?'tp':'sl';if(c[other]===null)c.tool=other;
+  renderControls(M.sltp,c);draw();
+}
+function syncSltp(){
+  var c=sc();if(!c)return;
+  var b=$('[data-act="confirm-sltp"]');if(b)b.disabled=!(c.sl!==null&&c.tp!==null);
+  ['sl','tp'].forEach(function(k){var e=$('[data-act="tool-'+k+'"] .n');if(e)e.textContent=c[k]===null?'—':c[k].toFixed(2)});
+}
+
+/* ---------- result views ---------- */
+function viewHTML(v){
+  var h='<h3>'+(v.ok?ICON.check:ICON.x)+'<span>'+v.head+'</span>'+(v.gain?'<span class="gain">+'+v.gain+'</span>':'')+'</h3>';
+  if(v.cmp)h+='<div class="cmp">'+v.cmp.map(function(c){return '<div class="cell '+(c[2]||'')+'"><span>'+c[0]+'</span><b>'+c[1]+'</b></div>'}).join('')+'</div>';
+  if(v.mistake)h+='<p class="mistake"><b>ما الذي حدث؟</b> '+v.mistake+'</p>';
+  (v.paras||[]).forEach(function(p){h+='<p>'+p+'</p>'});
+  if(v.lesson)h+='<details class="lesson"'+(v.open?' open':'')+'><summary>'+v.lesson.h+'</summary><ol>'+v.lesson.items.map(function(i){return '<li>'+i+'</li>'}).join('')+'</ol></details>';
+  if(v.tip)h+='<p class="tip">'+ICON.bulb+'<span>'+v.tip+'</span></p>';
+  return h;
+}
+function candleView(c){
+  var nm=PAT[c.kind].ar,v={ok:c.ok,gain:c.gain};
+  v.head=c.ok?'إصابة':c.timeout?'انتهى الوقت':'ليست هذه المرة';
+  v.cmp=[['اختيارك',c.timeout?'لم تختر':dirName(c.choice),c.ok?'good':'bad'],['الشمعة التالية',dirName(c.nextDir),'good'],['النمط يرجّح',c.expected?dirName(c.expected):'لا إشارة','']];
+  if(!c.ok){
+    if(c.kind==='none')v.mistake='لا يوجد نمط يرجّح اتجاهًا هنا، فالشمعة التالية كانت أقرب للحظ. الأفضل تجاهل الشارت الغامض.';
+    else if(c.timeout)v.mistake='انتهى الوقت قبل أن تختار. '+nm+' كانت ترجّح '+dirName(c.expected)+'.';
+    else if(c.choice===c.expected)v.mistake='قرأت النمط صح واخترت '+dirName(c.choice)+'، لكن السوق عاكسه هذه المرة. الأنماط ترجّح ولا تضمن، ولهذا نستخدم وقف الخسارة.';
+    else v.mistake='النمط كان يرجّح '+dirName(c.expected)+' وأنت اخترت '+dirName(c.choice)+'. انتبه للنمط المحدد بالإطار الذهبي على الشارت.';
+  }
+  v.paras=[EXP[c.kind]];
+  v.lesson={h:'كيف تتعرف على هذا النمط',items:CSTEPS[c.kind]};v.open=!c.ok;
+  return v;
+}
+function zoneView(c){
+  var t=c.target,d=t.dir>0?0:1,nm=(t.dir>0?'Bullish ':'Bearish ')+t.type.toUpperCase(),v={ok:c.ok,gain:c.gain};
+  v.head=c.ok?'إصابة':c.timeout?'انتهى الوقت':'ليست هذه المرة';
+  v.cmp=[['اختيارك',c.timeout?'لم تختر':c.ok?'داخل المنطقة':c.where[0],c.ok?'good':'bad'],['الإجابة الصحيحة','<span class="n">'+nm+'</span> (الإطار الذهبي)','good']];
+  if(!c.ok)v.mistake=c.timeout?'انتهى الوقت قبل أن تختار. المنطقة الصحيحة ظاهرة بالإطار الذهبي.':c.where[1];
+  v.paras=[ZEXP[t.type][d]];
+  v.lesson={h:'كيف تجدها على أي شارت',items:ZSTEPS[t.type]};v.open=!c.ok;
+  if(c.hintUsed)v.tip='استخدمت التلميح فخُفّضت نقاط هذه الجولة.';
+  return v;
+}
+function mcqView(c){
+  var q=c.q,good=q.options.filter(function(o){return o.ok})[0],bad=c.choice>=0?q.options[c.choice]:null,v={ok:c.ok,gain:c.gain};
+  function T(o){return o.n?'<span class="n">'+o.t+'</span>':o.t}
+  v.head=c.ok?'إجابة صحيحة':c.timeout?'انتهى الوقت':'إجابة غير صحيحة';
+  v.cmp=[['اختيارك',bad?T(bad):'لم تختر',c.ok?'good':'bad'],['الإجابة الصحيحة',T(good),'good']];
+  if(!c.ok&&bad&&bad.why)v.mistake=bad.why;
+  if(!c.ok&&c.timeout)v.mistake='انتهى الوقت قبل أن تختار.';
+  if(S.mode==='terms'){v.paras=['<b>'+q.term[1]+'</b>: '+q.term[2]]}
+  else{v.lesson={h:'الحل خطوة بخطوة',items:q.steps};v.open=!c.ok;v.tip=q.tip}
+  return v;
+}
+function orderView(c){
+  var n=c.seq.steps.length,v={ok:c.ok,gain:c.gain};
+  v.head=c.ok?'ترتيب صحيح':'ترتيب غير مكتمل';
+  v.cmp=[['خطوات في مكانها الصحيح',cnt(c)+' من '+n,c.ok?'good':'bad']];
+  if(!c.ok){
+    var bad=[];c.picked.forEach(function(p,i){if(p!==i&&bad.length<2)bad.push('«'+c.seq.steps[i].t+'» مكانها رقم '+(i+1))});
+    v.mistake='وضعت بعض الخطوات في غير مكانها: '+bad.join('، ')+'.';
+  }
+  v.lesson={h:'الترتيب الصحيح ولماذا',items:c.seq.steps.map(function(s){return '<b>'+s.t+'</b>: '+s.why})};v.open=true;
+  return v;
+}
+function cnt(c){return c.right}
+function summaryHTML(m){
+  var n=rounds(),acc=m.hits/n,misses=m.log.filter(function(x){return !x.ok});
+  var remark=acc>=.85?'أداء ممتاز، عينك صارت سريعة.':acc>=.6?'أداء جيد، كرّر الجولة لتثبّت ما تعلمته.':'تحتاج مزيدًا من التمرين، وهذا هو الهدف من اللعبة.';
+  var h='<h3>'+ICON.check+'<span>انتهت الجولة: '+m.hits+' من '+n+'</span><span class="gain">+'+m.pts+'</span></h3>';
+  h+='<p>'+remark+' رتبتك الآن: <b>'+rankOf(P.points)+'</b>.</p>';
+  if(acc>=.75&&S.level<3)h+='<p>أنت جاهز لمستوى <b>'+LEVELS[S.level].name+'</b>.</p>';
+  else if(acc<.4&&S.level>1)h+='<p>جرّب مستوى <b>'+LEVELS[S.level-2].name+'</b> لتثبّت الأساس ثم عد.</p>';
+  if(misses.length)h+='<p><b>مراجعة أخطائك</b></p><ul class="rev">'+misses.map(function(x){return '<li>'+x.note+'</li>'}).join('')+'</ul>';
+  else h+='<p>لم تخطئ في أي جولة هنا.</p>';
+  return h;
+}
+
+/* ---------- render ---------- */
+var stage=$('#stage'),firstBuild=true;
+function buildStatic(){
+  $('#levels').innerHTML=LEVELS.map(function(l){
+    var bars='';for(var i=1;i<=3;i++)bars+='<i'+(i<=l.id?' class="on"':'')+'></i>';
+    return '<button class="lv" data-lv="'+l.id+'" aria-pressed="false"><span class="lt"><b>'+l.name+'</b><span class="bars" aria-hidden="true">'+bars+'</span></span><span class="ld">'+l.desc+'</span><span class="lm"><span class="mx">×'+l.mult+'</span><span class="acc"></span><span class="rec" hidden>موصى به</span></span></button>';
+  }).join('');
+  $('#modes').innerHTML=GAMES.map(function(g){return '<button class="tab" role="tab" id="tab-'+g.id+'" data-mode="'+g.id+'" aria-selected="false" aria-controls="stage">'+g.name+'</button>'}).join('');
+}
+function recLevel(){
+  var r=1;
+  for(var l=1;l<3;l++){var t=P.lvT[l]||0,h=P.lvH[l]||0;if(t>=8&&h/t>=.7)r=l+1;else break}
+  return r;
+}
+var shown={pts:0,streak:0};
+function countTo(el,from,to){
+  if(reduced()||from===to){el.textContent=to;return}
+  var t0=performance.now();
+  (function s(now){var t=Math.min(1,(now-t0)/600);el.textContent=Math.round(from+(to-from)*easeOut(t));if(t<1)requestAnimationFrame(s)})(t0);
+}
+function renderStats(){
+  if(P.points!==shown.pts){countTo($('#sPts'),shown.pts,P.points);shown.pts=P.points}
+  var sk=$('#sStreak');sk.textContent=S.streak;
+  if(S.streak!==shown.streak){if(S.streak>shown.streak){sk.classList.remove('bump');void sk.offsetWidth;sk.classList.add('bump')}shown.streak=S.streak}$('#sRank').textContent=rankOf(P.points);
+  var rec=recLevel();
+  document.querySelectorAll('.lv').forEach(function(b){
+    var l=+b.dataset.lv,t=P.lvT[l]||0,h=P.lvH[l]||0;
+    b.setAttribute('aria-pressed',String(l===S.level));
+    b.querySelector('.acc').textContent=t?'دقتك '+Math.round(h/t*100)+'%':'لم تبدأ';
+    b.querySelector('.rec').hidden=l!==rec;
+  });
+  document.querySelectorAll('.tab').forEach(function(t){t.setAttribute('aria-selected',String(t.dataset.mode===S.mode))});
+  stage.setAttribute('aria-labelledby','tab-'+S.mode);
+}
+function renderQuestion(c){
+  var chip,title,def;
+  if(S.mode==='candle'){
+    chip='NEXT CANDLE';title='ما اتجاه الشمعة التالية؟';
+    def=S.level===1?'الشمعة الأخيرة عليها نمط ظاهر بإطار ذهبي. اقرأ معناه ثم اختر.':S.level===2?'اقرأ آخر الشموع ثم اختر. قد لا يوجد نمط واضح.':'بلا تلميحات ولديك 20 ثانية. بعض الشارتات بلا إشارة أصلًا.';
+  }else if(S.mode==='zone'){
+    var t=c.target,d=t.dir>0?0:1;
+    chip=(d===0?'Bullish ':'Bearish ')+t.type.toUpperCase();title=TITLES[t.type][d];def=DEFS[t.type][d];
+  }else if(S.mode==='risk'){chip='RISK MASTER';title=c.q.title;def=c.q.def}
+  else if(S.mode==='terms'){chip='TERMS';title=c.q.title;def=c.q.def}
+  else if(S.mode==='sltp'){
+    chip=(c.dir>0?'LONG':'SHORT')+' · SL / TP';
+    title=c.dir>0?'صفقة شراء: ضع وقف الخسارة والهدف':'صفقة بيع: ضع وقف الخسارة والهدف';
+    def=S.level===1?'الهيكل والسيولة محددان لك على الشارت. ضع الخطين في مكانهما.':S.level===2?'حدّد بنفسك الهيكل والسيولة، ثم ضع الخطين.':'بلا تلميحات، ولديك 45 ثانية.';
+  }else if(S.mode==='trade'){
+    chip='TRADE OR SKIP';title='هل تدخل هذه الصفقة؟';
+    def=S.level===1?'راجع بطاقة الصفقة ثم قرر.':'إذا قررت التجاهل فستحدد البند الذي فيه المشكلة.';
+  }
+  else{chip='SETUP ORDER';title=c.seq.title;def='اضغط الخطوات بالترتيب الصحيح من الأولى إلى الأخيرة.'}
+  $('#chip').textContent=chip;$('#qTitle').innerHTML=title;$('#qDef').textContent=def;
+  if(!c.qShown){c.qShown=true;['#qTitle','#qDef'].forEach(function(s){var el=$(s);el.classList.remove('anim');void el.offsetWidth;el.classList.add('anim')})}
+}
+function renderMCQ(c){
+  var q=c.q;
+  $('#dataCard').hidden=!(q.card&&q.card.length);
+  $('#dataCard').innerHTML=(q.card||[]).map(function(r){return '<div class="dc"><span>'+r[0]+'</span><b class="n">'+r[1]+'</b></div>'}).join('');
+  $('#opts').innerHTML=q.options.map(function(o,i){
+    var cls='opt',sub='';
+    if(c.answered){
+      if(o.ok){cls+=' good';sub=ICON.check+'<span>الإجابة الصحيحة</span>'}
+      else{if(i===c.choice){cls+=' bad';sub=ICON.x+'<span>اختيارك: '+(o.why||'')+'</span>'}else sub='<span>'+(o.why||'')+'</span>'}
+    }
+    var lab=o.n?'<span class="n">'+o.t+'</span>':'<span>'+o.t+'</span>';
+    if(!c.answered&&!c.entered)cls+=' enter';
+    return '<button class="'+cls+'" style="--i:'+i+'" data-opt="'+i+'"'+(c.answered?' disabled':'')+'><span class="l"><span class="k">'+LET[i]+'</span>'+lab+'</span>'+(sub?'<span class="sub">'+sub+'</span>':'')+'</button>';
+  }).join('');
+  c.entered=true;
+}
+function renderOrder(c){
+  var n=c.seq.steps.length,h='',i;
+  for(i=0;i<n;i++){
+    var pi=c.picked[i],filled=pi!==undefined,cls='slot'+(filled?' filled':'');
+    if(c.answered&&filled)cls+=pi===i?' good':' bad';
+    else if(i===c.freshIdx)cls+=' fresh';
+    h+='<li><button class="'+cls+'" data-slot="'+i+'"'+((!filled||c.answered)?' disabled':'')+'><span class="no">'+(i+1)+'</span><span class="tx">'+(filled?c.seq.steps[pi].t:'الخطوة '+(i+1))+'</span>'+(c.answered&&filled?(pi===i?ICON.check:ICON.x):'')+'</button></li>';
+  }
+  $('#slots').innerHTML=h;
+  c.entered=c.entered||false;
+  $('#pool').innerHTML=c.answered?'':c.order.filter(function(ix){return c.picked.indexOf(ix)<0}).map(function(ix,k){return '<button class="pc'+(c.entered?'':' enter')+'" style="--i:'+k+'" data-pool="'+ix+'">'+c.seq.steps[ix].t+'</button>'}).join('');
+  c.entered=true;c.freshIdx=-1;
+}
+function renderControls(m,c){
+  var h='';
+  if(m.summary){
+    h='<button class="btn gold" data-act="again">'+ICON.again+'<span>جولة جديدة</span></button>';
+    if(m.hits/rounds()>=.75&&S.level<3)h+='<button class="btn" data-act="levelup"><span>جرّب مستوى '+LEVELS[S.level].name+'</span>'+ICON.next+'</button>';
+  }else if(c&&!c.answered){
+    if(S.mode==='candle')h='<button class="call up" data-act="up">'+ICON.up+'<span>صاعدة</span></button><button class="call down" data-act="down">'+ICON.down+'<span>هابطة</span></button>';
+    else if(S.mode==='zone'){
+      var hm=LV.zone[S.level].hint;
+      h='<button class="btn gold grow" data-act="confirm"'+(c.pick?'':' disabled')+'>'+ICON.check+'<span>تأكيد الاختيار</span></button>';
+      if(hm==='btn')h+='<button class="btn" data-act="hint"'+(c.hint?' disabled':'')+'>'+ICON.bulb+'<span>تلميح</span></button>';
+      h+='<span class="help">'+(c.pick?'حرّك التحديد بالسحب أو بلمسة أخرى، ثم أكّد.':'المس الشارت لتحديد المكان، ثم أكّد.')+(hm==='btn'?' التلميح يخفّض النقاط.':'')+'</span>';
+    }else if(S.mode==='sltp'){
+      h='<button class="btn tool tsl" data-act="tool-sl" aria-pressed="'+(c.tool==='sl')+'"><span>الوقف</span><span class="n">'+(c.sl===null?'—':c.sl.toFixed(2))+'</span></button>'
+       +'<button class="btn tool ttp" data-act="tool-tp" aria-pressed="'+(c.tool==='tp')+'"><span>الهدف</span><span class="n">'+(c.tp===null?'—':c.tp.toFixed(2))+'</span></button>'
+       +'<button class="btn gold grow" data-act="confirm-sltp"'+(c.sl!==null&&c.tp!==null?'':' disabled')+'>'+ICON.check+'<span>تأكيد</span></button>'
+       +'<span class="help">اختر الخط ثم المس الشارت، أو اسحب الخط من مكانه.</span>';
+    }else if(S.mode==='trade'){
+      if(c.stage==='why')h='<span class="help">اضغط على البند الذي فيه المشكلة في البطاقة.</span><button class="btn" data-act="t-back"><span>تراجع</span></button>';
+      else h='<button class="call up" data-act="t-enter">'+ICON.check+'<span>ادخل الصفقة</span></button><button class="call down" data-act="t-skip">'+ICON.x+'<span>تجاهل</span></button>';
+    }else if(S.mode==='order'){
+      h='<button class="btn gold" data-act="check"'+(c.picked.length<c.seq.steps.length?' disabled':'')+'><span>تحقق من الترتيب</span></button><button class="btn" data-act="reset"'+(c.picked.length?'':' disabled')+'><span>إعادة</span></button>';
+    }
+  }else if(c&&c.answered&&c.shown){
+    h='<button class="btn gold" id="nextBtn" data-act="next"><span>'+(m.done>=rounds()?'عرض النتيجة':'الجولة التالية')+'</span>'+ICON.next+'</button>';
+  }
+  $('#controls').innerHTML=h;
+}
+function renderResult(m,c){
+  var res=$('#result');
+  if(m.summary){res.className='result sum';res.innerHTML=summaryHTML(m);res.hidden=false;return}
+  if(c&&c.answered&&c.shown){
+    var v=S.mode==='sltp'?sltpView(c):S.mode==='trade'?tradeView(c):S.mode==='candle'?candleView(c):S.mode==='zone'?zoneView(c):S.mode==='order'?orderView(c):mcqView(c);
+    res.className='result '+(c.ok?'ok':'no');res.innerHTML=viewHTML(v);res.hidden=false;
+  }else{res.hidden=true;res.innerHTML=''}
+}
+function renderSide(m){
+  var n=rounds(),dots='';
+  for(var i=0;i<n;i++){
+    var cls=i<m.res.length?(m.res[i]?'hit':'miss'):(i===m.res.length&&!m.summary?'now':'');
+    if(i===m.res.length-1&&!m.summary)cls+=' new';
+    dots+='<span class="dot '+cls+'"></span>';
+  }
+  $('#dots').innerHTML=dots;
+  $('#progTxt').textContent='إصابات هذه الجولة: '+m.hits+' من '+m.done;
+  $('#badges').innerHTML=BADGES.map(function(b){
+    var on=P.badges.indexOf(b.id)>=0;
+    return '<li class="badge'+(on?' on':'')+'">'+ICON.medal+'<div><b>'+b.name+'</b><span class="d">'+b.desc+'</span></div></li>';
+  }).join('');
+}
+function render(){
+  var m=M[S.mode],c=m.cur,cvMode=isCanvas();
+  renderStats();
+  stage.classList.toggle('is-summary',m.summary);
+  $('#chartBox').hidden=!cvMode;
+  $('#mcqBox').hidden=!(S.mode==='risk'||S.mode==='terms');
+  $('#orderBox').hidden=S.mode!=='order';
+  $('#tradeBox').hidden=S.mode!=='trade';
+  cv.style.touchAction=S.mode==='sltp'?'none':'pan-y';
+  if(c){
+    renderQuestion(c);
+    var n=c.answered?m.done:m.done+1;
+    $('#roundTxt').textContent=Math.min(n,rounds())+' / '+rounds();
+    if(!m.summary){
+      if(cvMode){setSize();if(S.mode==='trade')renderTradeBox(c)}
+      else if(S.mode==='order')renderOrder(c);
+      else renderMCQ(c);
+    }
+  }
+  renderControls(m,c);renderResult(m,c);renderSide(m);
+  var nb=$('#nextBtn');if(nb)nb.focus({preventScroll:true});
+  draw();ensureAmbient();
+}
+
+/* ---------- events ---------- */
+$('#levels').addEventListener('click',function(e){var b=e.target.closest('[data-lv]');if(b)setLevel(+b.dataset.lv)});
+$('#modes').addEventListener('click',function(e){var b=e.target.closest('[data-mode]');if(b&&b.dataset.mode!==S.mode)setMode(b.dataset.mode)});
+$('#controls').addEventListener('click',function(e){
+  var b=e.target.closest('[data-act]');if(!b||b.disabled)return;
+  var a=b.dataset.act,c=M[S.mode].cur;
+  if(a==='up')answerCandle(1);
+  else if(a==='down')answerCandle(-1);
+  else if(a==='confirm'){if(c&&c.pick)answerZone(c.pick.x,c.pick.y)}
+  else if(a==='tool-sl'||a==='tool-tp'){if(c&&!c.answered){c.tool=a.slice(5);renderControls(M.sltp,c);draw()}}
+  else if(a==='confirm-sltp')answerSltp(false);
+  else if(a==='t-enter')answerTrade('enter');
+  else if(a==='t-skip'){if(S.level===1)answerTrade('skip');else if(c&&!c.answered){c.stage='why';render()}}
+  else if(a==='t-back'){if(c&&!c.answered){c.stage='decide';render()}}
+  else if(a==='hint'){if(c&&!c.answered&&!c.hint){c.hint=true;c.hintUsed=true;render()}}
+  else if(a==='check')checkOrder();
+  else if(a==='reset'){if(c&&!c.answered){c.picked=[];render()}}
+  else if(a==='next')nextRound();
+  else if(a==='again')again();
+  else if(a==='levelup'){var nl=S.level+1;S.level=nl;S.streak=0;resetAll();startRound();toast('المستوى: '+LEVELS[nl-1].name)}
+});
+$('#opts').addEventListener('click',function(e){var b=e.target.closest('[data-opt]');if(b&&!b.disabled)answerMCQ(+b.dataset.opt)});
+$('#orderBox').addEventListener('click',function(e){
+  var c=M.order.cur;if(!c||c.answered)return;
+  var p=e.target.closest('[data-pool]'),s=e.target.closest('[data-slot]');
+  if(p){c.picked.push(+p.dataset.pool);c.freshIdx=c.picked.length-1;render()}
+  else if(s&&!s.disabled){c.picked.splice(+s.dataset.slot,1);render()}
+});
+function zc(){var c=M.zone.cur;return S.mode==='zone'&&c&&!c.answered?c:null}
+function syncConfirm(){var b=$('[data-act="confirm"]'),c=zc();if(b)b.disabled=!(c&&c.pick);var hp=$('.help');if(hp&&c&&c.pick)hp.textContent='حرّك التحديد بالسحب أو بلمسة أخرى، ثم أكّد.'}
+function setPick(x,y,ripple){
+  var c=zc();if(!c)return;
+  c.pick={x:Math.max(2,Math.min(cv.clientWidth-2,x)),y:Math.max(2,Math.min(cv.clientHeight-2,y))};c.cursor=null;
+  if(ripple)tween(c,'rip',600);else draw();
+  syncConfirm();ensureAmbient();
+}
+var dragging=false;
+cv.addEventListener('pointerdown',function(e){
+  if(S.mode==='sltp'){if(!sc())return;e.preventDefault();try{cv.setPointerCapture(e.pointerId)}catch(_){}var r0=cv.getBoundingClientRect();sltpDown(e.clientY-r0.top);return}
+  if(!zc())return;
+  var r=cv.getBoundingClientRect();dragging=true;setPick(e.clientX-r.left,e.clientY-r.top,true);
+});
+cv.addEventListener('pointermove',function(e){
+  if(S.mode==='sltp'){if(slDrag){var r1=cv.getBoundingClientRect();sltpMove(e.clientY-r1.top)}return}
+  var c=zc();if(!c)return;
+  var r=cv.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top;
+  if(dragging&&c.pick){setPick(x,y,false)}
+  else if(e.pointerType==='mouse'&&!c.pick){c.cursor={x:x,y:y};draw()}
+});
+window.addEventListener('pointerup',function(){dragging=false;if(slDrag)sltpUp()});
+cv.addEventListener('pointercancel',function(){dragging=false;if(slDrag)sltpUp()});
+$('#tradeBox').addEventListener('click',function(e){var b=e.target.closest('[data-row]');if(b)answerTrade('skip',+b.dataset.row)});
+cv.addEventListener('pointerleave',function(){var c=zc();if(c&&c.cursor){c.cursor=null;draw()}});
+cv.addEventListener('keydown',function(e){
+  if(S.mode==='sltp'){
+    var s=sc();if(!s||!L)return;
+    var k=e.key,st=(L.mx-L.mn)/(e.shiftKey?20:80);
+    if(k==='ArrowUp'||k==='ArrowDown'){e.preventDefault();var cur=s[s.tool]===null?s.entry:s[s.tool];s[s.tool]=cur+(k==='ArrowUp'?st:-st);draw();syncSltp()}
+    else if(k==='Enter'){e.preventDefault();answerSltp(false)}
+    return;
+  }
+  var c=zc();if(!c)return;
+  var step=e.shiftKey?24:8,k=e.key,p=c.pick?{x:c.pick.x,y:c.pick.y}:{x:cv.clientWidth/2,y:cv.clientHeight/2};
+  if(k==='ArrowLeft')p.x-=step;
+  else if(k==='ArrowRight')p.x+=step;
+  else if(k==='ArrowUp')p.y-=step;
+  else if(k==='ArrowDown')p.y+=step;
+  else if((k==='Enter'||k===' ')&&c.pick){e.preventDefault();answerZone(c.pick.x,c.pick.y);return}
+  else return;
+  e.preventDefault();setPick(p.x,p.y,false);
+});
+if(window.ResizeObserver){new ResizeObserver(function(){setSize();draw()}).observe($('#chartBox'))}
+else window.addEventListener('resize',function(){setSize();draw()});
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(function(){draw()});
+
+buildStatic();
+startRound();
+})();
+</script>
+</body>
+</html>
