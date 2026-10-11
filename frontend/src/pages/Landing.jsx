@@ -163,10 +163,11 @@ export default function Landing() {
             {[
               { href: '#features',      label: t.nav.features },
               { href: isAr ? '/strategy-builder' : '/en/strategy-builder', label: isAr ? 'بناء الاستراتيجيات' : 'Strategy Builder' },
+              { href: '/games/challenge', label: isAr ? 'الألعاب التعليمية' : 'Learning Games', native: true },
               { href: '#testimonials',  label: isAr ? 'آراء العملاء' : 'Reviews' },
               { href: '#pricing',       label: t.nav.pricing },
               { href: '#faq',           label: t.nav.faq },
-            ].map(({ href, label }) => href.startsWith('/') ? (
+            ].map(({ href, label, native }) => href.startsWith('/') && !native ? (
               <Link key={href} to={href}
                 className="hover:text-white transition-colors relative group">
                 {label}
@@ -229,10 +230,11 @@ export default function Landing() {
             {[
               { href: '#features',      label: t.nav.features },
               { href: isAr ? '/strategy-builder' : '/en/strategy-builder', label: isAr ? 'بناء الاستراتيجيات' : 'Strategy Builder' },
+              { href: '/games/challenge', label: isAr ? 'الألعاب التعليمية' : 'Learning Games', native: true },
               { href: '#testimonials',  label: isAr ? 'آراء العملاء' : 'Reviews' },
               { href: '#pricing',       label: t.nav.pricing },
               { href: '#faq',           label: t.nav.faq },
-            ].map(({ href, label }) => href.startsWith('/') ? (
+            ].map(({ href, label, native }) => href.startsWith('/') && !native ? (
               <Link key={href} to={href}
                 onClick={() => setMobileOpen(false)}
                 className="block py-2.5 px-3 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-colors">
@@ -724,6 +726,9 @@ export default function Landing() {
                 { to: '/login',    label: t.footer.login },
                 { to: '/pricing',  label: t.footer.pricing },
                 { to: '/blog',     label: isAr ? 'المدونة' : 'Blog' },
+                { to: isAr ? '/strategy-builder' : '/en/strategy-builder', label: isAr ? 'بناء الاستراتيجيات' : 'Strategy Builder' },
+                // صفحة HTML مستقلة خارج React — رابط عادي يحمّلها، لا Link
+                { native: '/games/challenge', label: isAr ? 'الألعاب التعليمية' : 'Learning Games' },
               ]},
               { title: t.footer.company, links: [
                 { to: '/about',  label: t.footer.about },
@@ -743,7 +748,9 @@ export default function Landing() {
                 <ul className="space-y-2.5">
                   {col.links.map((l, j) => (
                     <li key={j}>
-                      {l.href
+                      {l.native
+                        ? <a href={l.native} className="text-xs text-gray-400 hover:text-blue-400 transition-colors">{l.label}</a>
+                        : l.href
                         ? <a href={l.href} target="_blank" rel="noreferrer" className="text-xs text-gray-400 hover:text-blue-400 transition-colors">{l.label}</a>
                         : <Link to={l.to} className="text-xs text-gray-400 hover:text-blue-400 transition-colors">{l.label}</Link>
                       }

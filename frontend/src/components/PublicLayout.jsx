@@ -57,6 +57,11 @@ export default function PublicLayout({ children, bgClass = 'q-ground' }) {
           {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-6 text-sm text-gray-400">
             <a href="/#features" className="hover:text-white transition-colors">{t.nav.features}</a>
+            <Link to={isAr ? '/strategy-builder' : '/en/strategy-builder'} className="hover:text-white transition-colors">
+              {isAr ? 'بناء الاستراتيجيات' : 'Strategy Builder'}
+            </Link>
+            {/* صفحة HTML مستقلة خارج React — رابط عادي يحمّلها، لا Link */}
+            <a href="/games/challenge" className="hover:text-white transition-colors">{isAr ? 'الألعاب التعليمية' : 'Learning Games'}</a>
             <Link to="/pricing"  className="hover:text-white transition-colors">{t.nav.pricing}</Link>
             <Link to="/referral" className="hover:text-yellow-400 text-yellow-500/70 transition-colors font-medium">
               💰 {isAr ? 'الإحالات' : 'Referrals'}
@@ -99,6 +104,8 @@ export default function PublicLayout({ children, bgClass = 'q-ground' }) {
           <div className="md:hidden border-t q-line bg-gray-900/95 backdrop-blur-xl px-4 py-4 space-y-1">
             {[
               { href: '/#features', label: t.nav.features },
+              { to: isAr ? '/strategy-builder' : '/en/strategy-builder', label: isAr ? 'بناء الاستراتيجيات' : 'Strategy Builder' },
+              { href: '/games/challenge', label: isAr ? 'الألعاب التعليمية' : 'Learning Games' },
               { to: '/pricing',     label: t.nav.pricing },
               { to: '/about',       label: t.nav.about },
               { to: '/contact',     label: t.nav.contact },
@@ -170,6 +177,9 @@ export default function PublicLayout({ children, bgClass = 'q-ground' }) {
                 { to: '/register', label: t.footer.register },
                 { to: '/login',    label: t.footer.login },
                 { to: '/pricing',  label: t.footer.pricing },
+                { to: '/blog',     label: isAr ? 'المدونة' : 'Blog' },
+                { to: isAr ? '/strategy-builder' : '/en/strategy-builder', label: isAr ? 'بناء الاستراتيجيات' : 'Strategy Builder' },
+                { native: '/games/challenge', label: isAr ? 'الألعاب التعليمية' : 'Learning Games' },
               ]},
               { title: t.footer.company, links: [
                 { to: '/about',    label: t.footer.about },
@@ -191,7 +201,9 @@ export default function PublicLayout({ children, bgClass = 'q-ground' }) {
                 <ul className="space-y-2.5">
                   {col.links.map((l, j) => (
                     <li key={j}>
-                      {l.href
+                      {l.native
+                        ? <a href={l.native} className="text-xs text-gray-400 hover:text-blue-400 transition-colors">{l.label}</a>
+                        : l.href
                         ? <a href={l.href} target="_blank" rel="noreferrer" className="text-xs text-gray-400 hover:text-blue-400 transition-colors">{l.label}</a>
                         : <Link to={l.to} className="text-xs text-gray-400 hover:text-blue-400 transition-colors">{l.label}</Link>
                       }

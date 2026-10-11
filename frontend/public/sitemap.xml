@@ -21,6 +21,28 @@
     <priority>0.7</priority>
   </url>
 
+  <!-- ابني استراتيجيتك (عربي) -->
+  <url>
+    <loc>https://qaffel.com/strategy-builder</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/strategy-builder" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/strategy-builder" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/strategy-builder" />
+    <lastmod>2026-10-11</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- ابني استراتيجيتك (English) -->
+  <url>
+    <loc>https://qaffel.com/en/strategy-builder</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/strategy-builder" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/strategy-builder" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/strategy-builder" />
+    <lastmod>2026-10-11</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
   <!-- الصفحة الرئيسية (English) -->
   <url>
     <loc>https://qaffel.com/en</loc>

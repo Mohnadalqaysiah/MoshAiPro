@@ -2081,11 +2081,22 @@ def main():
         # كانت فاضية تماماً رغم وجود /start و/menu فعلياً، فتبدو للمستخدم الجديد
         # كأنه بوت بلا أوامر حقيقية. تحسين واجهة بحت — لا علاقة له بحلقة
         # الرصد/البث المجمَّدة.
-        await application.bot.set_my_commands([
-            BotCommand("start", "بدء التشغيل وربط الحساب"),
-            BotCommand("menu",  "القائمة الرئيسية"),
-            BotCommand("help",  "المساعدة وشرح الأوامر"),
-        ])
+        # (2026-10-11) بلاغ: القائمة تُظهر /start فقط. تيليجرام يقدّم قائمة النطاق
+        # الأخص (محادثات خاصة / لغة المستخدم) على الافتراضي — فقائمة قديمة بنطاق
+        # أخص (من BotFather مثلاً) كانت تحجب هذه. نضبطها صراحة لكل نطاق ولغة.
+        from telegram import BotCommandScopeDefault, BotCommandScopeAllPrivateChats
+        cmds = [
+            BotCommand("start",     "بدء التشغيل وربط الحساب"),
+            BotCommand("menu",      "القائمة الرئيسية"),
+            BotCommand("challenge", "تحدّي اليوم 🎯"),
+            BotCommand("help",      "المساعدة وشرح الأوامر"),
+        ]
+        for scope in (BotCommandScopeDefault(), BotCommandScopeAllPrivateChats()):
+            for lang in (None, "ar", "en"):
+                try:
+                    await application.bot.set_my_commands(cmds, scope=scope, language_code=lang)
+                except Exception as _ce:
+                    logger.warning(f"set_my_commands {scope.type}/{lang}: {_ce}")
         asyncio.create_task(broadcast_new_signals(application))
         asyncio.create_task(outcome_checker(application))
         asyncio.create_task(breakeven_alerts(application))
