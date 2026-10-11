@@ -1020,6 +1020,71 @@ def bot_renew_trials(
     return {"renewed_count": len(renewed), "user_ids": renewed}
 
 
+@router.get("/daily-challenge")
+def bot_daily_challenge(_: bool = Depends(verify_bot)):
+    """(2026-10-11) سؤال تحدّي اليوم — حتمي من التاريخ (UTC)، نفسه لكل المشتركين."""
+    from app.services.daily_challenge import build
+    return build(datetime.now(timezone.utc).date())
+
+
+@router.post("/daily-challenge/answer")
+def bot_daily_challenge_answer(
+    telegram_id: str = Body(..., embed=True),
+    challenge_id: str = Body(..., embed=True),
+    option: int = Body(..., embed=True),
+    _: bool = Depends(verify_bot),
+    db: Session = Depends(get_db),
+):
+    """يصحّح الإجابة على الخادم (من التاريخ نفسه، لا من البوت) ويضيف النقاط
+    لحساب الألعاب. مرة واحدة لكل تحدٍّ لكل مستخدم؛ تحدٍّ أقدم من يومين لا يُحتسب.
+    السلسلة = أيام متتالية بإجابة (صحيحة أو خاطئة) — تكافئ الرجوع اليومي،
+    والنقاط للصحيحة فقط: 20 + 4 لكل يوم سلسلة حتى +20."""
+    from datetime import date as _date
+    from app.services.daily_challenge import build
+    from app.models.game_progress import GameProgress
+
+    try:
+        day = _date.fromisoformat(challenge_id)
+    except ValueError:
+        return {"ok": False, "reason": "invalid"}
+    today = datetime.now(timezone.utc).date()
+    if not (0 <= (today - day).days <= 1):
+        return {"ok": False, "reason": "expired"}
+
+    correct = option == build(day)["correct"]
+    user = db.query(User).filter(User.telegram_id == telegram_id).first()
+    if not user:
+        return {"ok": True, "correct": correct, "linked": False}
+
+    gp = db.query(GameProgress).filter(GameProgress.user_id == user.id).first()
+    if gp is None:
+        gp = GameProgress(user_id=user.id, points=0, best_streak=0, week_points=0, daily_streak=0)
+        db.add(gp)
+    if gp.daily_last == challenge_id:
+        return {"ok": True, "correct": correct, "linked": True, "already": True,
+                "streak": gp.daily_streak or 0, "points": gp.points or 0}
+
+    prev = (day - timedelta(days=1)).isoformat()
+    gp.daily_streak = (gp.daily_streak or 0) + 1 if gp.daily_last == prev else 1
+    gp.daily_last = challenge_id
+
+    awarded = 0
+    if correct:
+        awarded = 20 + min(gp.daily_streak - 1, 5) * 4
+        y, w, _w = datetime.now(timezone.utc).isocalendar()
+        wk = f"{y}-W{w:02d}"
+        if gp.week_key != wk:
+            gp.week_key, gp.week_points = wk, 0
+        gp.points = (gp.points or 0) + awarded
+        gp.week_points = (gp.week_points or 0) + awarded
+        blob = dict(gp.data or {})
+        blob["points"] = gp.points          # الصفحة تتبنى رقم الخادم عند فتحها
+        gp.data = blob
+    db.commit()
+    return {"ok": True, "correct": correct, "linked": True, "awarded": awarded,
+            "streak": gp.daily_streak, "points": gp.points or 0}
+
+
 @router.get("/breakeven-alerts")
 async def bot_breakeven_alerts(
     _: bool = Depends(verify_bot),

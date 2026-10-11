@@ -5,9 +5,9 @@ Qaffel AI Bot v2 — Professional Edition
 
 import os, asyncio, aiohttp
 from datetime import datetime, timezone, timedelta
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand, WebAppInfo
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand, WebAppInfo, Poll
 from telegram.ext import (
-    Application, CommandHandler, CallbackQueryHandler, ContextTypes,
+    Application, CommandHandler, CallbackQueryHandler, ContextTypes, PollAnswerHandler,
 )
 from loguru import logger
 
@@ -1451,6 +1451,99 @@ async def breakeven_alerts(app: Application):
         await asyncio.sleep(BREAKEVEN_CHECK_INTERVAL)
 
 
+# ─── Background: Daily challenge (quiz) ───────────────────────────────────────
+# (2026-10-11) سؤال تعليمي واحد كل يوم 06:00 UTC (09:00 مكة) كاختبار Quiz
+# تيليجرام، نفسه للكل. الإجابة تُصحَّح على الخادم وتُضاف لنقاط الألعاب ولوحة
+# المتصدّرين، مع سلسلة أيام متتالية — سبب يومي للرجوع للمنصة.
+_DAILY_CHALLENGE_DATE = None
+_POLL_CHALLENGE: dict[str, str] = {}   # poll_id → challenge_id (لضياعها بعد إعادة تشغيل: التاريخ الحالي)
+GAMES_URL = f"{FRONTEND_URL}/games/challenge"
+
+async def daily_challenge(app: Application):
+    global _DAILY_CHALLENGE_DATE
+    logger.info("🎯 بدء مهمة التحدّي اليومي…")
+    await asyncio.sleep(70)
+    while True:
+        try:
+            now = datetime.now(timezone.utc)
+            today = now.strftime("%Y-%m-%d")
+            if now.hour == 6 and now.minute < 5 and _DAILY_CHALLENGE_DATE != today:
+                _DAILY_CHALLENGE_DATE = today
+                q = await _get("/api/v1/bot/daily-challenge")
+                if q and q.get("options"):
+                    subs = (await _get("/api/v1/bot/active-subscribers")).get("subscribers", [])
+                    sent = 0
+                    for s in subs:
+                        tid = s.get("telegram_id")
+                        if not tid:
+                            continue
+                        try:
+                            msg = await app.bot.send_poll(
+                                chat_id=int(tid),
+                                question=("🎯 تحدّي كفيل اليومي\n" + q["question"])[:300],
+                                options=q["options"],
+                                type=Poll.QUIZ,
+                                correct_option_id=q["correct"],
+                                explanation=q.get("explanation", "")[:200],
+                                is_anonymous=False,
+                            )
+                            if msg.poll:
+                                _POLL_CHALLENGE[msg.poll.id] = q["id"]
+                            sent += 1
+                            await asyncio.sleep(0.05)
+                        except Exception:
+                            pass
+                    logger.info(f"🎯 تحدّي اليوم ({q['id']}) → {sent} مشترك")
+                    if len(_POLL_CHALLENGE) > 20000:   # لا تكبر الذاكرة بلا حد
+                        _POLL_CHALLENGE.clear()
+        except Exception as e:
+            logger.error(f"daily_challenge: {e}")
+        await asyncio.sleep(60)
+
+async def cmd_challenge(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/challenge — تحدّي اليوم عند الطلب (نفس سؤال الإرسال الصباحي)."""
+    q = await _get("/api/v1/bot/daily-challenge")
+    if not q or not q.get("options"):
+        await update.message.reply_text("تعذّر جلب تحدّي اليوم، جرّب بعد قليل.")
+        return
+    msg = await context.bot.send_poll(
+        chat_id=update.effective_chat.id,
+        question=("🎯 تحدّي كفيل اليومي\n" + q["question"])[:300],
+        options=q["options"], type=Poll.QUIZ, correct_option_id=q["correct"],
+        explanation=q.get("explanation", "")[:200], is_anonymous=False,
+    )
+    if msg.poll:
+        _POLL_CHALLENGE[msg.poll.id] = q["id"]
+
+async def on_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    pa = update.poll_answer
+    if not pa or not pa.option_ids:
+        return
+    cid = _POLL_CHALLENGE.get(pa.poll_id) or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    try:
+        r = await _post("/api/v1/bot/daily-challenge/answer",
+                        json={"telegram_id": str(pa.user.id), "challenge_id": cid, "option": pa.option_ids[0]})
+    except Exception as e:
+        logger.warning(f"daily answer: {e}")
+        return
+    if not r or not r.get("ok") or r.get("already"):
+        return
+    if not r.get("linked"):
+        text = ("✅ إجابة صحيحة!" if r.get("correct") else "❌ ليست الإجابة الصحيحة هذه المرة.") + \
+               f"\n\nاربط حسابك في كفيل لتُحفظ نقاطك وتدخل لوحة المتصدّرين 👇\n{GAMES_URL}"
+    else:
+        streak = r.get("streak", 1)
+        fire = f"🔥 سلسلتك: {streak} " + ("يوم" if streak == 1 else "أيام")
+        if r.get("correct"):
+            text = f"✅ إجابة صحيحة! +{r.get('awarded', 0)} نقطة\n{fire}\n\n🏆 ترتيبك في متصدّري الأسبوع والمزيد من التحديات:\n{GAMES_URL}"
+        else:
+            text = f"❌ ليست الصحيحة، لكن سلسلتك مستمرة.\n{fire}\n\n🎮 درّب نفسك أكثر:\n{GAMES_URL}"
+    try:
+        await context.bot.send_message(chat_id=pa.user.id, text=text, disable_web_page_preview=True)
+    except Exception:
+        pass
+
+
 # ─── Background: Monitor watchlists ───────────────────────────────────────────
 async def monitor_watchlists(app: Application):
     logger.info("🔍 بدء مراقبة قوائم المشتركين…")
@@ -1979,7 +2072,9 @@ def main():
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("menu",  cmd_menu))
     app.add_handler(CommandHandler("help",  cmd_help))
+    app.add_handler(CommandHandler("challenge", cmd_challenge))
     app.add_handler(CallbackQueryHandler(on_button))
+    app.add_handler(PollAnswerHandler(on_poll_answer))
 
     async def post_init(application: Application):
         # (2026-09-23) قائمة أوامر تيليجرام الأصلية (زر "/" جانب حقل الكتابة) —
@@ -1994,6 +2089,7 @@ def main():
         asyncio.create_task(broadcast_new_signals(application))
         asyncio.create_task(outcome_checker(application))
         asyncio.create_task(breakeven_alerts(application))
+        asyncio.create_task(daily_challenge(application))
         asyncio.create_task(monitor_watchlists(application))
         asyncio.create_task(notify_expiry(application))
         asyncio.create_task(market_session_notifier(application))

@@ -43,4 +43,8 @@ class GameProgress(Base):
     week_key    = Column(String, nullable=True, index=True)
     week_points = Column(Integer, nullable=False, default=0)
 
+    # تحدّي تيليجرام اليومي: آخر تحدٍّ أُجيب (YYYY-MM-DD) وسلسلة الأيام المتتالية
+    daily_last   = Column(String, nullable=True)
+    daily_streak = Column(Integer, nullable=True, default=0)
+
     updated_at  = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
