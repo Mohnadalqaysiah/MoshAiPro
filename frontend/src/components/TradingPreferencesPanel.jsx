@@ -6,7 +6,11 @@ import useMarkets from '../hooks/useMarkets'
 import { Save, CheckCircle, AlertCircle, TrendingUp, Bell, Calculator } from 'lucide-react'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-const TIMEFRAMES = ['15m', '30m', '1h', '4h', '1day']
+// (2026-10-12) الفريمات التي يُصدر عليها المحرك إشارات فعلاً (SCAN_TIMEFRAMES
+// بالبوت). 30m و1day كانا ظاهرين ولا تصدر عليهما إشارات — من اختارهما وحدهما
+// لن تصله أي إشارة.
+const TIMEFRAMES = ['15m', '1h', '4h']
+const TF_LABEL = { '15m': { ar: '15 دقيقة', en: '15 min' }, '1h': { ar: 'ساعة', en: '1 hour' }, '4h': { ar: '4 ساعات', en: '4 hours' } }
 
 // (2026-10-09) مستخرج من Profile.jsx — كان "إدارة رأس المال + حاسبة اللوت"
 // و"تفضيلات الإشعارات" (الأزواج/الفريمات/الثقة) موجودين بصفحة /profile
@@ -22,8 +26,10 @@ export default function TradingPreferencesPanel() {
   const [trading, setTrading] = useState({ account_balance: user?.account_balance || 10000, risk_percent: user?.risk_percent || 1.5 })
   const [prefs, setPrefs]     = useState({
     notify_watchlist:      user?.notify_watchlist      || [],
-    notify_timeframes:     user?.notify_timeframes     || (user?.notify_timeframe ? [user.notify_timeframe] : ['1h']),
-    notify_min_confidence: user?.notify_min_confidence ?? 65,
+    // (2026-10-12) الافتراضي "كل الفريمات" و"كل الإشارات" — كان ['1h'] و65%،
+    // فيحفظهما لكل من ضغط حفظ دون أن يختارهما، ثم يُطبَّقان عليه فعلياً
+    notify_timeframes:     user?.notify_timeframes?.length ? user.notify_timeframes : ['all'],
+    notify_min_confidence: user?.notify_min_confidence ?? 0,
     notifications_enabled: user?.notifications_enabled !== false,
     language:              user?.language              || 'ar',
   })
@@ -262,7 +268,7 @@ export default function TradingPreferencesPanel() {
               <span className="text-gray-400 text-xs mr-1">
                 ({prefs.notify_timeframes.includes('all')
                   ? (isAr ? 'الكل' : 'All')
-                  : prefs.notify_timeframes.join(' · ')})
+                  : prefs.notify_timeframes.map(t => TF_LABEL[t] ? TF_LABEL[t][isAr ? 'ar' : 'en'] : t).join(' · ')})
               </span>
             </label>
             <div className="flex flex-wrap gap-2">
@@ -282,7 +288,7 @@ export default function TradingPreferencesPanel() {
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
                   }`}>
-                  {tf}
+                  {TF_LABEL[tf] ? TF_LABEL[tf][isAr ? 'ar' : 'en'] : tf}
                 </button>
               ))}
             </div>
@@ -319,10 +325,32 @@ export default function TradingPreferencesPanel() {
             </div>
           </div>
 
-          <div className="bg-gray-700/30 rounded-lg p-3 text-xs text-gray-400">
-            {isAr
-              ? 'سيراقب البوت الأزواج المختارة كل 15 دقيقة ويرسل تنبيهاً عند وجود إشارة BUY/SELL بنسبة ثقة أعلى من الحد المحدد.'
-              : 'The bot will monitor selected pairs every 15 minutes and send an alert when a BUY/SELL signal appears above the minimum confidence threshold.'}
+          {/* (2026-10-12) ملخص واضح لما سيصل العميل فعلاً بعد الحفظ */}
+          <div className="bg-blue-900/20 border border-blue-800/40 rounded-lg p-3 text-xs text-gray-300 leading-relaxed">
+            {!prefs.notifications_enabled ? (
+              isAr ? '🔕 الإشعارات متوقفة — لن تصلك إشارات على تيليجرام.' : '🔕 Notifications are off — no Telegram signals.'
+            ) : (
+              <>
+                <b className="text-white">{isAr ? 'ما سيصلك على تيليجرام:' : 'What you will receive on Telegram:'}</b>{' '}
+                {isAr ? 'إشارات ' : 'Signals for '}
+                <b>{prefs.notify_watchlist.length === 0 || prefs.notify_watchlist.length === markets.length
+                  ? (isAr ? 'كل الأزواج' : 'all markets')
+                  : (isAr ? `${prefs.notify_watchlist.length} زوجاً` : `${prefs.notify_watchlist.length} markets`)}</b>
+                {isAr ? '، على ' : ', on '}
+                <b>{prefs.notify_timeframes.includes('all')
+                  ? (isAr ? 'كل الفريمات' : 'all timeframes')
+                  : prefs.notify_timeframes.map(t => TF_LABEL[t] ? TF_LABEL[t][isAr ? 'ar' : 'en'] : t).join(isAr ? ' و' : ' & ')}</b>
+                {isAr ? '، ' : ', '}
+                <b>{prefs.notify_min_confidence === 0
+                  ? (isAr ? 'بأي نسبة ثقة' : 'any confidence')
+                  : (isAr ? `بثقة ${prefs.notify_min_confidence}% أو أكثر` : `${prefs.notify_min_confidence}%+ confidence`)}</b>.
+                <div className="text-gray-400 mt-1">
+                  {isAr
+                    ? 'عدم اختيار أي زوج = كل الأزواج. تقدر تغيّر هذا بأي وقت، أو توقف إشارات زوج معيّن مباشرة من زر تحت الإشارة في تيليجرام.'
+                    : 'No market selected = all markets. Change this any time, or mute a market straight from the button under a Telegram signal.'}
+                </div>
+              </>
+            )}
           </div>
 
           <button type="submit" disabled={loading === 'prefs'}

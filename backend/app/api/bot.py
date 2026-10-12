@@ -935,7 +935,7 @@ def bot_get_watchlist(
         "linked": True,
         "watchlist":           user.notify_watchlist      or [],
         "timeframe":           user.notify_timeframe      or "1h",
-        "min_confidence":      user.notify_min_confidence or 65,
+        "min_confidence":      user.notify_min_confidence if user.notify_min_confidence is not None else 0,
         "notifications_enabled": bool(user.notifications_enabled),
     }
 
@@ -969,7 +969,7 @@ def bot_all_watchlists(
             "telegram_id":    u.telegram_id,
             "watchlist":      wl,
             "timeframe":      u.notify_timeframe      or "1h",
-            "min_confidence": u.notify_min_confidence or 65,
+            "min_confidence": u.notify_min_confidence if u.notify_min_confidence is not None else 0,
             "full_access":    _bot_has_full_signal_access(u),
         })
     return {"users": result, "count": len(result)}
@@ -1018,6 +1018,32 @@ def bot_renew_trials(
         db.commit()
 
     return {"renewed_count": len(renewed), "user_ids": renewed}
+
+
+@router.post("/mute-symbol")
+def bot_mute_symbol(
+    telegram_id: str = Body(..., embed=True),
+    symbol: str = Body(..., embed=True),
+    all_symbols: list = Body(default=[], embed=True),
+    _: bool = Depends(verify_bot),
+    db: Session = Depends(get_db),
+):
+    """(2026-10-12) زر "أوقف إشارات X" تحت الإشارة في تيليجرام.
+    قائمة فارغة = كل الرموز، فالإيقاف يبدأ من كل الرموز ناقص هذا. وإن لم
+    يبقَ رمز (قائمة فارغة كانت ستعني "الكل" من جديد) تُطفأ الإشعارات بدلها."""
+    user = _get_linked_user(telegram_id, db)
+    if not user:
+        return {"ok": False, "reason": "not_linked"}
+    sym = symbol.upper()
+    current = [s.upper() for s in (user.notify_watchlist or [])] or [s.upper() for s in all_symbols]
+    new = [s for s in current if s != sym]
+    if not new:
+        user.notifications_enabled = False
+        db.commit()
+        return {"ok": True, "all_muted": True, "remaining": 0}
+    user.notify_watchlist = new
+    db.commit()
+    return {"ok": True, "remaining": len(new)}
 
 
 @router.get("/daily-challenge")
@@ -1445,7 +1471,7 @@ def bot_active_subscribers(
             "notifications_enabled": u.notifications_enabled is not False,
             "watchlist":             [s.upper() for s in (u.notify_watchlist or [])],
             "timeframes":            list(u.notify_timeframes or []),
-            "min_confidence":        u.notify_min_confidence if u.notify_min_confidence is not None else 65,
+            "min_confidence":        u.notify_min_confidence if u.notify_min_confidence is not None else 0,
         }
         for u in users
     ]

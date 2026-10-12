@@ -23,6 +23,7 @@ import PWAInstallBanner from '../components/PWAInstallBanner'
 import WatchlistQuickCard from '../components/WatchlistQuickCard'
 import DashboardAnnouncement from '../components/DashboardAnnouncement'
 import MarketTicker from '../components/MarketTicker'
+import CustomizeTip from '../components/CustomizeTip'
 import TradingPreferencesPanel from '../components/TradingPreferencesPanel'
 import Sparkline from '../components/Sparkline'
 
@@ -562,6 +563,7 @@ export default function Dashboard() {
   return (
     <div className="space-y-0" dir={isAr ? 'rtl' : 'ltr'}>
       <MarketTicker />
+      <CustomizeTip />
       <DashboardAnnouncement />
 
       {/* Modals */}

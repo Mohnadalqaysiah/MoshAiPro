@@ -91,8 +91,16 @@ async def web_push_broadcaster():
                     # Dashboard.jsx يقرأ ?signal=ID ويفتح نافذة التحليل لها مباشرة.
                     signal_url = f"/dashboard?signal={sig.id}"
                     for u in users:
+                        # (2026-10-12) نفس تخصيص الإشارات: الأزواج والفريمات والثقة.
+                        # لا نطبّق notifications_enabled هنا — زرّه بالواجهة "إشعارات
+                        # تيليجرام"، وإشعار الجوال له موافقة مستقلة من المتصفح.
                         wl = u.notify_watchlist or []
                         if wl and sig.market.upper() not in [w.upper() for w in wl]:
+                            continue
+                        tfs = {t for t in (u.notify_timeframes or []) if t != "all"}
+                        if tfs and sig.timeframe not in tfs:
+                            continue
+                        if (u.notify_min_confidence or 0) > 0 and float(sig.ai_confidence or 0) < u.notify_min_confidence:
                             continue
                         sent_total += send_push(db, u, title, body, url=signal_url, tag=f"signal-{sig.id}")
 

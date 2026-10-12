@@ -17,6 +17,7 @@ BOT_TOKEN    = os.getenv("TELEGRAM_BOT_TOKEN",  "")
 FRONTEND_URL = os.getenv("FRONTEND_URL",        "https://qaffel.com")
 BOT_SECRET   = os.getenv("BOT_SECRET",          "mosh-bot-secret-2026")
 BOT_HEADERS  = {"X-Bot-Secret": BOT_SECRET}
+SETTINGS_URL = f"{FRONTEND_URL}/profile#watchlist"   # صفحة تخصيص الأزواج والفريمات
 
 # ─── Market catalogue ─────────────────────────────────────────────────────────
 CATEGORIES: dict[str, dict] = {
@@ -753,6 +754,24 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
+    # (2026-10-12) "🔕 أوقف إشارات X" تحت الإشارة — تخصيص بضغطة دون فتح الموقع
+    if d.startswith("mute_"):
+        symbol = d[5:].upper()
+        r = await _post("/api/v1/bot/mute-symbol",
+                        json={"telegram_id": tgid, "symbol": symbol, "all_symbols": sorted(_VALID_SYMBOLS)})
+        if not r or not r.get("ok"):
+            text = ("اربط حسابك في كفيل أولاً لتتحكم بالإشارات التي تصلك 👇" if r and r.get("reason") == "not_linked"
+                    else "تعذّر التعديل الآن، جرّب بعد قليل.")
+        elif r.get("all_muted"):
+            text = f"🔕 أوقفنا إشارات {symbol}، ولم يبقَ زوج آخر في قائمتك فأوقفنا الإشعارات كلها. فعّلها من الإعدادات متى أردت."
+        else:
+            text = f"🔕 لن تصلك إشارات {symbol} بعد الآن ({r.get('remaining', 0)} زوجاً في قائمتك).\nتقدر ترجعها أو تغيّر الفريمات بأي وقت من الإعدادات."
+        await context.bot.send_message(
+            chat_id=uid, text=text,
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⚙️ الإعدادات", url=SETTINGS_URL)]]),
+        )
+        return
+
     if d.startswith("cat_an_"):
         cat = d[7:]
         info = CATEGORIES.get(cat, {})
@@ -1256,6 +1275,19 @@ async def broadcast_new_signals(app: Application):
                     for s in subs_list if s.get("watchlist")
                 }
                 all_subs       = [t for t in full_access_of if t not in muted]
+                # (2026-10-12) الفريمات وحد الثقة — كانا محفوظين ولا يُطبَّقان إطلاقاً.
+                # فارغ أو 'all' = كل الفريمات؛ 0 = كل النسب. القيم التلقائية القديمة
+                # (ساعة/65%) صُفّرت بـmigrate_reset_default_prefs.py قبل التطبيق.
+                _TF_ALIAS = {"1day": "1d"}
+                user_tfs: dict[str, set] = {}
+                user_conf: dict[str, float] = {}
+                for s in subs_list:
+                    tfs = {_TF_ALIAS.get(t, t) for t in (s.get("timeframes") or []) if t != "all"}
+                    if tfs:
+                        user_tfs[str(s["telegram_id"])] = tfs
+                    mc = float(s.get("min_confidence") or 0)
+                    if mc > 0:
+                        user_conf[str(s["telegram_id"])] = mc
 
                 logger.info(f"📡 {len(sigs)} إشارة جديدة → {len(all_subs)} مشترك ({len(user_wl)} لديهم watchlist، {len(muted)} أطفؤوا الإشعارات)")
 
@@ -1285,10 +1317,17 @@ async def broadcast_new_signals(app: Application):
 
                     msg_full   = fmt_new_signal(sig)
                     msg_masked = fmt_new_signal_masked(sig)
-                    kb_full    = InlineKeyboardMarkup([[
-                        InlineKeyboardButton("📊 تحليل هذا الزوج", callback_data=f"sym_{sig['market']}"),
-                        InlineKeyboardButton("📡 كل الإشارات",     callback_data="m_signals"),
-                    ]])
+                    kb_full    = InlineKeyboardMarkup([
+                        [
+                            InlineKeyboardButton("📊 تحليل هذا الزوج", callback_data=f"sym_{sig['market']}"),
+                            InlineKeyboardButton("📡 كل الإشارات",     callback_data="m_signals"),
+                        ],
+                        # (2026-10-12) تخصيص بضغطة من الإشارة نفسها
+                        [
+                            InlineKeyboardButton(f"🔕 أوقف إشارات {sig['market']}", callback_data=f"mute_{sig['market']}"),
+                            InlineKeyboardButton("⚙️ تخصيص", url=SETTINGS_URL),
+                        ],
+                    ])
                     kb_masked  = InlineKeyboardMarkup([[
                         InlineKeyboardButton("💳 اشترك الآن", url=f"{FRONTEND_URL}/pricing"),
                     ]])
@@ -1310,6 +1349,10 @@ async def broadcast_new_signals(app: Application):
                         # مستخدم بدون watchlist → يستلم كل شيء
                         # مستخدم بـ watchlist → يستلم فقط أزواجه
                         if tid in user_wl and market not in user_wl[tid]:
+                            continue
+                        if tid in user_tfs and sig_tf not in user_tfs[tid]:
+                            continue
+                        if tid in user_conf and float(sig.get("ai_confidence") or 0) < user_conf[tid]:
                             continue
                         if owner_tid and tid == owner_tid:
                             continue
@@ -1499,6 +1542,19 @@ async def daily_challenge(app: Application):
         except Exception as e:
             logger.error(f"daily_challenge: {e}")
         await asyncio.sleep(60)
+
+async def cmd_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/settings — (2026-10-12) تخصيص الإشارات: الأزواج والفريمات وحد الثقة."""
+    await update.message.reply_text(
+        "⚙️ *خصّص الإشارات التي تصلك*\n\n"
+        "• اختر الأزواج التي تتداولها فقط\n"
+        "• اختر الفريمات: 15 دقيقة، ساعة، 4 ساعات\n"
+        "• حدّد أقل نسبة ثقة للإشارة\n"
+        "• أو أوقف الإشعارات مؤقتاً\n\n"
+        "وتقدر توقف أي زوج مباشرة من زر 🔕 تحت الإشارة.",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⚙️ فتح الإعدادات", url=SETTINGS_URL)]]),
+    )
 
 async def cmd_challenge(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """/challenge — تحدّي اليوم عند الطلب (نفس سؤال الإرسال الصباحي)."""
@@ -2073,6 +2129,7 @@ def main():
     app.add_handler(CommandHandler("menu",  cmd_menu))
     app.add_handler(CommandHandler("help",  cmd_help))
     app.add_handler(CommandHandler("challenge", cmd_challenge))
+    app.add_handler(CommandHandler("settings", cmd_settings))
     app.add_handler(CallbackQueryHandler(on_button))
     app.add_handler(PollAnswerHandler(on_poll_answer))
 
@@ -2089,6 +2146,7 @@ def main():
             BotCommand("start",     "بدء التشغيل وربط الحساب"),
             BotCommand("menu",      "القائمة الرئيسية"),
             BotCommand("challenge", "تحدّي اليوم 🎯"),
+            BotCommand("settings",  "تخصيص الأزواج والفريمات ⚙️"),
             BotCommand("help",      "المساعدة وشرح الأوامر"),
         ]
         for scope in (BotCommandScopeDefault(), BotCommandScopeAllPrivateChats()):

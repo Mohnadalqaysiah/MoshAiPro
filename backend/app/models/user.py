@@ -116,7 +116,9 @@ class User(Base):
     notify_watchlist      = Column(JSON,    default=list)   # ["XAUUSD","BTCUSD"]
     notify_timeframe      = Column(String,  default="1h")   # legacy single value
     notify_timeframes     = Column(JSON,    default=list)   # ["1h","4h"] or ["all"]
-    notify_min_confidence = Column(Integer, default=65)
+    # (2026-10-12) كان 65 — حدّ يحجب 51% من الإشارات وكان يُحفظ لكل من ضغط
+    # "حفظ" دون أن يختاره. 0 = كل الإشارات، والعميل يرفعه إن أراد.
+    notify_min_confidence = Column(Integer, default=0)
 
     # Telegram broadcast masking (2026-08-21) — نفس مبدأ trial_signal_daily_limit
     # المطبّق على قائمة الموقع (/signals/latest)، بس هون لبث Telegram اللحظي:
