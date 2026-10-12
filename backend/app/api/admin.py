@@ -21,7 +21,7 @@ from app.models.site_settings import SiteSettings
 from app.models.affiliate import Affiliate, AffiliateReferral, TIER1_RATE, TIER2_RATE, TIER2_THRESHOLD
 from app.models.signal import Signal, SignalStatus
 from app.models.feature_request import FeatureRequest
-from app.services.decision_grouping import group_unique_decisions as _group_unique_decisions
+from app.services.decision_grouping import group_unique_decisions as _group_unique_decisions, merge_reissued
 from app.services.auth_service import get_admin_user, hash_password, verify_password
 from app.services.smart_data import smart_data as _smart_data
 from app.services.subscription_service import activate_subscription_payment
@@ -2083,7 +2083,8 @@ def _build_performance_report(signals: list, days: int, db: Session) -> tuple[st
     (2026-09-03) يُحسب الآن على مستوى "القرار الفريد" (_group_unique_decisions)
     بدل الصف الخام — انظر التعليق فوق `_group_unique_decisions`.
     """
-    decisions   = _group_unique_decisions(signals)
+    # (2026-10-12) + دمج الصفقة المُعاد إصدارها وهي مفتوحة (DECISIONS 12/10)
+    decisions   = merge_reissued(_group_unique_decisions(signals))
     # (2026-09-21) بلاغ حقيقي: "عدد المستخدمين" هون كان len(signals) — صفوف
     # Signal الخام، وهي تُنشأ أيضاً لكل مستخدم حلّل الرمز بنفسه عبر مراقبته
     # الشخصية (monitor_watchlists)، لا لكل من استلم رسالة تلغرام فعلياً.
@@ -2245,7 +2246,8 @@ def get_performance_report(
         q = q.filter(func.upper(Signal.market).in_(market_filter))
     signals = q.order_by(Signal.exit_executed.desc()).all()
 
-    decisions = _group_unique_decisions(signals)
+    # (2026-10-12) + دمج الصفقة المُعاد إصدارها وهي مفتوحة (DECISIONS 12/10)
+    decisions = merge_reissued(_group_unique_decisions(signals))
 
     # (2026-09-21) بلاغ حقيقي: عمود "مستخدمون" كان user_count = عدد صفوف
     # Signal بالمجموعة (كم مستخدم حلّل الرمز بنفسه عبر مراقبته الشخصية)،
@@ -2263,14 +2265,14 @@ def get_performance_report(
     # المجموعة (row_ids)، لا معرّف واحد مفترَض.
     if decisions:
         from app.models.signal_delivery import SignalDelivery
-        _all_ids = [rid for d in decisions for rid in d.get("row_ids", [d["id"]])]
+        _all_ids = [rid for d in decisions for rid in d.get("row_ids", [d["id"]]) + d.get("merged_row_ids", [])]
         _delivered_map = dict(
             db.query(SignalDelivery.signal_id, func.count(SignalDelivery.id))
               .filter(SignalDelivery.signal_id.in_(_all_ids), SignalDelivery.ok == True)  # noqa: E712
               .group_by(SignalDelivery.signal_id).all()
         )
         for d in decisions:
-            delivered = sum(_delivered_map.get(rid, 0) for rid in d.get("row_ids", [d["id"]]))
+            delivered = sum(_delivered_map.get(rid, 0) for rid in d.get("row_ids", [d["id"]]) + d.get("merged_row_ids", []))
             d["broadcast"] = bool(delivered)
             if delivered:
                 d["user_count"] = delivered

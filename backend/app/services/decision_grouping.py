@@ -148,4 +148,7 @@ def verified_unique_decisions(signals: list) -> list[dict]:
         s for s in signals
         if s.current_price is not None or getattr(s, "outcome_verified", False)
     ]
-    return group_unique_decisions(verified)
+    # (2026-10-12) + دمج الصفقة المُعاد إصدارها وهي مفتوحة — معاينة diag_merge_preview.py:
+    # 604→537 قراراً، مجموع R شبه ثابت (+155.8→+157.0)، ودمجت رابحات وخاسرات معاً
+    # (W41 انخفض). معايرة المحرك لا تمر من هنا (تستدعي group_unique_decisions مباشرة).
+    return merge_reissued(group_unique_decisions(verified))
