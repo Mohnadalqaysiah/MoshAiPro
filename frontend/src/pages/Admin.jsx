@@ -79,6 +79,42 @@ const fmtMinutes = (m) => {
   return `${Math.floor(h / 24)}ي${h % 24 ? ` ${h % 24}س` : ''}`
 }
 
+// (2026-10-12) حسابات أخرى سُجّلت من نفس IP — داخل نافذة المشترك مباشرة.
+// مؤشر لا دليل: العائلة وشبكات الجوال والمقاهي تشترك بنفس IP.
+function SameIpAccounts({ userId }) {
+  const [list, setList] = useState(null)
+  useEffect(() => {
+    let off = false
+    axios.get(`${API}/api/v1/admin/users/${userId}`)
+      .then(r => { if (!off) setList(r.data.same_ip_accounts || []) })
+      .catch(() => { if (!off) setList([]) })
+    return () => { off = true }
+  }, [userId])
+  if (!list || list.length === 0) return null
+  const fmtD = d => d ? new Date(d).toLocaleDateString('ar-EG', { dateStyle: 'short' }) : '—'
+  return (
+    <div className="bg-amber-900/15 border border-amber-700/40 rounded-xl p-3">
+      <div className="text-xs font-semibold text-amber-300 mb-1">⚠️ حسابات أخرى سجّلت من نفس الـIP ({list.length})</div>
+      <p className="text-[11px] text-gray-400 mb-2">مؤشر لا دليل — العائلة وشبكات الجوال قد تشترك بنفس الـIP.</p>
+      <div className="space-y-1.5">
+        {list.map(o => (
+          <div key={o.id} className="bg-gray-900/60 rounded-lg px-2.5 py-1.5 text-[11px] flex items-center justify-between gap-2 flex-wrap">
+            <span className="text-gray-200">#{o.id} · {o.full_name || '—'} · {o.email}</span>
+            <span className="text-gray-400 flex gap-2 flex-wrap">
+              <span>{o.plan}</span>
+              {o.telegram && <span>تيليجرام: {o.telegram}</span>}
+              {!o.verified && <span className="text-amber-400">غير مؤكَّد</span>}
+              {!o.active && <span className="text-red-400">معطّل</span>}
+              <span>سجّل {fmtD(o.created_at)}</span>
+              <span>آخر ظهور {fmtD(o.last_seen_at)}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 const RENEW_DAY_PRESETS = [7, 14, 30, 60, 90]
 const RENEW_REASON_PRESETS = ['تحويل بنكي', 'دفع كاش', 'PayPal يدوي', 'تعويض/مكافأة']
 
@@ -272,6 +308,7 @@ function UserModal({ user: u, onClose, onUpdate }) {
               </div>
             ))}
           </div>
+          {u.registration_ip && <SameIpAccounts userId={u.id} />}
 
           {/* قائمة المراقبة — أزواج التنبيهات الشخصية (فاضية = يراقب كل الأسواق) */}
           <div className="bg-gray-800 rounded-lg px-3 py-2.5">

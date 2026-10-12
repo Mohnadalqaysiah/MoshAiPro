@@ -261,6 +261,21 @@ def get_user(
     payments = db.query(Payment).filter(Payment.user_id == user_id).all()
     info = _user_info(user)
     info["payments"] = [_payment_info(p) for p in payments]
+    # (2026-10-12) الحسابات الأخرى المسجّلة من نفس IP — تظهر عند فتح المشترك
+    # مباشرة (مؤشر لتعدد الحسابات، لا دليل: العائلة وشبكات الجوال تشترك بـIP)
+    info["same_ip_accounts"] = []
+    if user.registration_ip:
+        others = (db.query(User)
+                  .filter(User.registration_ip == user.registration_ip, User.id != user.id)
+                  .order_by(User.created_at).limit(20).all())
+        info["same_ip_accounts"] = [{
+            "id": o.id, "email": o.email, "full_name": o.full_name,
+            "plan": o.plan.value if hasattr(o.plan, "value") else o.plan,
+            "telegram": o.telegram_username or (o.telegram_id and "مرتبط") or None,
+            "verified": bool(o.is_verified), "active": bool(o.is_active),
+            "created_at": o.created_at.isoformat() if o.created_at else None,
+            "last_seen_at": o.last_seen_at.isoformat() if o.last_seen_at else None,
+        } for o in others]
     return info
 
 
@@ -1306,7 +1321,9 @@ def send_telegram_message(
             "sent": 0, "total": total, "log_id": log.id}
 
 
-@router.get("/users/ip-groups")
+# ⚠️ ليس /users/ip-groups: /users/{user_id} مُعرَّف قبله فيلتقط "ip-groups" كرقم
+# مستخدم ويرفضه (422) — كان سبب "تعذّر التحميل" بأول نشر.
+@router.get("/ip-groups")
 def users_ip_groups(
     min_accounts: int = 2,
     admin: User = Depends(get_admin_user),

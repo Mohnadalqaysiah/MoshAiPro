@@ -21,7 +21,7 @@ export default function IpGroupsPanel({ onOpenUser }) {
 
   const load = async () => {
     setLoading(true)
-    try { const r = await axios.get(`${API}/api/v1/admin/users/ip-groups`); setData(r.data) }
+    try { const r = await axios.get(`${API}/api/v1/admin/ip-groups`); setData(r.data) }
     catch (_) { setData({ groups: [], error: true }) }
     finally { setLoading(false) }
   }
