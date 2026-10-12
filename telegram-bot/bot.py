@@ -1238,26 +1238,26 @@ async def broadcast_new_signals(app: Application):
             sigs      = sigs_data.get("signals", [])
 
             if sigs:
-                # جلب قوائم المراقبة — كل مستخدم يستلم فقط إشارات أزواجه
-                wl_data = await _get("/api/v1/bot/all-watchlists")
-                wl_users = wl_data.get("users", [])
-
-                # بناء map: telegram_id → set of symbols
-                user_wl: dict[str, set] = {}
-                for u in wl_users:
-                    tid_str = str(u["telegram_id"])
-                    user_wl[tid_str] = set(s.upper() for s in u.get("watchlist", []))
-
+                # (2026-10-12) تفضيلات كل مشترك من مصدر واحد (/active-subscribers).
+                # قبلها: فلتر الأزواج من /all-watchlists التي تستبعد من أطفأ
+                # الإشعارات ومن لم يؤكّد بريده — فكان هؤلاء يُعاملون كـ"بلا تخصيص"
+                # ويستلمون كل الإشارات، عكس اختيارهم تماماً.
                 # المستخدمون بدون watchlist يستلمون كل الإشارات (لم يضبطوا تفضيلاتهم بعد)
                 # full_access: أدمن/مشترك فعلي — full لدايماً. الباقي (تجربة نشطة أو
                 # منتهية) يستمرون بالاستلام لكن بنسخة مموّهة بعد حصتهم اليومية
                 # المجانية (2026-08-21 — قرار: لا نقطع الإشعارات نهائياً عن التجربة
                 # المنتهية، القفل يكون على التفاصيل فقط).
                 subs_data      = await _get("/api/v1/bot/active-subscribers")
-                full_access_of = {str(s["telegram_id"]): bool(s.get("full_access")) for s in subs_data.get("subscribers", [])}
-                all_subs       = list(full_access_of.keys())
+                subs_list      = subs_data.get("subscribers", [])
+                full_access_of = {str(s["telegram_id"]): bool(s.get("full_access")) for s in subs_list}
+                muted          = {str(s["telegram_id"]) for s in subs_list if s.get("notifications_enabled") is False}
+                user_wl: dict[str, set] = {
+                    str(s["telegram_id"]): set(s.get("watchlist") or [])
+                    for s in subs_list if s.get("watchlist")
+                }
+                all_subs       = [t for t in full_access_of if t not in muted]
 
-                logger.info(f"📡 {len(sigs)} إشارة جديدة → {len(all_subs)} مشترك ({len(user_wl)} لديهم watchlist)")
+                logger.info(f"📡 {len(sigs)} إشارة جديدة → {len(all_subs)} مشترك ({len(user_wl)} لديهم watchlist، {len(muted)} أطفؤوا الإشعارات)")
 
                 now_bc = datetime.now(timezone.utc)
                 for sig in sigs:
@@ -1475,7 +1475,7 @@ async def daily_challenge(app: Application):
                     sent = 0
                     for s in subs:
                         tid = s.get("telegram_id")
-                        if not tid:
+                        if not tid or s.get("notifications_enabled") is False:
                             continue
                         try:
                             msg = await app.bot.send_poll(
@@ -1978,7 +1978,7 @@ async def daily_briefing(app: Application):
                 sent = 0
                 for s in subs:
                     tid = s.get("telegram_id")
-                    if not tid:
+                    if not tid or s.get("notifications_enabled") is False:   # (2026-10-12) احترام الإيقاف
                         continue
                     try:
                         await app.bot.send_message(

@@ -71,6 +71,7 @@ class TelegramMessageIn(BaseModel):
     title: Optional[str] = None  # العنوان الرئيسي مثل "Qaffel Ai"
     message: str  # الرسالة
     user_ids: Optional[List[int]] = None  # إذا None، يرسل لجميع المستخدمين الذين لديهم telegram_id
+    test_to_me: bool = False      # (2026-10-11) تجربة: أرسل للأدمن نفسه فقط قبل البث
 
 
 # ─── Dashboard Stats ──────────────────────────────────────────────────────────
@@ -1152,13 +1153,19 @@ def _get_bot_token(db: Session) -> str:
     return _settings.TELEGRAM_BOT_TOKEN or ""
 
 
-def _send_telegram_message(chat_id: str, text: str, db: Session = None) -> bool:
-    """إرسال رسالة تيليجرام واحدة"""
-    token = _get_bot_token(db) if db else (_settings.TELEGRAM_BOT_TOKEN or "")
+def _send_telegram_message(chat_id: str, text: str, db: Session = None, token: str = None, _err: list = None) -> bool:
+    """إرسال رسالة تيليجرام واحدة.
+
+    (2026-10-11) إن رفض تيليجرام تنسيق HTML (رمز < أو & في النص) تُعاد
+    الرسالة نصاً عادياً بدل أن تضيع بصمت. _err يجمع آخر سبب فشل للسجل."""
+    import re as _re
+    token = token or (_get_bot_token(db) if db else (_settings.TELEGRAM_BOT_TOKEN or ""))
     if not token:
+        if _err is not None:
+            _err.append("لا يوجد توكن بوت")
         return False
     url = f"https://api.telegram.org/bot{token}/sendMessage"
-    payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
+    payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML", "disable_web_page_preview": True}
     try:
         resp = requests.post(url, json=payload, timeout=10)
         if resp.status_code == 429:
@@ -1166,17 +1173,77 @@ def _send_telegram_message(chat_id: str, text: str, db: Session = None) -> bool:
             retry_after = resp.json().get("parameters", {}).get("retry_after", 5)
             _t.sleep(retry_after)
             resp = requests.post(url, json=payload, timeout=10)
+        if resp.status_code == 400 and "parse entities" in resp.text:
+            payload = {"chat_id": chat_id, "text": _re.sub(r"<[^>]+>", "", text), "disable_web_page_preview": True}
+            resp = requests.post(url, json=payload, timeout=10)
+        if resp.status_code != 200 and _err is not None:
+            try:
+                _err.append(resp.json().get("description", str(resp.status_code))[:200])
+            except Exception:
+                _err.append(str(resp.status_code))
         return resp.status_code == 200
-    except Exception:
+    except Exception as e:
+        if _err is not None:
+            _err.append(type(e).__name__)
         return False
 
 
-def _broadcast_task(chat_ids: list, text: str):
-    """يُرسل للقائمة في الخلفية مع rate limiting"""
+def _broadcast_task(chat_ids: list, text: str, token: str = None, log_id: int = None):
+    """يُرسل للقائمة في الخلفية مع rate limiting.
+
+    (2026-10-11) بلاغ: إعلان لم يصل. كانت هذه الدالة تستدعي الإرسال بلا db
+    فتقرأ توكن متغيّر البيئة فقط — بينما الإرسال الصغير (≤5) يقرأ التوكن
+    المحفوظ بإعدادات اللوحة أولاً. فإن كان التوكن مضبوطاً باللوحة فقط، فشل
+    كل بث كبير بصمت واللوحة تقول "جاري إرسال N". الآن التوكن يُمرَّر من
+    الطلب نفسه، والنتيجة تُسجَّل في telegram_broadcasts."""
     import time as _t
-    for cid in chat_ids:
-        _send_telegram_message(cid, text)
+    from app.database import SessionLocal
+    from app.models.telegram_broadcast import TelegramBroadcast
+    ok = failed = 0
+    errs: list = []
+    for i, cid in enumerate(chat_ids):
+        if _send_telegram_message(cid, text, token=token, _err=errs):
+            ok += 1
+        else:
+            failed += 1
         _t.sleep(0.05)  # Telegram: max 30 msg/s
+        if log_id and (i + 1) % 25 == 0:
+            _update_broadcast_log(log_id, ok, failed, errs, done=False)
+    if log_id:
+        _update_broadcast_log(log_id, ok, failed, errs, done=True)
+
+
+def _update_broadcast_log(log_id: int, ok: int, failed: int, errs: list, done: bool):
+    from app.database import SessionLocal
+    from app.models.telegram_broadcast import TelegramBroadcast
+    s = SessionLocal()
+    try:
+        row = s.query(TelegramBroadcast).filter(TelegramBroadcast.id == log_id).first()
+        if row:
+            row.ok, row.failed = ok, failed
+            if errs:
+                row.last_error = errs[-1]
+            if done:
+                row.status = "done"
+                row.finished_at = datetime.now(timezone.utc)
+            s.commit()
+    finally:
+        s.close()
+
+
+def _format_broadcast(title: Optional[str], message: str) -> str:
+    """(2026-10-11) النص يُرسل HTML: نهرّب < > & حتى لا يرفضه تيليجرام، ونحوّل
+    *نص* (المستخدم بقوالب اللوحة) إلى عريض — كانت النجوم تظهر حرفياً للعملاء."""
+    import html as _html
+    import re as _re
+    def fmt(s: str) -> str:
+        s = _html.escape(s, quote=False)
+        return _re.sub(r"\*([^*\n]+)\*", r"<b>\1</b>", s)
+    lines = []
+    if title:
+        lines += [f"<b>📢 {fmt(title)}</b>", ""]
+    lines += [fmt(message), "", "<i>— Qaffel AI</i>"]
+    return "\n".join(lines)
 
 
 @router.post("/telegram/send")
@@ -1187,18 +1254,21 @@ def send_telegram_message(
     db: Session = Depends(get_db),
 ):
     """إرسال رسالة تيليجرام — للمحددين أو للجميع"""
-    if not _get_bot_token(db):
+    from app.models.telegram_broadcast import TelegramBroadcast
+    token = _get_bot_token(db)
+    if not token:
         raise HTTPException(400, "TELEGRAM_BOT_TOKEN غير مضبوط")
 
-    # ── بناء الرسالة ───────────────────────────────────────────────────────
-    lines = []
-    if data.title:
-        lines.append(f"<b>📢 {data.title}</b>")
-        lines.append("")
-    lines.append(data.message)
-    lines.append("")
-    lines.append("<i>— Qaffel AI</i>")
-    text = "\n".join(lines)
+    text = _format_broadcast(data.title, data.message)
+
+    # ── تجربة للأدمن نفسه ──────────────────────────────────────────────────
+    if data.test_to_me:
+        if not admin.telegram_id:
+            raise HTTPException(400, "حسابك غير مربوط بتيليجرام — اربطه من البوت أولاً")
+        errs: list = []
+        ok = _send_telegram_message(admin.telegram_id, text, token=token, _err=errs)
+        return {"message": "✅ وصلتك رسالة التجربة على تيليجرام" if ok else f"❌ فشلت التجربة: {errs[-1] if errs else ''}",
+                "sent": int(ok), "total": 1}
 
     # ── تحديد المستلمين ────────────────────────────────────────────────────
     if data.user_ids:
@@ -1219,13 +1289,80 @@ def send_telegram_message(
     if total == 0:
         return {"message": "لا يوجد مستخدمون لديهم تيليجرام", "sent": 0, "total": 0}
 
-    # ── إرسال فوري للأعداد الصغيرة، خلفية للكبيرة ─────────────────────────
+    log = TelegramBroadcast(admin_id=admin.id, title=data.title, preview=data.message[:300], total=total)
+    db.add(log)
+    db.commit()
+    db.refresh(log)
+
+    # ── إرسال فوري للأعداد الصغيرة، خلفية للكبيرة — نفس التوكن في الحالتين ─
     if total <= 5:
-        sent = sum(1 for cid in chat_ids if _send_telegram_message(cid, text, db))
-        return {"message": f"✅ تم إرسال {sent}/{total} رسالة", "sent": sent, "total": total}
-    else:
-        background.add_task(_broadcast_task, chat_ids, text)
-        return {"message": f"⏳ جاري إرسال {total} رسالة في الخلفية", "sent": total, "total": total}
+        errs: list = []
+        sent = sum(1 for cid in chat_ids if _send_telegram_message(cid, text, token=token, _err=errs))
+        _update_broadcast_log(log.id, sent, total - sent, errs, done=True)
+        return {"message": f"✅ تم إرسال {sent}/{total} رسالة" + (f" — آخر خطأ: {errs[-1]}" if errs else ""),
+                "sent": sent, "total": total}
+    background.add_task(_broadcast_task, chat_ids, text, token, log.id)
+    return {"message": f"⏳ جاري إرسال {total} رسالة — تابع النتيجة في سجل الإعلانات أدناه",
+            "sent": 0, "total": total, "log_id": log.id}
+
+
+@router.get("/users/ip-groups")
+def users_ip_groups(
+    min_accounts: int = 2,
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """(2026-10-12) الحسابات المشتركة بنفس IP التسجيل، مجمّعة.
+
+    ⚠️ مؤشر لا دليل: شبكات الجوال (CGNAT) والعائلة والمكاتب والمقاهي تشترك
+    بنفس IP بين أشخاص مختلفين. القرار للأدمن بعد النظر بالتفاصيل — لذلك
+    نعرض ما يرجّح التلاعب: كم حساب منها تجريبي، وتقارب أوقات التسجيل.
+    IP داخلي (127/10/172.16-31/192.168) يعني خللاً بتمرير IP من nginx، لا شخصاً."""
+    import ipaddress
+    rows = (db.query(User.registration_ip, func.count(User.id))
+            .filter(User.registration_ip.isnot(None), User.registration_ip != "")
+            .group_by(User.registration_ip)
+            .having(func.count(User.id) >= max(2, min_accounts))
+            .order_by(func.count(User.id).desc())
+            .limit(100).all())
+    groups = []
+    for ip, cnt in rows:
+        members = db.query(User).filter(User.registration_ip == ip).order_by(User.created_at).all()
+        try:
+            internal = ipaddress.ip_address(ip).is_private or ipaddress.ip_address(ip).is_loopback
+        except ValueError:
+            internal = False
+        created = [m.created_at for m in members if m.created_at]
+        span_h = round((max(created) - min(created)).total_seconds() / 3600, 1) if len(created) > 1 else 0
+        trials = sum(1 for m in members if (m.plan.value if hasattr(m.plan, "value") else m.plan) == "trial")
+        groups.append({
+            "ip": ip, "count": cnt, "internal_ip": internal,
+            "trial_accounts": trials, "span_hours": span_h,
+            "suspicion": "high" if trials >= 2 and span_h <= 72 else "medium" if trials >= 2 else "low",
+            "members": [{
+                "id": m.id, "email": m.email, "full_name": m.full_name,
+                "plan": m.plan.value if hasattr(m.plan, "value") else m.plan,
+                "telegram": m.telegram_username or (m.telegram_id and "مرتبط") or None,
+                "verified": bool(m.is_verified), "active": bool(m.is_active),
+                "created_at": m.created_at.isoformat() if m.created_at else None,
+                "last_seen_at": m.last_seen_at.isoformat() if m.last_seen_at else None,
+            } for m in members],
+        })
+    order = {"high": 0, "medium": 1, "low": 2}
+    groups.sort(key=lambda g: (g["internal_ip"], order[g["suspicion"]], -g["count"]))
+    return {"groups": groups, "count": len(groups)}
+
+
+@router.get("/telegram/history")
+def telegram_history(admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    """(2026-10-11) آخر 20 إعلاناً أُرسل من اللوحة ونتيجة كل منها."""
+    from app.models.telegram_broadcast import TelegramBroadcast
+    rows = db.query(TelegramBroadcast).order_by(TelegramBroadcast.id.desc()).limit(20).all()
+    return {"items": [{
+        "id": r.id, "title": r.title, "preview": r.preview, "total": r.total, "ok": r.ok,
+        "failed": r.failed, "last_error": r.last_error, "status": r.status,
+        "created_at": r.created_at.isoformat() if r.created_at else None,
+    } for r in rows]}
 
 
 # ─── Signal Performance ───────────────────────────────────────────────────────

@@ -1434,8 +1434,19 @@ def bot_active_subscribers(
         User.plan != PlanType.BANNED,
     ).all()
 
+    # (2026-10-12) تفضيلات كل مشترك مع القائمة نفسها — مصدر واحد للبث. قبلها
+    # كان البوت يأخذ فلتر الأزواج من /all-watchlists التي تستبعد من أطفأ
+    # الإشعارات ومن لم يؤكّد بريده، فيعاملهم البث كأنهم "بلا تخصيص" ويرسل لهم
+    # **كل** الإشارات — عكس اختيارهم تماماً.
     result = [
-        {"telegram_id": u.telegram_id, "full_access": _bot_has_full_signal_access(u)}
+        {
+            "telegram_id":           u.telegram_id,
+            "full_access":           _bot_has_full_signal_access(u),
+            "notifications_enabled": u.notifications_enabled is not False,
+            "watchlist":             [s.upper() for s in (u.notify_watchlist or [])],
+            "timeframes":            list(u.notify_timeframes or []),
+            "min_confidence":        u.notify_min_confidence if u.notify_min_confidence is not None else 65,
+        }
         for u in users
     ]
 

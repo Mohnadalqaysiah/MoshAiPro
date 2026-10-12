@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext'
 import Logo from '../components/Logo'
 import QualityReportPanel from '../components/QualityReportPanel'
 import CombinationsPanel from '../components/CombinationsPanel'
+import IpGroupsPanel from '../components/IpGroupsPanel'
 import OnlineUsersModal from '../components/OnlineUsersModal'
 import CouponsPanel from '../components/CouponsPanel'
 import useSiteSettings from '../hooks/useSiteSettings'
@@ -641,6 +642,7 @@ export default function Admin() {
   // Messages state
   const [messageForm, setMessageForm] = useState({ title:'', message:'', user_ids:[] })
   const [messageSending, setMessageSending] = useState(false)
+  const [tgHistory, setTgHistory] = useState([])
   const [messageMsg, setMessageMsg] = useState(null)
 
   // Performance Report state
@@ -1043,14 +1045,23 @@ export default function Admin() {
     finally { setPushSending(false) }
   }
 
-  const sendMessage = async (e) => {
-    e.preventDefault(); setMessageSending(true); setMessageMsg(null)
+  // (2026-10-11) سجل الإعلانات — قبله لم يكن هناك أي طريقة لمعرفة هل وصل الإعلان
+  const loadTgHistory = async () => {
+    try { const r = await axios.get(`${API}/api/v1/admin/telegram/history`); setTgHistory(r.data.items || []) } catch (_) {}
+  }
+  const sendMessage = async (e, test = false) => {
+    e?.preventDefault?.()
+    if (!messageForm.message.trim()) return
+    setMessageSending(true); setMessageMsg(null)
     try {
-      const payload = { title: messageForm.title || undefined, message: messageForm.message }
-      if (messageForm.user_ids.length > 0) payload.user_ids = messageForm.user_ids.map(id => parseInt(id))
+      const payload = { title: messageForm.title || undefined, message: messageForm.message, test_to_me: test }
+      if (!test && messageForm.user_ids.length > 0) payload.user_ids = messageForm.user_ids.map(id => parseInt(id))
       const r = await axios.post(`${API}/api/v1/admin/telegram/send`, payload)
-      setMessageMsg({ type:'ok', text: r.data.message })
-      setMessageForm(f => ({ ...f, title:'', message:'', user_ids:[] }))
+      setMessageMsg({ type: r.data.message?.startsWith('❌') ? 'err' : 'ok', text: r.data.message })
+      if (!test) {
+        setMessageForm(f => ({ ...f, title:'', message:'', user_ids:[] }))
+        loadTgHistory(); setTimeout(loadTgHistory, 15000); setTimeout(loadTgHistory, 60000)
+      }
     } catch (err) { setMessageMsg({ type:'err', text: err.response?.data?.detail || 'فشل الإرسال' }) }
     finally { setMessageSending(false) }
   }
@@ -1406,6 +1417,7 @@ export default function Admin() {
           {/* ── Users ── */}
           {tab === 'users' && (
             <div>
+              <div className="mb-3"><IpGroupsPanel onOpenUser={openUserById} /></div>
               <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
                 <h1 className="text-xl font-bold">
                   المستخدمون <span className="text-sm text-gray-500 font-normal">({filteredUsers.length})</span>
@@ -2180,7 +2192,11 @@ export default function Admin() {
                   <p className="text-xs text-gray-500 mt-1">يمكن اختيار عدة مستخدمين (Ctrl+Click)</p>
                 </div>
 
-                <div className="flex gap-3">
+                <div className="flex flex-wrap gap-3">
+                  <button type="button" disabled={messageSending} onClick={e => sendMessage(e, true)}
+                    className="flex items-center gap-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 disabled:opacity-50 text-gray-200 px-4 py-2 rounded-lg text-sm transition">
+                    📨 أرسل لي تجربة أولاً
+                  </button>
                   <button type="submit" disabled={messageSending}
                     className="flex items-center gap-2 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white px-6 py-2 rounded-lg text-sm transition">
                     {messageSending ? <RefreshCw size={14} className="animate-spin"/> : <Mail size={14}/>}
@@ -2197,7 +2213,37 @@ export default function Admin() {
                 <p>📱 يرسل الرسائل عبر تيليجرام بوت</p>
                 <p>⚙️ يتطلب ضبط <span className="font-mono text-gray-400">TELEGRAM_BOT_TOKEN</span></p>
                 <p>🚀 الإرسال يتم في الخلفية للمستخدمين الذين لديهم telegram_id</p>
-                <p>💬 يدعم HTML formatting في الرسائل</p>
+                <p>💬 النص بين نجمتين <span className="font-mono text-gray-400">*هكذا*</span> يظهر عريضاً</p>
+              </div>
+
+              {/* ── سجل الإعلانات ── */}
+              <div className="mt-4 bg-gray-900 border border-gray-800 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-gray-200">📋 سجل الإعلانات المرسلة</h3>
+                  <button type="button" onClick={loadTgHistory} className="text-xs text-gray-400 hover:text-white flex items-center gap-1">
+                    <RefreshCw size={12}/> تحديث
+                  </button>
+                </div>
+                {tgHistory.length === 0 ? (
+                  <p className="text-xs text-gray-500">لا توجد إعلانات مسجّلة بعد — اضغط تحديث. (الإعلانات قبل هذا التحديث لم تكن تُسجَّل)</p>
+                ) : (
+                  <div className="space-y-2">
+                    {tgHistory.map(h => (
+                      <div key={h.id} className="bg-gray-800/50 rounded-lg px-3 py-2 text-xs">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <span className="text-gray-200 font-medium truncate">{h.title || (h.preview || '').slice(0, 50)}</span>
+                          <span className="text-gray-500">{h.created_at ? new Date(h.created_at).toLocaleString('ar-EG', { dateStyle: 'short', timeStyle: 'short' }) : ''}</span>
+                        </div>
+                        <div className="flex items-center gap-3 mt-1 flex-wrap">
+                          <span className={h.status === 'done' ? 'text-gray-400' : 'text-yellow-400'}>{h.status === 'done' ? 'اكتمل' : 'جارٍ الإرسال…'}</span>
+                          <span className="text-green-400">✓ وصل: {h.ok} / {h.total}</span>
+                          {h.failed > 0 && <span className="text-red-400">✕ فشل: {h.failed}</span>}
+                          {h.last_error && <span className="text-red-300/80 truncate">آخر خطأ: {h.last_error}</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* ── Re-engagement Campaign ── */}
