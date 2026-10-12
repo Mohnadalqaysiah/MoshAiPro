@@ -190,8 +190,13 @@ async def lifespan(app: FastAPI):
     from app.services.web_push_broadcaster import web_push_broadcaster
     web_push_task = asyncio.create_task(web_push_broadcaster())
 
+    # (2026-10-12) تقييم إشارات الظل (كريبتو العطلة) من الشموع — لا يرسل شيئاً لأحد
+    from app.services.shadow_evaluator import shadow_evaluator
+    shadow_task = asyncio.create_task(shadow_evaluator())
+
     yield
 
+    shadow_task.cancel()
     alert_task.cancel()
     strategy_task.cancel()
     scanner_task.cancel()

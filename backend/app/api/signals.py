@@ -219,7 +219,13 @@ async def analyze_market(
                 # — هاد المسار (تحليل من الموقع مباشرة) كان يتجاوزه بالكامل،
                 # وهو الأعلى حجماً لرمز شعبي زي XAUUSD. نفس الدالة والمنطق تماماً.
                 loss_streak_reason = _check_loss_streak_breaker(db, symbol, rec)
-                if loss_streak_reason:
+                # (2026-10-12) كريبتو بالعطلة → جدول الظل فقط (راجع weekend_policy.py)
+                from app.services.weekend_policy import crypto_weekend_paused, record_shadow
+                if crypto_weekend_paused(db, symbol):
+                    record_shadow(db, source="web", symbol=symbol, timeframe=timeframe, signal_type=rec,
+                                  entry=entry, sl=sl, tp1=tp1, tp2=tp2, confidence=conf, rr=rr,
+                                  expires_at=expires_at, user_id=user.id)
+                elif loss_streak_reason:
                     analysis["loss_streak_blocked"] = True
                     analysis["rejection_reason"]    = loss_streak_reason.upper()
                     logger.warning(

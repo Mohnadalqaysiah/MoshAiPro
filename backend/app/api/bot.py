@@ -259,7 +259,14 @@ async def bot_analyze(
                 ).hexdigest()
                 existing = db.query(Signal).filter(Signal.signal_hash == sig_hash).first()
 
-                if not existing:
+                # (2026-10-12) كريبتو بالعطلة → جدول الظل فقط، لا صف Signal (لا بث ولا إحصائية)
+                from app.services.weekend_policy import crypto_weekend_paused, record_shadow
+                if crypto_weekend_paused(db, symbol):
+                    record_shadow(db, source="analyze" if telegram_id else "scanner", symbol=symbol,
+                                  timeframe=timeframe, signal_type=rec, entry=entry, sl=sl, tp1=tp1,
+                                  tp2=tp2, confidence=conf, rr=rr, expires_at=expires_at,
+                                  user_id=signal_user_id)
+                elif not existing:
                     new_signal = Signal(
                         user_id            = signal_user_id,
                         market             = symbol,
@@ -1674,12 +1681,22 @@ def bot_save_alert_signal(
     if _user_already_has_trade(db, user, symbol, ST(signal_type), entry):
         return {"saved": False, "reason": "same open trade already delivered to this user"}
 
+    tf_hours   = {"1m": 2, "5m": 4, "15m": 3, "30m": 12, "1h": 24, "4h": 72, "1d": 168}
+
+    # (2026-10-12) كريبتو بالعطلة → لا تنبيه مراقبة؛ يُحفظ بجدول الظل للقياس فقط
+    from app.services.weekend_policy import crypto_weekend_paused, record_shadow
+    if crypto_weekend_paused(db, symbol):
+        record_shadow(db, source="watch", symbol=symbol, timeframe=timeframe, signal_type=signal_type,
+                      entry=entry, sl=sl, tp1=tp1, tp2=tp2, confidence=confidence, rr=rr,
+                      expires_at=datetime.now(timezone.utc) + timedelta(hours=tf_hours.get(timeframe, 24)),
+                      user_id=user.id)
+        return {"saved": False, "reason": "crypto_weekend_pause"}
+
     # (2026-10-03) 15m كانت 8 ساعات (32× حجم الشمعة — شذوذ مقارنة بالجدول
     # المتدرّج حولها: 5m=48×، 30m=24×). بنية السوق يلي بُنيت عليها إشارة
     # 15m تتغيّر فعلياً خلال ساعات قليلة، فـ8 ساعات تعني إشارة "صالحة"
     # لإعداد عملياً انتهى بحكم الواقع. نزلت لـ3 ساعات (12× — أقرب لانحدار
-    # الجدول). بتفويض صريح من صاحب المنتج.
-    tf_hours   = {"1m": 2, "5m": 4, "15m": 3, "30m": 12, "1h": 24, "4h": 72, "1d": 168}
+    # الجدول). بتفويض صريح من صاحب المنتج. (tf_hours معرّف أعلاه — قبل فحص الكريبتو)
     expires_at = datetime.now(timezone.utc) + timedelta(hours=tf_hours.get(timeframe, 24))
 
     sig_hash = hashlib.md5(
