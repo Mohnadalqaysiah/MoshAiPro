@@ -87,6 +87,50 @@ def _finalize_decision_group(rows: list) -> dict:
     }
 
 
+SAME_TRADE_ENTRY_TOL = 0.0005   # 0.05% — نفس عتبة حماية البث (_entries_equivalent بـbot.py)
+
+
+def merge_reissued(decisions: list[dict]) -> list[dict]:
+    """(2026-10-12) يدمج "الصفقة المُعاد إصدارها" بالأولى: نفس الرمز والاتجاه، دخول ضمن
+    0.05%، أي فريم، وصدرت **والأولى ما زالت مفتوحة** (قبل exit_executed). تُحسب نتيجة
+    الأولى — هي التي وصلت للمشتركين. القاعدة متماثلة على الرابح والخاسر (DECISIONS 12/10).
+
+    لا تُستدعى من group_unique_decisions: معايرة المحرك (ai_engine_v5) تستخدم تلك
+    مباشرة والمحرك مجمّد — الدمج طبقة عرض/إحصاء فوقها فقط.
+    يضيف للقرار المُبقى: merged_count، merged_row_ids، merge_conflict (نتيجتان مختلفتان)."""
+    far = datetime.max.replace(tzinfo=timezone.utc)
+
+    def _aware(d):
+        return d if d is None or d.tzinfo else d.replace(tzinfo=timezone.utc)
+
+    kept: list[dict] = []
+    for d in sorted(decisions, key=lambda x: _aware(x.get("created_at")) or far):
+        created = _aware(d.get("created_at"))
+        host = None
+        if created is not None and d.get("entry_price"):
+            for a in reversed(kept):
+                if a["market"] != d["market"] or a["signal_type"] != d["signal_type"]:
+                    continue
+                a_entry = float(a.get("entry_price") or 0)
+                if not a_entry or abs(float(d["entry_price"]) - a_entry) / a_entry > SAME_TRADE_ENTRY_TOL:
+                    continue
+                a_created = _aware(a.get("created_at"))
+                a_exit = _aware(a.get("exit_executed")) or far
+                if a_created is not None and a_created <= created < a_exit:
+                    host = a
+                    break
+        if host is None:
+            d = dict(d, merged_count=0, merged_row_ids=[], merge_conflict=False)
+            kept.append(d)
+        else:
+            host["merged_count"] += 1
+            host["merged_row_ids"] += d.get("row_ids", [d["id"]])
+            host["user_count"] = host.get("user_count", 0) + d.get("user_count", 0)
+            if d["status"] != host["status"]:
+                host["merge_conflict"] = True
+    return kept
+
+
 def verified_unique_decisions(signals: list) -> list[dict]:
     """الأداة الجاهزة لأي تقرير/إحصائية مجمّعة: تفلتر الصفوف الخام لمصدرها
     الموثوق فقط (current_price IS NOT NULL — تلقائي عبر check_outcomes،
