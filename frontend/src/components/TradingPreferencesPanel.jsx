@@ -18,7 +18,7 @@ const TF_LABEL = { '15m': { ar: '15 دقيقة', en: '15 min' }, '1h': { ar: 'س
 // يُعاد استخدامه بالاثنين بدل تكرار نفس المنطق (حفظ، حاسبة اللوت،
 // تبديل الأزواج) بملفين منفصلين.
 export default function TradingPreferencesPanel() {
-  const { user } = useAuth()
+  const { user, refreshUser } = useAuth()
   const { lang } = useLang()
   const isAr = lang === 'ar'
   const { markets } = useMarkets()
@@ -97,6 +97,8 @@ export default function TradingPreferencesPanel() {
         ...prefs,
         notify_watchlist: allSelected ? [] : prefs.notify_watchlist,
       })
+      // بدونه تبقى بيانات الحساب بالذاكرة قديمة، فيرجع الاختيار القديم عند العودة للصفحة
+      refreshUser?.().catch(() => {})
       setPrefsMsg({ type: 'ok', text: isAr ? 'تم حفظ إعدادات الإشعارات' : 'Notification settings saved' })
     } catch (err) {
       setPrefsMsg({ type: 'err', text: err.response?.data?.detail || 'Error' })
@@ -114,15 +116,18 @@ export default function TradingPreferencesPanel() {
   const selectAllWatchlist   = () => setPrefs(p => ({ ...p, notify_watchlist: markets.map(m => m.symbol) }))
   const deselectAllWatchlist = () => setPrefs(p => ({ ...p, notify_watchlist: [] }))
 
+  // (2026-10-12) بلاغ: لا يمكن اختيار فريم. الأزرار كانت معطّلة ما دام "كل الفريمات"
+  // مفعّلاً، والضغط عليه لا يلغيه — وصار هو الافتراضي فعلق العميل. الآن: ضغط فريم
+  // من وضع "الكل" يبدأ اختياراً جديداً به، وإلغاء آخر فريم يرجع لـ"الكل".
   const toggleTimeframe = (tf) => {
     if (tf === 'all') {
       setPrefs(p => ({ ...p, notify_timeframes: ['all'] }))
       return
     }
     setPrefs(p => {
-      const current = p.notify_timeframes.filter(t => t !== 'all')
+      const current = p.notify_timeframes.filter(t => t !== 'all' && TIMEFRAMES.includes(t))
       const next = current.includes(tf) ? current.filter(t => t !== tf) : [...current, tf]
-      return { ...p, notify_timeframes: next.length === 0 ? [tf] : next }
+      return { ...p, notify_timeframes: next.length === 0 ? ['all'] : next }
     })
   }
 
@@ -288,8 +293,7 @@ export default function TradingPreferencesPanel() {
               </button>
               {TIMEFRAMES.map(tf => (
                 <button key={tf} type="button" onClick={() => toggleTimeframe(tf)}
-                  disabled={prefs.notify_timeframes.includes('all')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-40 ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                     !prefs.notify_timeframes.includes('all') && prefs.notify_timeframes.includes(tf)
                       ? 'bg-blue-600 text-white'
                       : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
