@@ -12,9 +12,11 @@ export default function Games() {
   const isAr = lang === 'ar'
   // (2026-10-11) api= نفس عنوان الـAPI الذي يستخدمه التطبيق — الصفحة تحفظ
   // النقاط بالحساب ولا تخمّن العنوان داخل لوحة التحكم
-  const src = `/games/challenge?embed=1&api=${encodeURIComponent(API)}`
+  // (2026-10-12) lang= يفتح الألعاب بلغة المنصة؛ key يعيد تحميل الإطار عند تبديل اللغة
+  const src = `/games/challenge?embed=1&lang=${isAr ? 'ar' : 'en'}&api=${encodeURIComponent(API)}`
   return (
     <iframe
+      key={lang}
       src={src}
       title={isAr ? 'الألعاب التعليمية' : 'Learning games'}
       className="block w-full rounded-2xl border-0"

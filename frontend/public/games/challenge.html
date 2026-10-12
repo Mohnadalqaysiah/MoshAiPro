@@ -44,7 +44,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Readex+Pro:wght@500;600;700&display=swap">
-<script>if(/[?&]embed=1/.test(location.search))document.documentElement.classList.add('embed')</script>
+<script>if(/[?&]embed=1/.test(location.search))document.documentElement.classList.add('embed')
+/* (2026-10-12) نسخة إنجليزية بنفس الصفحة: ?lang= أولاً (الإطار داخل المنصة يمرّره)، ثم
+   لغة الموقع المحفوظة qaffel_lang. الـHTML الثابت يبقى عربياً لمحرك البحث — لا رابط جديد. */
+window.QF_EN=(function(){var m=location.search.match(/[?&]lang=(ar|en)/);if(m)return m[1]==='en';try{return localStorage.getItem('qaffel_lang')==='en'}catch(e){return false}})();
+if(window.QF_EN){document.documentElement.lang='en';document.documentElement.dir='ltr'}</script>
 <style>
 /* Layout: level picker, game tabs, then one stage (question, play area, controls, result) beside a side rail of progress and badges.
    Single dark look by choice: it matches the Qaffel terminal (charcoal, gold, teal, red). */
@@ -87,7 +91,7 @@ h1{font:600 21px/1.2 var(--f-display);margin:0}
 .stat dd.rank{font:600 15px/1.6 var(--f-display);color:var(--gold-hi)}
 
 .levels{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
-.lv{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;text-align:right;cursor:pointer;display:grid;gap:6px;min-width:0;transition:border-color .15s,background .15s}
+.lv{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;text-align:start;cursor:pointer;display:grid;gap:6px;min-width:0;transition:border-color .15s,background .15s}
 .lv:hover{border-color:#2f3546}
 .lv[aria-pressed="true"]{border-color:var(--gold);background:linear-gradient(180deg,var(--gold-dim),transparent 85%),var(--surface)}
 .lv .lt{display:flex;justify-content:space-between;align-items:center;gap:8px}
@@ -133,7 +137,7 @@ canvas{display:block;width:100%;touch-action:manipulation;cursor:crosshair}
 .dc span{display:block;font-size:11.5px;color:var(--sub)}
 .dc b{font:500 15px var(--f-mono)}
 .opts{display:grid;gap:8px}
-.opt{display:grid;gap:4px;text-align:right;background:var(--surface-hi);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font:500 15px/1.6 var(--f-body);cursor:pointer;transition:border-color .15s,background .15s;min-width:0}
+.opt{display:grid;gap:4px;text-align:start;background:var(--surface-hi);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font:500 15px/1.6 var(--f-body);cursor:pointer;transition:border-color .15s,background .15s;min-width:0}
 .opt:hover:not(:disabled){border-color:var(--gold)}
 .opt:disabled{cursor:default}
 .opt .l{display:flex;gap:10px;align-items:center}
@@ -145,7 +149,7 @@ canvas{display:block;width:100%;touch-action:manipulation;cursor:crosshair}
 .opt.bad .sub{color:var(--red)}
 
 .slots{list-style:none;margin:0 0 12px;padding:0;display:grid;gap:8px}
-.slot{width:100%;display:flex;gap:10px;align-items:center;min-height:46px;text-align:right;background:transparent;border:1px dashed var(--line);border-radius:10px;padding:8px 12px;color:var(--muted);font:14px/1.6 var(--f-body);cursor:pointer}
+.slot{width:100%;display:flex;gap:10px;align-items:center;min-height:46px;text-align:start;background:transparent;border:1px dashed var(--line);border-radius:10px;padding:8px 12px;color:var(--muted);font:14px/1.6 var(--f-body);cursor:pointer}
 .slot:disabled{cursor:default}
 .slot .no{flex:none;width:24px;height:24px;border-radius:50%;border:1px solid var(--line);display:grid;place-items:center;font:500 12px var(--f-mono);color:var(--sub)}
 .slot .tx{flex:1;min-width:0}
@@ -153,7 +157,7 @@ canvas{display:block;width:100%;touch-action:manipulation;cursor:crosshair}
 .slot.good{border-color:rgba(47,216,196,.6);background:var(--teal-dim);color:var(--text)}
 .slot.bad{border-color:rgba(229,85,92,.6);background:var(--red-dim);color:var(--text)}
 .pool{display:flex;flex-wrap:wrap;gap:8px}
-.pc{background:var(--surface-hi);border:1px solid var(--line);border-radius:10px;padding:9px 13px;font:14px/1.6 var(--f-body);cursor:pointer;text-align:right;transition:border-color .15s}
+.pc{background:var(--surface-hi);border:1px solid var(--line);border-radius:10px;padding:9px 13px;font:14px/1.6 var(--f-body);cursor:pointer;text-align:start;transition:border-color .15s}
 .pc:hover{border-color:var(--gold)}
 
 .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center;min-height:46px}
@@ -274,9 +278,9 @@ canvas{touch-action:pan-y;-webkit-user-select:none;user-select:none;-webkit-tap-
 
 .tbox{display:grid;gap:6px}
 .tcap{font:600 12.5px var(--f-display);color:var(--gold-hi);padding:2px 2px 4px}
-.trow{display:flex;gap:10px;align-items:center;justify-content:space-between;background:var(--bg2);border:1px solid var(--line-soft);border-radius:10px;padding:10px 12px;font:14px/1.6 var(--f-body);text-align:right;width:100%;color:var(--text);animation:inUp .3s ease both;animation-delay:calc(var(--i,0)*45ms)}
+.trow{display:flex;gap:10px;align-items:center;justify-content:space-between;background:var(--bg2);border:1px solid var(--line-soft);border-radius:10px;padding:10px 12px;font:14px/1.6 var(--f-body);text-align:start;width:100%;color:var(--text);animation:inUp .3s ease both;animation-delay:calc(var(--i,0)*45ms)}
 .trow .tl{color:var(--sub);font-size:13px;flex:none}
-.trow .tv{font-weight:600;text-align:left;min-width:0;flex:1}
+.trow .tv{font-weight:600;text-align:end;min-width:0;flex:1}
 .trow.pickable{cursor:pointer;border-color:rgba(201,166,103,.4);background:var(--surface-hi);min-height:48px}
 .trow.pickable:hover{border-color:var(--gold)}
 .trow.good{border-color:rgba(47,216,196,.35)}
@@ -320,7 +324,7 @@ canvas{touch-action:pan-y;-webkit-user-select:none;user-select:none;-webkit-tap-
 </head>
 <body>
 
-<div class="app" dir="rtl" lang="ar">
+<div class="app">
   <header class="top">
     <div class="brand">
       <svg class="logo" viewBox="0 0 48 48" aria-hidden="true">
@@ -330,14 +334,14 @@ canvas{touch-action:pan-y;-webkit-user-select:none;user-select:none;-webkit-tap-
         <text x="24" y="33" text-anchor="middle" font-family="Readex Pro,sans-serif" font-size="27" font-weight="700" fill="url(#sg)">Q</text>
       </svg>
       <div>
-        <h1>تحدي كفيل</h1>
-        <p>درّب عينك وحسّن قراراتك في دقائق</p>
+        <h1 data-en="Qaffel Challenge">تحدي كفيل</h1>
+        <p data-en="Train your eye and sharpen your decisions in minutes">درّب عينك وحسّن قراراتك في دقائق</p>
       </div>
     </div>
     <dl class="stats">
-      <div class="stat"><dt>النقاط</dt><dd id="sPts">0</dd></div>
-      <div class="stat"><dt>السلسلة</dt><dd id="sStreak">0</dd></div>
-      <div class="stat"><dt>الرتبة</dt><dd id="sRank" class="rank">متدرّب</dd></div>
+      <div class="stat"><dt data-en="Points">النقاط</dt><dd id="sPts">0</dd></div>
+      <div class="stat"><dt data-en="Streak">السلسلة</dt><dd id="sStreak">0</dd></div>
+      <div class="stat"><dt data-en="Rank">الرتبة</dt><dd id="sRank" class="rank">متدرّب</dd></div>
     </dl>
   </header>
 
@@ -354,7 +358,7 @@ canvas{touch-action:pan-y;-webkit-user-select:none;user-select:none;-webkit-tap-
       </div>
       <div class="chartwrap" id="chartBox">
         <canvas id="chart" tabindex="0" role="application" aria-label="شارت تعليمي. في تحدي المنطقة استخدم الأسهم لتحريك المؤشر ثم Enter للاختيار."></canvas>
-        <span class="meta">XAU/USD · 15m · بيانات تعليمية مولّدة</span>
+        <span class="meta" data-en="XAU/USD · 15m · generated training data">XAU/USD · 15m · بيانات تعليمية مولّدة</span>
       </div>
       <div class="tbox" id="tradeBox" hidden></div>
       <div class="mcq" id="mcqBox" hidden>
@@ -371,24 +375,24 @@ canvas{touch-action:pan-y;-webkit-user-select:none;user-select:none;-webkit-tap-
 
     <aside class="side">
       <section class="panel">
-        <h3>تقدّم الجولة</h3>
+        <h3 data-en="Round progress">تقدّم الجولة</h3>
         <div class="dots" id="dots" aria-hidden="true"></div>
         <p class="sm" id="progTxt"></p>
       </section>
       <section class="panel">
-        <h3>الشارات</h3>
+        <h3 data-en="Badges">الشارات</h3>
         <ul class="badges" id="badges"></ul>
       </section>
       <section class="panel" id="lbPanel">
-        <h3>متصدّرو الأسبوع</h3>
-        <ol class="lb" id="lb"><li class="sm">جارٍ التحميل…</li></ol>
+        <h3 data-en="This week's leaders">متصدّرو الأسبوع</h3>
+        <ol class="lb" id="lb"><li class="sm" data-en="Loading…">جارٍ التحميل…</li></ol>
         <p class="sm" id="lbMe"></p>
         <p class="sm sync" id="syncTxt"></p>
       </section>
     </aside>
   </div>
 
-  <p class="note">ألعاب تعليمية للتسلية. الشموع والأرقام في معظم الألعاب مولّدة للتدريب ولا تمثل بيانات سوق حقيقية، باستثناء لعبة «صفقات كفيل الحقيقية» التي تعرض إشارات حقيقية بنتيجتها الفعلية. نتائج الألعاب لا تعني نتائج التداول الحقيقي. لا توجد جوائز مالية ولا رهان، فقط نقاط وشارات ورتب.</p>
+  <p class="note" data-en="Educational games for fun. In most games the candles and numbers are generated for practice and are not real market data, except “Qaffel Real Trades”, which shows real signals with their actual outcome. Game results do not mean real trading results. No cash prizes and no betting, only points, badges and ranks.">ألعاب تعليمية للتسلية. الشموع والأرقام في معظم الألعاب مولّدة للتدريب ولا تمثل بيانات سوق حقيقية، باستثناء لعبة «صفقات كفيل الحقيقية» التي تعرض إشارات حقيقية بنتيجتها الفعلية. نتائج الألعاب لا تعني نتائج التداول الحقيقي. لا توجد جوائز مالية ولا رهان، فقط نقاط وشارات ورتب.</p>
 
   <!-- (2026-10-11) محتوى نصي يقرأه محرك البحث مباشرة — الألعاب نفسها تُبنى
        بالجافاسكربت فيرى جوجل صفحة شبه فارغة بدونه. مطابق للـFAQ schema أعلاه. -->
@@ -414,7 +418,29 @@ canvas{touch-action:pan-y;-webkit-user-select:none;user-select:none;-webkit-tap-
       <dt>هل توجد جوائز مالية؟</dt><dd>لا. الألعاب تعليمية بنقاط وشارات ورتب فقط، بلا رهان ولا جوائز مالية.</dd>
     </dl>
   </section>
-  <div class="site-links"><a class="cta" href="/register">سجّل مجانًا في كفيل</a><a href="/">الصفحة الرئيسية</a><a href="/blog">المدونة</a></div>
+  <template id="learnEn">
+    <h2 id="learnH">What do you learn in the Qaffel Challenge?</h2>
+    <p>Eight short games that train the skills every trader needs before risking money, from chart reading to risk management. Every answer is followed by an explanation of why it was right or wrong.</p>
+    <div class="lgrid">
+      <article><h3>Next Candle</h3><p>Learn Japanese candlestick patterns: bullish and bearish engulfing, the hammer, the shooting star, and when a chart has no signal at all.</p></article>
+      <article><h3>Spot the Zone</h3><p>Find the Fair Value Gap (FVG), the Order Block and the Break of Structure (BOS) candle on the chart: the basics of Smart Money and ICT analysis.</p></article>
+      <article><h3>Risk Calculator</h3><p>Work out the risk amount, lot size, risk-to-reward ratio, the win rate needed to break even, and what a losing streak does to your balance.</p></article>
+      <article><h3>Terms Quiz</h3><p>From support and resistance to CHoCH, Liquidity Sweep, OTE and Breaker Block: market terms with short, clear definitions.</p></article>
+      <article><h3>Order the Setup</h3><p>Put the steps of a sound trade in order: higher-timeframe analysis, marking the zone, waiting for confirmation, then placing the stop and target.</p></article>
+      <article><h3>Place SL &amp; TP</h3><p>Put the stop loss behind structure and the target at the opposing liquidity, and learn why the stop goes where the idea is invalidated.</p></article>
+      <article><h3>Trade or Skip</h3><p>Inspect the trade card and find the trap: counter-trend, entry from the wrong place, a stop that is too tight, or too much risk.</p></article>
+      <article><h3>Qaffel Real Trades</h3><p>Real signals Qaffel sent to its subscribers, on the real chart. Decide whether you would have entered, then see what actually happened, winners and losers alike.</p></article>
+    </div>
+    <h2>FAQ</h2>
+    <dl class="faq">
+      <dt>Are the Qaffel Challenge games free?</dt><dd>Yes. All games and all three levels are free and you can play without signing up. A free account saves your points and puts you on the weekly leaderboard.</dd>
+      <dt>What will I learn from these games?</dt><dd>Reading candlestick patterns, spotting Smart Money zones such as FVGs, order blocks and breaks of structure, calculating lot size and risk-to-reward, placing the stop and target, and judging a trade before entering it.</dd>
+      <dt>What is the difference between the three levels?</dt><dd>Beginner shows hints on the chart, Intermediate removes the hints and adds ambiguous cases, and Expert adds a timer, busier charts and harder problems.</dd>
+      <dt>Are the charts in the games real?</dt><dd>Most games use generated training charts. The Qaffel Real Trades game shows real signals the platform sent with their actual outcome, picked at random, so it includes losers as well as winners.</dd>
+      <dt>Are there cash prizes?</dt><dd>No. The games are educational, with points, badges and ranks only. No betting and no cash prizes.</dd>
+    </dl>
+  </template>
+  <div class="site-links"><a class="cta" href="/register" data-en="Sign up free to Qaffel" data-en-href="/en/register">سجّل مجانًا في كفيل</a><a href="/" data-en="Home" data-en-href="/en">الصفحة الرئيسية</a><a href="/blog" data-en="Blog" data-en-href="/en/blog">المدونة</a><a href="?lang=en" id="langSw" lang="en">English</a></div>
 </div>
 
 <div class="toast" id="toast" role="status" hidden></div>
@@ -427,6 +453,29 @@ var css=getComputedStyle(document.documentElement);
 var tok=function(n){return css.getPropertyValue(n).trim()};
 var COL={up:tok('--teal'),down:tok('--red'),gold:tok('--gold'),goldHi:tok('--gold-hi'),axis:tok('--sub'),bg:tok('--bg2'),grid:'rgba(139,146,165,.14)'};
 var MONO="'JetBrains Mono',ui-monospace,monospace";
+
+/* ---------- language (2026-10-12) ---------- */
+var EN=!!window.QF_EN;
+function TR(ar,en){return EN?en:ar}
+var MOVE_HELP=TR('حرّك التحديد بالسحب أو بلمسة أخرى، ثم أكّد.','Drag the marker or tap again to move it, then confirm.');
+(function(){
+  var sw=$('#langSw');
+  if(sw)sw.addEventListener('click',function(e){
+    e.preventDefault();
+    var next=EN?'ar':'en';
+    try{localStorage.setItem('qaffel_lang',next)}catch(_){}
+    location.href=location.pathname+'?lang='+next;
+  });
+  if(!EN)return;
+  document.title='Qaffel Challenge | Trading games for chart reading and risk management';
+  document.querySelectorAll('[data-en]').forEach(function(el){el.textContent=el.getAttribute('data-en')});
+  document.querySelectorAll('[data-en-href]').forEach(function(el){el.setAttribute('href',el.getAttribute('data-en-href'))});
+  var le=$('#learnEn');if(le)$('.learn').innerHTML=le.innerHTML;
+  if(sw){sw.textContent='العربية';sw.setAttribute('lang','ar');sw.setAttribute('href','?lang=ar')}
+  $('#levels').setAttribute('aria-label','Difficulty level');
+  $('#modes').setAttribute('aria-label','Challenge type');
+  $('#chart').setAttribute('aria-label','Training chart. In Spot the Zone, use the arrow keys to move the cursor, then Enter to choose.');
+})();
 
 /* ---------- icons ---------- */
 function ic(d,s){return '<svg class="i" width="'+(s||18)+'" height="'+(s||18)+'" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="'+d+'"/></svg>'}
@@ -453,7 +502,8 @@ function fnum(v,dp){return Number(v).toLocaleString('en-US',{minimumFractionDigi
 function usd(v,dp){return '$'+fnum(v,dp)}
 function fmtR(v){return v%1===0?String(v):v.toFixed(1)}
 function sgnR(v){return (v>0?'+':v<0?'−':'')+fmtR(Math.abs(v))+'R'}
-function dirName(d){return d>0?'صاعدة':d<0?'هابطة':'—'}
+function dirName(d){return d>0?TR('صاعدة','up'):d<0?TR('هابطة','down'):'—'}
+function cap(s){return EN&&s?s.charAt(0).toUpperCase()+s.slice(1):s}
 
 /* ---------- candle helpers ---------- */
 /* (2026-10-11) سعر الذهب المرجعي للشارتات والمسائل — كان 2300-2450 والذهب ~4170،
@@ -466,20 +516,20 @@ function walk(n,start,drift,vol){var a=[],p=start;for(var i=0;i<n;i++){var c=p+d
 
 /* ---------- games and levels ---------- */
 var GAMES=[
-  {id:'candle',name:'توقّع الشمعة',rounds:8},
-  {id:'zone',name:'اصطد المنطقة',rounds:8},
-  {id:'risk',name:'حاسبة المخاطرة',rounds:6},
-  {id:'terms',name:'اختبار المصطلحات',rounds:8},
-  {id:'order',name:'رتّب الصفقة',rounds:3},
-  {id:'sltp',name:'ضع الوقف والهدف',rounds:6},
-  {id:'trade',name:'صفقة أو لا صفقة',rounds:8},
-  {id:'real',name:'صفقات كفيل الحقيقية',rounds:6}
+  {id:'candle',name:TR('توقّع الشمعة','Next Candle'),rounds:8},
+  {id:'zone',name:TR('اصطد المنطقة','Spot the Zone'),rounds:8},
+  {id:'risk',name:TR('حاسبة المخاطرة','Risk Calculator'),rounds:6},
+  {id:'terms',name:TR('اختبار المصطلحات','Terms Quiz'),rounds:8},
+  {id:'order',name:TR('رتّب الصفقة','Order the Setup'),rounds:3},
+  {id:'sltp',name:TR('ضع الوقف والهدف','Place SL & TP'),rounds:6},
+  {id:'trade',name:TR('صفقة أو لا صفقة','Trade or Skip'),rounds:8},
+  {id:'real',name:TR('صفقات كفيل الحقيقية','Qaffel Real Trades'),rounds:6}
 ];
 var GAME={};GAMES.forEach(function(g){GAME[g.id]=g});
 var LEVELS=[
-  {id:1,name:'مبتدئ',mult:1,desc:'أنماط واضحة وتلميحات ظاهرة على الشارت'},
-  {id:2,name:'متوسط',mult:1.5,desc:'بدون تلميحات مع حالات ملتبسة'},
-  {id:3,name:'خبير',mult:2,desc:'مؤقّت وشارت مزدحم ومسائل أصعب'}
+  {id:1,name:TR('مبتدئ','Beginner'),mult:1,desc:TR('أنماط واضحة وتلميحات ظاهرة على الشارت','Clear patterns and visible hints on the chart')},
+  {id:2,name:TR('متوسط','Intermediate'),mult:1.5,desc:TR('بدون تلميحات مع حالات ملتبسة','No hints, with ambiguous cases')},
+  {id:3,name:TR('خبير','Expert'),mult:2,desc:TR('مؤقّت وشارت مزدحم ومسائل أصعب','A timer, busier charts and harder problems')}
 ];
 var LV={
   candle:{
@@ -499,15 +549,16 @@ var RK={
   2:['rr','lot','breakeven','lot','rr','lot'],
   3:['lot','netR','drawdown','lot','breakeven','drawdown']
 };
-var LET=['أ','ب','ج','د'];
+var LET=EN?['A','B','C','D']:['أ','ب','ج','د'];
 
 /* ---------- texts: candle ---------- */
 var PAT={
-  bull_engulf:{en:'BULLISH ENGULFING',ar:'ابتلاعية صعودية',n:2},
-  bear_engulf:{en:'BEARISH ENGULFING',ar:'ابتلاعية هبوطية',n:2},
-  hammer:{en:'HAMMER',ar:'مطرقة',n:1},
-  shooting_star:{en:'SHOOTING STAR',ar:'نجمة هابطة',n:1},
-  none:{en:'NO PATTERN',ar:'لا نمط',n:0}
+  // ar = اسم النمط بلغة الواجهة (الإنجليزية في النسخة الإنجليزية)، en = الوسم على الشارت
+  bull_engulf:{en:'BULLISH ENGULFING',ar:TR('ابتلاعية صعودية','A bullish engulfing'),n:2},
+  bear_engulf:{en:'BEARISH ENGULFING',ar:TR('ابتلاعية هبوطية','A bearish engulfing'),n:2},
+  hammer:{en:'HAMMER',ar:TR('مطرقة','A hammer'),n:1},
+  shooting_star:{en:'SHOOTING STAR',ar:TR('نجمة هابطة','A shooting star'),n:1},
+  none:{en:'NO PATTERN',ar:TR('لا نمط','No pattern'),n:0}
 };
 var EXP={
   bull_engulf:'شمعة ابتلاعية صعودية: جسمها ابتلع جسم الشمعة الهابطة قبلها بعد هبوط، وهذا يرجّح عودة المشترين. تذكّر: الشارت هنا تعليمي، وفي السوق الحقيقي ينجح النمط وحده أقل بكثير، فلا تدخل به إلا عند مستوى واتجاه يدعمانه.',
@@ -651,6 +702,146 @@ var SEQ={
  ]
 };
 
+/* ---------- English texts (2026-10-12) — same keys and order as the Arabic above ---------- */
+if(EN){
+  var CAVEAT=' Remember: this chart is for training. In the real market the pattern alone works far less often, so only act on it at a level and in a direction that support it.';
+  EXP={
+    bull_engulf:'Bullish engulfing: its body swallowed the body of the bearish candle before it after a decline, which favours buyers returning.'+CAVEAT,
+    bear_engulf:'Bearish engulfing: its body swallowed the body of the bullish candle before it after a rally, which favours sellers returning.'+CAVEAT,
+    hammer:'Hammer: a long lower wick after a decline means sellers were pushed back.'+CAVEAT,
+    shooting_star:'Shooting star: a long upper wick after a rally means higher prices were rejected.'+CAVEAT,
+    none:'There is no clear pattern here and the move is close to random. Not every chart has a signal, and ignoring an unclear chart is part of the game.'
+  };
+  CSTEPS={
+    bull_engulf:['Look for a small bearish candle after a down move.','It is followed by a bullish candle whose body is larger and fully covers the previous body.','Treat it as a possible sign of buyers returning, and confirm it with support or an FVG.'],
+    bear_engulf:['Look for a small bullish candle after an up move.','It is followed by a bearish candle whose body is larger and fully covers the previous body.','Treat it as a possible sign of sellers returning, and confirm it with resistance or an FVG.'],
+    hammer:['Look for a candle with a small body at the top of its range.','Its lower wick is long, about twice the body or more.','Appearing after a decline, it means lower prices were rejected.'],
+    shooting_star:['Look for a candle with a small body at the bottom of its range.','Its upper wick is long, about twice the body or more.','Appearing after a rally, it means higher prices were rejected.'],
+    none:['The candles are similar, with no engulfing and no clearly long wicks.','Do not enter just because you want to be in a trade.','Wait for a clear pattern at an important level.']
+  };
+  TITLES={
+    fvg:['Tap the bullish fair value gap','Tap the bearish fair value gap'],
+    ob:['Tap the bullish order block','Tap the bearish order block'],
+    bos:['Tap the candle that broke structure upward','Tap the candle that broke structure downward']
+  };
+  DEFS={
+    fvg:['Three consecutive candles leave a gap between the high of the first and the low of the third. Tap inside that gap.','Three consecutive candles leave a gap between the low of the first and the high of the third. Tap inside that gap.'],
+    ob:['The last bearish candle before a strong move up.','The last bullish candle before a strong move down.'],
+    bos:['The candle that closed above the previous swing high.','The candle that closed below the previous swing low.']
+  };
+  ZEXP={
+    fvg:['Bullish FVG: the middle candle pushed hard and left a gap between the high of the first and the low of the third. Price often returns to fill part of it.','Bearish FVG: the middle candle pushed hard and left a gap between the low of the first and the high of the third. Price often returns to fill part of it.'],
+    ob:['Bullish order block: the last bearish candle before the push up. Large orders entered here, and price may come back to test the zone.','Bearish order block: the last bullish candle before the push down. Large orders entered here, and price may come back to test the zone.'],
+    bos:['Bullish BOS: this candle closed above the previous high marked by the dashed line, confirming the uptrend continues.','Bearish BOS: this candle closed below the previous low marked by the dashed line, confirming the downtrend continues.']
+  };
+  ZSTEPS={
+    fvg:['Find a large impulse candle with a long body.','Compare the wick of the candle before it with the wick of the candle after it.','If the two wicks do not overlap, the space between them is the FVG.'],
+    ob:['Find a strong impulse move in one direction.','Go back to the candle right before the impulse.','That is the order block: the last opposite candle before the move (bearish for a move up, bullish for a move down).'],
+    bos:['Mark the last clear high (for an up move) or low (for a down move).','Wait for a candle to close beyond it with its body, not just its wick.','The candle that closed there is the BOS.']
+  };
+  var ITEMS_EN={
+    'Support':'A price level where declines often stop because buyers show up there.',
+    'Resistance':'A price level where rallies often stop because sellers show up there.',
+    'Stop Loss':'An order that closes the trade automatically at a set price to limit the loss.',
+    'Take Profit':'An order that closes the trade automatically at the target price to lock in profit.',
+    'Risk/Reward (RR)':'Comparing the expected profit with the possible loss, such as 1:2.',
+    'Trend':'The overall direction of price: a series of higher or lower highs and lows.',
+    'Lot':'The unit used to measure trade size.',
+    'Spread':'The difference between the buy price and the sell price; it is the cost of entering.',
+    'Long':'A buy trade, which profits when price rises.',
+    'Short':'A sell trade, which profits when price falls.',
+    'Timeframe':'The period of time each candle on the chart represents.',
+    'Volume':'The number of contracts or units traded during a given period.',
+    'BOS':'A candle closing beyond a previous high or low, confirming the trend continues.',
+    'CHoCH':'The first structure break against the prevailing trend, hinting that the trend may change.',
+    'FVG':'A price gap left by an impulsive move between the wicks of three consecutive candles.',
+    'Order Block':'The last opposite candle before a strong impulsive move, where large orders entered.',
+    'Liquidity':'Clusters of stop-loss orders above highs and below lows.',
+    'Liquidity Sweep':'A quick push through a liquidity level and back, to grab the stop orders.',
+    'Premium / Discount':'The upper half of a range is premium, suited to selling; the lower half is discount, suited to buying.',
+    'Kill Zone':'A time window with higher activity, such as the London and New York opens.',
+    'Equal Highs':'Two or more highs at about the same level, with liquidity resting above them.',
+    'Retest':'Price returning to test a level it broke earlier.',
+    'Divergence':'Price moving one way while an indicator moves the other, warning that the move is weakening.',
+    'Fibonacci 0.618':'A retracement level known as the golden ratio, where traders look for a bounce.',
+    'MSS':'A market structure shift with displacement, strengthening the case for a trend change.',
+    'Displacement':'An impulsive move of several large candles in a row, often leaving an FVG.',
+    'IFVG':'A fair value gap that failed to support the move, so it flips and acts as a zone in the opposite direction.',
+    'Breaker Block':'An order block that failed and was broken, so it turns into an opposing zone.',
+    'OTE':'Optimal Trade Entry: the ideal entry zone between the 0.62 and 0.79 retracement.',
+    'Dealing Range':'The range between the last major high and low, used to measure premium and discount.',
+    'Judas Swing':'A misleading move at the session open against the real direction, to grab liquidity.',
+    'Turtle Soup':'A reversal that follows a false breakout of a previous high or low.',
+    'Inducement':'A small high or low that lures traders into entering early before the real move.',
+    'SMT Divergence':'Two correlated assets behaving differently at highs or lows, as confirmation of a reversal.',
+    'Confluence':'Several independent pieces of evidence meeting at the same zone, raising the odds of the trade.',
+    'Expectancy':'The average result per trade in R, after counting winners and losers.'
+  };
+  ITEMS=ITEMS.map(function(i){return [i[0],i[1],ITEMS_EN[i[1]]||i[2]]});
+  SEQ={
+   1:[
+    {title:'Top-down chart analysis',steps:[
+      S_('Open the daily chart and identify the overall trend','The big trend tells you which side to look for trades on.'),
+      S_('Drop to the 1-hour chart and mark support and resistance','It shows where price may react before you look for an entry.'),
+      S_('Drop to the 15-minute chart and wait for an entry signal at the zone','Entering on a lower timeframe keeps the stop tight.'),
+      S_('Place the trade with a stop loss and a target','Execution is the last step, once the picture is complete.')]},
+    {title:'Before you press Buy',steps:[
+      S_('Decide your risk as a share of the balance, such as 1%','Risk is decided before anything else, not after entering.'),
+      S_('Set the entry price and the stop loss price','The distance between them sets the trade size.'),
+      S_('Calculate the right lot size','Lot = risk amount ÷ loss per lot.'),
+      S_('Open the trade and place the stop right away','Never leave a trade open without a stop.')]},
+    {title:'Building a buy trade at support',steps:[
+      S_('Make sure the overall trend is up','Do not buy against the bigger trend.'),
+      S_('Wait for price to reach a support zone','Support is where buyers are expected to appear.'),
+      S_('Wait for a bullish confirmation candle at support','Confirmation reduces early entries.'),
+      S_('Put the stop below support and the target at the nearest resistance','A stop below the zone cancels the idea if it breaks.')]}
+   ],
+   2:[
+    {title:'ICT buy scenario',steps:[
+      S_('The trend is up on the 4-hour chart','It tells you to look for buys only.'),
+      S_('Price pulls back into a discount zone','Buying at a discount gives a better reward ratio.'),
+      S_('A liquidity sweep below a previous low','Sellers\' orders are grabbed, then price reverses.'),
+      S_('A bullish break of structure on the 15-minute chart (BOS)','It confirms buyers took control after the sweep.'),
+      S_('Enter at an FVG or order block with the stop below the low','A precise entry zone with a tight stop.')]},
+    {title:'ICT sell scenario',steps:[
+      S_('The trend is down on the 4-hour chart','It tells you to look for sells only.'),
+      S_('Price rallies into a premium zone','Selling at a premium gives a better reward ratio.'),
+      S_('A liquidity sweep above equal highs','Buyers\' orders are grabbed, then price reverses.'),
+      S_('A bearish CHoCH on the 15-minute chart','It hints that sellers are starting to take control.'),
+      S_('Enter from a bearish order block with the stop above the high','A tight stop behind the sweep point.')]},
+    {title:'Risk management before execution',steps:[
+      S_('Set the risk amount in dollars','It is the basis for every other calculation.'),
+      S_('Place the stop loss behind structure','The stop goes where the idea is invalidated, not where you would like it.'),
+      S_('Place the target at the opposing liquidity','Price is often drawn to liquidity.'),
+      S_('Check that the RR suits your plan','If the ratio is not enough, skip the trade.'),
+      S_('Calculate the lot size and execute','Size comes from the risk and the stop together.')]}
+   ],
+   3:[
+    {title:'London session model',steps:[
+      S_('Set the bias from the daily and 4-hour charts','It sets the allowed direction.'),
+      S_('Mark the dealing range and the discount zone','It shows where to buy and where to stay away.'),
+      S_('Wait for the London kill zone','Activity rises and noise falls.'),
+      S_('Watch for a Judas swing or a sweep of the Asian session liquidity','The misleading move comes before the real direction.'),
+      S_('Wait for an MSS with displacement','It confirms the shift is real.'),
+      S_('Enter when price returns to the OTE or an FVG','An entry after confirmation, with a tight stop.')]},
+    {title:'Managing a winning trade',steps:[
+      S_('Enter with a stop and a target set in advance','The decision is made before emotions get involved.'),
+      S_('Move the stop to breakeven after 1R of profit','It protects capital from a reversal.'),
+      S_('Close part at the first opposing liquidity','It locks in profit at the first expected zone.'),
+      S_('Let the rest run toward the main target','It gives the trade a chance at a higher RR.'),
+      S_('Close at the target or on an opposite MSS','An opposite signal cancels the idea.'),
+      S_('Log the trade and review it in your journal','Reviewing is what improves performance over time.')]},
+    {title:'Avoiding the inducement trap',steps:[
+      S_('A small low forms that looks like obvious support','This is the bait everyone sees.'),
+      S_('Traders buy early and put their stops below it','Liquidity builds up for the market to target.'),
+      S_('Price sweeps that liquidity with a quick move','The stops are hit before the real move.'),
+      S_('A bullish displacement breaks structure','Confirmation that the real move has started.'),
+      S_('You wait for price to return to the order block','A better entry instead of chasing the move.'),
+      S_('You enter after confirmation with your stop behind the sweep','A logical stop below the lowest point of the sweep.')]}
+   ]
+  };
+}
+
 /* ---------- state ---------- */
 var KEY='qaffel-challenge-v1';
 var P={points:0,bestStreak:0,hits:0,fvg:0,ob:0,bos:0,strong:0,expert:0,risk:0,terms:0,order:0,sltp:0,traps:0,played:[],badges:[],lvH:{1:0,2:0,3:0},lvT:{1:0,2:0,3:0}};
@@ -686,12 +877,12 @@ function schedulePush(){
   pushTimer=setTimeout(function(){
     api('/progress',{method:'PUT',body:JSON.stringify({data:P})}).then(function(r){
       if(r&&r.ok&&typeof r.points==='number'&&r.points!==P.points){P.points=r.points;try{localStorage.setItem(KEY,JSON.stringify(P))}catch(e){}renderStats()}
-      setSync('✓ نقاطك محفوظة بحسابك');loadBoard();
-    }).catch(function(){setSync('تعذّر الحفظ الآن — ستُحفظ مع الإجابة التالية')});
+      setSync(TR('✓ نقاطك محفوظة بحسابك','✓ Your points are saved to your account'));loadBoard();
+    }).catch(function(){setSync(TR('تعذّر الحفظ الآن — ستُحفظ مع الإجابة التالية','Could not save right now — it will save with your next answer'))});
   },2500);
 }
 function pullProgress(){
-  if(!TOKEN){setSync('<a href="/register">سجّل مجانًا</a> لتحفظ نقاطك وتدخل لوحة المتصدّرين');return}
+  if(!TOKEN){setSync(TR('<a href="/register">سجّل مجانًا</a> لتحفظ نقاطك وتدخل لوحة المتصدّرين','<a href="/en/register">Sign up free</a> to save your points and join the leaderboard'));return}
   api('/progress').then(function(r){
     var d=r&&r.data;
     if(d&&typeof d==='object'&&(d.points||0)>=(P.points||0)){
@@ -699,27 +890,27 @@ function pullProgress(){
       P.lvH=Object.assign({1:0,2:0,3:0},P.lvH||{});P.lvT=Object.assign({1:0,2:0,3:0},P.lvT||{});
       if(!Array.isArray(P.played))P.played=[];if(!Array.isArray(P.badges))P.badges=[];
       try{localStorage.setItem(KEY,JSON.stringify(P))}catch(e){}
-      synced=true;render();setSync('✓ نقاطك محفوظة بحسابك');
+      synced=true;render();setSync(TR('✓ نقاطك محفوظة بحسابك','✓ Your points are saved to your account'));
     }else{synced=true;schedulePush()}   // نقاط المتصفح أعلى (لعب قبل التسجيل) — تُرفع
-  }).catch(function(){setSync('<a href="/login">سجّل الدخول</a> لتحفظ نقاطك بحسابك')});
+  }).catch(function(){setSync(TR('<a href="/login">سجّل الدخول</a> لتحفظ نقاطك بحسابك','<a href="/en/login">Log in</a> to save your points to your account'))});
 }
 /* قياس الأثر — عدّادات يومية مجهولة الهوية: زيارة، جولة مكتملة، ضغط "سجّل" */
 var EMBED=/[?&]embed=1/.test(location.search);
 function track(ev){
   try{fetch(API_BASE+'/api/v1/games/event',{method:'POST',keepalive:true,headers:{'Content-Type':'application/json'},body:JSON.stringify({event:ev,embed:EMBED})}).catch(function(){})}catch(e){}
 }
-document.addEventListener('click',function(e){var a=e.target.closest('a[href^="/register"]');if(a)track('signup_click')});
+document.addEventListener('click',function(e){var a=e.target.closest('a[href$="/register"]');if(a)track('signup_click')});
 function loadBoard(){
   api('/leaderboard').then(function(r){
     var top=(r&&r.top)||[],me=r&&r.me;
     $('#lb').innerHTML=top.length?top.map(function(x){
       var mine=me&&me.rank===x.rank;
       return '<li'+(mine?' class="me"':'')+'><span class="rk">'+x.rank+'</span><span class="nm"></span><span class="pt">'+x.points+'</span></li>';
-    }).join(''):'<li class="sm">كن أول من يتصدّر هذا الأسبوع</li>';
+    }).join(''):'<li class="sm">'+TR('كن أول من يتصدّر هذا الأسبوع','Be the first on this week\'s board')+'</li>';
     // الأسماء نصّاً لا HTML — تأتي من حسابات المستخدمين
     var names=$('#lb').querySelectorAll('.nm');top.forEach(function(x,i){if(names[i])names[i].textContent=x.name});
-    $('#lbMe').textContent=me?('ترتيبك هذا الأسبوع: '+me.rank+' · '+me.points+' نقطة'):'';
-  }).catch(function(){$('#lb').innerHTML='<li class="sm">لوحة المتصدّرين غير متاحة الآن</li>'});
+    $('#lbMe').textContent=me?TR('ترتيبك هذا الأسبوع: '+me.rank+' · '+me.points+' نقطة','Your rank this week: '+me.rank+' · '+me.points+' pts'):'';
+  }).catch(function(){$('#lb').innerHTML='<li class="sm">'+TR('لوحة المتصدّرين غير متاحة الآن','The leaderboard is not available right now')+'</li>'});
 }
 
 var S={mode:'candle',level:1,streak:0};
@@ -729,29 +920,29 @@ function resetAll(){GAMES.forEach(function(g){M[g.id]=fresh()})}
 resetAll();
 function rounds(){return GAME[S.mode].rounds}
 
-var RANKS=[[0,'متدرّب'],[80,'محلل'],[220,'متداول'],[450,'ماستر SMC']];
+var RANKS=[[0,TR('متدرّب','Trainee')],[80,TR('محلل','Analyst')],[220,TR('متداول','Trader')],[450,TR('ماستر SMC','SMC Master')]];
 function rankOf(p){var r=RANKS[0][1];for(var i=0;i<RANKS.length;i++){if(p>=RANKS[i][0])r=RANKS[i][1]}return r}
 
 var BADGES=[
-  {id:'first',name:'أول إصابة',desc:'أجب إجابة صحيحة واحدة',test:function(){return P.hits>=1}},
-  {id:'streak5',name:'سلسلة 5',desc:'خمس إجابات صحيحة متتالية',test:function(){return P.bestStreak>=5}},
-  {id:'fvg',name:'عين الـ FVG',desc:'اصطد ثلاث فجوات سعرية',test:function(){return P.fvg>=3}},
-  {id:'ob',name:'صائد OB',desc:'حدّد ثلاثة أوردر بلوك',test:function(){return P.ob>=3}},
-  {id:'bos',name:'قارئ الهيكل',desc:'حدّد ثلاث شموع كسر هيكل',test:function(){return P.bos>=3}},
-  {id:'risk',name:'سيد المخاطرة',desc:'أجب 4 مسائل مخاطرة صحيحة',test:function(){return P.risk>=4}},
-  {id:'terms',name:'لغة السوق',desc:'أجب 6 أسئلة مصطلحات صحيحة',test:function(){return P.terms>=6}},
-  {id:'order',name:'مخطّط الصفقة',desc:'رتّب صفقتين ترتيبًا كاملًا',test:function(){return P.order>=2}},
-  {id:'expert',name:'خبير ميداني',desc:'أنهِ جولة في مستوى الخبير بنتيجة جيدة',test:function(){return P.expert>=1}},
-  {id:'sltp',name:'مهندس الصفقة',desc:'ضع الوقف والهدف صحيحين 3 مرات',test:function(){return P.sltp>=3}},
-  {id:'traps',name:'عين الفخ',desc:'تجاهل 3 صفقات فخ بالسبب الصحيح',test:function(){return P.traps>=3}},
-  {id:'explorer',name:'مستكشف',desc:'جرّب سبع ألعاب مختلفة',test:function(){return P.played.length>=7}}
+  {id:'first',name:TR('أول إصابة','First Hit'),desc:TR('أجب إجابة صحيحة واحدة','Get one answer right'),test:function(){return P.hits>=1}},
+  {id:'streak5',name:TR('سلسلة 5','Streak 5'),desc:TR('خمس إجابات صحيحة متتالية','Five correct answers in a row'),test:function(){return P.bestStreak>=5}},
+  {id:'fvg',name:TR('عين الـ FVG','FVG Eye'),desc:TR('اصطد ثلاث فجوات سعرية','Spot three fair value gaps'),test:function(){return P.fvg>=3}},
+  {id:'ob',name:TR('صائد OB','OB Hunter'),desc:TR('حدّد ثلاثة أوردر بلوك','Find three order blocks'),test:function(){return P.ob>=3}},
+  {id:'bos',name:TR('قارئ الهيكل','Structure Reader'),desc:TR('حدّد ثلاث شموع كسر هيكل','Find three break-of-structure candles'),test:function(){return P.bos>=3}},
+  {id:'risk',name:TR('سيد المخاطرة','Risk Master'),desc:TR('أجب 4 مسائل مخاطرة صحيحة','Solve 4 risk problems correctly'),test:function(){return P.risk>=4}},
+  {id:'terms',name:TR('لغة السوق','Market Language'),desc:TR('أجب 6 أسئلة مصطلحات صحيحة','Answer 6 terms questions correctly'),test:function(){return P.terms>=6}},
+  {id:'order',name:TR('مخطّط الصفقة','Trade Planner'),desc:TR('رتّب صفقتين ترتيبًا كاملًا','Order two setups perfectly'),test:function(){return P.order>=2}},
+  {id:'expert',name:TR('خبير ميداني','Field Expert'),desc:TR('أنهِ جولة في مستوى الخبير بنتيجة جيدة','Finish an Expert round with a good score'),test:function(){return P.expert>=1}},
+  {id:'sltp',name:TR('مهندس الصفقة','Trade Engineer'),desc:TR('ضع الوقف والهدف صحيحين 3 مرات','Place SL and TP correctly 3 times'),test:function(){return P.sltp>=3}},
+  {id:'traps',name:TR('عين الفخ','Trap Spotter'),desc:TR('تجاهل 3 صفقات فخ بالسبب الصحيح','Skip 3 trap trades for the right reason'),test:function(){return P.traps>=3}},
+  {id:'explorer',name:TR('مستكشف','Explorer'),desc:TR('جرّب سبع ألعاب مختلفة','Try seven different games'),test:function(){return P.played.length>=7}}
 ];
 var toastTimer=null;
 function toast(msg){var t=$('#toast');t.textContent=msg;t.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(function(){t.hidden=true},2800)}
 function checkBadges(){
   var f=[];
   BADGES.forEach(function(b){if(P.badges.indexOf(b.id)<0&&b.test()){P.badges.push(b.id);f.push(b.name)}});
-  if(f.length){save();toast('شارة جديدة: '+f.join('، '))}
+  if(f.length){save();toast(TR('شارة جديدة: ','New badge: ')+f.join(TR('، ',', ')))}
 }
 function played(){if(P.played.indexOf(S.mode)<0)P.played.push(S.mode)}
 
@@ -863,28 +1054,28 @@ var RISK={
   riskAmt:function(){
     var bal=pick([500,1000,2000,5000,10000]),pct=pick([0.5,1,2,3]),ans=bal*pct/100,dp=ans%1?2:0;
     return makeQ({
-      title:'كم تخسر لو ضُرب وقف الخسارة؟',
-      def:'رصيدك '+usd(bal)+' وتخاطر بنسبة '+pct+'% في هذه الصفقة. احسب أقصى مبلغ يمكن أن تخسره.',
-      card:[['الرصيد',usd(bal)],['نسبة المخاطرة',pct+'%']],
+      title:TR('كم تخسر لو ضُرب وقف الخسارة؟','How much do you lose if the stop is hit?'),
+      def:TR('رصيدك '+usd(bal)+' وتخاطر بنسبة '+pct+'% في هذه الصفقة. احسب أقصى مبلغ يمكن أن تخسره.','Your balance is '+usd(bal)+' and you risk '+pct+'% on this trade. Work out the most you can lose.'),
+      card:[[TR('الرصيد','Balance'),usd(bal)],[TR('نسبة المخاطرة','Risk'),pct+'%']],
       correct:usd(ans,dp),
-      wrongs:[[usd(bal*pct),'نسيت القسمة على 100، فصارت النسبة رقمًا صحيحًا.'],[usd(bal/pct),'قسمت الرصيد على النسبة بدل ضربه فيها.'],[usd(bal*pct/10),'نقلت الفاصلة خانة واحدة بدل خانتين.'],[usd(ans*2,dp),'ضاعفت المبلغ بلا سبب.']],
-      filler:function(k){return[usd(ans*(1+k*0.5),2),'قيمة بعيدة عن الحساب الصحيح.']},
-      steps:['المخاطرة = الرصيد × النسبة المئوية','<span class="n">'+usd(bal)+' × '+pct+'% = '+usd(ans,dp)+'</span>'],
-      tip:'يخاطر معظم المتداولين المنضبطين بنسبة 1% إلى 2% أو أقل من الرصيد في الصفقة الواحدة.'
+      wrongs:[[usd(bal*pct),TR('نسيت القسمة على 100، فصارت النسبة رقمًا صحيحًا.','You forgot to divide by 100, so the percentage became a whole number.')],[usd(bal/pct),TR('قسمت الرصيد على النسبة بدل ضربه فيها.','You divided the balance by the percentage instead of multiplying.')],[usd(bal*pct/10),TR('نقلت الفاصلة خانة واحدة بدل خانتين.','You moved the decimal point one place instead of two.')],[usd(ans*2,dp),TR('ضاعفت المبلغ بلا سبب.','You doubled the amount for no reason.')]],
+      filler:function(k){return[usd(ans*(1+k*0.5),2),TR('قيمة بعيدة عن الحساب الصحيح.','A value far from the correct calculation.')]},
+      steps:[TR('المخاطرة = الرصيد × النسبة المئوية','Risk = balance × percentage'),'<span class="n">'+usd(bal)+' × '+pct+'% = '+usd(ans,dp)+'</span>'],
+      tip:TR('يخاطر معظم المتداولين المنضبطين بنسبة 1% إلى 2% أو أقل من الرصيد في الصفقة الواحدة.','Most disciplined traders risk 1% to 2% of the balance or less per trade.')
     });
   },
   rr:function(){
     var buy=R()<.5,entry=r1(rnd(XAU-75,XAU+75)),d=pick([4,5,6,8,10]),rr=pick([1,1.5,2,2.5,3]);
     var sl=buy?entry-d:entry+d,tp=buy?entry+d*rr:entry-d*rr;
     return makeQ({
-      title:'ما نسبة العائد إلى المخاطرة؟',
-      def:'احسب نسبة العائد إلى المخاطرة لهذه الصفقة.',
-      card:[['الاتجاه',buy?'شراء':'بيع'],['الدخول',entry.toFixed(1)],['الوقف',sl.toFixed(1)],['الهدف',tp.toFixed(1)]],
+      title:TR('ما نسبة العائد إلى المخاطرة؟','What is the risk-to-reward ratio?'),
+      def:TR('احسب نسبة العائد إلى المخاطرة لهذه الصفقة.','Work out the risk-to-reward ratio for this trade.'),
+      card:[[TR('الاتجاه','Direction'),buy?TR('شراء','Buy'):TR('بيع','Sell')],[TR('الدخول','Entry'),entry.toFixed(1)],[TR('الوقف','Stop'),sl.toFixed(1)],[TR('الهدف','Target'),tp.toFixed(1)]],
       correct:'1:'+fmtR(rr),
-      wrongs:[['1:'+fmtR(Math.round(10/rr)/10),'قلبت النسبة: قسمت المخاطرة على الربح بدل العكس.'],['1:'+fmtR(rr+1),'قسمت المسافة بين الوقف والهدف على المخاطرة بدل الربح.'],['1:'+fmtR(rr*2),'ضاعفت الربح المتوقع.']],
-      filler:function(k){return['1:'+fmtR(rr+k*0.5),'حسبت المسافة بشكل غير دقيق.']},
-      steps:['المخاطرة = |الدخول − الوقف| = '+d,'الربح = |الهدف − الدخول| = '+fmtR(d*rr),'RR = الربح ÷ المخاطرة = 1:'+fmtR(rr)],
-      tip:'الصفقة بنسبة أقل من 1:1 تحتاج نسبة نجاح عالية جدًا لتربح.'
+      wrongs:[['1:'+fmtR(Math.round(10/rr)/10),TR('قلبت النسبة: قسمت المخاطرة على الربح بدل العكس.','You flipped the ratio: you divided risk by reward instead of the other way round.')],['1:'+fmtR(rr+1),TR('قسمت المسافة بين الوقف والهدف على المخاطرة بدل الربح.','You divided the stop-to-target distance by the risk instead of the reward.')],['1:'+fmtR(rr*2),TR('ضاعفت الربح المتوقع.','You doubled the expected reward.')]],
+      filler:function(k){return['1:'+fmtR(rr+k*0.5),TR('حسبت المسافة بشكل غير دقيق.','You measured the distance inaccurately.')]},
+      steps:[TR('المخاطرة = |الدخول − الوقف| = ','Risk = |entry − stop| = ')+d,TR('الربح = |الهدف − الدخول| = ','Reward = |target − entry| = ')+fmtR(d*rr),TR('RR = الربح ÷ المخاطرة = 1:','RR = reward ÷ risk = 1:')+fmtR(rr)],
+      tip:TR('الصفقة بنسبة أقل من 1:1 تحتاج نسبة نجاح عالية جدًا لتربح.','A trade below 1:1 needs a very high win rate to be profitable.')
     });
   },
   lot:function(){
@@ -892,53 +1083,53 @@ var RISK={
     do{bal=pick([2000,5000,10000,25000]);pct=pick([0.5,1,2]);d=r1(rnd(3,12));risk=bal*pct/100;lots=Math.floor(risk/(d*100)*100)/100;tries++}while(lots<0.05&&tries<40);
     var buy=R()<.5,entry=r1(rnd(XAU-75,XAU+75)),sl=buy?entry-d:entry+d;
     return makeQ({
-      title:'ما حجم اللوت المناسب؟',
-      def:'ذهب XAU/USD. تريد ألا تتجاوز خسارتك المحددة إذا ضُرب الوقف. احسب حجم اللوت.',
-      card:[['الرصيد',usd(bal)],['المخاطرة',pct+'%'],['الدخول',entry.toFixed(1)],['الوقف',sl.toFixed(1)],['حجم العقد','100 أونصة / لوت']],
+      title:TR('ما حجم اللوت المناسب؟','What is the right lot size?'),
+      def:TR('ذهب XAU/USD. تريد ألا تتجاوز خسارتك المحددة إذا ضُرب الوقف. احسب حجم اللوت.','Gold, XAU/USD. You want your loss to stay within your set risk if the stop is hit. Work out the lot size.'),
+      card:[[TR('الرصيد','Balance'),usd(bal)],[TR('المخاطرة','Risk'),pct+'%'],[TR('الدخول','Entry'),entry.toFixed(1)],[TR('الوقف','Stop'),sl.toFixed(1)],[TR('حجم العقد','Contract size'),TR('100 أونصة / لوت','100 oz / lot')]],
       correct:lots.toFixed(2),
-      wrongs:[[(risk/d).toFixed(2),'نسيت أن اللوت الواحد = 100 أونصة.'],[(risk/(d*10)).toFixed(2),'عاملت اللوت كأنه 10 أونصات بدل 100.'],[((bal*pct)/(d*100)).toFixed(2),'استخدمت النسبة المئوية كرقم صحيح بدل نسبة.'],[(lots*2).toFixed(2),'ضاعفت حجم المخاطرة.']],
-      filler:function(k){return[(lots+k*0.05).toFixed(2),'حجم لا يطابق المخاطرة المحددة.']},
-      steps:['المخاطرة = '+usd(bal)+' × '+pct+'% = '+usd(risk,2),'مسافة الوقف = |'+entry.toFixed(1)+' − '+sl.toFixed(1)+'| = '+d.toFixed(1)+' دولار للأونصة','خسارة اللوت الواحد = '+d.toFixed(1)+' × 100 = '+usd(d*100),'اللوت = '+usd(risk,2)+' ÷ '+usd(d*100)+' = '+(risk/(d*100)).toFixed(3)+' ثم نقرّب للأسفل = '+lots.toFixed(2)],
-      tip:'التقريب للأسفل يبقيك ضمن حد المخاطرة. حجم العقد قد يختلف بين الوسطاء، وهنا نفترض 100 أونصة.'
+      wrongs:[[(risk/d).toFixed(2),TR('نسيت أن اللوت الواحد = 100 أونصة.','You forgot that one lot = 100 ounces.')],[(risk/(d*10)).toFixed(2),TR('عاملت اللوت كأنه 10 أونصات بدل 100.','You treated a lot as 10 ounces instead of 100.')],[((bal*pct)/(d*100)).toFixed(2),TR('استخدمت النسبة المئوية كرقم صحيح بدل نسبة.','You used the percentage as a whole number instead of a ratio.')],[(lots*2).toFixed(2),TR('ضاعفت حجم المخاطرة.','You doubled the risk.')]],
+      filler:function(k){return[(lots+k*0.05).toFixed(2),TR('حجم لا يطابق المخاطرة المحددة.','A size that does not match the set risk.')]},
+      steps:[TR('المخاطرة = ','Risk = ')+usd(bal)+' × '+pct+'% = '+usd(risk,2),TR('مسافة الوقف = |','Stop distance = |')+entry.toFixed(1)+' − '+sl.toFixed(1)+'| = '+d.toFixed(1)+TR(' دولار للأونصة',' dollars per ounce'),TR('خسارة اللوت الواحد = ','Loss per lot = ')+d.toFixed(1)+' × 100 = '+usd(d*100),TR('اللوت = ','Lot = ')+usd(risk,2)+' ÷ '+usd(d*100)+' = '+(risk/(d*100)).toFixed(3)+TR(' ثم نقرّب للأسفل = ',', rounded down = ')+lots.toFixed(2)],
+      tip:TR('التقريب للأسفل يبقيك ضمن حد المخاطرة. حجم العقد قد يختلف بين الوسطاء، وهنا نفترض 100 أونصة.','Rounding down keeps you within your risk limit. Contract size can differ between brokers; here we assume 100 ounces.')
     });
   },
   breakeven:function(){
     var rr=pick([1,1.5,2,3]),ans=Math.round(100/(1+rr));
     return makeQ({
-      title:'ما أقل نسبة نجاح تكفي للتعادل؟',
-      def:'تتداول بنسبة عائد إلى مخاطرة 1:'+fmtR(rr)+'. بدون عمولات، ما أقل نسبة صفقات رابحة تكفي لتعادل الحساب؟',
+      title:TR('ما أقل نسبة نجاح تكفي للتعادل؟','What is the lowest win rate to break even?'),
+      def:TR('تتداول بنسبة عائد إلى مخاطرة 1:'+fmtR(rr)+'. بدون عمولات، ما أقل نسبة صفقات رابحة تكفي لتعادل الحساب؟','You trade at a risk-to-reward of 1:'+fmtR(rr)+'. Ignoring fees, what is the lowest share of winning trades that breaks even?'),
       card:[['RR','1:'+fmtR(rr)]],
       correct:ans+'%',
-      wrongs:[[Math.round(100/rr)+'%','قسمت 100 على RR بدل (1 + RR).'],[Math.round(100*rr/(1+rr))+'%','هذه نسبة الربح من المجموع، وليست نسبة النجاح المطلوبة.'],['50%','افترضت أن التعادل يكون دائمًا عند 50%.']],
-      filler:function(k){return[(ans+k*5)+'%','قيمة غير دقيقة.']},
-      steps:['عند التعادل: الربح الكلي = الخسارة الكلية','النسبة × RR = (1 − النسبة) × 1','النسبة = 1 ÷ (1 + '+fmtR(rr)+') = '+ans+'% تقريبًا'],
-      tip:'كلما ارتفعت RR انخفضت نسبة النجاح اللازمة، لكن لا تبنِ استراتيجيتك على RR عالية وحدها.'
+      wrongs:[[Math.round(100/rr)+'%',TR('قسمت 100 على RR بدل (1 + RR).','You divided 100 by RR instead of (1 + RR).')],[Math.round(100*rr/(1+rr))+'%',TR('هذه نسبة الربح من المجموع، وليست نسبة النجاح المطلوبة.','That is the reward share of the total, not the required win rate.')],['50%',TR('افترضت أن التعادل يكون دائمًا عند 50%.','You assumed break-even is always at 50%.')]],
+      filler:function(k){return[(ans+k*5)+'%',TR('قيمة غير دقيقة.','An inaccurate value.')]},
+      steps:[TR('عند التعادل: الربح الكلي = الخسارة الكلية','At break-even: total profit = total loss'),TR('النسبة × RR = (1 − النسبة) × 1','win rate × RR = (1 − win rate) × 1'),TR('النسبة = 1 ÷ (1 + ','win rate = 1 ÷ (1 + ')+fmtR(rr)+') = '+ans+TR('% تقريبًا','% approx.')],
+      tip:TR('كلما ارتفعت RR انخفضت نسبة النجاح اللازمة، لكن لا تبنِ استراتيجيتك على RR عالية وحدها.','The higher the RR, the lower the win rate you need, but do not build a strategy on high RR alone.')
     });
   },
   netR:function(){
     var w=pick([3,4,5]),l=10-w,rr=pick([2,2.5,3]),net=w*rr-l;
     return makeQ({
-      title:'كم صافي نتيجة 10 صفقات بوحدات R؟',
-      def:'من 10 صفقات ربحت '+w+' وخسرت '+l+'. كل رابحة بنسبة 1:'+fmtR(rr)+' وكل خاسرة تساوي 1R.',
-      card:[['رابحة',String(w)],['خاسرة',String(l)],['RR','1:'+fmtR(rr)]],
+      title:TR('كم صافي نتيجة 10 صفقات بوحدات R؟','What is the net result of 10 trades in R?'),
+      def:TR('من 10 صفقات ربحت '+w+' وخسرت '+l+'. كل رابحة بنسبة 1:'+fmtR(rr)+' وكل خاسرة تساوي 1R.','Out of 10 trades, '+w+' won and '+l+' lost. Each winner was 1:'+fmtR(rr)+' and each loser cost 1R.'),
+      card:[[TR('رابحة','Winners'),String(w)],[TR('خاسرة','Losers'),String(l)],['RR','1:'+fmtR(rr)]],
       correct:sgnR(net),
-      wrongs:[[sgnR(w*rr),'نسيت طرح الخسائر.'],[sgnR(w-l),'تجاهلت أن الرابحة تساوي RR وليس 1R.'],[sgnR(w*rr-l*rr),'ضربت الخسائر في RR، والخسارة دائمًا 1R.'],[sgnR(-net),'عكست الإشارة.']],
-      filler:function(k){return[sgnR(net+k),'قيمة غير مطابقة للحساب.']},
-      steps:['كل خسارة = −1R','كل رابحة = +'+fmtR(rr)+'R','الصافي = ('+w+' × '+fmtR(rr)+') − ('+l+' × 1) = '+sgnR(net)],
-      tip:'استراتيجية بنسبة نجاح أقل من 50% قد تربح إذا كانت RR كافية.'
+      wrongs:[[sgnR(w*rr),TR('نسيت طرح الخسائر.','You forgot to subtract the losses.')],[sgnR(w-l),TR('تجاهلت أن الرابحة تساوي RR وليس 1R.','You ignored that a winner is worth RR, not 1R.')],[sgnR(w*rr-l*rr),TR('ضربت الخسائر في RR، والخسارة دائمًا 1R.','You multiplied the losses by RR, but a loss is always 1R.')],[sgnR(-net),TR('عكست الإشارة.','You flipped the sign.')]],
+      filler:function(k){return[sgnR(net+k),TR('قيمة غير مطابقة للحساب.','A value that does not match the calculation.')]},
+      steps:[TR('كل خسارة = −1R','Each loss = −1R'),TR('كل رابحة = +','Each win = +')+fmtR(rr)+'R',TR('الصافي = (','Net = (')+w+' × '+fmtR(rr)+') − ('+l+' × 1) = '+sgnR(net)],
+      tip:TR('استراتيجية بنسبة نجاح أقل من 50% قد تربح إذا كانت RR كافية.','A strategy that wins less than 50% of the time can still profit if the RR is high enough.')
     });
   },
   drawdown:function(){
     var bal=10000,n=pick([5,8,10]),pct=pick([1,2,3]),f=1-pct/100,rem=bal*Math.pow(f,n);
     return makeQ({
-      title:'كم يتبقى من رصيدك بعد سلسلة خسائر؟',
-      def:'رصيدك '+usd(bal)+' وتخاطر بـ '+pct+'% من الرصيد الحالي في كل صفقة. خسرت '+n+' صفقات متتالية. كم تقريبًا الرصيد المتبقي؟',
-      card:[['الرصيد',usd(bal)],['المخاطرة',pct+'%'],['خسائر متتالية',String(n)]],
+      title:TR('كم يتبقى من رصيدك بعد سلسلة خسائر؟','How much is left after a losing streak?'),
+      def:TR('رصيدك '+usd(bal)+' وتخاطر بـ '+pct+'% من الرصيد الحالي في كل صفقة. خسرت '+n+' صفقات متتالية. كم تقريبًا الرصيد المتبقي؟','Your balance is '+usd(bal)+' and you risk '+pct+'% of the current balance on each trade. You lost '+n+' trades in a row. Roughly what balance is left?'),
+      card:[[TR('الرصيد','Balance'),usd(bal)],[TR('المخاطرة','Risk'),pct+'%'],[TR('خسائر متتالية','Losses in a row'),String(n)]],
       correct:usd(rem),
-      wrongs:[[usd(bal*(1-n*pct/100)),'جمعت النسب بدل تركيبها، وكل خسارة تُحسب من الرصيد المتبقي.'],[usd(bal*Math.pow(f,n-1)),'أخطأت بعدد الخسائر بخسارة واحدة.'],[usd(bal-n*pct),'طرحت رقم النسبة من الرصيد كأنه دولار.'],[usd(bal*Math.pow(1+pct/100,n)),'استخدمت نموًا بدل تناقص الرصيد.']],
-      filler:function(k){return[usd(rem+k*137),'قيمة غير مطابقة للحساب.']},
-      steps:['بعد كل خسارة يصبح الرصيد × '+f.toFixed(2),'بعد '+n+' خسائر: 10,000 × '+f.toFixed(2)+'^'+n,'= '+usd(rem)],
-      tip:'سلسلة الخسائر جزء طبيعي من أي استراتيجية، ولهذا نضع حدًا لخسارة اليوم.'
+      wrongs:[[usd(bal*(1-n*pct/100)),TR('جمعت النسب بدل تركيبها، وكل خسارة تُحسب من الرصيد المتبقي.','You added the percentages instead of compounding them; each loss comes off the remaining balance.')],[usd(bal*Math.pow(f,n-1)),TR('أخطأت بعدد الخسائر بخسارة واحدة.','You were off by one loss.')],[usd(bal-n*pct),TR('طرحت رقم النسبة من الرصيد كأنه دولار.','You subtracted the percentage from the balance as if it were dollars.')],[usd(bal*Math.pow(1+pct/100,n)),TR('استخدمت نموًا بدل تناقص الرصيد.','You used growth instead of a shrinking balance.')]],
+      filler:function(k){return[usd(rem+k*137),TR('قيمة غير مطابقة للحساب.','A value that does not match the calculation.')]},
+      steps:[TR('بعد كل خسارة يصبح الرصيد × ','After each loss the balance becomes × ')+f.toFixed(2),TR('بعد '+n+' خسائر: ','After '+n+' losses: ')+'10,000 × '+f.toFixed(2)+'^'+n,'= '+usd(rem)],
+      tip:TR('سلسلة الخسائر جزء طبيعي من أي استراتيجية، ولهذا نضع حدًا لخسارة اليوم.','Losing streaks are a normal part of any strategy, which is why we set a daily loss limit.')
     });
   }
 };
@@ -948,10 +1139,10 @@ function genTerms(m){
   if(!m.bag||!m.bag.length)m.bag=shuffle(ITEMS.filter(function(i){return i[0]===S.level}));
   var it=m.bag.pop(),others=shuffle(ITEMS.filter(function(x){return x[0]===S.level&&x!==it})).slice(0,3),a=R()<.5,q;
   if(a){
-    q=makeQ({title:'ما معنى <bdi class="n">'+it[1]+'</bdi>؟',def:'اختر التعريف الصحيح.',correct:it[2],num:false,
-      wrongs:others.map(function(o){return[o[2],'هذا تعريف «'+o[1]+'».']})});
+    q=makeQ({title:TR('ما معنى <bdi class="n">'+it[1]+'</bdi>؟','What does <bdi class="n">'+it[1]+'</bdi> mean?'),def:TR('اختر التعريف الصحيح.','Choose the correct definition.'),correct:it[2],num:false,
+      wrongs:others.map(function(o){return[o[2],TR('هذا تعريف «'+o[1]+'».','That is the definition of “'+o[1]+'”.')]})});
   }else{
-    q=makeQ({title:'أي مصطلح يصف هذا التعريف؟',def:it[2],correct:it[1],num:true,
+    q=makeQ({title:TR('أي مصطلح يصف هذا التعريف؟','Which term matches this definition?'),def:it[2],correct:it[1],num:true,
       wrongs:others.map(function(o){return[o[1],'«'+o[1]+'»: '+o[2]]})});
   }
   q.term=it;
@@ -1100,7 +1291,7 @@ function draw(){
       ctx.fillStyle=mc;ctx.beginPath();ctx.arc(c.click.x,c.click.y,2.2,0,6.283);ctx.fill();
       if(c.rip!==undefined&&c.rip<1){ctx.globalAlpha=1-c.rip;ctx.beginPath();ctx.arc(c.click.x,c.click.y,9+30*easeOut(c.rip),0,6.283);ctx.stroke();ctx.globalAlpha=1}
       ctx.font='600 11px '+MONO;ctx.textAlign='center';
-      ctx.fillText('اختيارك',Math.max(30,Math.min(W-L.pr-20,c.click.x)),c.click.y>26?c.click.y-14:c.click.y+24);
+      ctx.fillText(TR('اختيارك','Your pick'),Math.max(30,Math.min(W-L.pr-20,c.click.x)),c.click.y>26?c.click.y-14:c.click.y+24);
     }
   }else if(c.pick){
     var pk=c.pick,ci=Math.floor((pk.x-L.pl)/L.slot);
@@ -1178,6 +1369,11 @@ function timeout(){
 /* candle */
 function candleNote(c){
   var nm=PAT[c.kind].ar;
+  if(EN){
+    if(c.timeout)return 'Time ran out. '+(c.kind==='none'?'There was no clear pattern':nm+' pointed '+dirName(c.expected))+', and the next candle was '+dirName(c.nextDir)+'.';
+    if(c.kind==='none')return 'A chart with no clear pattern, and the next candle was '+dirName(c.nextDir)+'.';
+    return nm+' points '+dirName(c.expected)+', you chose '+dirName(c.choice)+', and the next candle was '+dirName(c.nextDir)+'.';
+  }
   if(c.timeout)return 'انتهى الوقت. '+(c.kind==='none'?'لم يكن هناك نمط واضح':nm+' كانت ترجّح '+dirName(c.expected))+'، والشمعة التالية '+dirName(c.nextDir)+'.';
   if(c.kind==='none')return 'شارت بلا نمط واضح، والشمعة التالية كانت '+dirName(c.nextDir)+'.';
   return nm+' ترجّح '+dirName(c.expected)+' وأنت اخترت '+dirName(c.choice)+'، والشمعة التالية '+dirName(c.nextDir)+'.';
@@ -1199,10 +1395,10 @@ function whereInfo(x,y,c){
   var t=c.target,r=zoneRect(t,c),ex=9;
   var inX=x>=r.x0-ex&&x<=r.x1+ex,inY=y>=r.y0-ex&&y<=r.y1+ex;
   var ci=Math.floor((x-L.pl)/L.slot),gap=ci<t.i0?t.i0-ci:ci>t.i1?ci-t.i1:0;
-  if(inX&&!inY)return['خارج حدود المنطقة سعريًا','اخترت الشمعة الصحيحة تقريبًا لكن السعر الذي ضغطت عليه خارج حدود المنطقة. انتبه للمحور السعري على اليمين.'];
-  if(!inX&&inY)return['شمعة مختلفة','السعر قريب لكن ضغطت عند شمعة مختلفة. المنطقة الصحيحة محددة بالإطار الذهبي.'];
-  if(gap<=2)return['قريب من المنطقة','كنت قريبًا بشمعة أو شمعتين. راجع خطوات التعرف أدناه لتحدد الحدود بدقة.'];
-  return['بعيد عن المنطقة','ضغطت في مكان بعيد عن المنطقة. ابدأ بالبحث عن الاندفاع القوي على الشارت ثم ارجع إلى ما قبله أو ما حوله.'];
+  if(inX&&!inY)return[TR('خارج حدود المنطقة سعريًا','Outside the zone on price'),TR('اخترت الشمعة الصحيحة تقريبًا لكن السعر الذي ضغطت عليه خارج حدود المنطقة. انتبه للمحور السعري على اليمين.','You picked about the right candle, but the price you tapped is outside the zone. Watch the price axis on the right.')];
+  if(!inX&&inY)return[TR('شمعة مختلفة','A different candle'),TR('السعر قريب لكن ضغطت عند شمعة مختلفة. المنطقة الصحيحة محددة بالإطار الذهبي.','The price is close, but you tapped a different candle. The correct zone is marked by the gold frame.')];
+  if(gap<=2)return[TR('قريب من المنطقة','Close to the zone'),TR('كنت قريبًا بشمعة أو شمعتين. راجع خطوات التعرف أدناه لتحدد الحدود بدقة.','You were a candle or two away. Review the steps below to pin down the edges.')];
+  return[TR('بعيد عن المنطقة','Far from the zone'),TR('ضغطت في مكان بعيد عن المنطقة. ابدأ بالبحث عن الاندفاع القوي على الشارت ثم ارجع إلى ما قبله أو ما حوله.','You tapped far from the zone. Start by finding the strong impulse on the chart, then look just before it or around it.')];
 }
 function answerZone(x,y){
   var m=M.zone,c=m.cur;if(!c||c.answered)return;
@@ -1222,7 +1418,7 @@ function answerZone(x,y){
   c.gain=award(m,ok,base,0);
   if(ok)P[c.target.type]++;
   var d=c.target.dir>0?0:1;
-  m.log.push({ok:ok,note:(c.timeout?'انتهى الوقت. ':'')+'المطلوب: '+TITLES[c.target.type][d]+'. '+DEFS[c.target.type][d]});
+  m.log.push({ok:ok,note:(c.timeout?TR('انتهى الوقت. ','Time ran out. '):'')+TR('المطلوب: ','Task: ')+TITLES[c.target.type][d]+'. '+DEFS[c.target.type][d]});
   save();checkBadges();c.zr=0;c.rip=0;render();
   tween(c,'zr',750);if(c.click)tween(c,'rip',650);
 }
@@ -1238,7 +1434,7 @@ function answerMCQ(i){
   var good=c.q.options.filter(function(o){return o.ok})[0],bad=i>=0?c.q.options[i]:null;
   var note;
   if(S.mode==='terms')note=c.q.term[1]+': '+c.q.term[2];
-  else note=c.q.title+' الصحيح: '+good.t+'. '+(bad&&bad.why?bad.why:(c.timeout?'انتهى الوقت.':''));
+  else note=c.q.title+TR(' الصحيح: ',' Correct: ')+good.t+'. '+(bad&&bad.why?bad.why:(c.timeout?TR('انتهى الوقت.','Time ran out.'):''));
   m.log.push({ok:c.ok,note:note});
   save();checkBadges();render();
 }
@@ -1252,7 +1448,9 @@ function checkOrder(){
   c.answered=true;c.shown=true;c.right=cnt;c.ok=cnt===n;
   c.gain=award(m,c.ok,6+n*2,cnt*2);
   if(c.ok)P.order++;
-  m.log.push({ok:c.ok,note:'في «'+c.seq.title+'» وضعت '+cnt+' من '+n+' في مكانها'+(wrongIdx>=0?'. أول خطأ في المكان رقم '+(wrongIdx+1)+': الصحيح «'+c.seq.steps[wrongIdx].t+'».':'.')});
+  m.log.push({ok:c.ok,note:EN
+    ?'In “'+c.seq.title+'” you placed '+cnt+' of '+n+' correctly'+(wrongIdx>=0?'. First mistake at position '+(wrongIdx+1)+': the correct step is “'+c.seq.steps[wrongIdx].t+'”.':'.')
+    :'في «'+c.seq.title+'» وضعت '+cnt+' من '+n+' في مكانها'+(wrongIdx>=0?'. أول خطأ في المكان رقم '+(wrongIdx+1)+': الصحيح «'+c.seq.steps[wrongIdx].t+'».':'.')});
   save();checkBadges();render();
 }
 
@@ -1275,7 +1473,7 @@ function setMode(mode){
 function setLevel(lv){
   if(lv===S.level)return;
   S.level=lv;S.streak=0;resetAll();startRound();
-  toast('المستوى: '+LEVELS[lv-1].name);
+  toast(TR('المستوى: ','Level: ')+LEVELS[lv-1].name);
 }
 
 /* =================== game: SL / TP placer =================== */
@@ -1327,14 +1525,14 @@ function toBuy(c,p){return c.dir>0?p:2*c.C-p}
 function fromBuy(c,p){return c.dir>0?p:2*c.C-p}
 function evalSltp(c){
   var p=SLTP_LV[S.level],b=c.bs,sl=toBuy(c,c.sl),tp=toBuy(c,c.tp),r={},buy=c.dir>0;
-  if(sl>=b.entry)r.sl=['bad','في الجهة الخطأ','وقف الخسارة في الجهة الخطأ من سعر الدخول. في صفقة '+(buy?'الشراء يكون الوقف تحت الدخول.':'البيع يكون الوقف فوق الدخول.')];
-  else if(sl>=b.Lw-0.02*V)r.sl=['bad','قريب جدًا','وقفك داخل الحركة '+(buy?'فوق القاع':'تحت القمة')+' الذي انطلقت منه، فأي تذبذب طبيعي يضربه قبل أن تبطل فكرة الصفقة.'];
-  else if(sl<b.Lw-p.slb*V)r.sl=['bad','بعيد جدًا','وقفك أبعد من اللازم خلف '+(buy?'القاع':'القمة')+'، فتكبر الخسارة وتضعف نسبة RR.'];
-  else r.sl=['good','في مكانه',''];
-  if(tp<=b.entry)r.tp=['bad','في الجهة الخطأ','الهدف في الجهة الخطأ من سعر الدخول.'];
-  else if(tp>b.T+0.3*V)r.tp=['bad','بعد السيولة','هدفك أبعد من السيولة '+(buy?'فوق القمم المتساوية':'تحت القيعان المتساوية')+'، والسعر غالبًا يتفاعل عندها قبل أن يصل لهدفك.'];
-  else if(tp<b.T-p.tpb*V)r.tp=['bad','قريب جدًا','هدفك قريب جدًا وتركت جزءًا كبيرًا من الحركة المتوقعة حتى السيولة.'];
-  else r.tp=['good','في مكانه',''];
+  if(sl>=b.entry)r.sl=['bad',TR('في الجهة الخطأ','Wrong side'),TR('وقف الخسارة في الجهة الخطأ من سعر الدخول. في صفقة '+(buy?'الشراء يكون الوقف تحت الدخول.':'البيع يكون الوقف فوق الدخول.'),'The stop loss is on the wrong side of the entry. In a '+(buy?'buy the stop goes below the entry.':'sell the stop goes above the entry.'))];
+  else if(sl>=b.Lw-0.02*V)r.sl=['bad',TR('قريب جدًا','Too tight'),TR('وقفك داخل الحركة '+(buy?'فوق القاع':'تحت القمة')+' الذي انطلقت منه، فأي تذبذب طبيعي يضربه قبل أن تبطل فكرة الصفقة.','Your stop sits inside the move, '+(buy?'above the low':'below the high')+' it started from, so normal noise hits it before the trade idea is invalidated.')];
+  else if(sl<b.Lw-p.slb*V)r.sl=['bad',TR('بعيد جدًا','Too wide'),TR('وقفك أبعد من اللازم خلف '+(buy?'القاع':'القمة')+'، فتكبر الخسارة وتضعف نسبة RR.','Your stop is further than needed beyond the '+(buy?'low':'high')+', so the loss grows and the RR weakens.')];
+  else r.sl=['good',TR('في مكانه','Well placed'),''];
+  if(tp<=b.entry)r.tp=['bad',TR('في الجهة الخطأ','Wrong side'),TR('الهدف في الجهة الخطأ من سعر الدخول.','The target is on the wrong side of the entry.')];
+  else if(tp>b.T+0.3*V)r.tp=['bad',TR('بعد السيولة','Past the liquidity'),TR('هدفك أبعد من السيولة '+(buy?'فوق القمم المتساوية':'تحت القيعان المتساوية')+'، والسعر غالبًا يتفاعل عندها قبل أن يصل لهدفك.','Your target is beyond the liquidity '+(buy?'above the equal highs':'below the equal lows')+', and price often reacts there before reaching your target.')];
+  else if(tp<b.T-p.tpb*V)r.tp=['bad',TR('قريب جدًا','Too close'),TR('هدفك قريب جدًا وتركت جزءًا كبيرًا من الحركة المتوقعة حتى السيولة.','Your target is too close; you left a large part of the expected move to the liquidity on the table.')];
+  else r.tp=['good',TR('في مكانه','Well placed'),''];
   r.rr=(tp-b.entry)/(b.entry-sl);
   r.ideal=((b.T-0.2*V)-b.entry)/(b.entry-(b.Lw-0.3*V));
   return r;
@@ -1350,19 +1548,25 @@ function answerSltp(timeout){
   c.gain=award(m,c.ok,14,part);
   if(c.ok)P.sltp++;
   var buy=c.dir>0;
-  m.log.push({ok:c.ok,note:(c.ev?'الوقف: '+c.ev.sl[1]+'، الهدف: '+c.ev.tp[1]+'. ':'انتهى الوقت قبل وضع الخطين. ')+'الوقف المنطقي خلف '+(buy?'قاع':'قمة')+' الهيكل، والهدف قبل '+(buy?'القمم':'القيعان')+' المتساوية.'});
+  m.log.push({ok:c.ok,note:EN
+    ?(c.ev?'Stop: '+c.ev.sl[1]+', target: '+c.ev.tp[1]+'. ':'Time ran out before both lines were placed. ')+'The logical stop is behind the structure '+(buy?'low':'high')+', and the target just before the equal '+(buy?'highs':'lows')+'.'
+    :(c.ev?'الوقف: '+c.ev.sl[1]+'، الهدف: '+c.ev.tp[1]+'. ':'انتهى الوقت قبل وضع الخطين. ')+'الوقف المنطقي خلف '+(buy?'قاع':'قمة')+' الهيكل، والهدف قبل '+(buy?'القمم':'القيعان')+' المتساوية.'});
   save();checkBadges();c.zr=0;render();tween(c,'zr',750);
 }
 function sltpView(c){
   var buy=c.dir>0,v={ok:c.ok,gain:c.gain};
-  v.head=c.ok?'الوقف والهدف في مكانهما':c.timeout?'انتهى الوقت':'تحتاج تعديلًا';
+  v.head=c.ok?TR('الوقف والهدف في مكانهما','Stop and target well placed'):c.timeout?TR('انتهى الوقت','Time ran out'):TR('تحتاج تعديلًا','Needs adjusting');
   if(c.ev){
     var e=c.ev;
-    v.cmp=[['وقف الخسارة',e.sl[1],e.sl[0]],['الهدف',e.tp[1],e.tp[0]],['RR لصفقتك','<span class="n">'+(e.rr>0?'1:'+e.rr.toFixed(1):'—')+'</span>',''],['RR المثالي تقريبًا','<span class="n">1:'+e.ideal.toFixed(1)+'</span>','good']];
+    v.cmp=[[TR('وقف الخسارة','Stop loss'),e.sl[1],e.sl[0]],[TR('الهدف','Target'),e.tp[1],e.tp[0]],[TR('RR لصفقتك','Your RR'),'<span class="n">'+(e.rr>0?'1:'+e.rr.toFixed(1):'—')+'</span>',''],[TR('RR المثالي تقريبًا','Ideal RR (approx.)'),'<span class="n">1:'+e.ideal.toFixed(1)+'</span>','good']];
     var ms=[e.sl[2],e.tp[2]].filter(Boolean);if(ms.length)v.mistake=ms.join(' ');
-  }else v.mistake='انتهى الوقت قبل وضع الوقف والهدف.';
-  v.paras=['المنطقة الحمراء على الشارت هي المكان المنطقي للوقف، والخضراء هي المكان المنطقي للهدف.'];
-  v.lesson={h:'كيف تضع الوقف والهدف',items:[
+  }else v.mistake=TR('انتهى الوقت قبل وضع الوقف والهدف.','Time ran out before you placed the stop and target.');
+  v.paras=[TR('المنطقة الحمراء على الشارت هي المكان المنطقي للوقف، والخضراء هي المكان المنطقي للهدف.','The red zone on the chart is the logical place for the stop, and the green zone is the logical place for the target.')];
+  v.lesson={h:TR('كيف تضع الوقف والهدف','How to place the stop and target'),items:EN?[
+    buy?'Find the low the move started from and put the stop just below it.':'Find the high the move started from and put the stop just above it.',
+    buy?'Look for liquidity above you: equal highs or a clear previous high.':'Look for liquidity below you: equal lows or a clear previous low.',
+    'Put the target just before the liquidity, because price reacts there.',
+    'Work out the RR, and if it is below what your plan requires, skip the trade.']:[
     buy?'حدّد القاع الذي انطلقت منه الحركة، وضع الوقف تحته بهامش بسيط.':'حدّد القمة التي انطلقت منها الحركة، وضع الوقف فوقها بهامش بسيط.',
     buy?'ابحث عن السيولة فوقك: قمم متساوية أو قمة سابقة واضحة.':'ابحث عن السيولة تحتك: قيعان متساوية أو قاع سابق واضح.',
     'ضع الهدف قبل السيولة بقليل، لأن السعر يتفاعل عندها.',
@@ -1374,24 +1578,25 @@ function sltpView(c){
 /* =================== game: trade or skip =================== */
 function G_(v){return function(d){return typeof v==='function'?v(d):v}}
 var TCHK=[
- {k:'trend',l:'اتجاه فريم 4 ساعات',lv:1,good:function(d){return d>0?'صاعد':'هابط'},
-  bad:[{lv:1,v:function(d){return d>0?'هابط':'صاعد'},why:'الصفقة عكس الاتجاه الأكبر، واحتمال نجاحها أقل.'}]},
- {k:'rr',l:'نسبة RR',lv:1,good:function(){return '1:'+pick(['2','2.5','3'])},
-  bad:[{lv:1,v:G_('1:0.8'),why:'الربح المتوقع أقل من الخسارة المحتملة.'},{lv:2,v:G_('1:1.1'),why:'نسبة RR ضعيفة تحتاج نسبة نجاح عالية جدًا لتربح.'}]},
- {k:'sl',l:'وقف الخسارة',lv:1,good:function(d){return d>0?'تحت قاع الهيكل':'فوق قمة الهيكل'},
-  bad:[{lv:1,v:G_('بدون وقف'),why:'صفقة بلا وقف خسارة قد تمسح جزءًا كبيرًا من الحساب.'},{lv:2,v:function(d){return d>0?'داخل الحركة فوق القاع':'داخل الحركة تحت القمة'},why:'الوقف قريب جدًا وأي تذبذب طبيعي يضربه.'}]},
- {k:'news',l:'الأخبار',lv:1,good:G_('لا أخبار مهمة قريبة'),
-  bad:[{lv:1,v:G_('قرار الفائدة بعد 5 دقائق'),why:'الأخبار القوية تسبب حركة حادة وانزلاقًا في السعر.'}]},
- {k:'zone',l:'موقع الدخول',lv:2,good:function(d){return d>0?'منطقة خصم':'منطقة علاوة'},
-  bad:[{lv:2,v:function(d){return d>0?'منطقة علاوة':'منطقة خصم'},why:'تدخل من الجهة الخطأ من النطاق، فتسوء نسبة العائد.'}]},
- {k:'confirm',l:'التأكيد',lv:2,good:G_('سحب سيولة ثم كسر هيكل'),
-  bad:[{lv:2,v:G_('لا يوجد كسر هيكل بعد'),why:'الدخول قبل التأكيد مبكر وقد يكون عكس الحركة.'}]},
- {k:'risk',l:'المخاطرة من الرصيد',lv:3,good:function(){return pick(['0.5%','1%'])},
-  bad:[{lv:3,v:G_('5%'),why:'مخاطرة كبيرة: خمس خسائر متتالية تأكل نحو ربع الحساب.'}]},
- {k:'spread',l:'السبريد مقارنة بالوقف',lv:3,good:G_('صغير، نحو 5% من الوقف'),
-  bad:[{lv:3,v:G_('كبير، نحو 40% من الوقف'),why:'السبريد يأكل جزءًا كبيرًا من مسافة الوقف ويضعف RR الفعلي.'}]},
- {k:'block',l:'بين الدخول والهدف',lv:3,good:G_('لا منطقة معاكسة قريبة'),
-  bad:[{lv:3,v:function(d){return d>0?'Order Block هابط على 4 ساعات قبل الهدف':'Order Block صاعد على 4 ساعات قبل الهدف'},why:'منطقة معاكسة قوية قد توقف السعر قبل الوصول للهدف.'}]}
+ {k:'trend',l:TR('اتجاه فريم 4 ساعات','4-hour trend'),lv:1,good:function(d){return d>0?TR('صاعد','Up'):TR('هابط','Down')},
+  bad:[{lv:1,v:function(d){return d>0?TR('هابط','Down'):TR('صاعد','Up')},why:TR('الصفقة عكس الاتجاه الأكبر، واحتمال نجاحها أقل.','The trade is against the bigger trend, so its odds are lower.')}]},
+ {k:'rr',l:TR('نسبة RR','RR ratio'),lv:1,good:function(){return '1:'+pick(['2','2.5','3'])},
+  bad:[{lv:1,v:G_('1:0.8'),why:TR('الربح المتوقع أقل من الخسارة المحتملة.','The expected profit is smaller than the possible loss.')},{lv:2,v:G_('1:1.1'),why:TR('نسبة RR ضعيفة تحتاج نسبة نجاح عالية جدًا لتربح.','A weak RR needs a very high win rate to be profitable.')}]},
+ {k:'sl',l:TR('وقف الخسارة','Stop loss'),lv:1,good:function(d){return d>0?TR('تحت قاع الهيكل','Below the structure low'):TR('فوق قمة الهيكل','Above the structure high')},
+  // nosl: علامة "بدون وقف" مستقلة عن لغة النص (كان الفحص بمقارنة النص العربي)
+  bad:[{lv:1,nosl:true,v:G_(TR('بدون وقف','No stop')),why:TR('صفقة بلا وقف خسارة قد تمسح جزءًا كبيرًا من الحساب.','A trade without a stop loss can wipe out a large part of the account.')},{lv:2,v:function(d){return d>0?TR('داخل الحركة فوق القاع','Inside the move, above the low'):TR('داخل الحركة تحت القمة','Inside the move, below the high')},why:TR('الوقف قريب جدًا وأي تذبذب طبيعي يضربه.','The stop is too tight and normal noise will hit it.')}]},
+ {k:'news',l:TR('الأخبار','News'),lv:1,good:G_(TR('لا أخبار مهمة قريبة','No major news soon')),
+  bad:[{lv:1,v:G_(TR('قرار الفائدة بعد 5 دقائق','Rate decision in 5 minutes')),why:TR('الأخبار القوية تسبب حركة حادة وانزلاقًا في السعر.','Major news causes sharp moves and slippage.')}]},
+ {k:'zone',l:TR('موقع الدخول','Entry location'),lv:2,good:function(d){return d>0?TR('منطقة خصم','Discount zone'):TR('منطقة علاوة','Premium zone')},
+  bad:[{lv:2,v:function(d){return d>0?TR('منطقة علاوة','Premium zone'):TR('منطقة خصم','Discount zone')},why:TR('تدخل من الجهة الخطأ من النطاق، فتسوء نسبة العائد.','You are entering from the wrong side of the range, so the reward ratio suffers.')}]},
+ {k:'confirm',l:TR('التأكيد','Confirmation'),lv:2,good:G_(TR('سحب سيولة ثم كسر هيكل','Liquidity sweep, then break of structure')),
+  bad:[{lv:2,v:G_(TR('لا يوجد كسر هيكل بعد','No break of structure yet')),why:TR('الدخول قبل التأكيد مبكر وقد يكون عكس الحركة.','Entering before confirmation is early and may be against the move.')}]},
+ {k:'risk',l:TR('المخاطرة من الرصيد','Risk of balance'),lv:3,good:function(){return pick(['0.5%','1%'])},
+  bad:[{lv:3,v:G_('5%'),why:TR('مخاطرة كبيرة: خمس خسائر متتالية تأكل نحو ربع الحساب.','Too much risk: five losses in a row eat about a quarter of the account.')}]},
+ {k:'spread',l:TR('السبريد مقارنة بالوقف','Spread vs stop'),lv:3,good:G_(TR('صغير، نحو 5% من الوقف','Small, about 5% of the stop')),
+  bad:[{lv:3,v:G_(TR('كبير، نحو 40% من الوقف','Large, about 40% of the stop')),why:TR('السبريد يأكل جزءًا كبيرًا من مسافة الوقف ويضعف RR الفعلي.','The spread eats a large part of the stop distance and weakens the real RR.')}]},
+ {k:'block',l:TR('بين الدخول والهدف','Between entry and target'),lv:3,good:G_(TR('لا منطقة معاكسة قريبة','No opposing zone nearby')),
+  bad:[{lv:3,v:function(d){return d>0?TR('Order Block هابط على 4 ساعات قبل الهدف','A bearish 4H order block before the target'):TR('Order Block صاعد على 4 ساعات قبل الهدف','A bullish 4H order block before the target')},why:TR('منطقة معاكسة قوية قد توقف السعر قبل الوصول للهدف.','A strong opposing zone may stop price before it reaches the target.')}]}
 ];
 function genTrade(){
   var lv=S.level,d=R()<.5?1:-1,items=TCHK.filter(function(t){return t.lv<=lv}),flaw=null;
@@ -1403,7 +1608,7 @@ function genTrade(){
   }
   var rows=items.map(function(t){var bad=!!flaw&&flaw.t===t;return{k:t.k,l:t.l,v:bad?flaw.b.v(d):t.good(d),bad:bad,why:bad?flaw.b.why:''}});
   function row(k){return rows.filter(function(r){return r.k===k})[0]}
-  var rr=parseFloat(row('rr').v.split(':')[1]),slv=row('sl'),noSL=slv.v==='بدون وقف',tight=slv.bad&&!noSL;
+  var rr=parseFloat(row('rr').v.split(':')[1]),slv=row('sl'),noSL=slv.bad&&!!flaw.b.nosl,tight=slv.bad&&!noSL;
   var cs=walk(28,XAU-30+R()*60,d*0.22,V*0.7),entry=cs[cs.length-1].c,dist=(tight?0.3:1.3)*V;
   return{d:d,rows:rows,good:!flaw,flaw:flaw?rows.filter(function(r){return r.bad})[0]:null,candles:cs,entry:entry,
     sl:noSL?null:entry-d*dist,tp:entry+d*dist*rr,rr:rr,stage:'decide',choice:null,tapped:-1,answered:false,shown:false,ok:false,timeout:false,gain:0};
@@ -1420,28 +1625,30 @@ function answerTrade(choice,idx){
   }else c.ok=false;
   c.gain=award(m,c.ok,12,part);
   if(c.ok&&!c.good)P.traps++;
-  m.log.push({ok:c.ok,note:c.good?'كانت صفقة مكتملة الشروط وقرارها الصحيح الدخول.':'كانت فخًا بسبب «'+c.flaw.l+': '+c.flaw.v+'». '+c.flaw.why});
+  m.log.push({ok:c.ok,note:c.good?TR('كانت صفقة مكتملة الشروط وقرارها الصحيح الدخول.','It was a complete setup and the right call was to enter.'):TR('كانت فخًا بسبب «'+c.flaw.l+': '+c.flaw.v+'». ','It was a trap because of “'+c.flaw.l+': '+c.flaw.v+'”. ')+c.flaw.why});
   save();checkBadges();render();
 }
 function tradeView(c){
   var v={ok:c.ok,gain:c.gain},tap=c.rows[c.tapped];
-  v.head=c.ok?'قرار صحيح':c.timeout?'انتهى الوقت':'قرار غير صحيح';
-  var mine=c.timeout?'لم تقرر':c.choice==='enter'?'دخول':'تجاهل'+(tap?' بسبب «'+tap.l+'»':'');
-  v.cmp=[['قرارك',mine,c.ok?'good':'bad'],['القرار الصحيح',c.good?'ادخل، الصفقة مكتملة':'تجاهل، فيها مشكلة','good']];
-  if(c.flaw)v.cmp.push(['المشكلة',c.flaw.l,'bad']);
+  v.head=c.ok?TR('قرار صحيح','Right call'):c.timeout?TR('انتهى الوقت','Time ran out'):TR('قرار غير صحيح','Wrong call');
+  var mine=c.timeout?TR('لم تقرر','No decision'):c.choice==='enter'?TR('دخول','Enter'):TR('تجاهل','Skip')+(tap?TR(' بسبب «'+tap.l+'»',' because of “'+tap.l+'”'):'');
+  v.cmp=[[TR('قرارك','Your call'),mine,c.ok?'good':'bad'],[TR('القرار الصحيح','Right call'),c.good?TR('ادخل، الصفقة مكتملة','Enter, the setup is complete'):TR('تجاهل، فيها مشكلة','Skip, it has a flaw'),'good']];
+  if(c.flaw)v.cmp.push([TR('المشكلة','The flaw'),c.flaw.l,'bad']);
   if(!c.ok&&!c.timeout){
-    if(c.choice==='enter')v.mistake='دخلت صفقة فيها مشكلة: «'+c.flaw.l+'» = '+c.flaw.v+'. '+c.flaw.why;
-    else if(c.good)v.mistake='كانت صفقة مكتملة الشروط. تجاهل الصفقات الجيدة يضيّع الفرص، تمامًا كما يضر الدخول في السيئة.';
-    else v.mistake='قرار التجاهل صحيح، لكن السبب غير دقيق: «'+(tap?tap.l:'')+'» سليم. المشكلة في «'+c.flaw.l+'»: '+c.flaw.why;
+    if(c.choice==='enter')v.mistake=TR('دخلت صفقة فيها مشكلة: «'+c.flaw.l+'» = '+c.flaw.v+'. ','You entered a flawed trade: “'+c.flaw.l+'” = '+c.flaw.v+'. ')+c.flaw.why;
+    else if(c.good)v.mistake=TR('كانت صفقة مكتملة الشروط. تجاهل الصفقات الجيدة يضيّع الفرص، تمامًا كما يضر الدخول في السيئة.','It was a complete setup. Skipping good trades wastes opportunities, just as entering bad ones hurts.');
+    else v.mistake=TR('قرار التجاهل صحيح، لكن السبب غير دقيق: «'+(tap?tap.l:'')+'» سليم. المشكلة في «'+c.flaw.l+'»: ','Skipping was right, but the reason is off: “'+(tap?tap.l:'')+'” is fine. The flaw is in “'+c.flaw.l+'”: ')+c.flaw.why;
   }
-  v.paras=[c.good?'كل البنود سليمة: الاتجاه والموقع والتأكيد والوقف والمخاطرة.':c.flaw.why];
-  v.lesson={h:'قائمة الفحص قبل أي صفقة',items:['الاتجاه الأكبر في صالح صفقتك.','الدخول من الجهة الصحيحة للنطاق: خصم للشراء وعلاوة للبيع.','وجود تأكيد قبل الدخول، مثل سحب سيولة ثم كسر هيكل.','وقف منطقي خلف الهيكل.','RR يناسب خطتك، ومخاطرة 1% أو أقل من الرصيد.','لا أخبار قوية قريبة.']};
+  v.paras=[c.good?TR('كل البنود سليمة: الاتجاه والموقع والتأكيد والوقف والمخاطرة.','Every item checks out: trend, location, confirmation, stop and risk.'):c.flaw.why];
+  v.lesson={h:TR('قائمة الفحص قبل أي صفقة','Checklist before any trade'),items:EN
+    ?['The bigger trend is on your side.','Entry from the right side of the range: discount for buys, premium for sells.','Confirmation before entry, such as a liquidity sweep then a break of structure.','A logical stop behind structure.','An RR that fits your plan, and risk of 1% of the balance or less.','No major news coming up.']
+    :['الاتجاه الأكبر في صالح صفقتك.','الدخول من الجهة الصحيحة للنطاق: خصم للشراء وعلاوة للبيع.','وجود تأكيد قبل الدخول، مثل سحب سيولة ثم كسر هيكل.','وقف منطقي خلف الهيكل.','RR يناسب خطتك، ومخاطرة 1% أو أقل من الرصيد.','لا أخبار قوية قريبة.']};
   v.open=!c.ok;
   return v;
 }
 function renderTradeBox(c){
   var why=!c.answered&&c.stage==='why';
-  $('#tradeBox').innerHTML='<div class="tcap">'+(why?'اضغط على البند الذي يجعلها صفقة سيئة':'بطاقة الصفقة · '+(c.d>0?'شراء':'بيع')+' XAU/USD')+'</div>'+c.rows.map(function(r,i){
+  $('#tradeBox').innerHTML='<div class="tcap">'+(why?TR('اضغط على البند الذي يجعلها صفقة سيئة','Tap the item that makes it a bad trade'):TR('بطاقة الصفقة · ','Trade card · ')+(c.d>0?TR('شراء','Buy'):TR('بيع','Sell'))+' XAU/USD')+'</div>'+c.rows.map(function(r,i){
     var cls='trow';
     if(c.answered){cls+=r.bad?' bad':' good';if(i===c.tapped&&!r.bad)cls+=' miss'}
     var mark=c.answered?(r.bad?ICON.x:ICON.check):'';
@@ -1474,37 +1681,39 @@ function genReal(){
   return{t:t,d:d,win:win,candles:t.before.map(toK),after:t.after.map(toK),entry:t.entry,sl:t.sl,tp:t.tp1,tp2:t.tp2,
     rr:Math.round(rr*10)/10,dp:realDP(t.entry),answered:false,shown:false,ok:false,timeout:false,gain:0,reveal:0};
 }
-var OUT_AR={TP2_HIT:'وصلت الهدف الثاني 🏆',TP1_HIT:'وصلت الهدف الأول ✅',SL_HIT:'ضربت وقف الخسارة ❌'};
+var OUT_AR=EN?{TP2_HIT:'Hit target 2 🏆',TP1_HIT:'Hit target 1 ✅',SL_HIT:'Hit the stop loss ❌'}:{TP2_HIT:'وصلت الهدف الثاني 🏆',TP1_HIT:'وصلت الهدف الأول ✅',SL_HIT:'ضربت وقف الخسارة ❌'};
 function answerReal(choice){
   var m=M.real,c=m.cur;if(!c||c.answered||c.loading)return;
   stopTimer();
   c.answered=true;c.choice=choice;c.timeout=choice===null;
   c.ok=(choice==='enter'&&c.win)||(choice==='skip'&&!c.win);
   c.gain=award(m,c.ok,10,0);
-  m.log.push({ok:c.ok,note:c.t.market+' '+(c.d>0?'شراء':'بيع')+' ('+c.t.date+'): '+OUT_AR[c.t.outcome]});
+  m.log.push({ok:c.ok,note:c.t.market+' '+(c.d>0?TR('شراء','buy'):TR('بيع','sell'))+' ('+c.t.date+'): '+OUT_AR[c.t.outcome]});
   save();renderStats();
   document.querySelectorAll('.call').forEach(function(b){b.disabled=true});
   tween(c,'reveal',Math.min(2600,300+c.after.length*55),function(){c.shown=true;checkBadges();render()});
 }
 function realView(c){
   var t=c.t,v={ok:c.ok,gain:c.gain};
-  v.head=c.ok?'قرار موفّق':c.timeout?'انتهى الوقت':'هذه المرة جاءت بعكس قرارك';
-  var mine=c.timeout?'لم تقرر':c.choice==='enter'?'دخول':'تجاهل';
-  v.cmp=[['قرارك',mine,c.ok?'good':'bad'],['ما حدث فعلاً',OUT_AR[t.outcome],c.win?'good':'bad'],['التاريخ',t.date+' · '+t.timeframe,'']];
-  v.paras=['هذه إشارة حقيقية أرسلتها كفيل لمشتركيها، والشموع بعد خط الدخول هي ما حدث في السوق فعلاً. الصفقات تُختار عشوائياً، لذلك تشمل الخاسرة كما الرابحة.'];
-  if(REAL_META&&REAL_META.pool)v.paras.push('من '+REAL_META.pool+' صفقة حقيقية في هذه المجموعة، ربحت '+REAL_META.wins+'. الربح المتوقع يأتي من أن الرابحة أكبر من الخاسرة، لا من الفوز بكل صفقة.');
-  v.lesson={h:'ما الذي تتعلمه من الصفقات الحقيقية؟',items:['لا أحد يعرف نتيجة صفقة واحدة مسبقاً، حتى أفضل الإشارات تخسر أحياناً.','الوقف يحدّد خسارتك بـ 1R مهما حدث — لهذا لا تدخل بلا وقف.','الأهداف أبعد من الوقف (RR '+fmtR(c.rr)+')، فصفقة رابحة تعوّض أكثر من خاسرة.','قيّم أي نظام بعشرات الصفقات، لا بصفقة أو اثنتين.']};
+  v.head=c.ok?TR('قرار موفّق','Good call'):c.timeout?TR('انتهى الوقت','Time ran out'):TR('هذه المرة جاءت بعكس قرارك','This time it went against your call');
+  var mine=c.timeout?TR('لم تقرر','No decision'):c.choice==='enter'?TR('دخول','Enter'):TR('تجاهل','Skip');
+  v.cmp=[[TR('قرارك','Your call'),mine,c.ok?'good':'bad'],[TR('ما حدث فعلاً','What actually happened'),OUT_AR[t.outcome],c.win?'good':'bad'],[TR('التاريخ','Date'),t.date+' · '+t.timeframe,'']];
+  v.paras=[TR('هذه إشارة حقيقية أرسلتها كفيل لمشتركيها، والشموع بعد خط الدخول هي ما حدث في السوق فعلاً. الصفقات تُختار عشوائياً، لذلك تشمل الخاسرة كما الرابحة.','This is a real signal Qaffel sent to its subscribers, and the candles after the entry line are what actually happened in the market. Trades are picked at random, so they include losers as well as winners.')];
+  if(REAL_META&&REAL_META.pool)v.paras.push(TR('من '+REAL_META.pool+' صفقة حقيقية في هذه المجموعة، ربحت '+REAL_META.wins+'. الربح المتوقع يأتي من أن الرابحة أكبر من الخاسرة، لا من الفوز بكل صفقة.','Of '+REAL_META.pool+' real trades in this set, '+REAL_META.wins+' won. Expected profit comes from winners being bigger than losers, not from winning every trade.'));
+  v.lesson={h:TR('ما الذي تتعلمه من الصفقات الحقيقية؟','What do real trades teach you?'),items:EN
+    ?['No one knows the outcome of a single trade in advance; even the best signals lose sometimes.','The stop limits your loss to 1R no matter what — that is why you never enter without one.','Targets are further than the stop (RR '+fmtR(c.rr)+'), so one winner makes up for more than one loser.','Judge any system over dozens of trades, not one or two.']
+    :['لا أحد يعرف نتيجة صفقة واحدة مسبقاً، حتى أفضل الإشارات تخسر أحياناً.','الوقف يحدّد خسارتك بـ 1R مهما حدث — لهذا لا تدخل بلا وقف.','الأهداف أبعد من الوقف (RR '+fmtR(c.rr)+')، فصفقة رابحة تعوّض أكثر من خاسرة.','قيّم أي نظام بعشرات الصفقات، لا بصفقة أو اثنتين.']};
   v.open=true;
   return v;
 }
 function renderRealBox(c){
-  if(c.loading){$('#tradeBox').innerHTML='<div class="tcap">'+(c.failed?'تعذّر جلب الصفقات الحقيقية الآن، جرّب لعبة أخرى أو عُد بعد قليل.':'جارٍ تحميل صفقات حقيقية من كفيل…')+'</div>';return}
+  if(c.loading){$('#tradeBox').innerHTML='<div class="tcap">'+(c.failed?TR('تعذّر جلب الصفقات الحقيقية الآن، جرّب لعبة أخرى أو عُد بعد قليل.','Could not load real trades right now. Try another game or come back shortly.'):TR('جارٍ تحميل صفقات حقيقية من كفيل…','Loading real trades from Qaffel…'))+'</div>';return}
   var t=c.t,f=function(v){return Number(v).toFixed(c.dp)};
-  var rows=[['الرمز',t.market+' · '+t.timeframe],['الاتجاه',c.d>0?'شراء 🟢':'بيع 🔴'],['الدخول',f(t.entry)],['وقف الخسارة',f(t.sl)],['الهدف الأول',f(t.tp1)],['الهدف الثاني',f(t.tp2)],['العائد/المخاطرة','1:'+fmtR(c.rr)],['الثقة',t.confidence+'%']];
-  $('#tradeBox').innerHTML='<div class="tcap">إشارة حقيقية أرسلتها كفيل</div>'+rows.map(function(r,i){return '<div class="trow" style="--i:'+i+'"><span class="tl">'+r[0]+'</span><span class="tv">'+r[1]+'</span></div>'}).join('');
+  var rows=[[TR('الرمز','Symbol'),t.market+' · '+t.timeframe],[TR('الاتجاه','Direction'),c.d>0?TR('شراء 🟢','Buy 🟢'):TR('بيع 🔴','Sell 🔴')],[TR('الدخول','Entry'),f(t.entry)],[TR('وقف الخسارة','Stop loss'),f(t.sl)],[TR('الهدف الأول','Target 1'),f(t.tp1)],[TR('الهدف الثاني','Target 2'),f(t.tp2)],[TR('العائد/المخاطرة','Risk/Reward'),'1:'+fmtR(c.rr)],[TR('الثقة','Confidence'),t.confidence+'%']];
+  $('#tradeBox').innerHTML='<div class="tcap">'+TR('إشارة حقيقية أرسلتها كفيل','A real signal sent by Qaffel')+'</div>'+rows.map(function(r,i){return '<div class="trow" style="--i:'+i+'"><span class="tl">'+r[0]+'</span><span class="tv">'+r[1]+'</span></div>'}).join('');
 }
 function drawReal(m,c,W,H){
-  if(c.loading){txt(c.failed?'تعذّر التحميل':'جارٍ التحميل…',W/2,H/2,COL.axis,'center','600 13px '+MONO);return}
+  if(c.loading){txt(c.failed?TR('تعذّر التحميل','Could not load'):TR('جارٍ التحميل…','Loading…'),W/2,H/2,COL.axis,'center','600 13px '+MONO);return}
   var cs=c.candles,n=cs.length,nA=c.after.length,shownA=c.answered?Math.round(nA*(c.reveal||0)):0;
   var vis=cs.concat(c.after.slice(0,shownA));
   var lo=Math.min(c.sl,c.tp2,c.tp),hi=Math.max(c.sl,c.tp2,c.tp);
@@ -1514,7 +1723,7 @@ function drawReal(m,c,W,H){
   vis.forEach(function(k,i){drawCandle(k,i,i<n?easeOut(clamp01((ip-i/(n+8))*(n+8)/8)):1)});
   var x0=L.x(n)-L.slot*.5,x1=W-L.pr;
   ctx.save();ctx.setLineDash([2,3]);ctx.strokeStyle='rgba(139,146,165,.5)';ctx.beginPath();ctx.moveTo(x0,L.pt);ctx.lineTo(x0,H-L.pb);ctx.stroke();ctx.restore();
-  txt('الإشارة',x0,L.pt+10,COL.axis,'center','600 10px '+MONO);
+  txt(TR('الإشارة','Signal'),x0,L.pt+10,COL.axis,'center','600 10px '+MONO);
   posBoxes(c.entry,c.sl,c.tp,x0,x1,W,clamp01(ip*1.4-0.4));
   [[c.sl,COL.down,'SL'],[c.tp,COL.up,'TP1'],[c.tp2,COL.up,'TP2']].forEach(function(o){
     if(o[0]===c.tp&&o[2]==='TP2'&&c.tp2===c.tp)return;
@@ -1575,10 +1784,10 @@ function drawPosGame(m,c,W,H,rm,ph){
   if(showMarks){
     var sw=cs[c.si],sy=L.y(buy?sw.l:sw.h),sx=L.x(c.si);
     ctx.fillStyle=COL.goldHi;ctx.beginPath();ctx.arc(sx,sy+(buy?7:-7),3.5,0,6.283);ctx.fill();
-    txt(buy?'قاع الهيكل':'قمة الهيكل',sx,sy+(buy?22:-14),COL.goldHi,'center','600 11px '+MONO);
+    txt(buy?TR('قاع الهيكل','Structure low'):TR('قمة الهيكل','Structure high'),sx,sy+(buy?22:-14),COL.goldHi,'center','600 11px '+MONO);
     var liq=fromBuy(c,c.bs.T),yl=L.y(liq),xe=L.x(c.eq[0])-L.slot*.4;
     ctx.save();ctx.setLineDash([2,4]);ctx.strokeStyle=COL.goldHi;ctx.lineWidth=1.2;ctx.globalAlpha=.85;ctx.beginPath();ctx.moveTo(xe,yl);ctx.lineTo(x1,yl);ctx.stroke();ctx.restore();
-    txt((buy?'EQH':'EQL')+' · سيولة',L.x(c.eq[1])+L.slot*2,yl+(buy?-6:14),COL.goldHi,'center');
+    txt((buy?'EQH':'EQL')+TR(' · سيولة',' · liquidity'),L.x(c.eq[1])+L.slot*2,yl+(buy?-6:14),COL.goldHi,'center');
   }
   if(c.answered){
     var p=SLTP_LV[S.level],b=c.bs,xs0=L.x(c.si)-L.slot*.5,wb=(x1-xs0)*z;
@@ -1587,8 +1796,8 @@ function drawPosGame(m,c,W,H,rm,ph){
     var t1=L.y(fromBuy(c,b.T+0.3*V)),t2=L.y(fromBuy(c,b.T-p.tpb*V));
     ctx.fillStyle=TEAL_A(.2);ctx.fillRect(xs0,Math.min(t1,t2),wb,Math.abs(t2-t1));
     ctx.globalAlpha=z;
-    txt('منطقة الوقف',xs0+wb/2,(s1+s2)/2+4,COL.down,'center','600 11px '+MONO);
-    txt('منطقة الهدف',xs0+wb/2,(t1+t2)/2+4,COL.up,'center','600 11px '+MONO);
+    txt(TR('منطقة الوقف','Stop zone'),xs0+wb/2,(s1+s2)/2+4,COL.down,'center','600 11px '+MONO);
+    txt(TR('منطقة الهدف','Target zone'),xs0+wb/2,(t1+t2)/2+4,COL.up,'center','600 11px '+MONO);
     ctx.globalAlpha=1;
   }
   posBoxes(c.entry,c.sl,c.tp,x0,x1,W,1);
@@ -1618,7 +1827,7 @@ function drawPosGame(m,c,W,H,rm,ph){
   }
   if(!c.answered&&c.sl===null&&c.tp===null){
     var a=rm?1:.55+.45*Math.sin(ph*3);
-    ctx.globalAlpha=a;txt('المس الشارت لوضع وقف الخسارة',(L.pl+x1)/2,L.pt+14,COL.goldHi,'center','600 12px '+MONO);ctx.globalAlpha=1;
+    ctx.globalAlpha=a;txt(TR('المس الشارت لوضع وقف الخسارة','Tap the chart to place the stop loss'),(L.pl+x1)/2,L.pt+14,COL.goldHi,'center','600 12px '+MONO);ctx.globalAlpha=1;
   }
 }
 
@@ -1654,7 +1863,7 @@ function syncSltp(){
 function viewHTML(v){
   var h='<h3>'+(v.ok?ICON.check:ICON.x)+'<span>'+v.head+'</span>'+(v.gain?'<span class="gain">+'+v.gain+'</span>':'')+'</h3>';
   if(v.cmp)h+='<div class="cmp">'+v.cmp.map(function(c){return '<div class="cell '+(c[2]||'')+'"><span>'+c[0]+'</span><b>'+c[1]+'</b></div>'}).join('')+'</div>';
-  if(v.mistake)h+='<p class="mistake"><b>ما الذي حدث؟</b> '+v.mistake+'</p>';
+  if(v.mistake)h+='<p class="mistake"><b>'+TR('ما الذي حدث؟','What happened?')+'</b> '+v.mistake+'</p>';
   (v.paras||[]).forEach(function(p){h+='<p>'+p+'</p>'});
   if(v.lesson)h+='<details class="lesson"'+(v.open?' open':'')+'><summary>'+v.lesson.h+'</summary><ol>'+v.lesson.items.map(function(i){return '<li>'+i+'</li>'}).join('')+'</ol></details>';
   if(v.tip)h+='<p class="tip">'+ICON.bulb+'<span>'+v.tip+'</span></p>';
@@ -1662,80 +1871,88 @@ function viewHTML(v){
 }
 function candleView(c){
   var nm=PAT[c.kind].ar,v={ok:c.ok,gain:c.gain};
-  v.head=c.ok?'إصابة':c.timeout?'انتهى الوقت':'ليست هذه المرة';
-  v.cmp=[['اختيارك',c.timeout?'لم تختر':dirName(c.choice),c.ok?'good':'bad'],['الشمعة التالية',dirName(c.nextDir),'good'],['النمط يرجّح',c.expected?dirName(c.expected):'لا إشارة','']];
+  v.head=c.ok?TR('إصابة','Hit'):c.timeout?TR('انتهى الوقت','Time ran out'):TR('ليست هذه المرة','Not this time');
+  v.cmp=[[TR('اختيارك','Your pick'),c.timeout?TR('لم تختر','No pick'):cap(dirName(c.choice)),c.ok?'good':'bad'],[TR('الشمعة التالية','Next candle'),cap(dirName(c.nextDir)),'good'],[TR('النمط يرجّح','Pattern points'),c.expected?cap(dirName(c.expected)):TR('لا إشارة','No signal'),'']];
   if(!c.ok){
-    if(c.kind==='none')v.mistake='لا يوجد نمط يرجّح اتجاهًا هنا، فالشمعة التالية كانت أقرب للحظ. الأفضل تجاهل الشارت الغامض.';
+    if(EN){
+      if(c.kind==='none')v.mistake='There is no pattern pointing either way here, so the next candle was closer to luck. Better to skip an unclear chart.';
+      else if(c.timeout)v.mistake='Time ran out before you chose. '+nm+' pointed '+dirName(c.expected)+'.';
+      else if(c.choice===c.expected)v.mistake='You read the pattern right and chose '+dirName(c.choice)+', but the market went the other way this time. Patterns tilt the odds, they do not guarantee — that is why we use a stop loss.';
+      else v.mistake='The pattern pointed '+dirName(c.expected)+' and you chose '+dirName(c.choice)+'. Watch the pattern marked by the gold frame on the chart.';
+    }
+    else if(c.kind==='none')v.mistake='لا يوجد نمط يرجّح اتجاهًا هنا، فالشمعة التالية كانت أقرب للحظ. الأفضل تجاهل الشارت الغامض.';
     else if(c.timeout)v.mistake='انتهى الوقت قبل أن تختار. '+nm+' كانت ترجّح '+dirName(c.expected)+'.';
     else if(c.choice===c.expected)v.mistake='قرأت النمط صح واخترت '+dirName(c.choice)+'، لكن السوق عاكسه هذه المرة. الأنماط ترجّح ولا تضمن، ولهذا نستخدم وقف الخسارة.';
     else v.mistake='النمط كان يرجّح '+dirName(c.expected)+' وأنت اخترت '+dirName(c.choice)+'. انتبه للنمط المحدد بالإطار الذهبي على الشارت.';
   }
   v.paras=[EXP[c.kind]];
-  v.lesson={h:'كيف تتعرف على هذا النمط',items:CSTEPS[c.kind]};v.open=!c.ok;
+  v.lesson={h:TR('كيف تتعرف على هذا النمط','How to recognise this pattern'),items:CSTEPS[c.kind]};v.open=!c.ok;
   return v;
 }
 function zoneView(c){
   var t=c.target,d=t.dir>0?0:1,nm=(t.dir>0?'Bullish ':'Bearish ')+t.type.toUpperCase(),v={ok:c.ok,gain:c.gain};
-  v.head=c.ok?'إصابة':c.timeout?'انتهى الوقت':'ليست هذه المرة';
-  v.cmp=[['اختيارك',c.timeout?'لم تختر':c.ok?'داخل المنطقة':c.where[0],c.ok?'good':'bad'],['الإجابة الصحيحة','<span class="n">'+nm+'</span> (الإطار الذهبي)','good']];
-  if(!c.ok)v.mistake=c.timeout?'انتهى الوقت قبل أن تختار. المنطقة الصحيحة ظاهرة بالإطار الذهبي.':c.where[1];
+  v.head=c.ok?TR('إصابة','Hit'):c.timeout?TR('انتهى الوقت','Time ran out'):TR('ليست هذه المرة','Not this time');
+  v.cmp=[[TR('اختيارك','Your pick'),c.timeout?TR('لم تختر','No pick'):c.ok?TR('داخل المنطقة','Inside the zone'):c.where[0],c.ok?'good':'bad'],[TR('الإجابة الصحيحة','Correct answer'),'<span class="n">'+nm+'</span> '+TR('(الإطار الذهبي)','(gold frame)'),'good']];
+  if(!c.ok)v.mistake=c.timeout?TR('انتهى الوقت قبل أن تختار. المنطقة الصحيحة ظاهرة بالإطار الذهبي.','Time ran out before you chose. The correct zone is shown by the gold frame.'):c.where[1];
   v.paras=[ZEXP[t.type][d]];
-  v.lesson={h:'كيف تجدها على أي شارت',items:ZSTEPS[t.type]};v.open=!c.ok;
-  if(c.hintUsed)v.tip='استخدمت التلميح فخُفّضت نقاط هذه الجولة.';
+  v.lesson={h:TR('كيف تجدها على أي شارت','How to find it on any chart'),items:ZSTEPS[t.type]};v.open=!c.ok;
+  if(c.hintUsed)v.tip=TR('استخدمت التلميح فخُفّضت نقاط هذه الجولة.','You used the hint, so this round scored fewer points.');
   return v;
 }
 function mcqView(c){
   var q=c.q,good=q.options.filter(function(o){return o.ok})[0],bad=c.choice>=0?q.options[c.choice]:null,v={ok:c.ok,gain:c.gain};
   function T(o){return o.n?'<span class="n">'+o.t+'</span>':o.t}
-  v.head=c.ok?'إجابة صحيحة':c.timeout?'انتهى الوقت':'إجابة غير صحيحة';
-  v.cmp=[['اختيارك',bad?T(bad):'لم تختر',c.ok?'good':'bad'],['الإجابة الصحيحة',T(good),'good']];
+  v.head=c.ok?TR('إجابة صحيحة','Correct'):c.timeout?TR('انتهى الوقت','Time ran out'):TR('إجابة غير صحيحة','Incorrect');
+  v.cmp=[[TR('اختيارك','Your pick'),bad?T(bad):TR('لم تختر','No pick'),c.ok?'good':'bad'],[TR('الإجابة الصحيحة','Correct answer'),T(good),'good']];
   if(!c.ok&&bad&&bad.why)v.mistake=bad.why;
-  if(!c.ok&&c.timeout)v.mistake='انتهى الوقت قبل أن تختار.';
+  if(!c.ok&&c.timeout)v.mistake=TR('انتهى الوقت قبل أن تختار.','Time ran out before you chose.');
   if(S.mode==='terms'){v.paras=['<b>'+q.term[1]+'</b>: '+q.term[2]]}
-  else{v.lesson={h:'الحل خطوة بخطوة',items:q.steps};v.open=!c.ok;v.tip=q.tip}
+  else{v.lesson={h:TR('الحل خطوة بخطوة','Step-by-step solution'),items:q.steps};v.open=!c.ok;v.tip=q.tip}
   return v;
 }
 function orderView(c){
   var n=c.seq.steps.length,v={ok:c.ok,gain:c.gain};
-  v.head=c.ok?'ترتيب صحيح':'ترتيب غير مكتمل';
-  v.cmp=[['خطوات في مكانها الصحيح',cnt(c)+' من '+n,c.ok?'good':'bad']];
+  v.head=c.ok?TR('ترتيب صحيح','Correct order'):TR('ترتيب غير مكتمل','Order not quite right');
+  v.cmp=[[TR('خطوات في مكانها الصحيح','Steps in the right place'),cnt(c)+TR(' من ',' of ')+n,c.ok?'good':'bad']];
   if(!c.ok){
-    var bad=[];c.picked.forEach(function(p,i){if(p!==i&&bad.length<2)bad.push('«'+c.seq.steps[i].t+'» مكانها رقم '+(i+1))});
-    v.mistake='وضعت بعض الخطوات في غير مكانها: '+bad.join('، ')+'.';
+    var bad=[];c.picked.forEach(function(p,i){if(p!==i&&bad.length<2)bad.push(TR('«'+c.seq.steps[i].t+'» مكانها رقم '+(i+1),'“'+c.seq.steps[i].t+'” belongs at position '+(i+1)))});
+    v.mistake=TR('وضعت بعض الخطوات في غير مكانها: ','Some steps are out of place: ')+bad.join(TR('، ','; '))+'.';
   }
-  v.lesson={h:'الترتيب الصحيح ولماذا',items:c.seq.steps.map(function(s){return '<b>'+s.t+'</b>: '+s.why})};v.open=true;
+  v.lesson={h:TR('الترتيب الصحيح ولماذا','The correct order and why'),items:c.seq.steps.map(function(s){return '<b>'+s.t+'</b>: '+s.why})};v.open=true;
   return v;
 }
 function cnt(c){return c.right}
 function summaryHTML(m){
   var n=rounds(),acc=m.hits/n,misses=m.log.filter(function(x){return !x.ok});
-  var remark=acc>=.85?'أداء ممتاز، عينك صارت سريعة.':acc>=.6?'أداء جيد، كرّر الجولة لتثبّت ما تعلمته.':'تحتاج مزيدًا من التمرين، وهذا هو الهدف من اللعبة.';
-  var h='<h3>'+ICON.check+'<span>انتهت الجولة: '+m.hits+' من '+n+'</span><span class="gain">+'+m.pts+'</span></h3>';
-  h+='<p>'+remark+' رتبتك الآن: <b>'+rankOf(P.points)+'</b>.</p>';
-  if(acc>=.75&&S.level<3)h+='<p>أنت جاهز لمستوى <b>'+LEVELS[S.level].name+'</b>.</p>';
-  else if(acc<.4&&S.level>1)h+='<p>جرّب مستوى <b>'+LEVELS[S.level-2].name+'</b> لتثبّت الأساس ثم عد.</p>';
-  if(misses.length)h+='<p><b>مراجعة أخطائك</b></p><ul class="rev">'+misses.map(function(x){return '<li>'+x.note+'</li>'}).join('')+'</ul>';
-  else h+='<p>لم تخطئ في أي جولة هنا.</p>';
+  var remark=acc>=.85?TR('أداء ممتاز، عينك صارت سريعة.','Excellent, your eye is getting quick.'):acc>=.6?TR('أداء جيد، كرّر الجولة لتثبّت ما تعلمته.','Good work. Repeat the round to lock in what you learned.'):TR('تحتاج مزيدًا من التمرين، وهذا هو الهدف من اللعبة.','You need more practice, and that is exactly what the game is for.');
+  var h='<h3>'+ICON.check+'<span>'+TR('انتهت الجولة: '+m.hits+' من '+n,'Round over: '+m.hits+' of '+n)+'</span><span class="gain">+'+m.pts+'</span></h3>';
+  h+='<p>'+remark+TR(' رتبتك الآن: ',' Your rank now: ')+'<b>'+rankOf(P.points)+'</b>.</p>';
+  if(acc>=.75&&S.level<3)h+='<p>'+TR('أنت جاهز لمستوى ','You are ready for ')+'<b>'+LEVELS[S.level].name+'</b>.</p>';
+  else if(acc<.4&&S.level>1)h+='<p>'+TR('جرّب مستوى ','Try ')+'<b>'+LEVELS[S.level-2].name+'</b>'+TR(' لتثبّت الأساس ثم عد.',' to firm up the basics, then come back.')+'</p>';
+  if(misses.length)h+='<p><b>'+TR('مراجعة أخطائك','Review your mistakes')+'</b></p><ul class="rev">'+misses.map(function(x){return '<li>'+x.note+'</li>'}).join('')+'</ul>';
+  else h+='<p>'+TR('لم تخطئ في أي جولة هنا.','You did not miss a single round here.')+'</p>';
   h+=shareHTML(m);
   return h;
 }
 /* شارك نتيجتك (2026-10-11) — أقوى مصدر زيارات للألعاب: نتيجة اللاعب + تحدٍّ للأصدقاء */
 var SHARE_URL='https://qaffel.com/games/challenge';
-function shareText(m){return 'حصلت على '+m.hits+' من '+rounds()+' في «'+GAME[S.mode].name+'» على تحدي كفيل 🎯 جرّب تغلبني:'}
+function shareText(m){return TR('حصلت على '+m.hits+' من '+rounds()+' في «'+GAME[S.mode].name+'» على تحدي كفيل 🎯 جرّب تغلبني:','I scored '+m.hits+' of '+rounds()+' in “'+GAME[S.mode].name+'” on the Qaffel Challenge 🎯 Can you beat me?')}
+// النسخة الإنجليزية تشارك الرابط مع lang=en فيفتح الصديق نفس اللغة
+function shareUrl(){return SHARE_URL+'?utm_source=share'+(EN?'&lang=en':'')}
 function shareHTML(m){
-  var t=encodeURIComponent(shareText(m)),u=encodeURIComponent(SHARE_URL+'?utm_source=share'),both=encodeURIComponent(shareText(m)+' '+SHARE_URL);
-  return '<p><b>شارك نتيجتك وتحدَّ أصدقاءك</b></p><div class="share">'
-    +(navigator.share?'<button type="button" data-share="native">مشاركة</button>':'')
-    +'<a href="https://wa.me/?text='+both+'" target="_blank" rel="noopener">واتساب</a>'
-    +'<a href="https://t.me/share/url?url='+u+'&text='+t+'" target="_blank" rel="noopener">تيليجرام</a>'
+  var t=encodeURIComponent(shareText(m)),u=encodeURIComponent(shareUrl()),both=encodeURIComponent(shareText(m)+' '+shareUrl());
+  return '<p><b>'+TR('شارك نتيجتك وتحدَّ أصدقاءك','Share your score and challenge your friends')+'</b></p><div class="share">'
+    +(navigator.share?'<button type="button" data-share="native">'+TR('مشاركة','Share')+'</button>':'')
+    +'<a href="https://wa.me/?text='+both+'" target="_blank" rel="noopener">'+TR('واتساب','WhatsApp')+'</a>'
+    +'<a href="https://t.me/share/url?url='+u+'&text='+t+'" target="_blank" rel="noopener">'+TR('تيليجرام','Telegram')+'</a>'
     +'<a href="https://twitter.com/intent/tweet?text='+t+'&url='+u+'" target="_blank" rel="noopener">X</a>'
-    +'<button type="button" data-share="copy">نسخ الرابط</button></div>';
+    +'<button type="button" data-share="copy">'+TR('نسخ الرابط','Copy link')+'</button></div>';
 }
 document.addEventListener('click',function(e){
   var b=e.target.closest('[data-share]');if(!b)return;
   var m=M[S.mode],text=shareText(m);
-  if(b.dataset.share==='native'){navigator.share({title:'تحدي كفيل',text:text,url:SHARE_URL+'?utm_source=share'}).catch(function(){})}
-  else{try{navigator.clipboard.writeText(text+' '+SHARE_URL);toast('تم نسخ الرابط')}catch(_){toast(SHARE_URL)}}
+  if(b.dataset.share==='native'){navigator.share({title:TR('تحدي كفيل','Qaffel Challenge'),text:text,url:shareUrl()}).catch(function(){})}
+  else{try{navigator.clipboard.writeText(text+' '+shareUrl());toast(TR('تم نسخ الرابط','Link copied'))}catch(_){toast(shareUrl())}}
   track('share');
 });
 
@@ -1744,7 +1961,7 @@ var stage=$('#stage'),firstBuild=true;
 function buildStatic(){
   $('#levels').innerHTML=LEVELS.map(function(l){
     var bars='';for(var i=1;i<=3;i++)bars+='<i'+(i<=l.id?' class="on"':'')+'></i>';
-    return '<button class="lv" data-lv="'+l.id+'" aria-pressed="false"><span class="lt"><b>'+l.name+'</b><span class="bars" aria-hidden="true">'+bars+'</span></span><span class="ld">'+l.desc+'</span><span class="lm"><span class="mx">×'+l.mult+'</span><span class="acc"></span><span class="rec" hidden>موصى به</span></span></button>';
+    return '<button class="lv" data-lv="'+l.id+'" aria-pressed="false"><span class="lt"><b>'+l.name+'</b><span class="bars" aria-hidden="true">'+bars+'</span></span><span class="ld">'+l.desc+'</span><span class="lm"><span class="mx">×'+l.mult+'</span><span class="acc"></span><span class="rec" hidden>'+TR('موصى به','Recommended')+'</span></span></button>';
   }).join('');
   $('#modes').innerHTML=GAMES.map(function(g){return '<button class="tab" role="tab" id="tab-'+g.id+'" data-mode="'+g.id+'" aria-selected="false" aria-controls="stage">'+g.name+'</button>'}).join('');
 }
@@ -1767,7 +1984,7 @@ function renderStats(){
   document.querySelectorAll('.lv').forEach(function(b){
     var l=+b.dataset.lv,t=P.lvT[l]||0,h=P.lvH[l]||0;
     b.setAttribute('aria-pressed',String(l===S.level));
-    b.querySelector('.acc').textContent=t?'دقتك '+Math.round(h/t*100)+'%':'لم تبدأ';
+    b.querySelector('.acc').textContent=t?TR('دقتك ','Accuracy ')+Math.round(h/t*100)+'%':TR('لم تبدأ','Not started');
     b.querySelector('.rec').hidden=l!==rec;
   });
   document.querySelectorAll('.tab').forEach(function(t){t.setAttribute('aria-selected',String(t.dataset.mode===S.mode))});
@@ -1776,8 +1993,8 @@ function renderStats(){
 function renderQuestion(c){
   var chip,title,def;
   if(S.mode==='candle'){
-    chip='NEXT CANDLE';title='ما اتجاه الشمعة التالية؟';
-    def=S.level===1?'الشمعة الأخيرة عليها نمط ظاهر بإطار ذهبي. اقرأ معناه ثم اختر.':S.level===2?'اقرأ آخر الشموع ثم اختر. قد لا يوجد نمط واضح.':'بلا تلميحات ولديك 20 ثانية. بعض الشارتات بلا إشارة أصلًا.';
+    chip='NEXT CANDLE';title=TR('ما اتجاه الشمعة التالية؟','Which way will the next candle go?');
+    def=S.level===1?TR('الشمعة الأخيرة عليها نمط ظاهر بإطار ذهبي. اقرأ معناه ثم اختر.','The last candle has a pattern marked with a gold frame. Read what it means, then choose.'):S.level===2?TR('اقرأ آخر الشموع ثم اختر. قد لا يوجد نمط واضح.','Read the last candles, then choose. There may be no clear pattern.'):TR('بلا تلميحات ولديك 20 ثانية. بعض الشارتات بلا إشارة أصلًا.','No hints and 20 seconds. Some charts have no signal at all.');
   }else if(S.mode==='zone'){
     var t=c.target,d=t.dir>0?0:1;
     chip=(d===0?'Bullish ':'Bearish ')+t.type.toUpperCase();title=TITLES[t.type][d];def=DEFS[t.type][d];
@@ -1785,16 +2002,16 @@ function renderQuestion(c){
   else if(S.mode==='terms'){chip='TERMS';title=c.q.title;def=c.q.def}
   else if(S.mode==='sltp'){
     chip=(c.dir>0?'LONG':'SHORT')+' · SL / TP';
-    title=c.dir>0?'صفقة شراء: ضع وقف الخسارة والهدف':'صفقة بيع: ضع وقف الخسارة والهدف';
-    def=S.level===1?'الهيكل والسيولة محددان لك على الشارت. ضع الخطين في مكانهما.':S.level===2?'حدّد بنفسك الهيكل والسيولة، ثم ضع الخطين.':'بلا تلميحات، ولديك 45 ثانية.';
+    title=c.dir>0?TR('صفقة شراء: ضع وقف الخسارة والهدف','Buy trade: place the stop loss and target'):TR('صفقة بيع: ضع وقف الخسارة والهدف','Sell trade: place the stop loss and target');
+    def=S.level===1?TR('الهيكل والسيولة محددان لك على الشارت. ضع الخطين في مكانهما.','Structure and liquidity are marked on the chart. Put both lines in place.'):S.level===2?TR('حدّد بنفسك الهيكل والسيولة، ثم ضع الخطين.','Find the structure and liquidity yourself, then place both lines.'):TR('بلا تلميحات، ولديك 45 ثانية.','No hints, and 45 seconds.');
   }else if(S.mode==='real'){
-    chip='REAL TRADE';title='صفقة حقيقية من كفيل: هل كنت ستدخلها؟';
-    def=c.loading?'':'الشارت الحقيقي حتى لحظة الإشارة. قرّر، ثم شاهد ما حدث في السوق فعلاً.';
+    chip='REAL TRADE';title=TR('صفقة حقيقية من كفيل: هل كنت ستدخلها؟','A real Qaffel trade: would you have taken it?');
+    def=c.loading?'':TR('الشارت الحقيقي حتى لحظة الإشارة. قرّر، ثم شاهد ما حدث في السوق فعلاً.','The real chart up to the moment of the signal. Decide, then see what actually happened in the market.');
   }else if(S.mode==='trade'){
-    chip='TRADE OR SKIP';title='هل تدخل هذه الصفقة؟';
-    def=S.level===1?'راجع بطاقة الصفقة ثم قرر.':'إذا قررت التجاهل فستحدد البند الذي فيه المشكلة.';
+    chip='TRADE OR SKIP';title=TR('هل تدخل هذه الصفقة؟','Would you take this trade?');
+    def=S.level===1?TR('راجع بطاقة الصفقة ثم قرر.','Review the trade card, then decide.'):TR('إذا قررت التجاهل فستحدد البند الذي فيه المشكلة.','If you skip, you will pick the item that has the problem.');
   }
-  else{chip='SETUP ORDER';title=c.seq.title;def='اضغط الخطوات بالترتيب الصحيح من الأولى إلى الأخيرة.'}
+  else{chip='SETUP ORDER';title=c.seq.title;def=TR('اضغط الخطوات بالترتيب الصحيح من الأولى إلى الأخيرة.','Tap the steps in the right order, from first to last.')}
   $('#chip').textContent=chip;$('#qTitle').innerHTML=title;$('#qDef').textContent=def;
   if(!c.qShown){c.qShown=true;['#qTitle','#qDef'].forEach(function(s){var el=$(s);el.classList.remove('anim');void el.offsetWidth;el.classList.add('anim')})}
 }
@@ -1805,8 +2022,8 @@ function renderMCQ(c){
   $('#opts').innerHTML=q.options.map(function(o,i){
     var cls='opt',sub='';
     if(c.answered){
-      if(o.ok){cls+=' good';sub=ICON.check+'<span>الإجابة الصحيحة</span>'}
-      else{if(i===c.choice){cls+=' bad';sub=ICON.x+'<span>اختيارك: '+(o.why||'')+'</span>'}else sub='<span>'+(o.why||'')+'</span>'}
+      if(o.ok){cls+=' good';sub=ICON.check+'<span>'+TR('الإجابة الصحيحة','Correct answer')+'</span>'}
+      else{if(i===c.choice){cls+=' bad';sub=ICON.x+'<span>'+TR('اختيارك: ','Your pick: ')+(o.why||'')+'</span>'}else sub='<span>'+(o.why||'')+'</span>'}
     }
     var lab=o.n?'<span class="n">'+o.t+'</span>':'<span>'+o.t+'</span>';
     if(!c.answered&&!c.entered)cls+=' enter';
@@ -1820,7 +2037,7 @@ function renderOrder(c){
     var pi=c.picked[i],filled=pi!==undefined,cls='slot'+(filled?' filled':'');
     if(c.answered&&filled)cls+=pi===i?' good':' bad';
     else if(i===c.freshIdx)cls+=' fresh';
-    h+='<li><button class="'+cls+'" data-slot="'+i+'"'+((!filled||c.answered)?' disabled':'')+'><span class="no">'+(i+1)+'</span><span class="tx">'+(filled?c.seq.steps[pi].t:'الخطوة '+(i+1))+'</span>'+(c.answered&&filled?(pi===i?ICON.check:ICON.x):'')+'</button></li>';
+    h+='<li><button class="'+cls+'" data-slot="'+i+'"'+((!filled||c.answered)?' disabled':'')+'><span class="no">'+(i+1)+'</span><span class="tx">'+(filled?c.seq.steps[pi].t:TR('الخطوة ','Step ')+(i+1))+'</span>'+(c.answered&&filled?(pi===i?ICON.check:ICON.x):'')+'</button></li>';
   }
   $('#slots').innerHTML=h;
   c.entered=c.entered||false;
@@ -1830,30 +2047,30 @@ function renderOrder(c){
 function renderControls(m,c){
   var h='';
   if(m.summary){
-    h='<button class="btn gold" data-act="again">'+ICON.again+'<span>جولة جديدة</span></button>';
-    if(m.hits/rounds()>=.75&&S.level<3)h+='<button class="btn" data-act="levelup"><span>جرّب مستوى '+LEVELS[S.level].name+'</span>'+ICON.next+'</button>';
+    h='<button class="btn gold" data-act="again">'+ICON.again+'<span>'+TR('جولة جديدة','New round')+'</span></button>';
+    if(m.hits/rounds()>=.75&&S.level<3)h+='<button class="btn" data-act="levelup"><span>'+TR('جرّب مستوى ','Try ')+LEVELS[S.level].name+'</span>'+ICON.next+'</button>';
   }else if(c&&!c.answered){
-    if(S.mode==='candle')h='<button class="call up" data-act="up">'+ICON.up+'<span>صاعدة</span></button><button class="call down" data-act="down">'+ICON.down+'<span>هابطة</span></button>';
+    if(S.mode==='candle')h='<button class="call up" data-act="up">'+ICON.up+'<span>'+TR('صاعدة','Up')+'</span></button><button class="call down" data-act="down">'+ICON.down+'<span>'+TR('هابطة','Down')+'</span></button>';
     else if(S.mode==='zone'){
       var hm=LV.zone[S.level].hint;
-      h='<button class="btn gold grow" data-act="confirm"'+(c.pick?'':' disabled')+'>'+ICON.check+'<span>تأكيد الاختيار</span></button>';
-      if(hm==='btn')h+='<button class="btn" data-act="hint"'+(c.hint?' disabled':'')+'>'+ICON.bulb+'<span>تلميح</span></button>';
-      h+='<span class="help">'+(c.pick?'حرّك التحديد بالسحب أو بلمسة أخرى، ثم أكّد.':'المس الشارت لتحديد المكان، ثم أكّد.')+(hm==='btn'?' التلميح يخفّض النقاط.':'')+'</span>';
+      h='<button class="btn gold grow" data-act="confirm"'+(c.pick?'':' disabled')+'>'+ICON.check+'<span>'+TR('تأكيد الاختيار','Confirm pick')+'</span></button>';
+      if(hm==='btn')h+='<button class="btn" data-act="hint"'+(c.hint?' disabled':'')+'>'+ICON.bulb+'<span>'+TR('تلميح','Hint')+'</span></button>';
+      h+='<span class="help">'+(c.pick?MOVE_HELP:TR('المس الشارت لتحديد المكان، ثم أكّد.','Tap the chart to mark the spot, then confirm.'))+(hm==='btn'?TR(' التلميح يخفّض النقاط.',' Using the hint lowers your points.'):'')+'</span>';
     }else if(S.mode==='sltp'){
-      h='<button class="btn tool tsl" data-act="tool-sl" aria-pressed="'+(c.tool==='sl')+'"><span>الوقف</span><span class="n">'+(c.sl===null?'—':c.sl.toFixed(2))+'</span></button>'
-       +'<button class="btn tool ttp" data-act="tool-tp" aria-pressed="'+(c.tool==='tp')+'"><span>الهدف</span><span class="n">'+(c.tp===null?'—':c.tp.toFixed(2))+'</span></button>'
-       +'<button class="btn gold grow" data-act="confirm-sltp"'+(c.sl!==null&&c.tp!==null?'':' disabled')+'>'+ICON.check+'<span>تأكيد</span></button>'
-       +'<span class="help">اختر الخط ثم المس الشارت، أو اسحب الخط من مكانه.</span>';
+      h='<button class="btn tool tsl" data-act="tool-sl" aria-pressed="'+(c.tool==='sl')+'"><span>'+TR('الوقف','Stop')+'</span><span class="n">'+(c.sl===null?'—':c.sl.toFixed(2))+'</span></button>'
+       +'<button class="btn tool ttp" data-act="tool-tp" aria-pressed="'+(c.tool==='tp')+'"><span>'+TR('الهدف','Target')+'</span><span class="n">'+(c.tp===null?'—':c.tp.toFixed(2))+'</span></button>'
+       +'<button class="btn gold grow" data-act="confirm-sltp"'+(c.sl!==null&&c.tp!==null?'':' disabled')+'>'+ICON.check+'<span>'+TR('تأكيد','Confirm')+'</span></button>'
+       +'<span class="help">'+TR('اختر الخط ثم المس الشارت، أو اسحب الخط من مكانه.','Pick a line, then tap the chart, or drag the line into place.')+'</span>';
     }else if(S.mode==='trade'){
-      if(c.stage==='why')h='<span class="help">اضغط على البند الذي فيه المشكلة في البطاقة.</span><button class="btn" data-act="t-back"><span>تراجع</span></button>';
-      else h='<button class="call up" data-act="t-enter">'+ICON.check+'<span>ادخل الصفقة</span></button><button class="call down" data-act="t-skip">'+ICON.x+'<span>تجاهل</span></button>';
+      if(c.stage==='why')h='<span class="help">'+TR('اضغط على البند الذي فيه المشكلة في البطاقة.','Tap the item on the card that has the problem.')+'</span><button class="btn" data-act="t-back"><span>'+TR('تراجع','Back')+'</span></button>';
+      else h='<button class="call up" data-act="t-enter">'+ICON.check+'<span>'+TR('ادخل الصفقة','Take the trade')+'</span></button><button class="call down" data-act="t-skip">'+ICON.x+'<span>'+TR('تجاهل','Skip')+'</span></button>';
     }else if(S.mode==='real'){
-      if(!c.loading)h='<button class="call up" data-act="r-enter">'+ICON.check+'<span>كنت سأدخل</span></button><button class="call down" data-act="r-skip">'+ICON.x+'<span>كنت سأتجاهلها</span></button>';
+      if(!c.loading)h='<button class="call up" data-act="r-enter">'+ICON.check+'<span>'+TR('كنت سأدخل','I would enter')+'</span></button><button class="call down" data-act="r-skip">'+ICON.x+'<span>'+TR('كنت سأتجاهلها','I would skip it')+'</span></button>';
     }else if(S.mode==='order'){
-      h='<button class="btn gold" data-act="check"'+(c.picked.length<c.seq.steps.length?' disabled':'')+'><span>تحقق من الترتيب</span></button><button class="btn" data-act="reset"'+(c.picked.length?'':' disabled')+'><span>إعادة</span></button>';
+      h='<button class="btn gold" data-act="check"'+(c.picked.length<c.seq.steps.length?' disabled':'')+'><span>'+TR('تحقق من الترتيب','Check order')+'</span></button><button class="btn" data-act="reset"'+(c.picked.length?'':' disabled')+'><span>'+TR('إعادة','Reset')+'</span></button>';
     }
   }else if(c&&c.answered&&c.shown){
-    h='<button class="btn gold" id="nextBtn" data-act="next"><span>'+(m.done>=rounds()?'عرض النتيجة':'الجولة التالية')+'</span>'+ICON.next+'</button>';
+    h='<button class="btn gold" id="nextBtn" data-act="next"><span>'+(m.done>=rounds()?TR('عرض النتيجة','See results'):TR('الجولة التالية','Next round'))+'</span>'+ICON.next+'</button>';
   }
   $('#controls').innerHTML=h;
 }
@@ -1873,7 +2090,7 @@ function renderSide(m){
     dots+='<span class="dot '+cls+'"></span>';
   }
   $('#dots').innerHTML=dots;
-  $('#progTxt').textContent='إصابات هذه الجولة: '+m.hits+' من '+m.done;
+  $('#progTxt').textContent=TR('إصابات هذه الجولة: '+m.hits+' من '+m.done,'Hits this round: '+m.hits+' of '+m.done);
   $('#badges').innerHTML=BADGES.map(function(b){
     var on=P.badges.indexOf(b.id)>=0;
     return '<li class="badge'+(on?' on':'')+'">'+ICON.medal+'<div><b>'+b.name+'</b><span class="d">'+b.desc+'</span></div></li>';
@@ -1924,7 +2141,7 @@ $('#controls').addEventListener('click',function(e){
   else if(a==='reset'){if(c&&!c.answered){c.picked=[];render()}}
   else if(a==='next')nextRound();
   else if(a==='again')again();
-  else if(a==='levelup'){var nl=S.level+1;S.level=nl;S.streak=0;resetAll();startRound();toast('المستوى: '+LEVELS[nl-1].name)}
+  else if(a==='levelup'){var nl=S.level+1;S.level=nl;S.streak=0;resetAll();startRound();toast(TR('المستوى: ','Level: ')+LEVELS[nl-1].name)}
 });
 $('#opts').addEventListener('click',function(e){var b=e.target.closest('[data-opt]');if(b&&!b.disabled)answerMCQ(+b.dataset.opt)});
 $('#orderBox').addEventListener('click',function(e){
@@ -1934,7 +2151,7 @@ $('#orderBox').addEventListener('click',function(e){
   else if(s&&!s.disabled){c.picked.splice(+s.dataset.slot,1);render()}
 });
 function zc(){var c=M.zone.cur;return S.mode==='zone'&&c&&!c.answered?c:null}
-function syncConfirm(){var b=$('[data-act="confirm"]'),c=zc();if(b)b.disabled=!(c&&c.pick);var hp=$('.help');if(hp&&c&&c.pick)hp.textContent='حرّك التحديد بالسحب أو بلمسة أخرى، ثم أكّد.'}
+function syncConfirm(){var b=$('[data-act="confirm"]'),c=zc();if(b)b.disabled=!(c&&c.pick);var hp=$('.help');if(hp&&c&&c.pick)hp.textContent=MOVE_HELP}
 function setPick(x,y,ripple){
   var c=zc();if(!c)return;
   c.pick={x:Math.max(2,Math.min(cv.clientWidth-2,x)),y:Math.max(2,Math.min(cv.clientHeight-2,y))};c.cursor=null;
