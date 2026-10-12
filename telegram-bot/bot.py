@@ -1336,6 +1336,8 @@ async def broadcast_new_signals(app: Application):
                     # لحاله. نستثنيه هون عشان ما توصله نفس الفرصة مرتين —
                     # تنبيه شخصي + بث عام لنفس الصفقة بالضبط.
                     owner_tid = str(sig.get("owner_telegram_id") or "")
+                    # (2026-10-12) كل من عنده صف مراقبة شخصية مفتوح لنفس الصفقة، لا صاحب صف واحد
+                    owner_tids = {str(t) for t in (sig.get("owner_telegram_ids") or [])}
 
                     sent = 0
                     # (2026-09-16) سجل التسليم: كان البث يزيد عدّاداً محلياً
@@ -1354,7 +1356,7 @@ async def broadcast_new_signals(app: Application):
                             continue
                         if tid in user_conf and float(sig.get("ai_confidence") or 0) < user_conf[tid]:
                             continue
-                        if owner_tid and tid == owner_tid:
+                        if (owner_tid and tid == owner_tid) or tid in owner_tids:
                             continue
 
                         # full_access (أدمن/مشترك فعلي) → دايماً كاملة، بدون استهلاك حصة.

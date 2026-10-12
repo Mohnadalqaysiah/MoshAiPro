@@ -2703,10 +2703,14 @@ export default function Admin() {
                       {reportData.conflicts > 0 && <span className="text-orange-400"> · ⚠️ {reportData.conflicts} قرار بنتائج متضاربة</span>}
                     </p>
                   )}
+                  {/* (2026-10-12) صافي R لا مجموع النقاط — النقاط لا تُجمع بين الرموز (نقطة الكريبتو ≠ نقطة الفوركس) */}
                   <div className="bg-gray-800 rounded-lg p-3 text-center mb-5">
-                    <span className="text-gray-400 text-sm">إجمالي النقاط: </span>
-                    <span className={`text-xl font-bold ${reportData.total_points>=0?'text-green-400':'text-red-400'}`}>
-                      {reportData.total_points>=0?'+':''}{reportData.total_points}
+                    <span className="text-gray-400 text-sm">صافي النتيجة: </span>
+                    <span className={`text-xl font-bold ${(reportData.total_r ?? 0)>=0?'text-green-400':'text-red-400'}`}>
+                      {(reportData.total_r ?? 0)>=0?'+':''}{reportData.total_r ?? 0}R
+                    </span>
+                    <span className="text-gray-500 text-xs mr-2">
+                      (متوسط {(reportData.avg_r ?? 0)>=0?'+':''}{reportData.avg_r ?? 0}R للصفقة · حسب يوم الإغلاق)
                     </span>
                   </div>
 
@@ -2719,6 +2723,7 @@ export default function Admin() {
                             <th className="pb-2 text-right">الزوج</th>
                             <th className="pb-2 text-right">النوع</th>
                             <th className="pb-2 text-right">النتيجة</th>
+                            <th className="pb-2 text-right">R</th>
                             <th className="pb-2 text-right">النقاط</th>
                             <th className="pb-2 text-right">مستخدمون</th>
                             <th className="pb-2 text-right">التاريخ</th>
@@ -2730,11 +2735,15 @@ export default function Admin() {
                             const statusLabel = {TP1_HIT:'هدف 1 ✅',TP2_HIT:'هدف 2 🏆',SL_HIT:'وقف ❌'}[s.status]||s.status
                             return (
                               <tr key={i} className="border-b border-gray-800/50 hover:bg-gray-800/30">
-                                <td className="py-2 font-medium">{s.market}</td>
+                                <td className="py-2 font-medium">{s.market}{s.timeframe && <span className="text-gray-500 text-xs mr-1">{s.timeframe}</span>}</td>
                                 <td className="py-2"><span className={`text-xs px-2 py-0.5 rounded ${s.signal_type==='BUY'?'bg-green-900/50 text-green-300':'bg-red-900/50 text-red-300'}`}>{s.signal_type==='BUY'?'شراء':'بيع'}</span></td>
                                 <td className="py-2 text-sm">{statusLabel}</td>
-                                <td className={`py-2 font-bold ${isWin?'text-green-400':'text-red-400'}`}>{s.points>=0?'+':''}{s.points}</td>
-                                <td className="py-2 text-gray-400">{s.user_count}</td>
+                                <td className={`py-2 font-bold ${isWin?'text-green-400':'text-red-400'}`} dir="ltr">{s.r == null ? '—' : `${s.r>=0?'+':''}${s.r}R`}</td>
+                                <td className={`py-2 text-xs ${isWin?'text-green-400/70':'text-red-400/70'}`}>{s.points>=0?'+':''}{s.points}</td>
+                                <td className="py-2 text-gray-400">
+                                  {s.user_count}
+                                  {s.broadcast === false && <span className="text-[10px] text-amber-400/80 mr-1" title="لم تُبث للمشتركين — العدد = صفوف المراقبة الشخصية">مراقبة</span>}
+                                </td>
                                 <td className="py-2 text-gray-500 text-xs">{s.exit_date}</td>
                               </tr>
                             )

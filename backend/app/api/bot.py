@@ -1248,6 +1248,43 @@ def _equivalent_open_broadcast(db: Session, s: Signal) -> bool:
     return any(_entries_equivalent(o.entry_price, s.entry_price) for o in others)
 
 
+def _open_equivalent_rows(db: Session, market: str, signal_type, entry, exclude_id: Optional[int] = None) -> list:
+    """كل الصفوف المفتوحة لنفس الصفقة: نفس الرمز والاتجاه، دخول ضمن 0.05%، أي فريم،
+    ACTIVE أو TP1_HIT ولم تنتهِ مدتها."""
+    now = datetime.now(timezone.utc)
+    q = db.query(Signal).filter(
+        Signal.market == market,
+        Signal.signal_type == signal_type,
+        Signal.status.in_([SignalStatus.ACTIVE, SignalStatus.TP1_HIT]),
+        (Signal.expires_at.is_(None)) | (Signal.expires_at > now),
+    )
+    if exclude_id is not None:
+        q = q.filter(Signal.id != exclude_id)
+    return [o for o in q.all() if _entries_equivalent(o.entry_price, entry)]
+
+
+def _user_already_has_trade(db: Session, user: User, market: str, signal_type, entry) -> bool:
+    """(2026-10-12) هل وصلت هذا المستخدم الصفقة نفسها وما زالت مفتوحة — بالبث العام
+    (SignalDelivery ناجح) أو بمراقبته الشخصية على فريم آخر؟ تقرير 12/10: SOL/ADA/BNB
+    صدرت بالبث ثم بعد 13-31 دقيقة "تنبيه مراقبة" لنفس الدخول لـ7-12 مشتركاً، لأن
+    _user_has_active_signal يفحص صفوف المستخدم على نفس الفريم فقط = مخاطرة مضاعفة."""
+    from app.models.signal_delivery import SignalDelivery
+    rows = _open_equivalent_rows(db, market, signal_type, entry)
+    if not rows:
+        return False
+    if any(r.user_id == user.id for r in rows):
+        return True
+    ids = [r.id for r in rows]
+    who = [SignalDelivery.user_id == user.id]
+    if user.telegram_id:
+        who.append(SignalDelivery.telegram_id == str(user.telegram_id))
+    return db.query(SignalDelivery.id).filter(
+        SignalDelivery.signal_id.in_(ids),
+        SignalDelivery.ok == True,  # noqa: E712
+        or_(*who),
+    ).first() is not None
+
+
 @router.get("/new-signals")
 def bot_new_signals(
     _: bool = Depends(verify_bot),
@@ -1315,6 +1352,12 @@ def bot_new_signals(
         if s.user_id:
             owner = db.query(User.telegram_id).filter(User.id == s.user_id).first()
             owner_tid = owner[0] if owner else None
+        # (2026-10-12) owner_tid يستثني صاحب صف واحد فقط — لكن نفس الإعداد يُنشأ صفاً
+        # شخصياً لكل مشترك يراقب الرمز. نستثني كل من عنده صف مفتوح لنفس الصفقة.
+        owner_uids = {r.user_id for r in _open_equivalent_rows(db, s.market, s.signal_type, s.entry_price)
+                      if r.user_id} | ({s.user_id} if s.user_id else set())
+        owner_tids = [str(t) for (t,) in db.query(User.telegram_id).filter(
+            User.id.in_(owner_uids), User.telegram_id.isnot(None)).all()] if owner_uids else []
 
         result.append({
             "id":             s.id,
@@ -1331,6 +1374,7 @@ def bot_new_signals(
             "premium_discount": s.premium_discount,
             "news_context":   s.notes,
             "owner_telegram_id": owner_tid,
+            "owner_telegram_ids": owner_tids,
             "expires_at":     s.expires_at.isoformat() if s.expires_at else None,
         })
 
@@ -1626,6 +1670,9 @@ def bot_save_alert_signal(
 
     if _user_has_active_signal(db, user.id, symbol, timeframe):
         return {"saved": False, "reason": "duplicate active position, waiting for resolution"}
+
+    if _user_already_has_trade(db, user, symbol, ST(signal_type), entry):
+        return {"saved": False, "reason": "same open trade already delivered to this user"}
 
     # (2026-10-03) 15m كانت 8 ساعات (32× حجم الشمعة — شذوذ مقارنة بالجدول
     # المتدرّج حولها: 5m=48×، 30m=24×). بنية السوق يلي بُنيت عليها إشارة

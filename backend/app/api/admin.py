@@ -2107,8 +2107,20 @@ def _build_performance_report(signals: list, days: int, db: Session) -> tuple[st
     period      = "اليوم" if days == 1 else f"آخر {days} يوم" if days < 30 else "الشهر"
     conflicts   = sum(1 for d in closed if d["status_conflict"])
 
+    # (2026-10-12) المجموع بمضاعف R لا بالنقاط — النقاط غير قابلة للجمع بين الرموز (DECISIONS)
+    from app.services.quality_report import _r_multiple
+    _by_id = {s.id: s for s in signals}
+    for d in closed:
+        rep = _by_id.get(d["id"])
+        d["r"] = _r_multiple(rep.entry_price, rep.stop_loss, rep.take_profit_1,
+                             rep.take_profit_2, d["status"]) if rep else None
+    _rs     = [d["r"] for d in closed if d["r"] is not None]
+    total_r = sum(_rs)
+    avg_r   = total_r / len(_rs) if _rs else 0.0
+
     # ── Telegram (HTML) ──────────────────────────────────────────────────────
     pts_sign = "+" if total_pts >= 0 else ""
+    r_sign   = "+" if total_r >= 0 else ""
     tg_lines = [
         f"📊 <b>تقرير أداء Qaffel AI</b>",
         f"🗓 الفترة: {period}",
@@ -2116,7 +2128,7 @@ def _build_performance_report(signals: list, days: int, db: Session) -> tuple[st
         f"📈 قرارات فريدة: <b>{len(closed)}</b>  <i>(وصلت فعلياً لـ{total_rows} مستخدم)</i>",
         f"✅ رابحة: <b>{len(wins)}</b>  │  ❌ خاسرة: <b>{len(losses)}</b>",
         f"🏆 نسبة نجاح القرارات: <b>{win_rate}%</b>",
-        f"⚡ إجمالي النقاط: <b>{pts_sign}{total_pts:.1f}</b>",
+        f"⚡ صافي النتيجة: <b>{r_sign}{total_r:.2f}R</b>  <i>(متوسط {avg_r:+.2f}R للصفقة)</i>",
         "━━━━━━━━━━━━━━━━━━━━━━",
     ]
     if conflicts:
@@ -2131,8 +2143,9 @@ def _build_performance_report(signals: list, days: int, db: Session) -> tuple[st
             pts   = d["points"]
             sign  = "+" if pts >= 0 else ""
             stype = "شراء" if d["signal_type"] == "BUY" else "بيع"
+            r_txt = f"{d['r']:+.2f}R · " if d.get("r") is not None else ""
             tg_lines.append(
-                f"{icon} {d['market']} {stype} — {tp}  <code>{sign}{pts:.1f} نقطة</code>"
+                f"{icon} {d['market']} {stype} — {tp}  <code>{r_txt}{sign}{pts:.1f} نقطة</code>"
             )
         if len(closed) > 10:
             tg_lines.append(f"<i>... و {len(closed)-10} قرار آخر</i>")
@@ -2179,8 +2192,8 @@ def _build_performance_report(signals: list, days: int, db: Session) -> tuple[st
             <div style="color:#9ca3af;font-size:12px">نسبة نجاح القرارات</div>
           </div>
           <div style="flex:1;background:#1f2937;border-radius:8px;padding:16px;text-align:center;min-width:100px">
-            <div style="font-size:28px;font-weight:bold;color:{'#22c55e' if total_pts>=0 else '#ef4444'}">{pts_sign}{total_pts:.1f}</div>
-            <div style="color:#9ca3af;font-size:12px">إجمالي النقاط</div>
+            <div style="font-size:28px;font-weight:bold;color:{'#22c55e' if total_r>=0 else '#ef4444'}">{r_sign}{total_r:.2f}R</div>
+            <div style="color:#9ca3af;font-size:12px">صافي النتيجة بمضاعف المخاطرة</div>
           </div>
         </div>
         {"<table style='width:100%;border-collapse:collapse;direction:rtl'><thead><tr style='background:#1f2937'><th style='padding:10px 12px;text-align:right'>الزوج</th><th style='padding:10px 12px;text-align:right'>النوع</th><th style='padding:10px 12px;text-align:right'>النتيجة</th><th style='padding:10px 12px;text-align:right'>النقاط</th><th style='padding:10px 12px;text-align:right'>التاريخ</th></tr></thead><tbody>" + rows + "</tbody></table>" if rows else "<p style='color:#9ca3af;text-align:center'>لا توجد صفقات مغلقة في هذه الفترة</p>"}
@@ -2258,8 +2271,19 @@ def get_performance_report(
         )
         for d in decisions:
             delivered = sum(_delivered_map.get(rid, 0) for rid in d.get("row_ids", [d["id"]]))
+            d["broadcast"] = bool(delivered)
             if delivered:
                 d["user_count"] = delivered
+
+    # (2026-10-12) R لكل قرار — "إجمالي النقاط" (−551 بتقرير 12/10) كان يوحي بكارثة بينما
+    # اليوم الحقيقي −2.16R: نقطة الكريبتو أكبر بأضعاف من نقطة الفوركس فتبتلع المجموع.
+    from app.services.quality_report import _r_multiple
+    _rows_by_id = {s.id: s for s in signals}
+    for d in decisions:
+        rep = _rows_by_id.get(d["id"])
+        d["r"] = _r_multiple(rep.entry_price, rep.stop_loss, rep.take_profit_1,
+                             rep.take_profit_2, d["status"]) if rep else None
+    _rs = [d["r"] for d in decisions if d["r"] is not None]
 
     decisions.sort(key=lambda d: d["exit_executed"] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
     wins    = [d for d in decisions if d["status"] in ("TP1_HIT","TP2_HIT")]
@@ -2278,15 +2302,21 @@ def get_performance_report(
         "losses":       len(losses),
         "win_rate":     round(len(wins)/len(decisions)*100) if decisions else 0,
         "total_points": round(pts, 2),
+        "total_r":      round(sum(_rs), 2),
+        "avg_r":        round(sum(_rs) / len(_rs), 2) if _rs else 0.0,
         "conflicts":    sum(1 for d in decisions if d["status_conflict"]),
         "signals": [
             {
                 "market":       d["market"],
+                "timeframe":    d["timeframe"],
                 "signal_type":  d["signal_type"],
                 "status":       d["status"],
                 "points":       round(d["points"], 2),
+                "r":            round(d["r"], 2) if d["r"] is not None else None,
                 "entry_price":  d["entry_price"],
                 "user_count":   d["user_count"],
+                # False = لم تُبث؛ user_count حينها عدد صفوف المراقبة الشخصية لا مستلمي البث
+                "broadcast":    d.get("broadcast", False),
                 "exit_date":    d["exit_executed"].strftime("%d/%m %H:%M") if d["exit_executed"] else None,
             }
             for d in decisions
