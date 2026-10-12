@@ -90,7 +90,13 @@ export default function TradingPreferencesPanel() {
   const savePrefs = async e => {
     e.preventDefault(); setLoading('prefs'); setPrefsMsg(null)
     try {
-      await axios.put(`${API}/api/v1/auth/preferences`, prefs)
+      // (2026-10-12) كل الأزواج محددة = "الكل" (قائمة فارغة) لا قائمة بأسمائها —
+      // وإلا أي زوج يُضاف للمنصة لاحقاً لا يصل لهذا العميل لأن قائمته ثابتة.
+      const allSelected = markets.length > 0 && markets.every(m => prefs.notify_watchlist.includes(m.symbol))
+      await axios.put(`${API}/api/v1/auth/preferences`, {
+        ...prefs,
+        notify_watchlist: allSelected ? [] : prefs.notify_watchlist,
+      })
       setPrefsMsg({ type: 'ok', text: isAr ? 'تم حفظ إعدادات الإشعارات' : 'Notification settings saved' })
     } catch (err) {
       setPrefsMsg({ type: 'err', text: err.response?.data?.detail || 'Error' })
