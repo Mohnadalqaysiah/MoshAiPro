@@ -60,7 +60,9 @@ def main():
             em, tg = emails.get(s.user_id, ("?", None))
             who = (f"كل المشتركين (بُثّت لـ{deliv.get(i, 0)})" if s.broadcast_sent
                    else f"صاحبها فقط {em.split('@')[0]}{' (تيليجرام)' if tg else ' (بلا تيليجرام)'}")
-            src = "رصد تلقائي" if s.current_price is not None else ("تصحيح يدوي مؤكد" if s.outcome_verified else "يدوي غير مؤكد")
+            src = ("بلا نتيجة بعد" if s.status.value in ("ACTIVE", "PENDING", "EXPIRED")
+                   else "رصد تلقائي" if s.current_price is not None
+                   else "تصحيح يدوي مؤكد" if s.outcome_verified else "يدوي غير مؤكد")
             ex = _utc(s.exit_executed)
             print(f"   #{s.id:<6} {str(s.timeframe):<4} دخول {s.entry_price} → {AR.get(s.status.value, s.status.value):<10} "
                   f"{(ex.strftime('%m-%d %H:%M') if ex else '—'):<12} {src:<16} نتيجتها أُرسلت لـ: {who}")

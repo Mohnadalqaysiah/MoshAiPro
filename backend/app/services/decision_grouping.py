@@ -73,6 +73,7 @@ def _finalize_decision_group(rows: list) -> dict:
         # (2026-10-14) لمقارنة "نفس الصفقة" بـmerge_reissued — مفاتيح إضافية فقط، لا تغيّر أي سلوك قائم
         "stop_loss":       rep.stop_loss,
         "take_profit_1":   rep.take_profit_1,
+        "expires_at":      getattr(rep, "expires_at", None),
         "status":          max(set(statuses), key=statuses.count),   # الأغلبية (عادةً كلهم متطابقين)
         "status_conflict": len(set(statuses)) > 1,
         "points":          rep.points_earned or 0,
@@ -92,6 +93,7 @@ def _finalize_decision_group(rows: list) -> dict:
 
 SAME_TRADE_ENTRY_TOL = 0.0005   # 0.05% — نفس عتبة حماية البث (_entries_equivalent بـbot.py)
 SAME_TRADE_LEVEL_TOL = 0.25     # فرق الوقف ≤25% من المخاطرة، وفرق TP1 ≤25% من مسافة الهدف
+_CLOSED = ("TP1_HIT", "TP2_HIT", "SL_HIT")
 
 
 def _same_levels(a: dict, d: dict) -> bool:
@@ -137,7 +139,9 @@ def merge_reissued(decisions: list[dict]) -> list[dict]:
                 if not _same_levels(a, d):
                     continue
                 a_created = _aware(a.get("created_at"))
-                a_exit = _aware(a.get("exit_executed")) or far
+                # (2026-10-14) الأولى "مفتوحة" حتى إغلاقها أو انتهاء مدتها — لا للأبد. قبلها صفقة منتهية بلا
+                # نتيجة (exit_executed فارغ) كانت تبتلع كل إعادة إصدار بنفس المستويات لأيام (USDJPY 9→13/10).
+                a_exit = _aware(a.get("exit_executed")) or _aware(a.get("expires_at")) or far
                 if a_created is not None and a_created <= created < a_exit:
                     host = a
                     break
@@ -148,7 +152,13 @@ def merge_reissued(decisions: list[dict]) -> list[dict]:
             host["merged_count"] += 1
             host["merged_row_ids"] += d.get("row_ids", [d["id"]])
             host["user_count"] = host.get("user_count", 0) + d.get("user_count", 0)
-            if d["status"] != host["status"]:
+            if host["status"] not in _CLOSED and d["status"] in _CLOSED:
+                # (2026-10-14) الأولى انتهت بلا هدف ولا وقف والنسخة اللاحقة أُغلقت فعلاً (وأُبلغ مستلموها
+                # بنتيجتها) ← تُعرض النتيجة الحقيقية، ربحاً أو خسارة. وإلا اختفت خسارة USDJPY التي وصلت 107 مشتركين.
+                keep = ("merged_count", "merged_row_ids", "user_count", "row_ids", "created_at")
+                host.update({k: v for k, v in d.items() if k not in keep})
+                host["adopted_outcome"] = True
+            elif d["status"] in _CLOSED and host["status"] in _CLOSED and d["status"] != host["status"]:
                 host["merge_conflict"] = True
     return kept
 
