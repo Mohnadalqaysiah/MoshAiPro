@@ -1511,6 +1511,131 @@ def admin_list_signals(
     return {"total": total, "signals": out}
 
 
+@router.get("/signals/decisions")
+def admin_signal_decisions(
+    date_from: Optional[str] = Query(default=None, description="YYYY-MM-DD (UTC) — افتراضياً قبل 7 أيام"),
+    date_to: Optional[str] = Query(default=None, description="YYYY-MM-DD (UTC) شاملاً — افتراضياً اليوم"),
+    status: str = Query(default="all", description="all / open / closed / win / loss / expired / TP1_HIT ..."),
+    category: Optional[str] = None,
+    market: Optional[str] = None,
+    side: Optional[str] = None,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=10, le=200),
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """(2026-10-13) سجل الإشارات للأدمن: **قرار واحد لكل صفقة** بفترة يختارها، بصفحات مرقّمة، ومعه
+    ملخص كامل للفترة. بلاغ المالك: الجدول القديم (/signals) يعرض صفوف Signal الخام — الصفقة نفسها
+    تظهر مرة لكل مشترك وصلته من مراقبته الشخصية — ومحدود بآخر 100 صف بلا فلتر تاريخ.
+    التجميع نفسه المستخدم بالإحصائيات (group_unique_decisions + merge_reissued)."""
+    from sqlalchemy.orm import joinedload
+    from app.models.signal_delivery import SignalDelivery
+    from app.services.quality_report import _r_multiple
+
+    today = datetime.now(timezone.utc).date()
+    try:
+        d_to = datetime.strptime(date_to, "%Y-%m-%d").date() if date_to else today
+        d_from = datetime.strptime(date_from, "%Y-%m-%d").date() if date_from else d_to - timedelta(days=6)
+    except ValueError:
+        raise HTTPException(400, "صيغة التاريخ YYYY-MM-DD")
+    if d_from > d_to:
+        d_from, d_to = d_to, d_from
+    start = datetime.combine(d_from, datetime.min.time()).replace(tzinfo=timezone.utc)
+    end = datetime.combine(d_to + timedelta(days=1), datetime.min.time()).replace(tzinfo=timezone.utc)
+
+    cats = {r[0].upper(): (r[1] or "") for r in db.query(MarketConfig.symbol, MarketConfig.category).all()}
+    q = db.query(Signal).options(joinedload(Signal.user)).filter(Signal.created_at >= start, Signal.created_at < end)
+    if market:
+        q = q.filter(func.upper(Signal.market) == market.strip().upper())
+    elif category:
+        syms = [s for s, c in cats.items() if c == category]
+        q = q.filter(func.upper(Signal.market).in_(syms or ["__none__"]))
+    if side in ("BUY", "SELL"):
+        q = q.filter(Signal.signal_type == side)
+    rows = q.all()
+    by_id = {s.id: s for s in rows}
+    decisions = merge_reissued(_group_unique_decisions(rows))
+
+    all_ids = [rid for d in decisions for rid in d.get("row_ids", []) + d.get("merged_row_ids", [])]
+    dmap: dict = {}
+    if all_ids:
+        for sid, ok, cnt in (db.query(SignalDelivery.signal_id, SignalDelivery.ok, func.count(SignalDelivery.id))
+                             .filter(SignalDelivery.signal_id.in_(all_ids))
+                             .group_by(SignalDelivery.signal_id, SignalDelivery.ok).all()):
+            dmap[(sid, bool(ok))] = cnt
+
+    CLOSED = ("TP1_HIT", "TP2_HIT", "SL_HIT")
+    items = []
+    for d in decisions:
+        rep = by_id.get(d["id"])
+        if rep is None:
+            continue
+        ids = d.get("row_ids", []) + d.get("merged_row_ids", [])
+        st = d["status"]
+        r = _r_multiple(rep.entry_price, rep.stop_loss, rep.take_profit_1, rep.take_profit_2, st) if st in CLOSED else None
+        info = _signal_info(rep)
+        info.update({
+            "status":          st,
+            "category":        cats.get((rep.market or "").upper(), ""),
+            "rows":            len(d.get("row_ids", [])),
+            "merged_count":    d.get("merged_count", 0),
+            "status_conflict": d.get("status_conflict") or d.get("merge_conflict"),
+            "delivered_count": sum(dmap.get((i, True), 0) for i in ids),
+            "failed_count":    sum(dmap.get((i, False), 0) for i in ids),
+            "r":               round(r, 2) if r is not None else None,
+        })
+        items.append(info)
+
+    def _match(it):
+        s = it["status"]
+        if status == "all":
+            return True
+        if status == "open":
+            return s in ("ACTIVE", "PENDING")
+        if status == "closed":
+            return s in CLOSED
+        if status == "win":
+            return s in ("TP1_HIT", "TP2_HIT")
+        if status == "loss":
+            return s == "SL_HIT"
+        if status == "expired":
+            return s == "EXPIRED"
+        return s == status
+    items = [it for it in items if _match(it)]
+    items.sort(key=lambda it: it["created_at"] or "", reverse=True)
+
+    def _summ(xs):
+        closed = [x for x in xs if x["status"] in CLOSED]
+        wins = sum(1 for x in closed if x["status"] != "SL_HIT")
+        rs = [x["r"] for x in closed if x["r"] is not None]
+        return {
+            "total":     len(xs),
+            "open":      sum(1 for x in xs if x["status"] in ("ACTIVE", "PENDING")),
+            "expired":   sum(1 for x in xs if x["status"] == "EXPIRED"),
+            "closed":    len(closed),
+            "wins":      wins,
+            "losses":    len(closed) - wins,
+            "win_rate":  round(wins / len(closed) * 100, 1) if closed else None,
+            "total_r":   round(sum(rs), 2),
+            "avg_r":     round(sum(rs) / len(rs), 2) if rs else None,
+            "delivered": sum(x["delivered_count"] for x in xs),
+        }
+    by_cat = {}
+    for it in items:
+        by_cat.setdefault(it["category"] or "other", []).append(it)
+
+    total = len(items)
+    pages = max(1, (total + page_size - 1) // page_size)
+    page = min(page, pages)
+    return {
+        "date_from": d_from.isoformat(), "date_to": d_to.isoformat(),
+        "summary":   _summ(items),
+        "by_category": {c: _summ(xs) for c, xs in sorted(by_cat.items())},
+        "page": page, "page_size": page_size, "pages": pages, "total": total,
+        "decisions": items[(page - 1) * page_size: page * page_size],
+    }
+
+
 @router.get("/signals/{signal_id}/deliveries")
 def admin_signal_deliveries(
     signal_id: int,

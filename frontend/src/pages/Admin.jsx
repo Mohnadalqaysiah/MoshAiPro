@@ -1103,13 +1103,35 @@ export default function Admin() {
     finally { setMessageSending(false) }
   }
 
-  const loadAdminSignals = async () => {
+  // (2026-10-13) بلاغ المالك: الجدول كان يعرض صفوفاً خاماً (نفس الصفقة مرة لكل مشترك من مراقبته
+  // الشخصية) ومحدوداً بآخر 100 بلا فلتر تاريخ. صار: قرار واحد لكل صفقة، فترة يختارها، صفحات، وملخص.
+  const _isoDay = (d) => d.toISOString().slice(0, 10)
+  const [sigFilters, setSigFilters] = useState(() => {
+    const to = new Date(); const from = new Date(Date.now() - 6 * 86400000)
+    return { date_from: _isoDay(from), date_to: _isoDay(to), status: 'all', category: '', market: '', side: '' }
+  })
+  const [sigPage, setSigPage] = useState(1)
+  const [sigPageSize, setSigPageSize] = useState(50)
+  const [sigMeta, setSigMeta] = useState(null)
+  const loadAdminSignals = async (page = sigPage, filters = sigFilters, size = sigPageSize) => {
     setSignalsLoading(true)
     try {
-      const r = await axios.get(`${API}/api/v1/admin/signals?status=all&limit=100`)
-      setAdminSignals(r.data.signals || [])
+      const p = new URLSearchParams({ page, page_size: size })
+      Object.entries(filters).forEach(([k, v]) => { if (v) p.set(k, v) })
+      const r = await axios.get(`${API}/api/v1/admin/signals/decisions?${p}`)
+      setAdminSignals(r.data.decisions || [])
+      setSigMeta(r.data)
+      setSigPage(r.data.page || 1)
     } catch (e) {}
     finally { setSignalsLoading(false) }
+  }
+  const applySigFilters = (patch) => {
+    const next = { ...sigFilters, ...patch }
+    setSigFilters(next); loadAdminSignals(1, next)
+  }
+  const sigQuickRange = (days) => {
+    const to = new Date(); const from = new Date(Date.now() - (days - 1) * 86400000)
+    applySigFilters({ date_from: _isoDay(from), date_to: _isoDay(to) })
   }
 
   // (2026-09-10) فحص الإشارة مقابل السوق التاريخي الحقيقي — يقول شو ضربت
@@ -2306,12 +2328,96 @@ export default function Admin() {
                     {bulkVerify?.loading ? '... جاري الفحص' : '🔍 تحقق من الكل (EXPIRED)'}
                   </button>
                   <button
-                    onClick={loadAdminSignals}
+                    onClick={() => loadAdminSignals()}
                     className="flex items-center gap-2 text-xs bg-gray-700 hover:bg-gray-600 text-white px-3 py-2 rounded-lg transition"
                   >
                     <RefreshCw size={13}/> تحديث
                   </button>
                 </div>
+              </div>
+
+              {/* (2026-10-13) الفلاتر: الفترة والسوق والحالة — قرار واحد لكل صفقة */}
+              <div className="bg-gray-900 border border-gray-800 rounded-xl p-4 mb-4 space-y-3">
+                <div className="flex flex-wrap items-end gap-3">
+                  <label className="text-xs text-gray-400">من
+                    <input type="date" value={sigFilters.date_from} onChange={e => applySigFilters({ date_from: e.target.value })}
+                      className="block mt-1 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-white text-xs" />
+                  </label>
+                  <label className="text-xs text-gray-400">إلى
+                    <input type="date" value={sigFilters.date_to} onChange={e => applySigFilters({ date_to: e.target.value })}
+                      className="block mt-1 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-white text-xs" />
+                  </label>
+                  <div className="flex gap-1">
+                    {[[1, 'اليوم'], [2, 'يومان'], [7, 'أسبوع'], [30, 'شهر'], [90, '3 أشهر']].map(([d, l]) => (
+                      <button key={d} onClick={() => sigQuickRange(d)}
+                        className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-2.5 py-1.5 rounded-lg">{l}</button>
+                    ))}
+                  </div>
+                  <select value={sigFilters.category} onChange={e => applySigFilters({ category: e.target.value, market: '' })}
+                    className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-white text-xs">
+                    <option value="">كل الأسواق</option>
+                    <option value="crypto">كريبتو</option>
+                    <option value="forex">فوركس</option>
+                    <option value="commodity">معادن وطاقة</option>
+                    <option value="index">مؤشرات</option>
+                    <option value="stock">أسهم</option>
+                    <option value="gulf">خليجي</option>
+                  </select>
+                  <input placeholder="رمز (مثلاً XAUUSD)" value={sigFilters.market}
+                    onChange={e => setSigFilters(f => ({ ...f, market: e.target.value.toUpperCase() }))}
+                    onKeyDown={e => { if (e.key === 'Enter') applySigFilters({}) }}
+                    onBlur={() => applySigFilters({})}
+                    className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-white text-xs w-32" dir="ltr" />
+                  <select value={sigFilters.side} onChange={e => applySigFilters({ side: e.target.value })}
+                    className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-white text-xs">
+                    <option value="">شراء وبيع</option>
+                    <option value="BUY">شراء</option>
+                    <option value="SELL">بيع</option>
+                  </select>
+                  <select value={sigFilters.status} onChange={e => applySigFilters({ status: e.target.value })}
+                    className="bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-white text-xs">
+                    <option value="all">كل الحالات</option>
+                    <option value="open">مفتوحة</option>
+                    <option value="closed">مغلقة (هدف/وقف)</option>
+                    <option value="win">رابحة</option>
+                    <option value="loss">خاسرة</option>
+                    <option value="expired">منتهية</option>
+                  </select>
+                </div>
+
+                {sigMeta?.summary && (
+                  <>
+                    <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
+                      {[
+                        ['صفقات', sigMeta.summary.total, 'text-white'],
+                        ['رابحة', sigMeta.summary.wins, 'text-green-400'],
+                        ['خاسرة', sigMeta.summary.losses, 'text-red-400'],
+                        ['نسبة الربح', sigMeta.summary.win_rate != null ? `${sigMeta.summary.win_rate}%` : '—', 'text-blue-300'],
+                        ['صافي النتيجة', `${sigMeta.summary.total_r > 0 ? '+' : ''}${sigMeta.summary.total_r}R`, sigMeta.summary.total_r >= 0 ? 'text-green-400' : 'text-red-400'],
+                        ['مفتوحة / منتهية', `${sigMeta.summary.open} / ${sigMeta.summary.expired}`, 'text-yellow-300'],
+                      ].map(([l, v, c]) => (
+                        <div key={l} className="bg-gray-800/60 rounded-lg p-2.5 text-center">
+                          <div className={`text-lg font-bold ${c}`} dir="ltr">{v}</div>
+                          <div className="text-[11px] text-gray-400">{l}</div>
+                        </div>
+                      ))}
+                    </div>
+                    {Object.keys(sigMeta.by_category || {}).length > 1 && (
+                      <div className="flex flex-wrap gap-2 text-[11px]">
+                        {Object.entries(sigMeta.by_category).map(([c, s]) => (
+                          <span key={c} className="bg-gray-800/60 rounded-lg px-2.5 py-1 text-gray-300">
+                            {({crypto:'كريبتو', forex:'فوركس', commodity:'معادن وطاقة', index:'مؤشرات', stock:'أسهم', gulf:'خليجي'})[c] || c}:
+                            {' '}{s.total} صفقة · {s.wins}✅ {s.losses}❌ ·{' '}
+                            <b className={s.total_r >= 0 ? 'text-green-400' : 'text-red-400'} dir="ltr">{s.total_r > 0 ? '+' : ''}{s.total_r}R</b>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <p className="text-[11px] text-gray-500">
+                      الفترة {sigMeta.date_from} → {sigMeta.date_to} (UTC، حسب وقت صدور الصفقة). كل صفقة تظهر مرة واحدة حتى لو وصلت لعدة مشتركين أو أُعيد إصدارها وهي مفتوحة.
+                    </p>
+                  </>
+                )}
               </div>
 
               {bulkVerify && !bulkVerify.loading && (
@@ -2418,7 +2524,7 @@ export default function Admin() {
                   <RefreshCw size={14} className="animate-spin"/> جاري التحميل...
                 </div>
               ) : adminSignals.length === 0 ? (
-                <p className="text-gray-500 text-center py-12">لا توجد إشارات بعد</p>
+                <p className="text-gray-500 text-center py-12">لا صفقات بهذه الفترة والفلاتر</p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
@@ -2432,6 +2538,7 @@ export default function Admin() {
                         <th className="pb-2 text-right font-medium">الدخول</th>
                         <th className="pb-2 text-right font-medium">SL</th>
                         <th className="pb-2 text-right font-medium">TP1</th>
+                        <th className="pb-2 text-right font-medium">R</th>
                         <th className="pb-2 text-right font-medium">النقاط</th>
                         <th className="pb-2 text-right font-medium">وصلت لـ</th>
                         <th className="pb-2 text-right font-medium">التاريخ</th>
@@ -2439,7 +2546,7 @@ export default function Admin() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-800/60">
-                      {adminSignals.slice(0, signalsLimit).map(s => {
+                      {adminSignals.map(s => {
                         const typeColor = s.signal_type === 'BUY'
                           ? 'bg-green-900/50 text-green-300'
                           : s.signal_type === 'SELL'
@@ -2464,7 +2571,13 @@ export default function Admin() {
                             <tr key={s.id} className="hover:bg-gray-800/40 transition-colors">
                               <td className="py-2 pr-2 text-gray-500">{s.id}</td>
                               <td className="py-2 text-gray-400 max-w-[120px] truncate" title={s.user_email}>{s.user_email?.split('@')[0] ?? `#${s.user_id}`}</td>
-                              <td className="py-2 font-semibold text-white">{s.market}</td>
+                              <td className="py-2 font-semibold text-white whitespace-nowrap">
+                                {s.market}
+                                {s.timeframe && <span className="text-gray-500 font-normal text-[10px] mr-1">{s.timeframe}</span>}
+                                {s.merged_count > 0 && (
+                                  <span className="text-amber-400/80 font-normal text-[10px] mr-1" title="أُعيد إصدارها وهي مفتوحة — تُحسب صفقة واحدة">+{s.merged_count} مكرر</span>
+                                )}
+                              </td>
                               <td className="py-2">
                                 <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${typeColor}`}>{s.signal_type}</span>
                               </td>
@@ -2474,7 +2587,10 @@ export default function Admin() {
                               <td className="py-2 text-gray-300 font-mono">{s.entry_price?.toFixed(5) ?? '-'}</td>
                               <td className="py-2 text-red-400 font-mono">{s.stop_loss?.toFixed(5) ?? '-'}</td>
                               <td className="py-2 text-green-400 font-mono">{s.take_profit_1?.toFixed(5) ?? '-'}</td>
-                              <td className={`py-2 font-semibold font-mono ${ptColor(s.points_earned)}`}>
+                              <td className={`py-2 font-semibold font-mono ${ptColor(s.r)}`} dir="ltr">
+                                {s.r != null ? `${s.r > 0 ? '+' : ''}${s.r}R` : '—'}
+                              </td>
+                              <td className={`py-2 font-mono ${ptColor(s.points_earned)}`}>
                                 {s.points_earned != null ? (s.points_earned > 0 ? '+' : '') + s.points_earned : '—'}
                               </td>
                               <td className="py-2">
@@ -2519,7 +2635,7 @@ export default function Admin() {
                             </tr>
                             {verifyResults[s.id] && !verifyResults[s.id].loading && (
                               <tr key={`verify-${s.id}`} className="bg-purple-950/30">
-                                <td colSpan={11} className="py-2.5 px-4">
+                                <td colSpan={13} className="py-2.5 px-4">
                                   {verifyResults[s.id].error ? (
                                     <span className="text-xs text-red-400">⚠️ {verifyResults[s.id].error}</span>
                                   ) : verifyResults[s.id].detected === 'STILL_ACTIVE' ? (
@@ -2566,7 +2682,7 @@ export default function Admin() {
                             )}
                             {isOpen && (
                               <tr key={`form-${s.id}`} className="bg-gray-900/70">
-                                <td colSpan={10} className="py-3 px-4">
+                                <td colSpan={13} className="py-3 px-4">
                                   <div className="flex items-center gap-3 flex-wrap">
                                     <select
                                       value={form.status || ''}
@@ -2613,7 +2729,40 @@ export default function Admin() {
                       })}
                     </tbody>
                   </table>
-                  <ShowMore total={adminSignals.length} limit={signalsLimit} onMore={() => setSignalsLimit(l => l + 10)} />
+                  {/* (2026-10-13) صفحات مرقّمة بدل "عرض المزيد" */}
+                  {sigMeta && (
+                    <div className="flex flex-wrap items-center justify-between gap-3 mt-4 text-xs">
+                      <span className="text-gray-400">
+                        {sigMeta.total === 0 ? 'لا صفقات' :
+                          `${(sigMeta.page - 1) * sigMeta.page_size + 1}–${Math.min(sigMeta.page * sigMeta.page_size, sigMeta.total)} من ${sigMeta.total} صفقة`}
+                      </span>
+                      <div className="flex items-center gap-1" dir="ltr">
+                        <button disabled={sigMeta.page <= 1} onClick={() => loadAdminSignals(1)}
+                          className="px-2 py-1 rounded bg-gray-800 disabled:opacity-30 hover:bg-gray-700">«</button>
+                        <button disabled={sigMeta.page <= 1} onClick={() => loadAdminSignals(sigMeta.page - 1)}
+                          className="px-2 py-1 rounded bg-gray-800 disabled:opacity-30 hover:bg-gray-700">‹</button>
+                        {Array.from({ length: sigMeta.pages }, (_, i) => i + 1)
+                          .filter(p => p === 1 || p === sigMeta.pages || Math.abs(p - sigMeta.page) <= 2)
+                          .map((p, i, arr) => (
+                            <span key={p} className="flex items-center gap-1">
+                              {i > 0 && p - arr[i - 1] > 1 && <span className="text-gray-600">…</span>}
+                              <button onClick={() => loadAdminSignals(p)}
+                                className={`px-2.5 py-1 rounded ${p === sigMeta.page ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>{p}</button>
+                            </span>
+                          ))}
+                        <button disabled={sigMeta.page >= sigMeta.pages} onClick={() => loadAdminSignals(sigMeta.page + 1)}
+                          className="px-2 py-1 rounded bg-gray-800 disabled:opacity-30 hover:bg-gray-700">›</button>
+                        <button disabled={sigMeta.page >= sigMeta.pages} onClick={() => loadAdminSignals(sigMeta.pages)}
+                          className="px-2 py-1 rounded bg-gray-800 disabled:opacity-30 hover:bg-gray-700">»</button>
+                      </div>
+                      <label className="text-gray-400 flex items-center gap-1">بكل صفحة
+                        <select value={sigPageSize} onChange={e => { const n = +e.target.value; setSigPageSize(n); loadAdminSignals(1, sigFilters, n) }}
+                          className="bg-gray-800 border border-gray-700 rounded px-1.5 py-1 text-white">
+                          {[25, 50, 100, 200].map(n => <option key={n} value={n}>{n}</option>)}
+                        </select>
+                      </label>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
