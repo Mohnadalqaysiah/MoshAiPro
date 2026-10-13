@@ -42,6 +42,6 @@ def get_db() -> Generator[Session, None, None]:
 def init_db() -> None:
     """Initialize database - create all tables"""
     # Import all models so SQLAlchemy knows about them
-    from app.models import user, payment, market_config, affiliate, trade_journal, game_progress, telegram_broadcast, shadow_signal  # noqa: F401
+    from app.models import user, payment, market_config, affiliate, trade_journal, game_progress, telegram_broadcast, shadow_signal, signal_feature  # noqa: F401
     Base.metadata.create_all(bind=engine)
     print("✅ Database initialized successfully")

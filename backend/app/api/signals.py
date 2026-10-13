@@ -221,10 +221,12 @@ async def analyze_market(
                 loss_streak_reason = _check_loss_streak_breaker(db, symbol, rec)
                 # (2026-10-12) كريبتو بالعطلة → جدول الظل فقط (راجع weekend_policy.py)
                 from app.services.weekend_policy import crypto_weekend_paused, record_shadow
+                from app.services import market_fingerprint
                 if crypto_weekend_paused(db, symbol):
-                    record_shadow(db, source="web", symbol=symbol, timeframe=timeframe, signal_type=rec,
-                                  entry=entry, sl=sl, tp1=tp1, tp2=tp2, confidence=conf, rr=rr,
-                                  expires_at=expires_at, user_id=user.id)
+                    _shid = record_shadow(db, source="web", symbol=symbol, timeframe=timeframe, signal_type=rec,
+                                          entry=entry, sl=sl, tp1=tp1, tp2=tp2, confidence=conf, rr=rr,
+                                          expires_at=expires_at, user_id=user.id)
+                    market_fingerprint.schedule(analysis, symbol, timeframe, rec, shadow_id=_shid)
                 elif loss_streak_reason:
                     analysis["loss_streak_blocked"] = True
                     analysis["rejection_reason"]    = loss_streak_reason.upper()
@@ -252,6 +254,8 @@ async def analyze_market(
                     )
                     db.add(new_sig)
                     db.commit()
+                    # (2026-10-13) بصمة السوق للتعلم — بالخلفية، لا تؤخر الرد
+                    market_fingerprint.schedule(analysis, symbol, timeframe, rec, signal_id=new_sig.id)
                     # سجّل الـ cooldown بعد الحفظ
                     mosh_ai_engine_v5.record_signal_sent(symbol, timeframe)
                     logger.info(

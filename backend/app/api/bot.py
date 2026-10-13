@@ -261,11 +261,13 @@ async def bot_analyze(
 
                 # (2026-10-12) كريبتو بالعطلة → جدول الظل فقط، لا صف Signal (لا بث ولا إحصائية)
                 from app.services.weekend_policy import crypto_weekend_paused, record_shadow
+                from app.services import market_fingerprint
                 if crypto_weekend_paused(db, symbol):
-                    record_shadow(db, source="analyze" if telegram_id else "scanner", symbol=symbol,
-                                  timeframe=timeframe, signal_type=rec, entry=entry, sl=sl, tp1=tp1,
-                                  tp2=tp2, confidence=conf, rr=rr, expires_at=expires_at,
-                                  user_id=signal_user_id)
+                    _shid = record_shadow(db, source="analyze" if telegram_id else "scanner", symbol=symbol,
+                                          timeframe=timeframe, signal_type=rec, entry=entry, sl=sl, tp1=tp1,
+                                          tp2=tp2, confidence=conf, rr=rr, expires_at=expires_at,
+                                          user_id=signal_user_id)
+                    market_fingerprint.schedule(analysis, symbol, timeframe, rec, shadow_id=_shid)
                 elif not existing:
                     new_signal = Signal(
                         user_id            = signal_user_id,
@@ -304,6 +306,8 @@ async def bot_analyze(
                     db.add(new_signal)
                     db.commit()
                     logger.info(f"💾 Signal saved: {symbol}/{timeframe} {rec} @ {conf:.0f}% confidence (user_id={signal_user_id})")
+                    # (2026-10-13) بصمة السوق للتعلم — بالخلفية، لا تؤخر شيئاً
+                    market_fingerprint.schedule(analysis, symbol, timeframe, rec, signal_id=new_signal.id)
         except Exception as _se:
             logger.warning(f"Signal save error in bot_analyze: {_se}")
         

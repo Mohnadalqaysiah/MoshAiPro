@@ -53,25 +53,27 @@ def crypto_weekend_paused(db, symbol: str, now: Optional[datetime] = None) -> bo
 
 def record_shadow(db, *, source: str, symbol: str, timeframe: str, signal_type: str,
                   entry, sl, tp1, tp2=None, confidence=None, rr=None, expires_at=None,
-                  user_id: Optional[int] = None) -> bool:
-    """يحفظ الإشارة بجدول الظل. نفس (رمز+فريم+اتجاه+دخول) تُحفظ مرة واحدة —
-    المراقبة الشخصية تكرر نفس الإعداد لكل مشترك. لا يرمي استثناء أبداً."""
+                  user_id: Optional[int] = None) -> Optional[int]:
+    """يحفظ الإشارة بجدول الظل ويعيد رقمها (لربط بصمة السوق)، أو None إن لم تُحفظ.
+    نفس (رمز+فريم+اتجاه+دخول) تُحفظ مرة واحدة — المراقبة الشخصية تكرر نفس الإعداد
+    لكل مشترك. لا يرمي استثناء أبداً."""
     try:
         from app.models.shadow_signal import ShadowSignal
         h = hashlib.md5(f"{symbol}-{timeframe}-{signal_type}-{round(float(entry), 4)}".encode()).hexdigest()
         if db.query(ShadowSignal.id).filter(ShadowSignal.signal_hash == h).first():
-            return False
-        db.add(ShadowSignal(
+            return None
+        sh = ShadowSignal(
             source=source, market=symbol.upper(), timeframe=timeframe, signal_type=signal_type,
             entry_price=float(entry), stop_loss=float(sl), take_profit_1=float(tp1),
             take_profit_2=float(tp2 or tp1), ai_confidence=float(confidence or 0),
             risk_reward_ratio=float(rr) if rr else None, expires_at=expires_at,
             user_id=user_id, signal_hash=h,
-        ))
+        )
+        db.add(sh)
         db.commit()
         logger.info(f"🌑 Shadow (crypto weekend): {symbol}/{timeframe} {signal_type} @ {entry} [{source}]")
-        return True
+        return sh.id
     except Exception as e:
         db.rollback()
         logger.warning(f"record_shadow: {e}")
-        return False
+        return None
