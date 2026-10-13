@@ -1150,6 +1150,14 @@ async def bot_breakeven_alerts(
         Signal.expires_at > now,
     ).all()
 
+    # (2026-10-13) المعادن والطاقة فقط — diag_target_profile.py (486 قراراً، أسبوعان): نقل الوقف
+    # للدخول عند 1R حسّن معادن وطاقة +16.6→+25.6R، لكنه أضرّ بالفوركس +24.1→+19.1R والكريبتو
+    # +102.2→+41.9R (يقطع الصفقات التي كانت ستبلغ الهدف البعيد). قرار المالك 13/10.
+    from app.models.market_config import MarketConfig
+    be_markets = {r[0].upper() for r in db.query(MarketConfig.symbol)
+                  .filter(MarketConfig.category == "commodity").all()}
+    rows = [s for s in rows if (s.market or "").upper() in be_markets]
+
     groups: dict = {}
     for s in rows:
         groups.setdefault(decision_key(s.market, s.timeframe, s.signal_type, s.entry_price), []).append(s)
