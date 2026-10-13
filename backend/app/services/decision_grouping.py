@@ -70,6 +70,9 @@ def _finalize_decision_group(rows: list) -> dict:
         "timeframe":       rep.timeframe,
         "signal_type":     rep.signal_type.value if hasattr(rep.signal_type, "value") else rep.signal_type,
         "entry_price":     rep.entry_price,
+        # (2026-10-14) لمقارنة "نفس الصفقة" بـmerge_reissued — مفاتيح إضافية فقط، لا تغيّر أي سلوك قائم
+        "stop_loss":       rep.stop_loss,
+        "take_profit_1":   rep.take_profit_1,
         "status":          max(set(statuses), key=statuses.count),   # الأغلبية (عادةً كلهم متطابقين)
         "status_conflict": len(set(statuses)) > 1,
         "points":          rep.points_earned or 0,
@@ -88,11 +91,28 @@ def _finalize_decision_group(rows: list) -> dict:
 
 
 SAME_TRADE_ENTRY_TOL = 0.0005   # 0.05% — نفس عتبة حماية البث (_entries_equivalent بـbot.py)
+SAME_TRADE_LEVEL_TOL = 0.25     # فرق الوقف ≤25% من المخاطرة، وفرق TP1 ≤25% من مسافة الهدف
+
+
+def _same_levels(a: dict, d: dict) -> bool:
+    """(2026-10-14) بلاغ AMD 13/10: صفقتان بنفس الدخول 587.87 لكن TP1 645.50 مقابل 593.43 —
+    الأولى خسرت والثانية بلغت TP2، والدمج بالدخول وحده أخفى الرابحة عمّن استلمها. نفس الصفقة
+    = نفس الدخول **والوقف والهدف**. إن غابت المستويات (بيانات قديمة) نكتفي بالدخول كما كان."""
+    try:
+        ea, sa, ta = float(a["entry_price"]), float(a["stop_loss"]), float(a["take_profit_1"])
+        sd, td = float(d["stop_loss"]), float(d["take_profit_1"])
+    except (KeyError, TypeError, ValueError):
+        return True
+    risk, reach = abs(ea - sa), abs(ta - ea)
+    if not risk or not reach:
+        return True
+    return abs(sd - sa) <= SAME_TRADE_LEVEL_TOL * risk and abs(td - ta) <= SAME_TRADE_LEVEL_TOL * reach
 
 
 def merge_reissued(decisions: list[dict]) -> list[dict]:
     """(2026-10-12) يدمج "الصفقة المُعاد إصدارها" بالأولى: نفس الرمز والاتجاه، دخول ضمن
-    0.05%، أي فريم، وصدرت **والأولى ما زالت مفتوحة** (قبل exit_executed). تُحسب نتيجة
+    0.05%، **ونفس الوقف والهدف** (_same_levels، 14/10)، أي فريم، وصدرت **والأولى ما زالت
+    مفتوحة** (قبل exit_executed). تُحسب نتيجة
     الأولى — هي التي وصلت للمشتركين. القاعدة متماثلة على الرابح والخاسر (DECISIONS 12/10).
 
     لا تُستدعى من group_unique_decisions: معايرة المحرك (ai_engine_v5) تستخدم تلك
@@ -113,6 +133,8 @@ def merge_reissued(decisions: list[dict]) -> list[dict]:
                     continue
                 a_entry = float(a.get("entry_price") or 0)
                 if not a_entry or abs(float(d["entry_price"]) - a_entry) / a_entry > SAME_TRADE_ENTRY_TOL:
+                    continue
+                if not _same_levels(a, d):
                     continue
                 a_created = _aware(a.get("created_at"))
                 a_exit = _aware(a.get("exit_executed")) or far
