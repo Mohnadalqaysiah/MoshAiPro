@@ -163,6 +163,19 @@ def _ext_direction(a: Dict, value: Optional[str]) -> Optional[bool]:
     return rec in ("BUY", "SELL")
 
 
+def _ext_trend(a: Dict, value: Optional[str]) -> Optional[bool]:
+    """(2026-10-14) اتجاه EMA50 مع ميله على فريم الشرط — نفس تعريف فلتر المعادن المختبر.
+    صاعد/شراء/BULL ← UP، هابط/بيع/BEAR ← DOWN، بلا قيمة ← أي اتجاه واضح (ليس FLAT).
+    بديل صادق لشرط EMA (الذي يعني فقط "السعر فوق EMA20")."""
+    t = (a.get("ema50_trend") or {}).get("trend")
+    if not t:
+        return None
+    hint = _direction_hint(value)
+    if hint == "BULL": return t == "UP"
+    if hint == "BEAR": return t == "DOWN"
+    return t in ("UP", "DOWN")
+
+
 def _ext_killzone(a: Dict, value: Optional[str]) -> Optional[bool]:
     kz = a.get("kill_zone") or {}
     if "is_kill_zone" not in kz:
@@ -174,11 +187,43 @@ def _ext_killzone(a: Dict, value: Optional[str]) -> Optional[bool]:
 
 # نوافذ الجلسات الكاملة بتوقيت UTC — وهي متداخلة بطبيعتها، فالسوق لا
 # يسلّم من جلسة لأخرى بقطع.
+# (2026-10-14) لندن ونيويورك صارتا بالتوقيت المحلي (08:00-17:00) مع التوقيت الصيفي — كانتا ساعات
+# UTC ثابتة (7-16 و12-21) صحيحة صيفاً فقط؛ شتاءً تتأخر الجلستان ساعة. أوروبا تغيّر آخر أحد بأكتوبر،
+# وأمريكا أول أحد بنوفمبر. سلوك الصيف لم يتغيّر. آسيا (طوكيو) بلا توقيت صيفي.
 _SESSION_WINDOWS = {
     "ASIA":     [(0, 9), (23, 24)],   # طوكيو/سيدني
-    "LONDON":   [(7, 16)],
+    "LONDON":   [(7, 16)],            # صيفاً — تُحسب فعلياً بـ_session_windows_utc
     "NEW_YORK": [(12, 21)],
 }
+
+
+def _nth_sunday(year: int, month: int, n: int):
+    """n>0: الأحد رقم n بالشهر؛ n=-1: آخر أحد."""
+    from datetime import date, timedelta
+    if n > 0:
+        d = date(year, month, 1)
+        d += timedelta(days=(6 - d.weekday()) % 7)
+        return d + timedelta(weeks=n - 1)
+    d = date(year + (month == 12), month % 12 + 1, 1) - timedelta(days=1)
+    return d - timedelta(days=(d.weekday() - 6) % 7)
+
+
+def _session_windows_utc(day) -> Dict[str, list]:
+    """نوافذ UTC لليوم المعطى مع التوقيت الصيفي: لندن 08-17 محلي، نيويورك 08-17 محلي."""
+    from datetime import datetime as _dt, timezone as _tz
+    y = day.year
+    t = _dt(day.year, day.month, day.day, 12, tzinfo=_tz.utc)
+    eu_start = _dt.combine(_nth_sunday(y, 3, -1), _dt.min.time()).replace(hour=1, tzinfo=_tz.utc)
+    eu_end = _dt.combine(_nth_sunday(y, 10, -1), _dt.min.time()).replace(hour=1, tzinfo=_tz.utc)
+    us_start = _dt.combine(_nth_sunday(y, 3, 2), _dt.min.time()).replace(hour=7, tzinfo=_tz.utc)
+    us_end = _dt.combine(_nth_sunday(y, 11, 1), _dt.min.time()).replace(hour=6, tzinfo=_tz.utc)
+    lon_off = 1 if eu_start <= t < eu_end else 0      # BST = UTC+1
+    ny_off = 4 if us_start <= t < us_end else 5       # EDT = UTC-4، EST = UTC-5
+    return {
+        "ASIA":     _SESSION_WINDOWS["ASIA"],
+        "LONDON":   [(8 - lon_off, 17 - lon_off)],
+        "NEW_YORK": [(8 + ny_off, 17 + ny_off)],
+    }
 
 
 def _session_match(a: Dict, needle: str) -> Optional[bool]:
@@ -202,14 +247,20 @@ def _session_match(a: Dict, needle: str) -> Optional[bool]:
     يُقرأ الوقت من لقطة التحليل متى توفّر، لا من `now`، حتى يوافق الحكم
     اللحظة التي قُيّم فيها التحليل فعلاً.
     """
-    windows = _SESSION_WINDOWS.get(needle.upper())
-    if not windows:
+    from datetime import datetime, timezone as _tz
+    if needle.upper() not in _SESSION_WINDOWS:
         return None
 
     kz = a.get("kill_zone") or {}
+    # (2026-10-14) الباكتيست يمرّر وقت الشمعة التاريخية (_eval_time_utc) — تاريخها يحدد التوقيت الصيفي
+    eval_t = a.get("_eval_time_utc")
+    day = eval_t.date() if isinstance(eval_t, datetime) else datetime.now(_tz.utc).date()
+    windows = _session_windows_utc(day).get(needle.upper())
     hour = None
+    if isinstance(eval_t, datetime):
+        hour = eval_t.hour + eval_t.minute / 60.0
     raw = kz.get("current_time_utc")          # بصيغة "HH:MM UTC"
-    if raw:
+    if hour is None and raw:
         try:
             hh, mm = str(raw).split(" ")[0].split(":")
             hour = int(hh) + int(mm) / 60.0
@@ -218,7 +269,6 @@ def _session_match(a: Dict, needle: str) -> Optional[bool]:
     if hour is None:
         if not kz:
             return None                        # لا بيانات ⇒ لا حكم
-        from datetime import datetime, timezone as _tz
         now = datetime.now(_tz.utc)
         hour = now.hour + now.minute / 60.0
 
@@ -285,6 +335,7 @@ SUPPORTED_CONDITION_TYPES = {
     "premium":   _ext_premium_discount,
     "killzone":  _ext_killzone,
     "direction": _ext_direction,
+    "trend":     _ext_trend,
     # Sessions & Time
     "london":    lambda a, v: _session_match(a, "LONDON"),
     "newyork":   lambda a, v: _session_match(a, "NEW_YORK"),

@@ -241,6 +241,47 @@ def create_strategy(body: StrategyIn, db: Session = Depends(get_db), user = Depe
     return _serialize_full(s)
 
 
+# ─── مكتبة الاستراتيجيات الجاهزة (2026-10-14) ──────────────────────────────────
+# ⚠️ قبل "/{strategy_id}" عمداً — وإلا التقطه ذلك المسار ("templates" ليس رقماً ← 422).
+
+@router.get("/templates")
+def list_templates(user = Depends(get_current_user)):
+    from app.services.strategy_templates import all_templates
+    return {"templates": all_templates()}
+
+
+@router.post("/templates/{key}/copy")
+def copy_template(key: str, db: Session = Depends(get_db), user = Depends(get_current_user)):
+    """ينشئ نسخة خاصة بالعميل (DRAFT) — يعدّلها ويفعّلها كأي استراتيجية؛ القالب نفسه لا يتغيّر."""
+    from app.services.strategy_templates import get_template
+    t = get_template(key)
+    if not t:
+        raise HTTPException(404, "القالب غير موجود")
+    groups, conds = [], []
+    for gi, g in enumerate(t["groups"], 1):
+        gid = f"tg{gi}"
+        groups.append(GroupIn(id=gid, name=g["name"], logic=g["logic"], atLeast=g["atLeast"]))
+        for ci, c in enumerate(g["conditions"], 1):
+            conds.append(ConditionIn(id=f"tc{gi}_{ci}", groupId=gid, catId=c["catId"], type=c["type"],
+                                     label=c["label"], timeframe=c["timeframe"], value=c["value"],
+                                     weight=c["weight"]))
+    body = StrategyIn(
+        name=t["name_ar"], symbols=t["symbols"], timeframes=t["timeframes"], minScore=t["min_score"],
+        triggerActions={"createSignal": True, "sendTelegram": True, "monitorEntry": True},
+        execCfg=t["exec"], groups=groups, conditions=conds,
+    )
+    if _access_tier(user, db) == "limited":
+        _enforce_limited_constraints(db, user, body)
+    s = Strategy(user_id=user.id, name=body.name, status=StrategyStatus.DRAFT)
+    db.add(s)
+    db.flush()
+    _apply_payload(db, s, body)
+    db.commit()
+    db.refresh(s)
+    logger.info(f"📚 Template {key} v{t['version']} copied → strategy #{s.id} (user {user.id})")
+    return _serialize_full(s)
+
+
 @router.get("/{strategy_id}")
 def get_strategy(strategy_id: int, db: Session = Depends(get_db), user = Depends(get_current_user)):
     return _serialize_full(_get_owned(db, strategy_id, user))
@@ -312,6 +353,62 @@ def set_status(strategy_id: int, body: StatusIn, db: Session = Depends(get_db), 
         raise HTTPException(400, "حالة غير صحيحة")
     db.commit()
     return {"success": True, "status": s.status.value}
+
+
+# ─── Backtest (2026-10-14) ─────────────────────────────────────────────────────
+
+class BacktestIn(BaseModel):
+    days: int = 30
+    symbols: List[str] = []
+
+
+_BACKTEST_TASKS: set = set()
+BACKTESTS_PER_DAY = 10
+
+
+def _bt_out(bt) -> dict:
+    return {"id": bt.id, "status": bt.status, "progress": bt.progress, "params": bt.params,
+            "result": bt.result, "error": bt.error,
+            "created_at": bt.created_at.isoformat() if bt.created_at else None,
+            "finished_at": bt.finished_at.isoformat() if bt.finished_at else None}
+
+
+@router.post("/{strategy_id}/backtest")
+async def start_backtest(strategy_id: int, body: BacktestIn, db: Session = Depends(get_db), user = Depends(get_current_user)):
+    """يبدأ باكتيست بالخلفية (يأخذ دقائق) — راجع app/services/strategy_backtest.py لطريقة الحساب."""
+    from app.models.strategy_backtest import StrategyBacktest
+    from app.services.strategy_backtest import run_backtest_job
+    s = _get_owned(db, strategy_id, user)
+    if not any(c.enabled for g in s.groups for c in g.conditions):
+        raise HTTPException(400, "أضف شروطاً مفعّلة واحفظ الاستراتيجية أولاً")
+    running = db.query(StrategyBacktest).filter(
+        StrategyBacktest.user_id == user.id, StrategyBacktest.status.in_(["queued", "running"])).first()
+    if running:
+        raise HTTPException(409, "عندك باكتيست قيد التشغيل — انتظر حتى ينتهي")
+    since = datetime.now(timezone.utc) - timedelta(days=1)
+    if db.query(StrategyBacktest).filter(StrategyBacktest.user_id == user.id,
+                                         StrategyBacktest.created_at >= since).count() >= BACKTESTS_PER_DAY:
+        raise HTTPException(429, f"الحد {BACKTESTS_PER_DAY} اختبارات يومياً — جرّب غداً")
+    days = max(3, min(int(body.days or 30), 300))
+    symbols = [x for x in (body.symbols or s.symbols or []) if x][:3] or ["XAU/USD"]
+    bt = StrategyBacktest(strategy_id=s.id, user_id=user.id, status="queued", progress=0,
+                          params={"days": days, "symbols": symbols})
+    db.add(bt)
+    db.commit()
+    db.refresh(bt)
+    task = asyncio.get_running_loop().create_task(run_backtest_job(bt.id))
+    _BACKTEST_TASKS.add(task)
+    task.add_done_callback(_BACKTEST_TASKS.discard)
+    return _bt_out(bt)
+
+
+@router.get("/{strategy_id}/backtest")
+def latest_backtest(strategy_id: int, db: Session = Depends(get_db), user = Depends(get_current_user)):
+    from app.models.strategy_backtest import StrategyBacktest
+    _get_owned(db, strategy_id, user)
+    bt = (db.query(StrategyBacktest).filter(StrategyBacktest.strategy_id == strategy_id)
+            .order_by(StrategyBacktest.id.desc()).first())
+    return _bt_out(bt) if bt else {"status": "none"}
 
 
 # ─── Evaluation (real Simulation) ──────────────────────────────────────────────

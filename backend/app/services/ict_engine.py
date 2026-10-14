@@ -638,7 +638,7 @@ class ICTEngine:
 
     # ─── Kill Zones ────────────────────────────────────────────────────────────
 
-    def get_kill_zone(self) -> Dict:
+    def get_kill_zone(self, at: Optional[datetime] = None) -> Dict:
         """
         Kill Zones الحقيقية بتوقيت UTC:
 
@@ -647,8 +647,10 @@ class ICTEngine:
         - New York Open KZ: 13:30 - 15:30 UTC (الأقوى)
         - London Close: 11:00 - 13:00 UTC
         - Midnight Open: 23:00 - 01:00 UTC
+
+        at: (2026-10-14) وقت التقييم — للباكتيست (شمعة تاريخية). بلا قيمة = الآن، كالسابق تماماً.
         """
-        now = datetime.now(timezone.utc)
+        now = at or datetime.now(timezone.utc)
         hour = now.hour
         minute = now.minute
         time_decimal = hour + minute / 60
@@ -1212,6 +1214,21 @@ class ICTEngine:
 
     # ─── Full Analysis ────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _ema50_trend(df: pd.DataFrame) -> Dict:
+        """UP: السعر فوق EMA50 وميلها موجب خلال 6 شموع؛ DOWN: تحتها وميلها سالب؛ وإلا FLAT."""
+        try:
+            if df is None or len(df) < 56:
+                return {"trend": "FLAT"}
+            close = df["close"].astype(float)
+            ema = close.ewm(span=50, adjust=False).mean()
+            px, e_now, e_then = float(close.iloc[-1]), float(ema.iloc[-1]), float(ema.iloc[-6])
+            trend = "UP" if px > e_now and e_now > e_then else "DOWN" if px < e_now and e_now < e_then else "FLAT"
+            return {"trend": trend, "dist_pct": round((px / e_now - 1) * 100, 3),
+                    "slope_pct": round((e_now / e_then - 1) * 100, 3)}
+        except Exception:
+            return {"trend": "FLAT"}
+
     def full_analysis(self, df: pd.DataFrame, symbol: str, timeframe: str) -> Dict:
         """التحليل الشامل - يجمع كل المكونات"""
         try:
@@ -1281,6 +1298,11 @@ class ICTEngine:
                 "market_mode":    market_mode,
                 "momentum":       momentum,
                 "range_conflict": range_conflict,
+
+                # (2026-10-14) اتجاه EMA50 مع ميله — نفس تعريف فلتر المعادن المختبر
+                # (ai_engine_v5._ema50_4h_trend) على فريم هذا التحليل. حقل إضافي لشرط
+                # "اتجاه EMA50" بباني الاستراتيجيات؛ لا يقرأه أي منطق قائم.
+                "ema50_trend":    self._ema50_trend(df),
 
                 # المؤشرات
                 "indicators": {

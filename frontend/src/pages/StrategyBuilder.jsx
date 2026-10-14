@@ -113,6 +113,8 @@ const CAT = [
       ["rsi", "RSI", "مؤشر القوة النسبية — تشبع شرائي/بيعي", "Relative Strength Index — overbought/oversold"],
       ["macd", "MACD", "تقاطع خط الإشارة مع MACD", "MACD line crossing its signal line"],
       ["ema", "EMA", "المتوسط المتحرك الأسي", "Exponential Moving Average"],
+      // (2026-10-14) اتجاه حقيقي: EMA50 مع ميله (تعريف فلتر المعادن المختبر) — شرط EMA أعلاه يعني فقط "السعر فوق EMA20"
+      ["trend", "اتجاه EMA50", "اتجاه السوق الحقيقي: السعر فوق EMA50 وميلها صاعد — اكتب: صاعد / هابط", "EMA50 Trend", "Real market trend: price above a rising EMA50 — type: up / down"],
       ["stoch", "Stochastic", "مذبذب الزخم العشوائي", "Stochastic momentum oscillator"],
     ]},
   { id: "smc", label: "ICT / SMC", en: "ICT / SMC", icon: Layers, color: C.gold, w: 18,
@@ -153,6 +155,7 @@ const ALL_ITEMS = CAT.flatMap((c) => c.items.map(([type, label, desc, labelEn, d
 
 const TABS = [
   { id: "build", label: "البناء", labelEn: "Build", icon: Hammer },
+  { id: "library", label: "الاستراتيجيات الجاهزة", labelEn: "Strategy Library", icon: Sparkles },
   { id: "logic", label: "المنطق والسكور", labelEn: "Logic & Score", icon: SlidersHorizontal },
   { id: "telegram", label: "تلجرام", labelEn: "Telegram", icon: Bot },
   { id: "monitoring", label: "المراقبة الحية", labelEn: "Live Monitoring", icon: MonitorDot },
@@ -240,10 +243,10 @@ function ScoreRing({ pct, size = 58, color }) {
   );
 }
 
-function Modal({ title, children, onClose, danger }) {
+function Modal({ title, children, onClose, danger, wide }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(4,5,7,0.72)" }}>
-      <div style={{ background: C.surfaceHi, border: `1px solid ${danger ? C.red : C.border}`, maxWidth: 440, width: "100%" }} className="rounded-2xl p-5 fade-in">
+      <div style={{ background: C.surfaceHi, border: `1px solid ${danger ? C.red : C.border}`, maxWidth: wide ? 920 : 440, width: "100%", maxHeight: "92vh", overflowY: "auto" }} className="rounded-2xl p-5 fade-in scroll-thin">
         <div className="flex items-center justify-between mb-3">
           <div style={{ fontFamily: FD, fontWeight: 600, fontSize: 15, color: danger ? C.red : C.text }} className="flex items-center gap-2">
             {danger && <AlertTriangle size={16} />}
@@ -254,6 +257,265 @@ function Modal({ title, children, onClose, danger }) {
         {children}
       </div>
     </div>
+  );
+}
+
+/* =========================================================================
+   (2026-10-14) مكتبة الاستراتيجيات الجاهزة — قوالب ثابتة من الخادم
+   (backend/app/services/strategy_templates.py). "إنشاء نسخة" ينشئ استراتيجية
+   عادية للعميل (مسودة) يعدّلها ويفعّلها؛ القالب نفسه لا يتغيّر.
+========================================================================= */
+const STYLE_LABEL = {
+  trend: ["مع الاتجاه", "Trend"], liquidity_reversal: ["انعكاس بعد سحب سيولة", "Liquidity reversal"],
+  session: ["جلسات", "Sessions"],
+};
+const LOGIC_LABEL = { AND: ["الكل", "All"], OR: ["واحد على الأقل", "At least one"], AT_LEAST: ["عدد محدد", "At least N"] };
+
+function TemplateLibrary({ isAr, onCopied, showToast }) {
+  const [items, setItems] = useState(null);
+  const [open, setOpen] = useState(null);
+  const [busy, setBusy] = useState(null);
+  useEffect(() => {
+    axios.get(`${API}/api/v1/strategies/templates`)
+      .then((r) => setItems(r.data.templates || []))
+      .catch(() => setItems([]));
+  }, []);
+  const copy = async (t) => {
+    setBusy(t.key);
+    try {
+      const r = await axios.post(`${API}/api/v1/strategies/templates/${t.key}/copy`);
+      onCopied(r.data);
+    } catch (e) {
+      showToast(e.response?.data?.detail || (isAr ? "تعذّر إنشاء النسخة" : "Could not create a copy"));
+    } finally { setBusy(null); }
+  };
+  if (items === null) return <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{[0, 1, 2, 3].map((i) => <div key={i} className="skeleton h-48 rounded-2xl" />)}</div>;
+  return (
+    <div className="flex flex-col gap-4">
+      <div style={{ background: C.goldSoft, border: `1px solid ${C.gold}55`, color: C.sub, fontSize: 12.5, lineHeight: 1.8 }} className="rounded-xl px-4 py-3">
+        {isAr
+          ? <>قوالب جاهزة من فريق كفيل. اضغط <b style={{ color: C.text }}>«إنشاء نسخة»</b> فتصير استراتيجية خاصة بك تعدّلها كما تريد، ثم جرّبها بـ<b style={{ color: C.text }}>الباكتيست</b> من تبويب «المحفوظة» قبل تفعيلها. الحالة «قيد الاختبار» تعني أنه لا توجد نتائج مثبتة بعد. <b style={{ color: C.text }}>الدرجة ليست نسبة نجاح</b> — هي مجموع أوزان الشروط المتحققة.</>
+          : <>Ready-made templates from the Qaffel team. Press <b style={{ color: C.text }}>"Create copy"</b> to get your own editable strategy, then run a <b style={{ color: C.text }}>backtest</b> from the "Saved" tab before activating it. "Testing" means no proven results yet. <b style={{ color: C.text }}>The score is not a win rate</b> — it is the sum of matched condition weights.</>}
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {items.map((t) => {
+          const buy = t.side === "BUY";
+          const isOpen = open === t.key;
+          return (
+            <div key={t.key} style={{ background: C.surface, border: `1px solid ${C.border}` }} className="rounded-2xl p-4 flex flex-col gap-3 fade-in">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <div style={{ fontFamily: FD, fontWeight: 600, fontSize: 14.5 }}>{isAr ? t.name_ar : t.name}</div>
+                  <div style={{ color: C.sub, fontFamily: FM, fontSize: 11.5 }} className="mt-0.5">{t.symbols.join(", ")} • {t.timeframes.join(" + ")}</div>
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                  <Pill color={buy ? C.teal : C.red} bg={buy ? C.tealSoft : C.redSoft}>{buy ? (isAr ? "شراء" : "Buy") : (isAr ? "بيع" : "Sell")}</Pill>
+                  <Pill color={C.gold} bg="transparent" border={`${C.gold}66`}>{isAr ? "قيد الاختبار" : "Testing"}</Pill>
+                </div>
+              </div>
+              <div style={{ color: C.sub, fontSize: 12.5, lineHeight: 1.8 }}>{isAr ? t.desc_ar : t.desc_en}</div>
+              <div style={{ color: C.muted, fontSize: 11.5 }} className="flex flex-wrap gap-x-4 gap-y-1">
+                <span>{isAr ? "الأسلوب:" : "Style:"} <span style={{ color: C.text }}>{(STYLE_LABEL[t.style] || [t.style, t.style])[isAr ? 0 : 1]}</span></span>
+                <span>{isAr ? "العتبة:" : "Threshold:"} <span style={{ color: C.text }}>{t.min_score}</span></span>
+                <span>{isAr ? "الأهداف:" : "Targets:"} <span style={{ color: C.text }}>TP1 1R · TP2 1:{t.exec.rr}</span></span>
+              </div>
+              {isOpen && (
+                <div className="flex flex-col gap-2">
+                  {t.groups.map((g, gi) => (
+                    <div key={gi} style={{ background: C.surfaceHi, border: `1px solid ${C.borderSoft}` }} className="rounded-lg px-3 py-2">
+                      <div className="flex justify-between" style={{ fontSize: 12 }}>
+                        <span style={{ color: C.text, fontWeight: 600 }}>{gi + 1}. {g.name}</span>
+                        <span style={{ color: C.gold }}>{(LOGIC_LABEL[g.logic] || [g.logic, g.logic])[isAr ? 0 : 1]}</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 mt-1.5">
+                        {g.conditions.map((c, ci) => (
+                          <span key={ci} style={{ background: C.bg, border: `1px solid ${C.border}`, fontSize: 11, color: C.sub }} className="rounded-md px-2 py-0.5">
+                            {c.label} <span style={{ color: C.muted, fontFamily: FM }}>{c.timeframe}</span>{c.value && <span style={{ color: C.goldBright }}> · {c.value}</span>}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  <div style={{ color: C.muted, fontSize: 11, lineHeight: 1.7 }}>
+                    {isAr ? "الدخول بسعر السوق، الوقف خلف آخر قاع/قمة، الهدف الأول بمسافة الوقف والثاني بنسبة 1:" : "Market entry, stop behind the last swing, TP1 at the stop distance and TP2 at 1:"}{t.exec.rr}.
+                    {isAr ? " التنبيه تحليل مشروط وليس ضماناً للربح." : " An alert is conditional analysis, not a profit guarantee."}
+                  </div>
+                </div>
+              )}
+              <div style={{ borderTop: `1px solid ${C.borderSoft}` }} className="pt-2.5 flex items-center gap-2">
+                <button onClick={() => setOpen(isOpen ? null : t.key)} style={{ background: C.surfaceHi, border: `1px solid ${C.border}`, color: C.text }} className="px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5">
+                  <Eye size={13} /> {isOpen ? (isAr ? "إخفاء الشروط" : "Hide conditions") : (isAr ? "معاينة الاستراتيجية" : "Preview")}
+                </button>
+                <button onClick={() => copy(t)} disabled={busy === t.key} style={{ background: C.gold, color: "#1A1200", opacity: busy === t.key ? 0.6 : 1 }} className="px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5">
+                  {busy === t.key ? <Loader2 size={13} className="animate-spin" /> : <Copy size={13} />} {isAr ? "إنشاء نسخة" : "Create copy"}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================================
+   (2026-10-14) الباكتيست — يعيد تشغيل نفس التحليل الحي على الشموع التاريخية
+   المغلقة (backend/app/services/strategy_backtest.py). يأخذ دقائق، بالخلفية.
+========================================================================= */
+const RESULT_LABEL = {
+  TP2: ["هدف 2 🏆", "TP2 🏆"], "TP1+BE": ["هدف 1 ثم تعادل", "TP1 then BE"], SL: ["وقف ❌", "Stop ❌"], EXPIRED: ["انتهت المدة", "Expired"],
+};
+
+function BacktestModal({ rec, isAr, onClose, showToast }) {
+  const [bt, setBt] = useState(null);
+  const [days, setDays] = useState(30);
+  const [starting, setStarting] = useState(false);
+  const load = useCallback(async () => {
+    try { const r = await axios.get(`${API}/api/v1/strategies/${rec.id}/backtest`); setBt(r.data); } catch { setBt({ status: "none" }); }
+  }, [rec.id]);
+  useEffect(() => { load(); }, [load]);
+  const running = bt && (bt.status === "queued" || bt.status === "running");
+  useEffect(() => {
+    if (!running) return;
+    const id = setInterval(load, 4000);
+    return () => clearInterval(id);
+  }, [running, load]);
+  const start = async () => {
+    setStarting(true);
+    try {
+      const r = await axios.post(`${API}/api/v1/strategies/${rec.id}/backtest`, { days });
+      setBt(r.data);
+    } catch (e) {
+      showToast(e.response?.data?.detail || (isAr ? "تعذّر بدء الباكتيست" : "Could not start the backtest"));
+    } finally { setStarting(false); }
+  };
+  const res = bt?.status === "done" ? bt.result : null;
+  const s = res?.summary;
+  const fmtT = (iso) => (iso ? iso.replace("T", " ").slice(5, 16) : "—");
+  const tile = (label, value, color) => (
+    <div style={{ background: C.surface, border: `1px solid ${C.borderSoft}` }} className="rounded-lg p-2.5 text-center">
+      <div style={{ color: color || C.text, fontFamily: FM, fontSize: 17, fontWeight: 600 }} dir="ltr">{value}</div>
+      <div style={{ color: C.muted, fontSize: 10.5 }}>{label}</div>
+    </div>
+  );
+  return (
+    <Modal wide title={`${isAr ? "باكتيست" : "Backtest"} — ${rec.name}`} onClose={onClose}>
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        <span style={{ color: C.sub, fontSize: 12.5 }}>{isAr ? "الفترة:" : "Period:"}</span>
+        {[14, 30, 45].map((d) => (
+          <button key={d} onClick={() => setDays(d)} disabled={running}
+            style={{ background: days === d ? C.goldSoft : C.surface, border: `1px solid ${days === d ? C.gold : C.border}`, color: days === d ? C.goldBright : C.sub }}
+            className="px-3 py-1 rounded-lg text-xs">{d} {isAr ? "يوم" : "days"}</button>
+        ))}
+        <button onClick={start} disabled={running || starting}
+          style={{ background: C.gold, color: "#1A1200", opacity: running || starting ? 0.55 : 1 }}
+          className="px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 ms-auto">
+          {running || starting ? <Loader2 size={13} className="animate-spin" /> : <Activity size={13} />}
+          {isAr ? "تشغيل الباكتيست" : "Run backtest"}
+        </button>
+      </div>
+
+      {running && (
+        <div className="mb-4">
+          <div style={{ background: C.surface, height: 8 }} className="rounded-full overflow-hidden">
+            <div style={{ width: `${Math.max(3, bt.progress || 0)}%`, background: C.gold, height: 8, transition: "width .5s" }} />
+          </div>
+          <div style={{ color: C.sub, fontSize: 11.5 }} className="mt-1.5">
+            {bt.status === "queued" ? (isAr ? "في الانتظار..." : "Queued...") : `${bt.progress || 0}%`} — {isAr ? "يعيد تحليل كل شمعة تاريخية بنفس محرك المنصة، يأخذ حوالي 5 دقائق لكل شهر وزوج. تستطيع إغلاق النافذة والعودة لاحقاً." : "Re-analysing every historical candle with the platform's own engine — about 5 minutes per month per symbol. You can close this and come back."}
+          </div>
+        </div>
+      )}
+      {bt?.status === "error" && (
+        <div style={{ background: C.redSoft, border: `1px solid ${C.red}66`, color: C.red, fontSize: 12.5 }} className="rounded-lg px-3 py-2 mb-3">⚠ {bt.error}</div>
+      )}
+      {bt?.status === "none" && !running && (
+        <div style={{ color: C.muted, fontSize: 12.5 }} className="py-6 text-center">{isAr ? "لم يُشغَّل باكتيست لهذه الاستراتيجية بعد. اختر الفترة واضغط «تشغيل الباكتيست»." : "No backtest yet. Pick a period and press \"Run backtest\"."}</div>
+      )}
+
+      {s && (
+        <div className="flex flex-col gap-4">
+          <div style={{ color: C.muted, fontSize: 11 }}>
+            {isAr ? "آخر تشغيل:" : "Last run:"} {fmtT(bt.finished_at)} · {res.config.days} {isAr ? "يوم" : "days"} · {Object.keys(res.config.data_range || {}).join(", ")} · {isAr ? "الاتجاه:" : "Side:"} {res.config.side}
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            {tile(isAr ? "صفقات" : "Trades", s.trades)}
+            {tile(isAr ? "بلغت الهدف الأول" : "Reached TP1", s.tp1_hit_rate != null ? `${s.tp1_hit_rate}%` : "—", C.teal)}
+            {tile(isAr ? "رابحة / خاسرة" : "Win / Loss", s.trades ? `${s.win_rate}% / ${s.loss_rate}%` : "—")}
+            {tile(isAr ? "صافي النتيجة" : "Net result", `${s.total_r > 0 ? "+" : ""}${s.total_r}R`, s.total_r >= 0 ? C.teal : C.red)}
+            {tile(isAr ? "متوسط الصفقة" : "Avg per trade", s.avg_r != null ? `${s.avg_r > 0 ? "+" : ""}${s.avg_r}R` : "—")}
+            {tile(isAr ? "أقصى تراجع" : "Max drawdown", `${s.max_drawdown_r}R`, C.red)}
+            {tile(isAr ? "أطول سلسلة خسائر" : "Worst losing streak", s.worst_losing_streak)}
+            {tile(isAr ? "وصلت الهدف الثاني" : "Reached TP2", s.tp2_hits, C.goldBright)}
+          </div>
+
+          {(res.notes?.length > 0 || res.unsupported?.length > 0) && (
+            <div style={{ background: C.goldSoft, border: `1px solid ${C.gold}55`, color: C.goldBright, fontSize: 12, lineHeight: 1.8 }} className="rounded-lg px-3 py-2">
+              {res.notes.map((n, i) => <div key={i}>⚠ {n}</div>)}
+              {res.unsupported.length > 0 && <div>⚠ {isAr ? "شروط لم تُحتسب:" : "Conditions not evaluated:"} {res.unsupported.map((u) => u.label).join("، ")}</div>}
+            </div>
+          )}
+
+          <div style={{ color: C.sub, fontSize: 12 }}>
+            {isAr
+              ? <>فُحصت <b style={{ color: C.text }}>{res.funnel.bars}</b> شمعة، اكتملت الشروط <b style={{ color: C.text }}>{res.funnel.triggers}</b> مرة (تُجوهل منها {res.funnel.skipped_open_trade} لوجود صفقة مفتوحة).</>
+              : <>Checked <b style={{ color: C.text }}>{res.funnel.bars}</b> candles; conditions were met <b style={{ color: C.text }}>{res.funnel.triggers}</b> times ({res.funnel.skipped_open_trade} skipped while a trade was open).</>}
+            <div className="flex flex-wrap gap-2 mt-1.5">
+              {Object.entries(res.group_pass || {}).map(([g, n]) => (
+                <span key={g} style={{ background: C.surface, border: `1px solid ${C.borderSoft}`, fontSize: 11 }} className="rounded-md px-2 py-0.5">
+                  {g}: {res.funnel.bars ? Math.round((100 * n) / res.funnel.bars) : 0}%
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {res.weekly?.length > 0 && (
+            <div>
+              <div style={{ fontFamily: FD, fontWeight: 600, fontSize: 13 }} className="mb-1.5">{isAr ? "أسبوعياً" : "Weekly"}</div>
+              <div className="flex flex-wrap gap-2">
+                {res.weekly.map((w) => (
+                  <div key={w.week} style={{ background: C.surface, border: `1px solid ${w.r >= 0 ? C.teal + "55" : C.red + "55"}` }} className="rounded-lg px-3 py-1.5" dir="ltr">
+                    <div style={{ fontFamily: FM, fontSize: 11, color: C.muted }}>{w.week}</div>
+                    <div style={{ fontFamily: FM, fontSize: 13, color: w.r >= 0 ? C.teal : C.red }}>{w.r > 0 ? "+" : ""}{w.r}R <span style={{ color: C.muted, fontSize: 11 }}>({w.trades})</span></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {res.trades?.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full" style={{ fontSize: 11.5 }}>
+                <thead><tr style={{ color: C.muted, borderBottom: `1px solid ${C.border}` }}>
+                  {(isAr ? ["الوقت (UTC)", "الرمز", "الاتجاه", "الدخول", "الوقف", "TP1", "TP2", "النتيجة", "R"] : ["Time (UTC)", "Symbol", "Side", "Entry", "Stop", "TP1", "TP2", "Result", "R"])
+                    .map((h) => <th key={h} className="pb-1.5 text-start font-medium">{h}</th>)}
+                </tr></thead>
+                <tbody>
+                  {[...res.trades].reverse().map((t, i) => (
+                    <tr key={i} style={{ borderBottom: `1px solid ${C.borderSoft}` }}>
+                      <td className="py-1.5" style={{ fontFamily: FM, color: C.sub }} dir="ltr">{fmtT(t.time)}</td>
+                      <td>{t.symbol}</td>
+                      <td style={{ color: t.side === "BUY" ? C.teal : C.red }}>{t.side === "BUY" ? (isAr ? "شراء" : "Buy") : (isAr ? "بيع" : "Sell")}</td>
+                      <td style={{ fontFamily: FM }} dir="ltr">{t.entry}</td>
+                      <td style={{ fontFamily: FM, color: C.red }} dir="ltr">{t.sl}</td>
+                      <td style={{ fontFamily: FM, color: C.teal }} dir="ltr">{t.tp1}</td>
+                      <td style={{ fontFamily: FM, color: C.teal }} dir="ltr">{t.tp2}</td>
+                      <td>{(RESULT_LABEL[t.result] || [t.result, t.result])[isAr ? 0 : 1]}</td>
+                      <td style={{ fontFamily: FM, color: t.r > 0 ? C.teal : t.r < 0 ? C.red : C.sub }} dir="ltr">{t.r > 0 ? "+" : ""}{t.r}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div style={{ color: C.muted, fontSize: 11, lineHeight: 1.8, borderTop: `1px solid ${C.borderSoft}` }} className="pt-2">
+            {isAr
+              ? "طريقة الحساب: نفس محرك التحليل الحي على كل شمعة مغلقة بلا أي بيانات مستقبلية. الدخول بإغلاق شمعة الإطلاق، الوقف خلف آخر قاع/قمة (10 شموع)، الهدف الأول بمسافة الوقف (1R) ويُغلق عنده نصف الصفقة وينتقل الوقف للدخول، والنصف الآخر حتى الهدف الثاني، وأقصى مدة 24 ساعة. صفقة واحدة مفتوحة لكل رمز. أسعار المعادن من العقود الآجلة. نتائج الماضي لا تضمن المستقبل."
+              : "Method: the live analysis engine on every closed candle with no future data. Entry at the trigger candle close, stop behind the last swing (10 candles), TP1 at the stop distance (1R) where half is closed and the stop moves to entry, the rest runs to TP2, max 24h. One open trade per symbol. Metals priced from futures. Past results do not guarantee the future."}
+          </div>
+        </div>
+      )}
+    </Modal>
   );
 }
 
@@ -299,6 +561,7 @@ export default function StrategyBuilder() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [viewTarget, setViewTarget] = useState(null);
+  const [backtestTarget, setBacktestTarget] = useState(null);
   const [toast, setToast] = useState(null);
 
   const loadSaved = useCallback(async () => {
@@ -729,7 +992,8 @@ export default function StrategyBuilder() {
         </div>
 
         {/* tabs */}
-        <div className="px-4 md:px-8 max-w-[1500px] mx-auto flex items-center gap-1 overflow-x-auto scroll-thin">
+        {/* (2026-10-14) تلتفّ لسطر ثانٍ بدل التمرير — 6 تبويبات، والتمرير كان يخفي الأخيرة على الجوال */}
+        <div className="px-4 md:px-8 max-w-[1500px] mx-auto flex items-center gap-1 flex-wrap">
           {TABS.map((t) => {
             const Icon = t.icon;
             const active = activeTab === t.id;
@@ -1363,6 +1627,19 @@ export default function StrategyBuilder() {
           </div>
         )}
 
+        {/* ============ TAB: STRATEGY LIBRARY (2026-10-14) ============ */}
+        {activeTab === "library" && (
+          <TemplateLibrary
+            isAr={isAr}
+            showToast={showToast}
+            onCopied={async (s) => {
+              await loadSaved();
+              await loadStrategy({ id: s.id }, "build");
+              showToast(isAr ? "تم إنشاء نسختك — عدّلها كما تريد، ثم جرّبها بالباكتيست من «المحفوظة» قبل التفعيل" : "Your copy is ready — edit it, then backtest it from \"Saved\" before activating");
+            }}
+          />
+        )}
+
         {/* ============ TAB: SAVED ============ */}
         {activeTab === "saved" && (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -1406,6 +1683,11 @@ export default function StrategyBuilder() {
                   <IconBtn icon={Copy} onClick={() => duplicateSaved(r)} title={isAr ? "تكرار" : "Duplicate"} />
                   <IconBtn icon={Power} onClick={() => toggleSavedStatus(r)} title={isAr ? "تفعيل/تعطيل" : "Enable/Disable"} color={r.status === "ACTIVE" ? C.teal : C.muted} />
                   <IconBtn icon={Eye} onClick={() => setViewTarget(r)} title={isAr ? "عرض" : "View"} />
+                  <button onClick={() => setBacktestTarget(r)} title={isAr ? "باكتيست على البيانات التاريخية" : "Backtest on historical data"}
+                    style={{ background: C.goldSoft, border: `1px solid ${C.gold}66`, color: C.goldBright }}
+                    className="px-2 py-1 rounded-md text-[11px] flex items-center gap-1 ms-1">
+                    <Activity size={12} /> {isAr ? "باكتيست" : "Backtest"}
+                  </button>
                   <IconBtn icon={Trash2} onClick={() => { if (requirePaid()) setDeleteTarget(r); }} title={isAr ? "حذف" : "Delete"} color={C.red} />
                 </div>
               </div>
@@ -1427,6 +1709,10 @@ export default function StrategyBuilder() {
             <button onClick={confirmDelete} style={{ background: C.red, color: "#1A0505" }} className="px-3.5 py-2 rounded-lg text-sm font-medium">{isAr ? "حذف نهائي" : "Delete permanently"}</button>
           </div>
         </Modal>
+      )}
+
+      {backtestTarget && (
+        <BacktestModal rec={backtestTarget} isAr={isAr} onClose={() => setBacktestTarget(null)} showToast={showToast} />
       )}
 
       {viewTarget && (
