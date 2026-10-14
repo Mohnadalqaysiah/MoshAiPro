@@ -53,25 +53,35 @@ def crypto_weekend_paused(db, symbol: str, now: Optional[datetime] = None) -> bo
 
 def record_shadow(db, *, source: str, symbol: str, timeframe: str, signal_type: str,
                   entry, sl, tp1, tp2=None, confidence=None, rr=None, expires_at=None,
-                  user_id: Optional[int] = None) -> Optional[int]:
+                  user_id: Optional[int] = None, reason: str = "crypto_weekend") -> Optional[int]:
     """يحفظ الإشارة بجدول الظل ويعيد رقمها (لربط بصمة السوق)، أو None إن لم تُحفظ.
     نفس (رمز+فريم+اتجاه+دخول) تُحفظ مرة واحدة — المراقبة الشخصية تكرر نفس الإعداد
     لكل مشترك. لا يرمي استثناء أبداً."""
     try:
         from app.models.shadow_signal import ShadowSignal
-        h = hashlib.md5(f"{symbol}-{timeframe}-{signal_type}-{round(float(entry), 4)}".encode()).hexdigest()
+        h = hashlib.md5(f"{reason}-{symbol}-{timeframe}-{signal_type}-{round(float(entry), 4)}".encode()).hexdigest()
         if db.query(ShadowSignal.id).filter(ShadowSignal.signal_hash == h).first():
             return None
+        if reason != "crypto_weekend":
+            # (2026-10-14) صفقات مرفوضة: الماسح يعيد نفس الفكرة كل دورة بسعر مختلف قليلاً — صفقة ظل مفتوحة
+            # واحدة لكل (سبب، رمز، فريم، اتجاه) كما يفعل النظام الحي (_has_active_signal)، وإلا تضخّمت العينة.
+            now = datetime.now(timezone.utc)
+            if db.query(ShadowSignal.id).filter(
+                ShadowSignal.reason == reason[:60], ShadowSignal.market == symbol.upper(),
+                ShadowSignal.timeframe == timeframe, ShadowSignal.signal_type == signal_type,
+                ShadowSignal.outcome.is_(None), ShadowSignal.expires_at > now,
+            ).first():
+                return None
         sh = ShadowSignal(
             source=source, market=symbol.upper(), timeframe=timeframe, signal_type=signal_type,
             entry_price=float(entry), stop_loss=float(sl), take_profit_1=float(tp1),
             take_profit_2=float(tp2 or tp1), ai_confidence=float(confidence or 0),
             risk_reward_ratio=float(rr) if rr else None, expires_at=expires_at,
-            user_id=user_id, signal_hash=h,
+            user_id=user_id, signal_hash=h, reason=reason[:60],
         )
         db.add(sh)
         db.commit()
-        logger.info(f"🌑 Shadow (crypto weekend): {symbol}/{timeframe} {signal_type} @ {entry} [{source}]")
+        logger.info(f"🌑 Shadow ({reason}): {symbol}/{timeframe} {signal_type} @ {entry} [{source}]")
         return sh.id
     except Exception as e:
         db.rollback()

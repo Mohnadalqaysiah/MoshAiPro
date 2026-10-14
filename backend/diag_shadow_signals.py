@@ -20,15 +20,29 @@ def _utc(d):
 
 
 def main():
+    """(2026-10-14) مقسّم حسب السبب: crypto_weekend (إيقاف العطلة) وكل قاعدة رفض بتجربتها الصامتة
+    (ZONE_CONFLICT_*، HTF_CONFLICT_*، COMMODITY_COUNTER_4H_TREND، SL_INSIDE_SPREAD_NOISE).
+    سؤال كل قاعدة رفض: لو سمحنا بالصفقات التي منعتها، هل كانت ستربح؟ موجب = القاعدة تمنع رابحات."""
     db = SessionLocal()
     rows = db.query(ShadowSignal).order_by(ShadowSignal.created_at).all()
+    groups = {}
+    for s in rows:
+        groups.setdefault(s.reason or "crypto_weekend", []).append(s)
+    for reason, rs in sorted(groups.items()):
+        print("=" * 70 + f"\nالسبب: {reason}\n" + "=" * 70)
+        report(rs)
+        print()
+    db.close()
+
+
+def report(rows):
     pending = [s for s in rows if s.outcome is None]
     done = [s for s in rows if s.outcome is not None]
 
     open_until = {}
     accepted, skipped = [], 0
     for s in done:
-        key = (s.market, s.timeframe)
+        key = (s.market, s.timeframe, s.signal_type)
         created = _utc(s.created_at)
         if key in open_until and open_until[key] and open_until[key] > created:
             skipped += 1
@@ -61,8 +75,8 @@ def main():
         by.setdefault(s.market, []).append(s.r_multiple)
     for m, rs in sorted(by.items(), key=lambda kv: sum(kv[1])):
         print(f"  {m:<9} {len(rs):>3} | مجموع {sum(rs):+.2f}R | متوسط {sum(rs) / len(rs):+.2f}R")
-    print("\nالمرجع (قبل الإيقاف، 16/09-12/10): كريبتو عطلة −0.25R للصفقة، كريبتو أيام الأسبوع +0.37R.")
-    db.close()
+    if rows and (rows[0].reason or "crypto_weekend") == "crypto_weekend":
+        print("\nالمرجع (قبل الإيقاف، 16/09-12/10): كريبتو عطلة −0.25R للصفقة، كريبتو أيام الأسبوع +0.37R.")
 
 
 if __name__ == "__main__":

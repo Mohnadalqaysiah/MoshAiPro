@@ -87,6 +87,9 @@ def _get_linked_user(telegram_id: str, db: Session) -> Optional[User]:
 # ضد الترند الأعلى عدة مرات متتالية بسوق متذبذب. هاد القاطع طبقة حماية
 # مستقلة عن محرك القرار: يوقف حفظ إشارات جديدة لنفس (الزوج، الاتجاه) لفترة
 # تهدئة بعد عدد معيّن من SL_HIT متتالية، بغض النظر عن سبب الخسارة نفسه.
+# (2026-10-14) قواعد رفض تُسجَّل صفقاتها المرفوضة بجدول الظل للتعلّم (تجربة صامتة، راجع bot_analyze)
+_LEARN_REJECTIONS = ("ZONE_CONFLICT_", "HTF_CONFLICT", "COMMODITY_COUNTER_4H_TREND", "SL_INSIDE_SPREAD_NOISE")
+
 _LOSS_STREAK_LIMIT      = 3   # عدد الخسائر المتتالية اللي تُفعّل القاطع
 _LOSS_STREAK_COOLDOWN_H = 6   # ساعات التهدئة قبل السماح بإشارة جديدة بنفس الاتجاه
 
@@ -310,7 +313,30 @@ async def bot_analyze(
                     market_fingerprint.schedule(analysis, symbol, timeframe, rec, signal_id=new_signal.id)
         except Exception as _se:
             logger.warning(f"Signal save error in bot_analyze: {_se}")
-        
+
+        # (2026-10-14) تجربة صامتة للقواعد التي تمنع الإشارات — الذهب والفضة صامتان لأن
+        # ZONE_CONFLICT_SELL_IN_DISCOUNT يمنع كل بيع في سوق هابط (السعر يبقى "رخيصاً"). لا نعرف هل
+        # القاعدة تمنع خاسرات أم رابحات، فتُسجَّل الصفقة المرفوضة بجدول الظل (لا تصل لأحد) ويقيّمها
+        # shadow_evaluator من الشموع. بمستويات المنتج الحالي (TP1 عند 1R). لا يمسّ المحرك.
+        try:
+            _pre = analysis.get("_pre_reject_rec")
+            _why = str(analysis.get("rejection_reason") or "")
+            if _pre in ("BUY", "SELL") and _why.startswith(_LEARN_REJECTIONS) \
+                    and signal_user_id is not None and _smart_data.is_market_open(symbol):
+                _lv = dict(analysis.get("_pre_reject_levels") or {})
+                if _lv.get("entry") and _lv.get("stop_loss") and _lv.get("tp1"):
+                    from datetime import timedelta
+                    from app.services.weekend_policy import record_shadow
+                    _capped = mosh_ai_engine_v5._cap_tp1({"recommendation": _pre, "levels": _lv}, symbol, timeframe)["levels"]
+                    _hrs = {"1m": 2, "5m": 4, "15m": 3, "30m": 12, "1h": 24, "4h": 72, "1d": 168}.get(timeframe, 24)
+                    record_shadow(db, source="rejected", reason=_why, symbol=symbol, timeframe=timeframe,
+                                  signal_type=_pre, entry=_capped["entry"], sl=_capped["stop_loss"],
+                                  tp1=_capped["tp1"], tp2=_capped.get("tp2"), confidence=None,
+                                  rr=_capped.get("risk_reward"),
+                                  expires_at=datetime.now(timezone.utc) + timedelta(hours=_hrs))
+        except Exception as _rs:
+            logger.warning(f"rejected-shadow {symbol}/{timeframe}: {_rs}")
+
         return {"success": True, "data": analysis}
     except Exception as e:
         logger.error(f"Bot analyze error: {e}")
