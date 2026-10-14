@@ -751,11 +751,13 @@ export default function Admin() {
   const [deliveries, setDeliveries] = useState(null)
   const [deliveriesLoading, setDeliveriesLoading] = useState(false)
 
-  const loadDeliveries = async (signalId) => {
+  // (2026-10-14) allIds: كل صفوف القرار — البث يُسجَّل على صف غير الممثِّل غالباً، فكانت النافذة تعرض 0
+  const loadDeliveries = async (signalId, allIds) => {
     setDeliveriesLoading(true)
     setDeliveries({ signal_id: signalId, recipients: [] })
     try {
-      const r = await axios.get(`${API}/api/v1/admin/signals/${signalId}/deliveries`)
+      const q = allIds?.length ? `?ids=${allIds.join(',')}` : ''
+      const r = await axios.get(`${API}/api/v1/admin/signals/${signalId}/deliveries${q}`)
       setDeliveries(r.data)
     } catch (e) {
       setDeliveries({ signal_id: signalId, recipients: [], error: e.response?.data?.detail || e.message })
@@ -2596,7 +2598,7 @@ export default function Admin() {
                               <td className="py-2">
                                 {s.delivered_count > 0 ? (
                                   <button
-                                    onClick={() => loadDeliveries(s.id)}
+                                    onClick={() => loadDeliveries(s.id, s.all_row_ids)}
                                     className="flex items-center gap-1 text-xs bg-blue-900/40 hover:bg-blue-900/70 text-blue-300 px-2 py-0.5 rounded transition-colors"
                                     title="اعرض من استلم هذه الإشارة">
                                     <Users size={11}/> {s.delivered_count}

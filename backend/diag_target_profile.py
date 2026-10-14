@@ -34,7 +34,10 @@ DAYS = int(sys.argv[1]) if len(sys.argv) > 1 else 14
 SPOT_TV = {"XAUUSD", "XAGUSD"}
 NAMES = {"crypto": "كريبتو", "forex": "فوركس", "commodity": "معادن وطاقة", "index": "مؤشرات"}
 PROFILES = [("A", "كما هو اليوم"), ("B", "هدف 1R كامل"), ("C", "نصف عند 1R + تعادل + الباقي TP2"),
-            ("D", "هدف 0.7R كامل"), ("E", "كما هو + تعادل عند 1R")]
+            ("D", "هدف 0.7R كامل"), ("E", "كما هو + تعادل عند 1R"),
+            # (2026-10-14) TP1 أقرب (سقف 1R أو 1.5R) وTP2 كما هو — نفس محاسبة A تماماً (TP1 يُقفل النتيجة رابحة)
+            ("H", "TP1 عند 0.7R + TP2 كما هو"), ("F", "TP1 عند 1R + TP2 كما هو"),
+            ("G", "TP1 عند 1.5R + TP2 كما هو")]
 
 
 async def _candles(sym):
@@ -120,7 +123,12 @@ def run(rows, created, end_ts, entry, sl, tp1, tp2, is_buy, profile):
                 return r_of(target)
         return None if still_open else r_of(last_close)
 
-    # A و E: TP1 يُقفل الربح، المتابعة حتى TP2؛ E ينقل الوقف للدخول بعد بلوغ 1R
+    # A و E و F و G و H: TP1 يُقفل الربح، المتابعة حتى TP2؛ E ينقل الوقف للدخول بعد بلوغ 1R؛
+    # F/G يقرّبان TP1 لـ1R/1.5R إن كان أبعد (وإلا يبقى كما هو) — TP2 لا يتغيّر
+    if profile in ("F", "G", "H"):
+        cap = {"F": 1.0, "G": 1.5, "H": 0.7}[profile]
+        if r_of(tp1) > cap:
+            tp1 = lvl(cap)
     has_t2 = (tp2 > tp1) if is_buy else (tp2 < tp1)
     cur_sl, armed, t1_hit = sl, False, False
     for hi, lo, _ in bars:

@@ -1580,6 +1580,7 @@ def admin_signal_decisions(
             "rows":            len(d.get("row_ids", [])),
             "merged_count":    d.get("merged_count", 0),
             "status_conflict": d.get("status_conflict") or d.get("merge_conflict"),
+            "all_row_ids":     ids,
             "delivered_count": sum(dmap.get((i, True), 0) for i in ids),
             "failed_count":    sum(dmap.get((i, False), 0) for i in ids),
             "r":               round(r, 2) if r is not None else None,
@@ -1639,15 +1640,30 @@ def admin_signal_decisions(
 @router.get("/signals/{signal_id}/deliveries")
 def admin_signal_deliveries(
     signal_id: int,
+    ids: Optional[str] = Query(default=None, description="(2026-10-14) كل صفوف القرار مفصولة بفاصلة"),
     admin: User = Depends(get_admin_user),
     db: Session = Depends(get_db),
 ):
-    """من استلم هذه الإشارة بالضبط ومتى — الكشف الذي كان غائباً تماماً."""
+    """من استلم هذه الإشارة بالضبط ومتى — الكشف الذي كان غائباً تماماً.
+
+    (2026-10-14) سجل الإشارات صار قراراً واحداً لكل صفقة، والرقم على الزر مجموع تسليم **كل** صفوفه،
+    بينما البث يُسجَّل على صف واحد (الأحدث) غالباً غير الصف الممثِّل — فكانت النافذة تعرض 0. ids
+    يجمع كل الصفوف، ومستلم واحد يُعرض مرة (أول تسليم له)."""
     from app.models.signal_delivery import SignalDelivery
 
+    want = {signal_id}
+    if ids:
+        want |= {int(x) for x in ids.split(",") if x.strip().isdigit()}
     rows = (db.query(SignalDelivery)
-              .filter(SignalDelivery.signal_id == signal_id)
+              .filter(SignalDelivery.signal_id.in_(want))
               .order_by(SignalDelivery.sent_at.asc()).all())
+    seen, uniq = set(), []
+    for r in rows:
+        key = (r.telegram_id or f"u{r.user_id}", r.ok)
+        if key not in seen:
+            seen.add(key)
+            uniq.append(r)
+    rows = uniq
     user_ids = [r.user_id for r in rows if r.user_id]
     users = {}
     if user_ids:
