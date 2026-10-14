@@ -338,6 +338,9 @@ class MoshAIEngineV5:
                         # drought) يفوّت رمزاً فعلياً ساكتاً.
                         if analysis.get("recommendation") in ("BUY", "SELL"):
                             self._record_signal_issued(symbol, timeframe)
+                            # (2026-10-14، بتفويض صريح من المالك) TP1 قريب — بعد كل البوابات حتى لا
+                            # يتغيّر أي قرار، فقط موضع الهدف الأول. راجع _cap_tp1.
+                            analysis = self._cap_tp1(analysis, symbol, timeframe)
 
                         # ── MARKET CONTEXT — optional news/sentiment summary ──
                         # Advisory only, same contract as the Gemini summary
@@ -2344,6 +2347,48 @@ class MoshAIEngineV5:
     # (2026-10-10) فلتر اتجاه 4h — راجع analyze_market. NATGAS مستثنى عمداً:
     # صفقاته عكس الاتجاه لم تخسر بالقياس (+0.26R، n=5).
     _COMMODITY_TREND_FILTER = {"XAUUSD", "XAGUSD", "XPTUSD", "COPPER", "USOIL"}
+
+    # ── TP1 قريب (2026-10-14، بتفويض صريح من المالك) ───────────────────────────
+    # المالك: "الإشارة توصل نص الهدف وترجع خاسرة — بدي من الآن أي إشارة جديدة تقرّب الهدف، والي راح راح".
+    # diag_target_profile.py (509 قراراً، 30/09-14/10) بمحاسبة قابلة للتنفيذ: TP1 عند 1R يرفع الإشارات
+    # التي تبلغ هدفها الأول من 35% إلى 56%، والمعادن من −24R إلى +6R، والربح الكلي شبه ثابت (+72R→+61.5R).
+    # يُطبَّق **بعد** كل البوابات: لا يغيّر أي قرار ولا عدد الإشارات ولا الدخول/الوقف — فقط TP1. الهدف
+    # البعيد الأصلي يصبح TP2 (يبقى للمتابعة). risk_reward يُعرض حتى TP2 (كي لا تسقط شروط الحفظ RR≥1.2).
+    # لا يمسّ أي إشارة سابقة (المالك: الإحصائيات الماضية لا تتغيّر).
+    TP1_CAP_R = 1.0
+
+    def _cap_tp1(self, analysis: dict, symbol: str, timeframe: str) -> dict:
+        lv = analysis.get("levels") or {}
+        try:
+            entry, sl, tp1 = float(lv["entry"]), float(lv["stop_loss"]), float(lv["tp1"])
+        except (KeyError, TypeError, ValueError):
+            return analysis
+        risk = abs(entry - sl)
+        if not risk:
+            return analysis
+        sgn = 1 if analysis.get("recommendation") == "BUY" else -1
+        if sgn * (tp1 - entry) / risk <= self.TP1_CAP_R:
+            return analysis                                   # الهدف أصلاً قريب — لا تغيير
+        try:
+            tp2 = float(lv.get("tp2") or tp1)
+        except (TypeError, ValueError):
+            tp2 = tp1
+        far = tp2 if sgn * (tp2 - tp1) > 0 else tp1          # الأبعد بين TP1 وTP2 الأصليين
+        new_tp1 = round(entry + sgn * self.TP1_CAP_R * risk, 5)
+        lv["tp1_original"] = tp1
+        lv["tp1"] = new_tp1
+        lv["tp2"] = round(far, 5)
+        rr_tp2 = round(abs(far - entry) / risk, 2)
+        lv["risk_reward"] = rr_tp2
+        lv["rr_tp1"] = self.TP1_CAP_R
+        analysis["risk_reward_ratio"] = rr_tp2
+        tz = analysis.get("take_profit_zones")
+        if isinstance(tz, list) and tz:
+            analysis["take_profit_zones"] = [new_tp1, round(far, 5)] + list(tz[2:])
+        analysis["levels"] = lv
+        analysis["tp1_capped"] = True
+        logger.info(f"TP1_CAP [{symbol}/{timeframe}] TP1 {tp1} → {new_tp1} ({self.TP1_CAP_R}R), TP2 {far}")
+        return analysis
 
     @staticmethod
     def _ema50_4h_trend(df_4h) -> str:
