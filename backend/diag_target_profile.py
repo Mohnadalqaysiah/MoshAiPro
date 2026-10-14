@@ -37,7 +37,11 @@ PROFILES = [("A", "كما هو اليوم"), ("B", "هدف 1R كامل"), ("C", 
             ("D", "هدف 0.7R كامل"), ("E", "كما هو + تعادل عند 1R"),
             # (2026-10-14) TP1 أقرب (سقف 1R أو 1.5R) وTP2 كما هو — نفس محاسبة A تماماً (TP1 يُقفل النتيجة رابحة)
             ("H", "TP1 عند 0.7R + TP2 كما هو"), ("F", "TP1 عند 1R + TP2 كما هو"),
-            ("G", "TP1 عند 1.5R + TP2 كما هو")]
+            ("G", "TP1 عند 1.5R + TP2 كما هو"),
+            # (2026-10-14) محاسبة صادقة يقدر عليها المتداول فعلاً — A وF-H تعدّ TP1 ربحاً وتُبقي الصفقة كاملة لـTP2
+            # معاً (مستحيل تنفيذياً). I/J = الأسلوب الحالي بصدق، C/K = TP1 قريب بصدق.
+            ("I", "صادق: إغلاق كامل عند TP1 الحالي"), ("J", "صادق: نصف عند TP1 الحالي + تعادل + الباقي TP2"),
+            ("K", "صادق: نصف عند 0.7R + تعادل + الباقي TP2")]
 
 
 async def _candles(sym):
@@ -89,11 +93,13 @@ def run(rows, created, end_ts, entry, sl, tp1, tp2, is_buy, profile):
     still_open = end_ts > datetime.now(timezone.utc)
     last_close = bars[-1][2]
 
-    if profile == "C":
-        # النصف الأول يُغلق عند 1R، ثم الوقف للدخول (من الشمعة التالية)، والنصف الثاني حتى الهدف
-        # النهائي (TP2، أو TP1 إن لم يوجد TP2). إن كان الهدف النهائي ≤ 1R يُغلق كاملاً عنده.
+    if profile in ("C", "J", "K"):
+        # النصف الأول يُغلق عند half_r (C: 1R، K: 0.7R، J: TP1 الأصلي)، ثم الوقف للدخول (من الشمعة
+        # التالية)، والنصف الثاني حتى الهدف النهائي (TP2، أو TP1 إن لم يوجد TP2). إن كان الهدف النهائي
+        # ≤ half_r يُغلق كاملاً عنده. هذا تنفيذ يقدر عليه المتداول فعلاً — محاسبة صادقة.
+        half_r = {"C": 1.0, "K": 0.7}.get(profile) or r_of(tp1)
         final = tp2 if ((tp2 > tp1) if is_buy else (tp2 < tp1)) else tp1
-        if r_of(final) <= 1.0:
+        if r_of(final) <= half_r:
             for hi, lo, _ in bars:
                 if sl_touch(hi, lo, sl):
                     return -1.0
@@ -105,17 +111,18 @@ def run(rows, created, end_ts, entry, sl, tp1, tp2, is_buy, profile):
             if armed:
                 cur_sl = entry
             if sl_touch(hi, lo, cur_sl):
-                return (0.5 + 0.5 * r_of(cur_sl)) if half else -1.0
+                return (0.5 * half_r + 0.5 * r_of(cur_sl)) if half else -1.0
             if reached(hi, lo, final):
-                return 0.5 + 0.5 * r_of(final)          # الوصول للنهائي يمر حتماً بـ1R
-            if reached(hi, lo, lvl(1.0)):
+                return 0.5 * half_r + 0.5 * r_of(final)    # الوصول للنهائي يمر حتماً بمستوى النصف
+            if reached(hi, lo, lvl(half_r)):
                 half, armed = True, True
         if still_open:
             return None
-        return (0.5 + 0.5 * r_of(last_close)) if half else r_of(last_close)
+        return (0.5 * half_r + 0.5 * r_of(last_close)) if half else r_of(last_close)
 
-    if profile in ("B", "D"):
-        target = lvl(1.0 if profile == "B" else 0.7)
+    if profile in ("B", "D", "I"):
+        # إغلاق كامل عند هدف واحد: B عند 1R، D عند 0.7R، I عند TP1 الأصلي (محاسبة صادقة للأسلوب الحالي)
+        target = tp1 if profile == "I" else lvl(1.0 if profile == "B" else 0.7)
         for hi, lo, _ in bars:
             if sl_touch(hi, lo, sl):
                 return -1.0
