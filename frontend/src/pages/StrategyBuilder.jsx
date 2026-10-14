@@ -447,6 +447,13 @@ function BacktestModal({ rec, isAr, onClose, showToast }) {
             {tile(isAr ? "أطول سلسلة خسائر" : "Worst losing streak", s.worst_losing_streak)}
             {tile(isAr ? "وصلت الهدف الثاني" : "Reached TP2", s.tp2_hits, C.goldBright)}
           </div>
+          {s.total_r_gross != null && (
+            <div style={{ color: C.muted, fontSize: 11.5 }}>
+              {isAr
+                ? <>صافي النتيجة بعد خصم السبريد المعتاد من كل صفقة. قبل الخصم: <span dir="ltr">{s.total_r_gross > 0 ? "+" : ""}{s.total_r_gross}R</span> · متوسط تكلفة السبريد: <span dir="ltr">{s.avg_cost_r}R</span> للصفقة.</>
+                : <>Net result after deducting the typical spread from every trade. Before costs: <span dir="ltr">{s.total_r_gross > 0 ? "+" : ""}{s.total_r_gross}R</span> · average spread cost: <span dir="ltr">{s.avg_cost_r}R</span> per trade.</>}
+            </div>
+          )}
 
           {(res.notes?.length > 0 || res.unsupported?.length > 0) && (
             <div style={{ background: C.goldSoft, border: `1px solid ${C.gold}55`, color: C.goldBright, fontSize: 12, lineHeight: 1.8 }} className="rounded-lg px-3 py-2">
@@ -510,8 +517,8 @@ function BacktestModal({ rec, isAr, onClose, showToast }) {
 
           <div style={{ color: C.muted, fontSize: 11, lineHeight: 1.8, borderTop: `1px solid ${C.borderSoft}` }} className="pt-2">
             {isAr
-              ? "طريقة الحساب: نفس محرك التحليل الحي على كل شمعة مغلقة بلا أي بيانات مستقبلية. الدخول بإغلاق شمعة الإطلاق، الوقف خلف آخر قاع/قمة (10 شموع)، الهدف الأول بمسافة الوقف (1R) ويُغلق عنده نصف الصفقة وينتقل الوقف للدخول، والنصف الآخر حتى الهدف الثاني، وأقصى مدة 24 ساعة. صفقة واحدة مفتوحة لكل رمز. أسعار المعادن من العقود الآجلة. نتائج الماضي لا تضمن المستقبل."
-              : "Method: the live analysis engine on every closed candle with no future data. Entry at the trigger candle close, stop behind the last swing (10 candles), TP1 at the stop distance (1R) where half is closed and the stop moves to entry, the rest runs to TP2, max 24h. One open trade per symbol. Metals priced from futures. Past results do not guarantee the future."}
+              ? "طريقة الحساب: نفس محرك التحليل الحي على كل شمعة مغلقة بلا أي بيانات مستقبلية. الدخول بإغلاق شمعة الإطلاق، الوقف خلف آخر قاع/قمة (10 شموع) وبحد أدنى نصف متوسط حركة الشمعة أو 3 أضعاف السبريد، ويُخصم السبريد المعتاد من كل صفقة. الهدف الأول بمسافة الوقف (1R) ويُغلق عنده نصف الصفقة وينتقل الوقف للدخول، والنصف الآخر حتى الهدف الثاني، وأقصى مدة 24 ساعة. صفقة واحدة مفتوحة لكل رمز. أسعار المعادن من العقود الآجلة. نتائج الماضي لا تضمن المستقبل."
+              : "Method: the live analysis engine on every closed candle with no future data. Entry at the trigger candle close, stop behind the last swing (10 candles) with a floor of half the average candle range or 3x the spread, and the typical spread is deducted from every trade. TP1 at the stop distance (1R) where half is closed and the stop moves to entry, the rest runs to TP2, max 24h. One open trade per symbol. Metals priced from futures. Past results do not guarantee the future."}
           </div>
         </div>
       )}

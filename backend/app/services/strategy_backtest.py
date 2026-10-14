@@ -93,7 +93,8 @@ def infer_side(conditions) -> Optional[str]:
 
 # ─── محاكاة الصفقة ────────────────────────────────────────────────────────────
 
-def _simulate(p: pd.DataFrame, i: int, side: str, rr: float, now: datetime) -> Optional[Dict]:
+def _simulate(p: pd.DataFrame, i: int, side: str, rr: float, now: datetime, symbol: str = "") -> Optional[Dict]:
+    from app.services.spread_table import typical_spread, MIN_SL_SPREAD_MULT
     entry = float(p.at[i, "close"])
     atr = float(p.at[i, "atr"] or 0)
     lo = float(p["low"].iloc[max(0, i - SWING_LOOKBACK + 1): i + 1].min())
@@ -102,9 +103,16 @@ def _simulate(p: pd.DataFrame, i: int, side: str, rr: float, now: datetime) -> O
     sl = (lo - 0.1 * atr) if buy else (hi + 0.1 * atr)
     if (buy and sl >= entry) or (not buy and sl <= entry):
         sl = entry - atr if buy else entry + atr
+    # (2026-10-14) حد أدنى للوقف — نتائج القوالب أظهرت وقوفاً بـ1-3 دولار للذهب (شموع آسيا الهادئة)، داخل
+    # الضجيج والسبريد. الأكبر بين نصف ATR و3× السبريد المعتاد (نفس قاعدة المحرك SL_INSIDE_SPREAD_NOISE).
+    spread = typical_spread(symbol, entry) or 0.0
+    min_dist = max(0.5 * atr, MIN_SL_SPREAD_MULT * spread)
+    if abs(entry - sl) < min_dist:
+        sl = entry - min_dist if buy else entry + min_dist
     risk = abs(entry - sl)
     if risk <= 0:
         return None
+    cost_r = spread / risk           # (2026-10-14) السبريد يُخصم من كل صفقة بوحدات R
     sgn = 1 if buy else -1
     r_of = lambda px: sgn * (px - entry) / risk
     tp1 = entry + sgn * risk
@@ -124,24 +132,25 @@ def _simulate(p: pd.DataFrame, i: int, side: str, rr: float, now: datetime) -> O
             cur_sl = entry
         if (l <= cur_sl) if buy else (h >= cur_sl):
             r = (0.5 + 0.5 * r_of(cur_sl)) if half else -1.0
-            return _trade(t0, tk, side, entry, sl, tp1, tp2, "TP1+BE" if half else "SL", r, half)
+            return _trade(t0, tk, side, entry, sl, tp1, tp2, "TP1+BE" if half else "SL", r, half, cost_r)
         if (h >= tp2) if buy else (l <= tp2):
             r = 1.0 if rr2 <= 1.0 else 0.5 + 0.5 * rr2
-            return _trade(t0, tk, side, entry, sl, tp1, tp2, "TP2", r, True)
+            return _trade(t0, tk, side, entry, sl, tp1, tp2, "TP2", r, True, cost_r)
         if not half and ((h >= tp1) if buy else (l <= tp1)):
             half = armed = True
         last_close, last_t = c, tk
     if last_t < end and end > now:
         return None                         # ما زالت مفتوحة عند نهاية البيانات — لا تُحسب
     r = (0.5 + 0.5 * r_of(last_close)) if half else r_of(last_close)
-    return _trade(t0, last_t, side, entry, sl, tp1, tp2, "EXPIRED", r, half)
+    return _trade(t0, last_t, side, entry, sl, tp1, tp2, "EXPIRED", r, half, cost_r)
 
 
-def _trade(t0, t1, side, entry, sl, tp1, tp2, result, r, tp1_hit):
+def _trade(t0, t1, side, entry, sl, tp1, tp2, result, r, tp1_hit, cost_r=0.0):
     dp = 5 if entry < 20 else 3 if entry < 1000 else 2
     return {"time": t0.isoformat(), "exit_time": t1.isoformat(), "side": side,
             "entry": round(entry, dp), "sl": round(sl, dp), "tp1": round(tp1, dp), "tp2": round(tp2, dp),
-            "result": result, "r": round(float(r), 3), "tp1_hit": bool(tp1_hit)}
+            "result": result, "r": round(float(r) - cost_r, 3), "r_gross": round(float(r), 3),
+            "cost_r": round(cost_r, 3), "tp1_hit": bool(tp1_hit)}
 
 
 # ─── التشغيل ──────────────────────────────────────────────────────────────────
@@ -230,7 +239,7 @@ def run_backtest_sync(snap: Dict, symbols: List[str], days: int, progress=None) 
                 side = fixed_side or (ict_dir if ict_dir in ("BUY", "SELL") else None)
                 if not side:
                     continue
-                tr = _simulate(p, i, side, snap["rr"], now)
+                tr = _simulate(p, i, side, snap["rr"], now, ns)
                 if tr is None:
                     continue
                 tr["symbol"] = sym
@@ -278,6 +287,8 @@ def _summarize(trades, funnel, group_pass, unsupported, notes, days, primary, tf
             "max_drawdown_r": round(dd, 2),
             "worst_losing_streak": worst_streak,
             "tp2_hits": sum(1 for t in trades if t["result"] == "TP2"),
+            "total_r_gross": round(sum(t.get("r_gross", t["r"]) for t in trades), 2),
+            "avg_cost_r": round(sum(t.get("cost_r", 0) for t in trades) / n, 3) if n else None,
         },
         "weekly": sorted(weekly.values(), key=lambda x: x["week"]),
         "trades": trades[-200:],
@@ -287,7 +298,8 @@ def _summarize(trades, funnel, group_pass, unsupported, notes, days, primary, tf
         "notes": notes,
         "config": {"days": days, "primary_tf": primary, "timeframes": tfs, "side": side or "AUTO",
                    "rr_tp2": rr, "tp1_r": 1.0, "management": "half_at_tp1_then_breakeven",
-                   "sl_rule": f"swing {SWING_LOOKBACK} bars ± 0.1 ATR", "max_hold_hours": 24,
+                   "sl_rule": f"swing {SWING_LOOKBACK} bars ± 0.1 ATR, min max(0.5 ATR, 3x spread)", "max_hold_hours": 24,
+                   "costs": "typical spread deducted per trade",
                    "data_range": data_range},
     }
 
