@@ -156,7 +156,7 @@ _TEST_RESULTS = {
     "gold_session_buy":    {"status": "negative", "days": 30, "trades": 29, "net_r": -2.2},
     "gold_liquidity_buy":  {"status": "negative", "days": 30, "trades": 24, "net_r": -3.42},
     "gold_trend_sell":     {"status": "negative", "days": 30, "trades": 10, "net_r": -4.77},
-    "gold_session_trend_sell": {"status": "testing", "days": 30, "trades": 33, "net_r": 8.8, "weeks_won": 4, "weeks": 5, "max_dd_r": 3.39},
+    "gold_session_trend_sell": {"status": "tested", "days": 45, "trades": 45, "net_r": 16.37, "weeks_won": 7, "weeks": 7, "max_dd_r": 3.39},
     "gold_session_trend_buy": {"status": "negative", "days": 45, "trades": 18, "net_r": -3.97, "weeks_won": 2, "weeks": 7, "max_dd_r": 5.41},
 }
 TEST_MARKET_NOTE = {"ar": "فترة الاختبار كان الذهب فيها هابطاً", "en": "tested while gold was in a downtrend"}
