@@ -12,6 +12,8 @@
   كل المجموعات — فالإطلاق يقرّره منطق المجموعات، والعتبة لا تضيف شرطاً خفياً ولا تكفي وحدها.
 - الحالة "قيد الاختبار": لا نتائج مثبتة. الدرجة ليست نسبة نجاح.
 - القالب E (اختراق الزخم) مُلغى — لا شرط اختراق حقيقي بالمنصة.
+- (2026-10-15) حالة الاختبار تُحسم بشروط القبول المسجّلة مسبقاً (DECISIONS.md 15/10)، لا بالانطباع:
+  صافٍ موجب بعد السبريد على 30 و45 يوماً + 20 صفقة فأكثر + أغلب الأسابيع رابحة + أقصى تراجع أقل من 6R.
 """
 from typing import Dict, List
 
@@ -71,9 +73,12 @@ def _liquidity_hunter(side):
     ]
 
 
-def _session_sniper(side):
+def _session_sniper(side, trend_tf=None):
     s = _SIDE[side]
-    return [
+    trend = [_g("اتجاه السوق", "AND", [
+        _c("indicators", "trend", "اتجاه EMA50", trend_tf, s["dir"]),
+    ])] if trend_tf else []
+    return trend + [
         _g("الجلسة", "OR", [
             _c("sessions", "london", "London Session", "15m"),
             _c("sessions", "newyork", "New York Session", "15m"),
@@ -119,6 +124,17 @@ _FAMILIES = [
                    "+ structure confirmation + entry zone, all on 15m. The session alone never fires a signal.",
     },
     {
+        # (2026-10-15) الخطوة التالية بعد اختبار القوالب: قنّاص الجلسات ربح بيعاً وخسر شراءً بنفس الشهر الهابط —
+        # الفاصل اتجاه السوق. هنا يُشترط اتجاه EMA50 على الساعة (4 ساعات جعلت قوالب الاتجاه نادرة جداً).
+        "family": "gold_session_trend", "build": lambda side: _session_sniper(side, "1H"), "symbols": ["XAU/USD"],
+        "timeframes": ["1H", "15m"], "style": "session", "name": "Gold Session Sniper + Trend",
+        "name_ar": "قنّاص الجلسات مع الاتجاه — الذهب",
+        "desc_ar": "قنّاص الجلسات نفسه، لكنه لا يدخل إلا مع اتجاه الذهب على الساعة (EMA50 مع ميله): شراء فقط والسوق صاعد، "
+                   "وبيع فقط والسوق هابط. فعّل النسختين معاً ليعمل في الاتجاهين.",
+        "desc_en": "The same Session Sniper, but it only trades with gold's 1H trend (EMA50 and its slope): buys only in an "
+                   "uptrend, sells only in a downtrend. Activate both copies to cover both directions.",
+    },
+    {
         "family": "silver_trend", "build": lambda side: _gold_trend(side), "symbols": ["XAG/USD"], "timeframes": ["4H", "15m"],
         "style": "trend", "name": "Silver Trend Pro", "name_ar": "الفضة مع الاتجاه",
         "desc_ar": "نفس منطق الذهب مع الاتجاه على الفضة: اتجاه 4 ساعات + تراجع لمنطقة مناسبة + تأكيد هيكلي + منطقة دخول "
@@ -127,6 +143,21 @@ _FAMILIES = [
                    "+ entry zone on 15m. Silver is more volatile — the stop comes from silver's own structure.",
     },
 ]
+
+
+# (2026-10-15) نتائج اختبار المالك — باكتيست واقعي (حد أدنى للوقف + خصم السبريد)، الذهب هابط طوال الفترة.
+# الحالة: tested = اجتاز شروط القبول الأربعة، negative = صافٍ سالب، testing = بيانات غير كافية أو لم يُختبر.
+_TEST_RESULTS = {
+    "gold_session_sell":   {"status": "tested",   "days": 45, "trades": 57, "net_r": 23.57, "weeks_won": 6, "weeks": 7, "max_dd_r": 3.18},
+    "gold_liquidity_sell": {"status": "testing",  "days": 30, "trades": 19, "net_r": 2.8},
+    "silver_trend_sell":   {"status": "testing",  "days": 30, "trades": 6,  "net_r": 0.82},
+    "gold_trend_buy":      {"status": "testing",  "days": 30, "trades": 3,  "net_r": -1.65},
+    "silver_trend_buy":    {"status": "testing",  "days": 30, "trades": 1,  "net_r": -1.1},
+    "gold_session_buy":    {"status": "negative", "days": 30, "trades": 29, "net_r": -2.2},
+    "gold_liquidity_buy":  {"status": "negative", "days": 30, "trades": 24, "net_r": -3.42},
+    "gold_trend_sell":     {"status": "negative", "days": 30, "trades": 10, "net_r": -4.77},
+}
+TEST_MARKET_NOTE = {"ar": "فترة الاختبار كان الذهب فيها هابطاً", "en": "tested while gold was in a downtrend"}
 
 
 def _min_score(groups: List[Dict]) -> int:
@@ -157,7 +188,9 @@ def all_templates() -> List[Dict]:
                 "min_score": _min_score(groups),
                 "exec": {"entry": "Market", "sl": "Below Swing Low" if side == "BUY" else "Above Swing High",
                          "tp": "Risk/Reward", "rr": "2"},
-                "test_status": "testing",
+                "test_status": _TEST_RESULTS.get(f"{f['family']}_{side.lower()}", {}).get("status", "testing"),
+                "test_result": _TEST_RESULTS.get(f"{f['family']}_{side.lower()}"),
+                "test_note": TEST_MARKET_NOTE if f"{f['family']}_{side.lower()}" in _TEST_RESULTS else None,
                 "groups": groups,
             })
     return out

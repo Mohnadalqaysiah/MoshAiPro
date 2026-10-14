@@ -294,8 +294,8 @@ function TemplateLibrary({ isAr, onCopied, showToast }) {
     <div className="flex flex-col gap-4">
       <div style={{ background: C.goldSoft, border: `1px solid ${C.gold}55`, color: C.sub, fontSize: 12.5, lineHeight: 1.8 }} className="rounded-xl px-4 py-3">
         {isAr
-          ? <>قوالب جاهزة من فريق كفيل. اضغط <b style={{ color: C.text }}>«إنشاء نسخة»</b> فتصير استراتيجية خاصة بك تعدّلها كما تريد، ثم جرّبها بـ<b style={{ color: C.text }}>الباكتيست</b> من تبويب «المحفوظة» قبل تفعيلها. الحالة «قيد الاختبار» تعني أنه لا توجد نتائج مثبتة بعد. <b style={{ color: C.text }}>الدرجة ليست نسبة نجاح</b> — هي مجموع أوزان الشروط المتحققة.</>
-          : <>Ready-made templates from the Qaffel team. Press <b style={{ color: C.text }}>"Create copy"</b> to get your own editable strategy, then run a <b style={{ color: C.text }}>backtest</b> from the "Saved" tab before activating it. "Testing" means no proven results yet. <b style={{ color: C.text }}>The score is not a win rate</b> — it is the sum of matched condition weights.</>}
+          ? <>قوالب جاهزة من فريق كفيل. اضغط <b style={{ color: C.text }}>«إنشاء نسخة»</b> فتصير استراتيجية خاصة بك تعدّلها كما تريد، ثم جرّبها بـ<b style={{ color: C.text }}>الباكتيست</b> من تبويب «المحفوظة» قبل تفعيلها. «مُختبر» = اجتاز شروطنا (ربح بعد السبريد على 30 و45 يوماً، 20 صفقة فأكثر، أغلب الأسابيع رابحة، تراجع أقل من 6R). «قيد الاختبار» = لا نتائج كافية بعد. «نتائج سلبية» نعرضها كما هي ولا نخفيها. <b style={{ color: C.text }}>الدرجة ليست نسبة نجاح</b> — هي مجموع أوزان الشروط المتحققة.</>
+          : <>Ready-made templates from the Qaffel team. Press <b style={{ color: C.text }}>"Create copy"</b> to get your own editable strategy, then run a <b style={{ color: C.text }}>backtest</b> from the "Saved" tab before activating it. "Tested" = passed our rules (profit after spread over 30 and 45 days, 20+ trades, most weeks positive, drawdown under 6R). "Testing" = not enough results yet. Negative results are shown, not hidden. <b style={{ color: C.text }}>The score is not a win rate</b> — it is the sum of matched condition weights.</>}
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {items.map((t) => {
@@ -310,10 +310,31 @@ function TemplateLibrary({ isAr, onCopied, showToast }) {
                 </div>
                 <div className="flex flex-col items-end gap-1">
                   <Pill color={buy ? C.teal : C.red} bg={buy ? C.tealSoft : C.redSoft}>{buy ? (isAr ? "شراء" : "Buy") : (isAr ? "بيع" : "Sell")}</Pill>
-                  <Pill color={C.gold} bg="transparent" border={`${C.gold}66`}>{isAr ? "قيد الاختبار" : "Testing"}</Pill>
+                  {t.test_status === "tested"
+                    ? <Pill color={C.teal} bg={C.tealSoft}>{isAr ? "مُختبر ✅" : "Tested ✅"}</Pill>
+                    : t.test_status === "negative"
+                      ? <Pill color={C.red} bg="transparent" border={`${C.red}66`}>{isAr ? "نتائج الاختبار سلبية" : "Negative test results"}</Pill>
+                      : <Pill color={C.gold} bg="transparent" border={`${C.gold}66`}>{isAr ? "قيد الاختبار" : "Testing"}</Pill>}
                 </div>
               </div>
               <div style={{ color: C.sub, fontSize: 12.5, lineHeight: 1.8 }}>{isAr ? t.desc_ar : t.desc_en}</div>
+              {t.test_result && (() => {
+                const r = t.test_result;
+                const few = r.trades < 20;
+                const col = t.test_status === "tested" ? C.teal : t.test_status === "negative" ? C.red : C.sub;
+                return (
+                  <div style={{ background: C.surfaceHi, border: `1px solid ${C.borderSoft}`, color: C.sub, fontSize: 11.5, lineHeight: 1.7 }} className="rounded-lg px-3 py-2">
+                    <span style={{ color: col, fontWeight: 600 }}>
+                      {isAr ? `باكتيست ${r.days} يوماً: ${r.trades} صفقة، صافي ` : `${r.days}-day backtest: ${r.trades} trades, net `}
+                      <span dir="ltr">{r.net_r > 0 ? "+" : ""}{r.net_r}R</span>
+                      {r.weeks ? (isAr ? `، ${r.weeks_won} أسابيع رابحة من ${r.weeks}` : `, ${r.weeks_won} of ${r.weeks} weeks positive`) : ""}
+                      {r.max_dd_r ? (isAr ? `، أقصى تراجع ${r.max_dd_r}R` : `, max drawdown ${r.max_dd_r}R`) : ""}
+                    </span>
+                    {few && <span>{isAr ? " — عدد الصفقات قليل للحكم" : " — too few trades to judge"}</span>}
+                    {t.test_note && <span>{" · "}{isAr ? t.test_note.ar : t.test_note.en}</span>}
+                  </div>
+                );
+              })()}
               <div style={{ color: C.muted, fontSize: 11.5 }} className="flex flex-wrap gap-x-4 gap-y-1">
                 <span>{isAr ? "الأسلوب:" : "Style:"} <span style={{ color: C.text }}>{(STYLE_LABEL[t.style] || [t.style, t.style])[isAr ? 0 : 1]}</span></span>
                 <span>{isAr ? "العتبة:" : "Threshold:"} <span style={{ color: C.text }}>{t.min_score}</span></span>
