@@ -27,6 +27,8 @@ def main():
     rows = db.query(ShadowSignal).order_by(ShadowSignal.created_at).all()
     groups = {}
     for s in rows:
+        if (s.reason or "").startswith("tpl:"):
+            continue          # قوالب الاستراتيجيات: diag_template_shadow.py
         groups.setdefault(s.reason or "crypto_weekend", []).append(s)
     for reason, rs in sorted(groups.items()):
         print("=" * 70 + f"\nالسبب: {reason}\n" + "=" * 70)

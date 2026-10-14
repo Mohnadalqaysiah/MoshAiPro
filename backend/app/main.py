@@ -194,9 +194,14 @@ async def lifespan(app: FastAPI):
     from app.services.shadow_evaluator import shadow_evaluator
     shadow_task = asyncio.create_task(shadow_evaluator())
 
+    # (2026-10-15) تجربة صامتة لقوالب الذهب (قنّاص الجلسات) — تسجّل فقط، لا ترسل شيئاً
+    from app.services.template_shadow import template_shadow
+    template_shadow_task = asyncio.create_task(template_shadow())
+
     yield
 
     shadow_task.cancel()
+    template_shadow_task.cancel()
     alert_task.cancel()
     strategy_task.cancel()
     scanner_task.cancel()

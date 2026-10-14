@@ -275,6 +275,7 @@ function TemplateLibrary({ isAr, onCopied, showToast }) {
   const [items, setItems] = useState(null);
   const [open, setOpen] = useState(null);
   const [busy, setBusy] = useState(null);
+  const [sub, setSub] = useState("tested");
   useEffect(() => {
     axios.get(`${API}/api/v1/strategies/templates`)
       .then((r) => setItems(r.data.templates || []))
@@ -297,8 +298,37 @@ function TemplateLibrary({ isAr, onCopied, showToast }) {
           ? <>قوالب جاهزة من فريق كفيل. اضغط <b style={{ color: C.text }}>«إنشاء نسخة»</b> فتصير استراتيجية خاصة بك تعدّلها كما تريد، ثم جرّبها بـ<b style={{ color: C.text }}>الباكتيست</b> من تبويب «المحفوظة» قبل تفعيلها. «مُختبر» = اجتاز شروطنا (ربح بعد السبريد على 30 و45 يوماً، 20 صفقة فأكثر، أغلب الأسابيع رابحة، تراجع أقل من 6R). «قيد الاختبار» = لا نتائج كافية بعد. «نتائج سلبية» نعرضها كما هي ولا نخفيها. <b style={{ color: C.text }}>الدرجة ليست نسبة نجاح</b> — هي مجموع أوزان الشروط المتحققة.</>
           : <>Ready-made templates from the Qaffel team. Press <b style={{ color: C.text }}>"Create copy"</b> to get your own editable strategy, then run a <b style={{ color: C.text }}>backtest</b> from the "Saved" tab before activating it. "Tested" = passed our rules (profit after spread over 30 and 45 days, 20+ trades, most weeks positive, drawdown under 6R). "Testing" = not enough results yet. Negative results are shown, not hidden. <b style={{ color: C.text }}>The score is not a win rate</b> — it is the sum of matched condition weights.</>}
       </div>
+      {(() => {
+        const tested = items.filter((t) => t.test_status === "tested");
+        const trial = items.filter((t) => t.test_status !== "tested");
+        const tabs = [["tested", isAr ? "مُختبرة ✅" : "Tested ✅", tested.length], ["trial", isAr ? "قيد التجربة" : "In trial", trial.length]];
+        return (
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-2">
+              {tabs.map(([k, label, n]) => (
+                <button key={k} onClick={() => setSub(k)}
+                  style={sub === k
+                    ? { background: k === "tested" ? C.tealSoft : C.goldSoft, color: k === "tested" ? C.teal : C.gold, border: `1px solid ${k === "tested" ? C.teal : C.gold}88` }
+                    : { background: C.surface, color: C.sub, border: `1px solid ${C.border}` }}
+                  className="px-4 py-2 rounded-xl text-sm font-semibold">
+                  {label} <span style={{ fontFamily: FM, opacity: 0.8 }}>({n})</span>
+                </button>
+              ))}
+            </div>
+            <div style={{ color: C.muted, fontSize: 12, lineHeight: 1.7 }}>
+              {sub === "tested"
+                ? (isAr ? "قوالب اجتازت شروطنا الأربعة في الباكتيست. هذا ليس ضماناً للربح — راقب نتيجتها وفق حالة السوق المذكورة تحت كل قالب."
+                        : "Templates that passed all four of our backtest rules. Not a profit guarantee — mind the market condition noted under each one.")
+                : (isAr ? "قوالب لم تثبت بعد: إما بيانات غير كافية، أو نتائجها في الاختبار سلبية (نعرضها كما هي). للتجربة والتعلّم — لا ننصح بتفعيلها على حساب حقيقي قبل أن تنتقل لتبويب «مُختبرة»."
+                        : "Templates not proven yet: either too little data or negative test results (shown as they are). For experimenting and learning — we don't recommend activating them on a real account until they move to \"Tested\".")}
+            </div>
+          </div>
+        );
+      })()}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {items.map((t) => {
+        {items.filter((t) => (sub === "tested") === (t.test_status === "tested"))
+          .sort((a, b) => (a.test_status === "negative") - (b.test_status === "negative"))
+          .map((t) => {
           const buy = t.side === "BUY";
           const isOpen = open === t.key;
           return (
