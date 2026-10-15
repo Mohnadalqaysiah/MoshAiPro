@@ -94,6 +94,11 @@ def _finalize_decision_group(rows: list) -> dict:
 SAME_TRADE_ENTRY_TOL = 0.0005   # 0.05% — نفس عتبة حماية البث (_entries_equivalent بـbot.py)
 SAME_TRADE_LEVEL_TOL = 0.25     # فرق الوقف ≤25% من المخاطرة، وفرق TP1 ≤25% من مسافة الهدف
 _CLOSED = ("TP1_HIT", "TP2_HIT", "SL_HIT")
+# (2026-10-15) إعادة إصدار بدخول مُعاد تسعيره: diag_near_duplicates — XRPUSD (دخول +0.09%) وNAS100 (+0.24%) بنفس الوقف
+# والهدف حرفياً وصلتا للمشتركين مرتين وخسرتا مرتين. نفس الوقف (≤5% من المخاطرة) + نفس TP1 (≤25%) + دخول ≤0.5% = نفس الصفقة.
+WIDE_ENTRY_TOL = 0.005
+WIDE_SL_TOL = 0.05
+MERGE_WIDE = False      # يُفعَّل بعد معاينة diag_merge_wide_preview.py (قرار المالك 15/10)
 
 
 def _same_levels(a: dict, d: dict) -> bool:
@@ -111,7 +116,21 @@ def _same_levels(a: dict, d: dict) -> bool:
     return abs(sd - sa) <= SAME_TRADE_LEVEL_TOL * risk and abs(td - ta) <= SAME_TRADE_LEVEL_TOL * reach
 
 
-def merge_reissued(decisions: list[dict]) -> list[dict]:
+def _same_trade_wide(a: dict, d: dict) -> bool:
+    """نفس الوقف تقريباً حرفياً ونفس الهدف، والدخول ضمن 0.5% — الثانية إعادة تسعير لنفس الفكرة."""
+    try:
+        ea, sa, ta = float(a["entry_price"]), float(a["stop_loss"]), float(a["take_profit_1"])
+        ed, sd, td = float(d["entry_price"]), float(d["stop_loss"]), float(d["take_profit_1"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    risk, reach = abs(ea - sa), abs(ta - ea)
+    if not ea or not risk or not reach:
+        return False
+    return (abs(ed - ea) / ea <= WIDE_ENTRY_TOL and abs(sd - sa) <= WIDE_SL_TOL * risk
+            and abs(td - ta) <= SAME_TRADE_LEVEL_TOL * reach)
+
+
+def merge_reissued(decisions: list[dict], wide: bool = None) -> list[dict]:
     """(2026-10-12) يدمج "الصفقة المُعاد إصدارها" بالأولى: نفس الرمز والاتجاه، دخول ضمن
     0.05%، **ونفس الوقف والهدف** (_same_levels، 14/10)، أي فريم، وصدرت **والأولى ما زالت
     مفتوحة** (قبل exit_executed). تُحسب نتيجة
@@ -121,6 +140,7 @@ def merge_reissued(decisions: list[dict]) -> list[dict]:
     مباشرة والمحرك مجمّد — الدمج طبقة عرض/إحصاء فوقها فقط.
     يضيف للقرار المُبقى: merged_count، merged_row_ids، merge_conflict (نتيجتان مختلفتان)."""
     far = datetime.max.replace(tzinfo=timezone.utc)
+    use_wide = MERGE_WIDE if wide is None else wide
 
     def _aware(d):
         return d if d is None or d.tzinfo else d.replace(tzinfo=timezone.utc)
@@ -134,9 +154,8 @@ def merge_reissued(decisions: list[dict]) -> list[dict]:
                 if a["market"] != d["market"] or a["signal_type"] != d["signal_type"]:
                     continue
                 a_entry = float(a.get("entry_price") or 0)
-                if not a_entry or abs(float(d["entry_price"]) - a_entry) / a_entry > SAME_TRADE_ENTRY_TOL:
-                    continue
-                if not _same_levels(a, d):
+                narrow = bool(a_entry) and abs(float(d["entry_price"]) - a_entry) / a_entry <= SAME_TRADE_ENTRY_TOL                     and _same_levels(a, d)
+                if not narrow and not (use_wide and _same_trade_wide(a, d)):
                     continue
                 a_created = _aware(a.get("created_at"))
                 # (2026-10-14) الأولى "مفتوحة" حتى إغلاقها أو انتهاء مدتها — لا للأبد. قبلها صفقة منتهية بلا

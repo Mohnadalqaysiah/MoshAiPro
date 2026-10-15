@@ -1,4 +1,7 @@
 """
+(2026-10-15) مع وسيط "wide": يقارن الدمج الحالي بالدمج الموسّع (نفس الوقف والهدف، دخول ≤0.5%):
+    docker exec moshapi_backend python diag_merge_preview.py wide
+
 (2026-10-12) معاينة للقراءة فقط: أثر دمج "الصفقة المُعاد إصدارها" على الإحصائيات.
 
 القاعدة (decision_grouping.merge_reissued): نفس الرمز والاتجاه، دخول ضمن 0.05%، أي فريم،
@@ -9,6 +12,7 @@
 
     docker exec moshapi_backend python diag_merge_preview.py
 """
+import sys
 from datetime import timezone
 
 from app.database import SessionLocal
@@ -35,8 +39,14 @@ def main():
         s = by_id.get(d["id"])
         return _r_multiple(s.entry_price, s.stop_loss, s.take_profit_1, s.take_profit_2, d["status"]) if s else None
 
-    before = group_unique_decisions(verified)
-    after = merge_reissued(before)
+    WIDE = len(sys.argv) > 1 and sys.argv[1] == "wide"
+    if WIDE:
+        print("وضع المقارنة: قبل = الدمج الحالي (0.05%) ، بعد = الدمج الموسّع (نفس الوقف والهدف، دخول ≤0.5%)\n")
+        before = merge_reissued(group_unique_decisions(verified), wide=False)
+        after = merge_reissued([dict(d, merged_count=0, merged_row_ids=[], merge_conflict=False) for d in group_unique_decisions(verified)], wide=True)
+    else:
+        before = group_unique_decisions(verified)
+        after = merge_reissued(before)
     kept_ids = {d["id"] for d in after}
     removed = [d for d in before if d["id"] not in kept_ids]
 
@@ -95,6 +105,21 @@ def main():
     print(f"\nقاعدة كريبتو العطلة (≥30 قراراً ومتوسط أسوأ من −0.2R):")
     print(f"  قبل الدمج: {nb} قرار، متوسط {ab:+.2f}R | بعد الدمج: {na} قرار، متوسط {aa:+.2f}R"
           f"  ← {'ما زالت متحققة' if na >= 30 and aa < -0.2 else 'لم تعد متحققة'}")
+
+    if WIDE:
+        print("\nكل ما يدمجه التوسيع (المكرر ← الأولى التي تُحسب):")
+        for d in sorted(removed, key=lambda x: _utc(x["created_at"])):
+            h = next((x for x in after if set(d.get("row_ids") or [d["id"]]) & set(x.get("merged_row_ids") or [])), None)
+            if not h:
+                continue
+            rd, rh = R(d), R(h)
+            fr = lambda r: "—" if r is None else f"{r:+.2f}R"
+            print(f"  {d['market']:<8} {d['signal_type']:<4} | الأولى {_utc(h['created_at']):%m-%d %H:%M} {h['timeframe']:<4} "
+                  f"دخول {h['entry_price']} وقف {h['stop_loss']} {h['status']} {fr(rh)} "
+                  f"| المكرر {_utc(d['created_at']):%m-%d %H:%M} {d['timeframe']:<4} دخول {d['entry_price']} وقف {d['stop_loss']} "
+                  f"{d['status']} {fr(rd)}{'  ⚠️ نتيجة مختلفة' if d['status'] != h['status'] else ''}")
+        db.close()
+        return
 
     print("\nأمثلة على ما دُمج (أول 15):")
     shown = 0
