@@ -32,8 +32,8 @@ PLANS = {
         "name_en":     "Weekly",
         "price_usd":   7,
         "days":        7,
-        "features":    ["تحليل ICT/SMC كامل", "شات AI غير محدود", "تنبيهات Telegram", "جميع الأزواج", "تحليل متعدد الفريمات", "باني الاستراتيجيات: تجربة محدودة (استراتيجية واحدة، بلا SMC)"],
-        "features_en": ["Full ICT/SMC Analysis", "Unlimited AI Chat", "Telegram Alerts", "All Pairs", "Multi-Timeframe Analysis", "Strategy Builder: limited trial (1 strategy, no SMC conditions)"],
+        "features":    ["تحليل ICT/SMC كامل", "شات AI غير محدود", "تنبيهات Telegram", "جميع الأزواج", "تحليل متعدد الفريمات", "باني الاستراتيجيات: استراتيجية واحدة على رمز واحد"],
+        "features_en": ["Full ICT/SMC Analysis", "Unlimited AI Chat", "Telegram Alerts", "All Pairs", "Multi-Timeframe Analysis", "Strategy Builder: one strategy on one symbol"],
     },
     "monthly": {
         "name":        "الشهرية",

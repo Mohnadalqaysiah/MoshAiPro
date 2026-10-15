@@ -13,9 +13,10 @@ from sqlalchemy.orm import Session
 
 from app.models.user import User, UserRole, PlanType
 
+# (2026-10-15) قرار المالك: التجربة = استراتيجية واحدة على **رمز واحد**، بلا قيد على عدد الشروط أو
+# المجموعات أو فئة SMC — قالب جاهز كامل أو بناء حر. (كانت: شرط واحد وبلا SMC — فالقوالب الجاهزة مستحيلة بالتجربة.)
 LIMITED_MAX_STRATEGIES   = 1
-LIMITED_MAX_CONDITIONS   = 1
-LIMITED_BLOCKED_CATEGORY = "smc"
+LIMITED_MAX_SYMBOLS      = 1
 LIMITED_FREE_ALERTS      = 3
 
 

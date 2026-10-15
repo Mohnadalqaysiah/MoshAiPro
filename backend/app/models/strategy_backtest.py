@@ -20,3 +20,15 @@ class StrategyBacktest(Base):
     error       = Column(Text, nullable=True)
     created_at  = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     finished_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class StrategyTemplateCopy(Base):
+    """(2026-10-15) من نسخ أي قالب جاهز — لإحصائيات الأدمن. جدول مستقل (create_all) بدل عمود بجدول strategies
+    (لا ترحيل لجدول قائم). strategy_id بلا FK: النسخة قد تُحذف ويبقى أثر أنها نُسخت."""
+    __tablename__ = "strategy_template_copies"
+
+    id           = Column(Integer, primary_key=True, index=True)
+    template_key = Column(String, nullable=False, index=True)
+    strategy_id  = Column(Integer, nullable=True, index=True)
+    user_id      = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at   = Column(DateTime(timezone=True), server_default=func.now(), index=True)

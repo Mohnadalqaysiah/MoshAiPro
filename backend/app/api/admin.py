@@ -3835,3 +3835,106 @@ def coupon_redemptions(
             for r, u in rows
         ],
     }
+
+
+# ─── (2026-10-15) إحصائيات باني الاستراتيجيات والقوالب — طلب المالك ─────────────────
+@router.get("/strategies/stats")
+def admin_strategy_stats(
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """من يستخدم باني الاستراتيجيات، أي القوالب تُنسخ وتُفعَّل، وكم باكتيست يُشغَّل.
+    نسخ القوالب قبل 15/10 (قبل جدول strategy_template_copies) تُعرف من اسم الاستراتيجية = اسم القالب."""
+    from app.models.strategy import Strategy, StrategyStatus, StrategyTriggerEvent
+    from app.models.strategy_backtest import StrategyBacktest, StrategyTemplateCopy
+    from app.services.strategy_templates import all_templates
+    from app.services.strategy_access import access_tier
+
+    now = datetime.now(timezone.utc)
+    week = now - timedelta(days=7)
+    tpls = all_templates()
+    by_name = {t["name_ar"]: t["key"] for t in tpls}
+
+    strategies = db.query(Strategy).all()
+    copies = db.query(StrategyTemplateCopy).all()
+    copy_of = {c.strategy_id: c.template_key for c in copies if c.strategy_id}
+    tpl_of = {s.id: copy_of.get(s.id) or by_name.get(s.name) for s in strategies}
+
+    bts = db.query(StrategyBacktest.strategy_id, StrategyBacktest.user_id, StrategyBacktest.created_at).all()
+    bt_count, bt_users, bt_week = {}, set(), 0
+    for sid, uid, created in bts:
+        bt_count[sid] = bt_count.get(sid, 0) + 1
+        bt_users.add(uid)
+        c = created if (created is None or created.tzinfo) else created.replace(tzinfo=timezone.utc)
+        if c and c >= week:
+            bt_week += 1
+
+    trig = dict(db.query(StrategyTriggerEvent.strategy_id, func.count(StrategyTriggerEvent.id))
+                  .filter(StrategyTriggerEvent.triggered == True, StrategyTriggerEvent.created_at >= week)
+                  .group_by(StrategyTriggerEvent.strategy_id).all())
+
+    users = {u.id: u for u in db.query(User).filter(User.id.in_({s.user_id for s in strategies} or {0})).all()}
+    is_active = lambda s: s.status == StrategyStatus.ACTIVE
+
+    # لكل قالب: نُسخ (منذ التتبّع + المستنتجة)، مستخدمون فريدون، موجودة الآن، مفعّلة، باكتيست، إطلاقات 7 أيام
+    per = {t["key"]: {"key": t["key"], "name": t["name_ar"], "status": t["test_status"], "copies": 0, "users": set(),
+                      "existing": 0, "active": 0, "backtests": 0, "triggers_7d": 0} for t in tpls}
+    tracked_ids = set()
+    for c in copies:
+        if c.template_key in per:
+            per[c.template_key]["copies"] += 1
+            per[c.template_key]["users"].add(c.user_id)
+            tracked_ids.add(c.strategy_id)
+    for s in strategies:
+        k = tpl_of.get(s.id)
+        if not k or k not in per:
+            continue
+        r = per[k]
+        if s.id not in tracked_ids:          # نسخة قبل التتبّع
+            r["copies"] += 1
+            r["users"].add(s.user_id)
+        r["existing"] += 1
+        r["active"] += is_active(s)
+        r["backtests"] += bt_count.get(s.id, 0)
+        r["triggers_7d"] += trig.get(s.id, 0)
+    templates = sorted(({**r, "users": len(r["users"])} for r in per.values()), key=lambda r: (-r["copies"], r["key"]))
+
+    tiers = {}
+    for uid in {s.user_id for s in strategies}:
+        u = users.get(uid)
+        if u:
+            t = access_tier(u)
+            tiers[t] = tiers.get(t, 0) + 1
+
+    recent = []
+    for s in sorted(strategies, key=lambda x: x.id, reverse=True)[:100]:
+        u = users.get(s.user_id)
+        recent.append({
+            "id": s.id, "name": s.name, "user_email": u.email if u else None,
+            "user_plan": (u.plan.value if hasattr(u.plan, "value") else u.plan) if u else None,
+            "tier": access_tier(u) if u else None,
+            "template": tpl_of.get(s.id), "symbols": s.symbols or [],
+            "status": s.status.value if hasattr(s.status, "value") else s.status,
+            "backtests": bt_count.get(s.id, 0), "triggers_7d": trig.get(s.id, 0),
+            "created_at": s.created_at.isoformat() if s.created_at else None,
+            "last_triggered_at": s.last_triggered_at.isoformat() if s.last_triggered_at else None,
+        })
+
+    from_tpl = sum(1 for s in strategies if tpl_of.get(s.id))
+    return {
+        "summary": {
+            "users_with_strategies": len({s.user_id for s in strategies}),
+            "strategies": len(strategies),
+            "active": sum(1 for s in strategies if is_active(s)),
+            "from_templates": from_tpl,
+            "custom": len(strategies) - from_tpl,
+            "template_copies_total": sum(r["copies"] for r in templates),
+            "backtests_total": len(bts),
+            "backtests_7d": bt_week,
+            "backtest_users": len(bt_users),
+            "triggers_7d": sum(trig.values()),
+            "users_by_tier": tiers,
+        },
+        "templates": templates,
+        "recent": recent,
+    }

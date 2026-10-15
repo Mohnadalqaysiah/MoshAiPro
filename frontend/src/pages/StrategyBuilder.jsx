@@ -586,14 +586,18 @@ export default function StrategyBuilder() {
   const isAr = lang === "ar";
   const tgConnected = !!user?.telegram_linked;
   // (2026-09-27) باني الاستراتيجيات صار مسيَّراً منفصلاً — أي مستخدم مسجَّل
-  // يقدر يجرّب (استراتيجية واحدة، شرط واحد، بلا SMC، 3 تنبيهات) بدل حجب
+  // يقدر يجرّب (استراتيجية واحدة على رمز واحد بكل الشروط — 15/10، 3 تنبيهات) بدل حجب
   // كامل. الحدود تُفرَض بالخادم فقط الآن (رسائل واضحة عبر showToast) —
   // isPaid تبقى فقط لتمييز شكل الواجهة (شارة "وصول كامل" مثلاً)، لا لمنع أي فعل.
-  const isPaid = user?.role === "admin" || ["weekly", "monthly"].includes(user?.plan);
+  // (2026-10-15) من الخادم (strategy_tier) — كانت تُخمَّن من الباقة فتخالف الخادم (الأسبوعي/الشهري "محدود" بالخادم)
+  const isPaid = user?.strategy_tier ? user.strategy_tier === "full" : (user?.role === "admin" || ["weekly", "monthly"].includes(user?.plan));
   const [tourForceOpen, setTourForceOpen] = useState(false);
   const requirePaid = () => true;
 
-  const [activeTab, setActiveTab] = useState("build");
+  // (2026-10-15) ?tab=library يفتح تبويباً مباشرة (رابط جولة الترحيب)
+  const [activeTab, setActiveTab] = useState(() => {
+    try { const t = new URLSearchParams(window.location.search).get("tab"); return TABS.some((x) => x.id === t) ? t : "build"; } catch { return "build"; }
+  });
   const [strategyName, setStrategyName] = useState(() => (isAr ? "استراتيجية جديدة" : "New Strategy"));
   const [symbols, setSymbols] = useState(["XAU/USD"]);
   const [timeframes, setTimeframes] = useState(["1H", "15m", "5m"]);
@@ -976,7 +980,8 @@ export default function StrategyBuilder() {
     }
   };
 
-  const toggleSymbol = (s) => setSymbols((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
+  // (2026-10-15) التجربة: رمز واحد — اختيار رمز آخر يستبدله بدل الإضافة (الخادم يرفض أكثر من رمز)
+  const toggleSymbol = (s) => setSymbols((prev) => (!isPaid ? [s] : prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]));
   const toggleTf = (t) => setTimeframes((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
 
   /* =======================================================================
@@ -1041,8 +1046,8 @@ export default function StrategyBuilder() {
               <Link to="/pricing">
                 <Pill color={C.gold} bg={C.goldSoft} border={C.gold}>
                   🔒 {isAr
-                    ? "تجربة محدودة (استراتيجية واحدة، شرط واحد، بلا SMC) — رقّي لـPremium للوصول الكامل"
-                    : "Limited trial (1 strategy, 1 condition, no SMC) — upgrade to Premium for full access"}
+                    ? "تجربة: استراتيجية واحدة على رمز واحد (قالب جاهز أو من بنائك، بكل الشروط) — رقّي لـPremium لاستراتيجيات ورموز غير محدودة"
+                    : "Trial: one strategy on one symbol (a template or your own, all conditions) — upgrade to Premium for unlimited strategies and symbols"}
                 </Pill>
               </Link>
             )}

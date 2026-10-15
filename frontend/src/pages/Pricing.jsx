@@ -127,8 +127,8 @@ const DEFAULT_PLANS = [
     periodAr: '/ أسبوع',
     periodEn: '/ week',
     popular: false,
-    featuresAr: ['تحليل ICT/SMC كامل', 'شات AI غير محدود', 'تنبيهات Telegram', 'جميع الأزواج', 'تحليل متعدد الفريمات', 'باني الاستراتيجيات: تجربة محدودة (استراتيجية واحدة، بلا SMC)'],
-    featuresEn: ['Full ICT/SMC Analysis', 'Unlimited AI Chat', 'Telegram Alerts', 'All Pairs', 'Multi-Timeframe Analysis', 'Strategy Builder: limited trial (1 strategy, no SMC conditions)'],
+    featuresAr: ['تحليل ICT/SMC كامل', 'شات AI غير محدود', 'تنبيهات Telegram', 'جميع الأزواج', 'تحليل متعدد الفريمات', 'باني الاستراتيجيات: استراتيجية واحدة على رمز واحد'],
+    featuresEn: ['Full ICT/SMC Analysis', 'Unlimited AI Chat', 'Telegram Alerts', 'All Pairs', 'Multi-Timeframe Analysis', 'Strategy Builder: one strategy on one symbol'],
   },
   {
     key: 'monthly',

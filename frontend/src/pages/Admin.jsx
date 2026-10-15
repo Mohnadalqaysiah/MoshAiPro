@@ -8,6 +8,7 @@ import CombinationsPanel from '../components/CombinationsPanel'
 import IpGroupsPanel from '../components/IpGroupsPanel'
 import OnlineUsersModal from '../components/OnlineUsersModal'
 import CouponsPanel from '../components/CouponsPanel'
+import StrategyStatsPanel from '../components/StrategyStatsPanel'
 import useSiteSettings from '../hooks/useSiteSettings'
 import {
   Users, CreditCard, BarChart2, CheckCircle, XCircle, Clock,
@@ -1215,6 +1216,7 @@ export default function Admin() {
     { key:'markets',    icon:BarChart2,     label:'الأسواق' },
     { key:'signals',    icon:TrendingUp,    label:'الإشارات' },
     { key:'reports',    icon:FileText,      label:'تقارير الأداء' },
+    { key:'strategies', icon:Sparkles,      label:'الاستراتيجيات والقوالب' },
     { key:'funnel',     icon:Filter,        label:'مسار الاشتراك' },
     { key:'affiliate',  icon:TrendUp,       label:'الأفلييت' },
     { key:'messages',   icon:Send,          label:'رسائل تيليجرام' },
@@ -4083,6 +4085,7 @@ export default function Admin() {
 
           {/* ── Diagnostic ── */}
           {tab === 'coupons' && <CouponsPanel />}
+          {tab === 'strategies' && <StrategyStatsPanel />}
 
           {tab === 'diagnostic' && <DiagnosticPanel />}
 

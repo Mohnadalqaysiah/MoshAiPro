@@ -25,7 +25,7 @@ from app.services.strategy_engine import (
 )
 from app.services.strategy_access import (
     access_tier as _access_tier,
-    LIMITED_MAX_STRATEGIES, LIMITED_MAX_CONDITIONS, LIMITED_BLOCKED_CATEGORY,
+    LIMITED_MAX_STRATEGIES, LIMITED_MAX_SYMBOLS,
 )
 
 router = APIRouter()
@@ -40,12 +40,8 @@ def _enforce_limited_constraints(db: Session, user: User, body: "StrategyIn", ex
     if q.count() >= LIMITED_MAX_STRATEGIES:
         raise HTTPException(403, "التجربة المحدودة تسمح باستراتيجية واحدة فقط — رقّي لباقة Premium لإنشاء المزيد")
 
-    if len(body.conditions) > LIMITED_MAX_CONDITIONS:
-        raise HTTPException(403, "التجربة المحدودة تسمح بشرط واحد فقط لكل استراتيجية — رقّي لباقة Premium لدمج شروط متعددة")
-
-    for c in body.conditions:
-        if (c.catId or "").strip().lower() == LIMITED_BLOCKED_CATEGORY:
-            raise HTTPException(403, "شروط Smart Money Concepts (Order Blocks، FVG، السيولة...) حصرية لباقة Premium")
+    if len([x for x in (body.symbols or []) if x]) > LIMITED_MAX_SYMBOLS:
+        raise HTTPException(403, "التجربة تسمح برمز واحد فقط للاستراتيجية — رقّي لباقة Premium لمراقبة عدة رموز")
 
 # نفس مجموعة الرموز الثمانية بالـ Prototype (SYMBOL_POOL بالفرونت)
 SIM_SYMBOLS = ["XAU/USD", "EUR/USD", "GBP/USD", "BTC/USD", "ETH/USD", "NAS100", "US30", "USOIL"]
@@ -276,6 +272,8 @@ def copy_template(key: str, db: Session = Depends(get_db), user = Depends(get_cu
     db.add(s)
     db.flush()
     _apply_payload(db, s, body)
+    from app.models.strategy_backtest import StrategyTemplateCopy
+    db.add(StrategyTemplateCopy(template_key=key, strategy_id=s.id, user_id=user.id))
     db.commit()
     db.refresh(s)
     logger.info(f"📚 Template {key} v{t['version']} copied → strategy #{s.id} (user {user.id})")
@@ -390,7 +388,8 @@ async def start_backtest(strategy_id: int, body: BacktestIn, db: Session = Depen
                                          StrategyBacktest.created_at >= since).count() >= BACKTESTS_PER_DAY:
         raise HTTPException(429, f"الحد {BACKTESTS_PER_DAY} اختبارات يومياً — جرّب غداً")
     days = max(3, min(int(body.days or 30), 300))
-    symbols = [x for x in (body.symbols or s.symbols or []) if x][:3] or ["XAU/USD"]
+    cap = LIMITED_MAX_SYMBOLS if _access_tier(user, db) == "limited" else 3
+    symbols = [x for x in (body.symbols or s.symbols or []) if x][:cap] or ["XAU/USD"]
     bt = StrategyBacktest(strategy_id=s.id, user_id=user.id, status="queued", progress=0,
                           params={"days": days, "symbols": symbols})
     db.add(bt)

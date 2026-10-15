@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import axios from 'axios'
 import { Link } from 'react-router-dom'
 import { X, ChevronRight, ChevronLeft, Zap, BarChart2, Activity,
-         MessageCircle, TrendingUp, Send, CheckCircle, Settings2 } from 'lucide-react'
+         MessageCircle, TrendingUp, Send, CheckCircle, Settings2, Sparkles } from 'lucide-react'
 import { useLang } from '../contexts/LangContext'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -35,6 +35,14 @@ const STEPS_AR = [
     title: 'المساعد الذكي',
     desc: 'الزر الدائر أسفل الشاشة — اسأله أي سؤال عن الأسواق، يحلل ويشرح بالعربي مدعوماً بـ Gemini AI.',
   },
+  // (2026-10-15) طلب المالك: شرح باني الاستراتيجيات مع الترحيب — قبل الخطوة الأخيرة (خطوة تلجرام رقمها 2 ثابت)
+  {
+    icon: <Sparkles size={28} className="text-amber-400" />,
+    title: 'باني الاستراتيجيات 🧩',
+    desc: 'ابنِ استراتيجيتك الخاصة ويصلك تنبيه حين تكتمل شروطها. أسهل بداية: تبويب «الاستراتيجيات الجاهزة» ← اختر قالباً من «مُختبرة ✅» ← «إنشاء نسخة» ← جرّبها بزر «باكتيست» لترى نتيجتها على الأيام الماضية قبل تفعيلها. بالتجربة المجانية: استراتيجية واحدة على رمز واحد، بكل الشروط.',
+    linkTo: '/strategies?tab=library',
+    linkLabel: 'افتح باني الاستراتيجيات',
+  },
   {
     icon: <TrendingUp size={28} className="text-green-400" />,
     title: 'أنت جاهز! 🚀',
@@ -64,6 +72,13 @@ const STEPS_EN = [
     icon: <MessageCircle size={28} className="text-indigo-400" />,
     title: 'AI Assistant',
     desc: 'The floating button at the bottom — ask anything about markets. Analyzes and explains, powered by Gemini AI.',
+  },
+  {
+    icon: <Sparkles size={28} className="text-amber-400" />,
+    title: 'Strategy Builder 🧩',
+    desc: 'Build your own strategy and get alerted when its conditions are met. Easiest start: the "Strategy Library" tab → pick a template under "Tested ✅" → "Create copy" → run a "Backtest" to see how it did on past days before activating it. Free trial: one strategy on one symbol, with all conditions.',
+    linkTo: '/strategies?tab=library',
+    linkLabel: 'Open the Strategy Builder',
   },
   {
     icon: <TrendingUp size={28} className="text-green-400" />,

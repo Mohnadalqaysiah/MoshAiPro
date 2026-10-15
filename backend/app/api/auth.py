@@ -909,7 +909,14 @@ def _user_info(user: User, db: Session) -> dict:
         # فيظهر استطلاع جديد تلقائياً لمن رأى نسخة أقدم فقط. الاسم بقي
         # نفسه (feature_survey_dismissed) فبقيت AppShell.jsx بلا أي تعديل.
         "feature_survey_dismissed": _feature_survey_dismissed(user, db),
+        # (2026-10-15) فئة باني الاستراتيجيات كما يقرّرها الخادم (full/limited) — الواجهة تعرض حدود التجربة منها
+        "strategy_tier":         _strategy_tier(user),
     }
+
+
+def _strategy_tier(user: User) -> str:
+    from app.services.strategy_access import access_tier
+    return access_tier(user)
 
 
 def _feature_survey_dismissed(user: User, db: Session) -> bool:
