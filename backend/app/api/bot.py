@@ -1308,13 +1308,26 @@ def _open_equivalent_rows(db: Session, market: str, signal_type, entry, exclude_
     return [o for o in q.all() if _entries_equivalent(o.entry_price, entry)]
 
 
-def _user_already_has_trade(db: Session, user: User, market: str, signal_type, entry) -> bool:
+def _user_already_has_trade(db: Session, user: User, market: str, signal_type, entry, sl=None, tp1=None) -> bool:
     """(2026-10-12) هل وصلت هذا المستخدم الصفقة نفسها وما زالت مفتوحة — بالبث العام
     (SignalDelivery ناجح) أو بمراقبته الشخصية على فريم آخر؟ تقرير 12/10: SOL/ADA/BNB
     صدرت بالبث ثم بعد 13-31 دقيقة "تنبيه مراقبة" لنفس الدخول لـ7-12 مشتركاً، لأن
     _user_has_active_signal يفحص صفوف المستخدم على نفس الفريم فقط = مخاطرة مضاعفة."""
     from app.models.signal_delivery import SignalDelivery
     rows = _open_equivalent_rows(db, market, signal_type, entry)
+    if sl is not None and tp1 is not None:
+        # (2026-10-15) XRPUSD 15/10: البث 09:05 دخول 1.3170 ثم مراقبة 9 مشتركين 09:15 دخول 1.3182 (+0.09%) بنفس
+        # الوقف حرفياً — نفس الإعداد أُعيد اكتشافه بسعر اللحظة فوصلهم مرتين. نفس الوقف والهدف = نفس الصفقة.
+        from app.services.decision_grouping import _same_trade_wide
+        now = datetime.now(timezone.utc)
+        new = {"entry_price": entry, "stop_loss": sl, "take_profit_1": tp1}
+        seen = {r.id for r in rows}
+        rows += [o for o in db.query(Signal).filter(
+                    Signal.market == market, Signal.signal_type == signal_type,
+                    Signal.status.in_([SignalStatus.ACTIVE, SignalStatus.TP1_HIT]),
+                    (Signal.expires_at.is_(None)) | (Signal.expires_at > now)).all()
+                 if o.id not in seen and _same_trade_wide(
+                     {"entry_price": o.entry_price, "stop_loss": o.stop_loss, "take_profit_1": o.take_profit_1}, new)]
     if not rows:
         return False
     if any(r.user_id == user.id for r in rows):
@@ -1716,7 +1729,7 @@ def bot_save_alert_signal(
     if _user_has_active_signal(db, user.id, symbol, timeframe):
         return {"saved": False, "reason": "duplicate active position, waiting for resolution"}
 
-    if _user_already_has_trade(db, user, symbol, ST(signal_type), entry):
+    if _user_already_has_trade(db, user, symbol, ST(signal_type), entry, sl, tp1):
         return {"saved": False, "reason": "same open trade already delivered to this user"}
 
     tf_hours   = {"1m": 2, "5m": 4, "15m": 3, "30m": 12, "1h": 24, "4h": 72, "1d": 168}

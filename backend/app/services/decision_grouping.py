@@ -98,7 +98,7 @@ _CLOSED = ("TP1_HIT", "TP2_HIT", "SL_HIT")
 # والهدف حرفياً وصلتا للمشتركين مرتين وخسرتا مرتين. نفس الوقف (≤5% من المخاطرة) + نفس TP1 (≤25%) + دخول ≤0.5% = نفس الصفقة.
 WIDE_ENTRY_TOL = 0.005
 WIDE_SL_TOL = 0.05
-MERGE_WIDE = False      # يُفعَّل بعد معاينة diag_merge_wide_preview.py (قرار المالك 15/10)
+MERGE_WIDE = True       # (15/10) مُفعَّل بعد معاينة diag_merge_preview.py wide: 635→621، 8 رابحة/7 خاسرة، +127.6R→+112.2R
 
 
 def _same_levels(a: dict, d: dict) -> bool:
