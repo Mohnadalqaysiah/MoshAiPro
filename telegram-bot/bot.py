@@ -580,7 +580,12 @@ def fmt_outcome(o: dict) -> str:
     market  = o["market"]
     stype   = o["signal_type"]
     entry   = _fmt_price(o["entry"])
-    price   = _fmt_price(o["current_price"])
+    # (2026-10-16) "إغلاق" = المستوى الذي أُغلقت عنده الصفقة لا سعر لحظة الاكتشاف — الحلقة ترصد كل ~90ث فالسعر
+    # الحالي قد يكون تجاوز الوقف/الهدف (XRP: وقف 1.30405 وعُرض 1.3054؛ AMD: وقف 536.78 وعُرض 534.99) فيبدو
+    # الخروج أسوأ/أفضل مما حدث. النسبة والنقاط محسوبة أصلاً من المستوى (_pnl_for_outcome).
+    _exit = {"SL_HIT": o.get("sl"), "TP1_HIT": o.get("tp1"), "TP2_HIT": o.get("tp2"),
+             "BREAKEVEN": o.get("entry")}.get(o["status"])
+    price   = _fmt_price(_exit if _exit is not None else o["current_price"])
     tp1     = _fmt_price(o["tp1"])
     tp2     = _fmt_price(o["tp2"])
     sl_p    = _fmt_price(o["sl"])
