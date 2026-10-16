@@ -566,6 +566,8 @@ async def bot_check_outcomes(
     # يُطبَّق هون: حلقة البث لكل المشتركين تُنفَّذ مرة واحدة فقط لكل قرار
     # فريد بالدورة، لا مرة لكل صف يمثّله.
     _broadcast_fanout_done_this_cycle: set = set()
+    from app.services.smart_data import GULF_SYMBOL_MAP as _GULF_MAP
+    _gulf_px_cycle: dict = {}   # سعر خليجي واحد لكل رمز بالدورة (عدة صفوف لنفس الرمز)
 
     triggered = []
     for sig in active:
@@ -609,6 +611,14 @@ async def bot_check_outcomes(
                     # مخفياً لأنها قليلة؛ ثم عمّ كل الرموز بتغيير اليوم.
                     price_info = _smart_data.get_realtime_price_with_meta(sig.market)
                     price = float(price_info["price"]) if price_info and price_info.get("price") else None
+                if price is None and market_upper in _GULF_MAP:
+                    # (2026-10-16، تفويض المالك) الأسهم الخليجية لا يعرفها yfinance/Finnhub — المسار المتزامن
+                    # أعلاه يعيد None دائماً فتُتخطّى الصفقة كل دورة حتى تنتهي مدتها: 25 من 26 نتيجة فائتة
+                    # بالتحقق الجماعي 16/10 كانت خليجية (16 خسارة مخفية). آخر إغلاق 1m من TradingView —
+                    # نفس مصدر شموعها (get_ohlcv ← _fetch_tv_gulf_history) فالقياس بنفس مرجع بناء المستويات.
+                    if market_upper not in _gulf_px_cycle:
+                        _gulf_px_cycle[market_upper] = await _smart_data.get_current_price_async(market_upper)
+                    price = _gulf_px_cycle[market_upper]
             except Exception as _px_err:
                 logger.warning(
                     f"⚠️ تعذّر جلب السعر اللحظي لـ{market_upper} #{sig.id}: "
