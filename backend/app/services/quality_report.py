@@ -121,6 +121,8 @@ def _r_multiple(entry, sl, tp1, tp2, status) -> Optional[float]:
             return None
         if status == "SL_HIT":
             return -1.0
+        if status == "BREAKEVEN":
+            return 0.0
         if status == "TP2_HIT" and tp2 is not None:
             return round(abs(float(tp2) - entry) / risk, 3)
         if status == "TP1_HIT" and tp1 is not None:

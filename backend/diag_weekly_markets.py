@@ -14,7 +14,7 @@ from app.models.signal import Signal, SignalStatus
 from app.services.decision_grouping import verified_unique_decisions
 from app.services.quality_report import _r_multiple, OUTCOME_FIX_DATE
 
-NAMES = {"crypto": "كريبتو", "forex": "فوركس", "commodity": "معادن وطاقة", "index": "مؤشرات",
+NAMES = {"crypto": "كريبتو", "forex": "فوركس", "commodity": "سلع ومؤشرات", "index": "مؤشرات",
          "stocks": "أسهم", "gulf": "خليجي"}
 
 

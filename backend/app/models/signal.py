@@ -23,6 +23,9 @@ class SignalStatus(str, enum.Enum):
     TP2_HIT = "TP2_HIT"
     SL_HIT = "SL_HIT"
     EXPIRED = "EXPIRED"
+    # (2026-10-16، قرار المالك) وصلته رسالة التأمين ("انقل الوقف للدخول") ثم عاد للدخول/الوقف قبل TP1 = 0R:
+    # لا رابحة ولا خاسرة — خارج نسبة الربح. كل الاستعلامات التي تعدّ TP1/TP2/SL تستثنيه تلقائياً.
+    BREAKEVEN = "BREAKEVEN"
 
 
 class SignalQuality(str, enum.Enum):

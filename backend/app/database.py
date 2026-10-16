@@ -44,4 +44,13 @@ def init_db() -> None:
     # Import all models so SQLAlchemy knows about them
     from app.models import user, payment, market_config, affiliate, trade_journal, game_progress, telegram_broadcast, shadow_signal, signal_feature, strategy_backtest, deleted_account  # noqa: F401
     Base.metadata.create_all(bind=engine)
+    # (2026-10-16) قيمة BREAKEVEN لنوع signalstatus القائم بـPostgres — create_all لا يعدّل نوع enum موجوداً.
+    # ADD VALUE لا يعمل داخل معاملة بإصدارات قديمة ← اتصال autocommit. idempotent (IF NOT EXISTS).
+    if engine.dialect.name == "postgresql":
+        try:
+            from sqlalchemy import text
+            with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+                conn.execute(text("ALTER TYPE signalstatus ADD VALUE IF NOT EXISTS 'BREAKEVEN'"))
+        except Exception as e:
+            print(f"⚠️ signalstatus BREAKEVEN: {e}")
     print("✅ Database initialized successfully")

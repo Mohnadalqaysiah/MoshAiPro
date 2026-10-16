@@ -140,6 +140,7 @@ export default function PerformanceSection() {
     if (status === 'TP1_HIT') return { label: tx.tp1, cls: 'bg-blue-900/50 text-blue-300' }
     if (status === 'TP2_HIT') return { label: tx.tp2, cls: 'bg-purple-900/50 text-purple-300' }
     if (status === 'SL_HIT')  return { label: tx.sl,  cls: 'bg-red-900/50 text-red-300' }
+    if (status === 'BREAKEVEN') return { label: '⚖️ 0R', cls: 'bg-amber-900/40 text-amber-300' }
     return { label: status, cls: 'bg-gray-700 text-gray-400' }
   }
 

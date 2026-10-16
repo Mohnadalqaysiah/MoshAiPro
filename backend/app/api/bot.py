@@ -26,6 +26,8 @@ def _pnl_for_outcome(entry: float, exit_price: float, sl: float, tp1: float, tp2
     """
     from app.api.admin import _calc_points  # دالة النقاط الموحّدة
 
+    if status == SignalStatus.BREAKEVEN:   # (2026-10-16) خروج على الدخول بعد رسالة التأمين
+        return 0.0, 0.0, round(entry, 5)
     if status == SignalStatus.SL_HIT:
         diff   = abs(entry - sl)
         points = -_calc_points(market, diff, entry)
@@ -898,6 +900,11 @@ async def bot_check_outcomes(
                     elif price <= tp2: new_status = SignalStatus.TP2_HIT
                     elif price <= tp1: new_status = SignalStatus.TP1_HIT
 
+            # (2026-10-16، قرار المالك) وصلته رسالة التأمين (+1R، "انقل الوقف للدخول") ثم عاد للوقف قبل TP1 ← من
+            # اتبع تعليمات المنصة خرج على الدخول: تأمين 0R لا خسارة. منذ 14/10 TP1=1R=نقطة التأمين فنادر جداً.
+            if new_status == SignalStatus.SL_HIT and sig.be_alert_sent and not _tp1_locked:
+                new_status = SignalStatus.BREAKEVEN
+
             if new_status and new_status != sig.status:
                 is_buy  = sig.signal_type.value == "BUY"
                 points, pnl_pct, exit_p = _pnl_for_outcome(
@@ -917,7 +924,7 @@ async def bot_check_outcomes(
                 # لكل قرار فريد، مو لكل صف/مستخدم (انظر التعليق فوق الحلقة)
                 dkey = decision_key(sig.market, sig.timeframe, sig.signal_type, sig.entry_price)
                 # ترقية TP1→TP2 ليست قراراً جديداً — حُسب WIN عند TP1 أصلاً
-                if dkey not in _perf_counted_this_cycle and not _tp1_locked:
+                if dkey not in _perf_counted_this_cycle and not _tp1_locked                         and new_status != SignalStatus.BREAKEVEN:   # التأمين ليس ربحاً ولا خسارة للمعايرة
                     _perf_counted_this_cycle.add(dkey)
                     perf_result = "WIN" if new_status in (SignalStatus.TP1_HIT, SignalStatus.TP2_HIT) else "LOSS"
                     mosh_ai_engine_v5.update_performance(perf_result)

@@ -613,6 +613,11 @@ def fmt_outcome(o: dict) -> str:
             f"  │  {sign_pts}{_fmt_pts(pnl)} نقطة"
         )
         tip = "الهدف التالي هدف 2 — استمر بالمتابعة 🎯"
+    elif status == "BREAKEVEN":
+        # (2026-10-16) وصلته رسالة التأمين ثم عاد للدخول — من نقل الوقف للدخول خرج بلا خسارة
+        header  = "⚖️ *أُغلقت على التأمين (نقطة الدخول)*"
+        pnl_line = "📊 النتيجة: *0%* — بلا ربح ولا خسارة لمن نقل الوقف للدخول"
+        tip = "التأمين حمى رأس المال — هذا دوره 🛡️"
     else:
         header  = "🔴 *وقف الخسارة ضُرب*"
         pnl_line = (
@@ -876,11 +881,11 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         STATUS_ICONS = {
             "ACTIVE":  "🔵", "TP1_HIT": "✅", "TP2_HIT": "🏆",
-            "SL_HIT":  "❌", "PENDING": "⏳", "EXPIRED":  "⚫",
+            "SL_HIT":  "❌", "PENDING": "⏳", "EXPIRED":  "⚫", "BREAKEVEN": "⚖️",
         }
         STATUS_AR = {
             "ACTIVE":"نشطة", "TP1_HIT":"هدف 1 ✅", "TP2_HIT":"هدف 2 🏆",
-            "SL_HIT":"وقف ❌", "PENDING":"معلقة", "EXPIRED":"منتهية",
+            "SL_HIT":"وقف ❌", "PENDING":"معلقة", "EXPIRED":"منتهية", "BREAKEVEN":"تأمين ⚖️",
         }
 
         if not sigs:

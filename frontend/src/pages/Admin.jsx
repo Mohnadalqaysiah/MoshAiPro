@@ -134,6 +134,7 @@ const SIGNAL_STATUS_STYLE = {
   TP2_HIT: 'bg-purple-900/40 text-purple-300',
   SL_HIT:  'bg-red-900/40 text-red-300',
   EXPIRED: 'bg-gray-700/60 text-gray-400',
+  BREAKEVEN: 'bg-amber-900/40 text-amber-300',
 }
 
 function UserModal({ user: u, onClose, onUpdate }) {
@@ -2402,7 +2403,7 @@ export default function Admin() {
                     <option value="">كل الأسواق</option>
                     <option value="crypto">كريبتو</option>
                     <option value="forex">فوركس</option>
-                    <option value="commodity">معادن وطاقة</option>
+                    <option value="commodity">سلع ومؤشرات</option>
                     <option value="index">مؤشرات</option>
                     <option value="stock">أسهم</option>
                     <option value="gulf">خليجي</option>
@@ -2426,6 +2427,7 @@ export default function Admin() {
                     <option value="win">رابحة</option>
                     <option value="loss">خاسرة</option>
                     <option value="expired">منتهية</option>
+                    <option value="breakeven">تأمين (0R)</option>
                   </select>
                 </div>
 
@@ -2439,6 +2441,7 @@ export default function Admin() {
                         ['نسبة الربح', sigMeta.summary.win_rate != null ? `${sigMeta.summary.win_rate}%` : '—', 'text-blue-300'],
                         ['صافي النتيجة', `${sigMeta.summary.total_r > 0 ? '+' : ''}${sigMeta.summary.total_r}R`, sigMeta.summary.total_r >= 0 ? 'text-green-400' : 'text-red-400'],
                         ['مفتوحة / منتهية', `${sigMeta.summary.open} / ${sigMeta.summary.expired}`, 'text-yellow-300'],
+                        ...(sigMeta.summary.breakeven ? [['تأمين ⚖️ (0R)', sigMeta.summary.breakeven, 'text-amber-300']] : []),
                       ].map(([l, v, c]) => (
                         <div key={l} className="bg-gray-800/60 rounded-lg p-2.5 text-center">
                           <div className={`text-lg font-bold ${c}`} dir="ltr">{v}</div>
@@ -2450,7 +2453,7 @@ export default function Admin() {
                       <div className="flex flex-wrap gap-2 text-[11px]">
                         {Object.entries(sigMeta.by_category).map(([c, s]) => (
                           <span key={c} className="bg-gray-800/60 rounded-lg px-2.5 py-1 text-gray-300">
-                            {({crypto:'كريبتو', forex:'فوركس', commodity:'معادن وطاقة', index:'مؤشرات', stock:'أسهم', gulf:'خليجي'})[c] || c}:
+                            {({crypto:'كريبتو', forex:'فوركس', commodity:'سلع ومؤشرات', index:'مؤشرات', stock:'أسهم', gulf:'خليجي'})[c] || c}:
                             {' '}{s.total} صفقة · {s.wins}✅ {s.losses}❌ ·{' '}
                             <b className={s.total_r >= 0 ? 'text-green-400' : 'text-red-400'} dir="ltr">{s.total_r > 0 ? '+' : ''}{s.total_r}R</b>
                           </span>
@@ -2604,6 +2607,7 @@ export default function Admin() {
                           TP2_HIT: 'bg-purple-900/40 text-purple-300',
                           SL_HIT:  'bg-red-900/40 text-red-300',
                           EXPIRED: 'bg-gray-700/60 text-gray-400',
+                          BREAKEVEN: 'bg-amber-900/40 text-amber-300',
                         }
                         const statusCls = statusMap[s.status] || 'bg-gray-700 text-gray-400'
                         const ptColor = (pts) => pts > 0 ? 'text-green-400' : pts < 0 ? 'text-red-400' : 'text-gray-400'
@@ -2925,7 +2929,7 @@ export default function Admin() {
                         <tbody>
                           {reportData.signals.slice(0, reportLimit).map((s,i) => {
                             const isWin = ['TP1_HIT','TP2_HIT'].includes(s.status)
-                            const statusLabel = {TP1_HIT:'هدف 1 ✅',TP2_HIT:'هدف 2 🏆',SL_HIT:'وقف ❌'}[s.status]||s.status
+                            const statusLabel = {TP1_HIT:'هدف 1 ✅',TP2_HIT:'هدف 2 🏆',SL_HIT:'وقف ❌',BREAKEVEN:'تأمين ⚖️'}[s.status]||s.status
                             return (
                               <tr key={i} className="border-b border-gray-800/50 hover:bg-gray-800/30">
                                 <td className="py-2 font-medium">{s.market}{s.timeframe && <span className="text-gray-500 text-xs mr-1">{s.timeframe}</span>}</td>

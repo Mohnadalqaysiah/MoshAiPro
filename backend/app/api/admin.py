@@ -1624,6 +1624,8 @@ def admin_signal_decisions(
             return s == "SL_HIT"
         if status == "expired":
             return s == "EXPIRED"
+        if status == "breakeven":
+            return s == "BREAKEVEN"
         return s == status
     items = [it for it in items if _match(it)]
     items.sort(key=lambda it: it["created_at"] or "", reverse=True)
@@ -1636,6 +1638,7 @@ def admin_signal_decisions(
             "total":     len(xs),
             "open":      sum(1 for x in xs if x["status"] in ("ACTIVE", "PENDING")),
             "expired":   sum(1 for x in xs if x["status"] == "EXPIRED"),
+            "breakeven": sum(1 for x in xs if x["status"] == "BREAKEVEN"),   # 0R، خارج نسبة الربح
             "closed":    len(closed),
             "wins":      wins,
             "losses":    len(closed) - wins,

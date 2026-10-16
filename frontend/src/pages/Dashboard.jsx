@@ -956,6 +956,7 @@ export default function Dashboard() {
                           TP2_HIT: { label: isAr ? 'هدف 2'     : 'TP2',     icon: '🎯', cls: 'bg-green-500/15 text-green-400 border-green-500/30' },
                           SL_HIT:  { label: isAr ? 'وقف خسارة' : 'SL',      icon: '❌', cls: 'bg-red-500/15 text-red-400 border-red-500/30' },
                           EXPIRED: { label: isAr ? 'منتهية'    : 'Expired', icon: '⏰', cls: 'bg-gray-600/30 text-gray-400 border-gray-600/40' },
+                          BREAKEVEN: { label: isAr ? 'تأمين'   : 'Breakeven', icon: '⚖️', cls: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
                         }
                         const st = HIST_STATUS[s.status] || { label: s.status, icon: '•', cls: 'bg-gray-600/30 text-gray-400 border-gray-600/40' }
                         return (
@@ -1156,6 +1157,7 @@ export default function Dashboard() {
                     TP2_HIT: { label: 'هدف 2',     icon: '🎯', bar: 'bg-purple-500', txt: 'text-purple-400'},
                     SL_HIT:  { label: 'وقف خسارة', icon: '❌', bar: 'bg-red-500',    txt: 'text-red-400'   },
                     EXPIRED: { label: 'منتهية',    icon: '⏰', bar: 'bg-gray-600',   txt: 'text-gray-500'  },
+                    BREAKEVEN: { label: 'تأمين',  icon: '⚖️', bar: 'bg-amber-500',  txt: 'text-amber-400' },
                   }
                   const st      = STATUS[s.status] || { label: s.status, icon: '•', bar: 'bg-gray-600', txt: 'text-gray-400' }
                   const isBuy   = s.type === 'BUY'
