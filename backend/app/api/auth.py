@@ -173,6 +173,9 @@ def _provision_trial_user(
 
     new_code = generate_affiliate_code(db)
     now = datetime.now(timezone.utc)
+    # (2026-10-16) نفس بريد حساب حذفه صاحبه سابقاً ← حساب جديد بلا تجربة مجانية (قرار المالك)
+    from app.models.deleted_account import DeletedAccount
+    reused = db.query(DeletedAccount.id).filter(DeletedAccount.email_hash == _email_hash(email)).first() is not None
 
     user = User(
         email         = email,
@@ -183,18 +186,23 @@ def _provision_trial_user(
         plan          = PlanType.TRIAL,
         is_active     = True,
         trial_started_at    = now,
-        trial_ends_at       = now + timedelta(days=TRIAL_DAYS),
-        trial_analyses_left = _get_setting(db, "trial_analysis_limit", 10),
-        trial_chat_left     = _get_setting(db, "trial_chat_limit", 20),
+        trial_ends_at       = now if reused else now + timedelta(days=TRIAL_DAYS),
+        trial_analyses_left = 0 if reused else _get_setting(db, "trial_analysis_limit", 10),
+        trial_chat_left     = 0 if reused else _get_setting(db, "trial_chat_limit", 20),
         telegram_link_token = secrets.token_urlsafe(16),
         affiliate_code      = new_code,
         referred_by_code    = clean_ref if referrer else None,
         registration_ip     = registration_ip,
         is_verified         = is_verified,
     )
+    if reused:
+        user.strategy_free_alerts_left = 0
+        user.trial_renewed_at = now      # لا يجدّدها renew-trials فوراً
     db.add(user)
     db.commit()
     db.refresh(user)
+    if reused:
+        logger.info(f"♻️ Re-registration of a deleted account email → no new trial (user {user.id})")
 
     aff = Affiliate(
         user_id             = user.id,
@@ -234,6 +242,11 @@ def _provision_trial_user(
         background_tasks.add_task(send_email, user.email, "مرحباً بك في Qaffel AI 🎉", body, smtp_pass)
 
     return user
+
+
+def _email_hash(email: str) -> str:
+    import hashlib
+    return hashlib.sha256((email or "").lower().strip().encode()).hexdigest()
 
 
 @router.post("/register")
@@ -911,6 +924,8 @@ def _user_info(user: User, db: Session) -> dict:
         "feature_survey_dismissed": _feature_survey_dismissed(user, db),
         # (2026-10-15) فئة باني الاستراتيجيات كما يقرّرها الخادم (full/limited) — الواجهة تعرض حدود التجربة منها
         "strategy_tier":         _strategy_tier(user),
+        # (2026-10-16) حذف الحساب: كلمة السر للتأكيد، أو كتابة "حذف" لحسابات Google
+        "has_password":          bool(user.password_hash),
     }
 
 
@@ -957,4 +972,66 @@ def update_preferences(
     user.notifications_enabled = data.notifications_enabled
     user.language              = data.language
     db.commit()
+    return {"success": True}
+
+
+
+# ─── حذف الحساب من العميل (2026-10-16، قرار المالك — DECISIONS.md 16/10) ─────────────────────────
+class DeleteAccountIn(BaseModel):
+    password: Optional[str] = None     # حسابات كلمة السر
+    confirm: Optional[str] = None      # حسابات Google: يكتب "حذف" (أو DELETE)
+
+
+@router.post("/delete-account")
+def delete_account(
+    data: DeleteAccountIn,
+    background_tasks: BackgroundTasks,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """مسح الهوية لا حذف الصف: الإشارات والمدفوعات مربوطة بـusers.id (إحصاء الأداء والمحاسبة) فتبقى بلا أي
+    بيانات شخصية. يُمسح: البريد، الاسم، الهاتف، تلجرام، كلمة السر، المفضلة، إشعارات المتصفح، الاستراتيجيات،
+    تنبيهات الأسعار. الاشتراك الساري ينتهي بلا استرداد (يُبلَّغ العميل بالواجهة قبل التأكيد)."""
+    if user.role == UserRole.ADMIN:
+        raise HTTPException(400, "لا يمكن حذف حساب إدارة من هنا")
+    if user.password_hash:
+        if not data.password or not verify_password(data.password, user.password_hash):
+            raise HTTPException(400, "كلمة المرور غير صحيحة")
+    elif (data.confirm or "").strip() not in ("حذف", "DELETE", "delete"):
+        raise HTTPException(400, "اكتب كلمة «حذف» للتأكيد")
+
+    from app.models.deleted_account import DeletedAccount
+    from app.models.strategy import Strategy
+    from app.models.push_subscription import PushSubscription
+    from app.models.price_alert import PriceAlert
+
+    uid, old_email = user.id, user.email
+    plan = user.plan.value if hasattr(user.plan, "value") else str(user.plan)
+    db.add(DeletedAccount(email_hash=_email_hash(old_email), user_id=uid, had_paid=plan))
+
+    for model in (Strategy, PushSubscription, PriceAlert):
+        db.query(model).filter(model.user_id == uid).delete(synchronize_session=False)
+
+    now = datetime.now(timezone.utc)
+    user.email = f"deleted-{uid}@deleted.invalid"
+    user.full_name = None
+    user.phone_number = None
+    user.password_hash = None
+    user.auth_provider = "deleted"
+    user.telegram_id = None
+    user.telegram_username = None
+    user.telegram_link_token = None
+    user.affiliate_code = None
+    user.registration_ip = None
+    user.notify_watchlist = []
+    user.notifications_enabled = False
+    user.is_active = False
+    user.subscription_ends_at = now if user.subscription_ends_at else None
+    user.strategy_pro_until = None
+    db.commit()
+    logger.info(f"🗑️ Account self-deleted: user {uid} (plan={plan}) — identity wiped")
+
+    from app.services.admin_notify import notify_admin_telegram
+    background_tasks.add_task(notify_admin_telegram,
+                              f"🗑️ <b>عميل حذف حسابه</b>\n#{uid} · الباقة وقت الحذف: {plan}")
     return {"success": True}
