@@ -1418,12 +1418,14 @@ export default function Admin() {
                     {[
                       { label:'دخل صفحة الأسعار', value: funnel.pricing_viewed, color:'blue' },
                       { label:'بدأ الدفع',        value: funnel.checkout_started, color:'yellow' },
-                      { label:'أكمل الدفع',       value: funnel.converted, color:'green' },
+                      { label:'اشتركوا فعلاً (كل الدفعات المقبولة)', value: funnel.paid_users ?? funnel.converted, color:'green',
+                        sub: funnel.paid_users != null ? `${funnel.paid_total_usd}$ · منهم ${funnel.converted} عبر زر الدفع` : null },
                     ].map((s, i) => (
                       <div key={s.label} className="bg-gray-900 border border-gray-800 rounded-xl p-4">
                         <div className="text-2xl font-bold">{s.value}</div>
                         <div className="text-xs text-gray-400 mt-1">{s.label}</div>
-                        {i > 0 && funnel.pricing_viewed > 0 && (
+                        {s.sub && <div className="text-[11px] text-green-400/80 mt-1">{s.sub}</div>}
+                        {i === 1 && funnel.pricing_viewed > 0 && (
                           <div className="text-[11px] text-gray-600 mt-2">
                             {Math.round((s.value / funnel.pricing_viewed) * 100)}% من الداخلين
                           </div>
@@ -1431,6 +1433,44 @@ export default function Admin() {
                       </div>
                     ))}
                   </div>
+
+                  <p className="text-[11px] text-gray-500 -mt-3 mb-6 leading-relaxed">
+                    «دخل صفحة الأسعار» و«بدأ الدفع» يُحسبان للمسجّلين فقط (الزائر بلا حساب لا يُعدّ). «اشتركوا فعلاً» من سجل المدفوعات
+                    المقبولة — يشمل من دفع بأي طريقة، وتفعيل الباقة يدوياً من تبويب المستخدمين بلا دفعة مسجّلة لا يظهر هنا.
+                  </p>
+
+                  <h2 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+                    <CheckCircle size={14} className="text-green-500" />
+                    المشتركون بهذه الفترة ({(funnel.paid || []).length})
+                  </h2>
+                  {(funnel.paid || []).length === 0 ? (
+                    <p className="text-gray-500 text-sm mb-6">لا توجد دفعات مقبولة بهذه الفترة</p>
+                  ) : (
+                    <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden mb-6">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-gray-500 text-xs border-b border-gray-800">
+                            <th className="text-right py-2.5 px-4 font-medium">المستخدم</th>
+                            <th className="text-right py-2.5 px-4 font-medium">الباقة</th>
+                            <th className="text-right py-2.5 px-4 font-medium">المبلغ</th>
+                            <th className="text-right py-2.5 px-4 font-medium">الوسيلة</th>
+                            <th className="text-right py-2.5 px-4 font-medium">الوقت</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-800/60">
+                          {funnel.paid.map((p, i) => (
+                            <tr key={i} className="hover:bg-gray-800/30">
+                              <td className="py-2.5 px-4">{p.full_name || p.email}</td>
+                              <td className="py-2.5 px-4 text-gray-400">{p.plan}</td>
+                              <td className="py-2.5 px-4 text-green-400">{p.amount_usd}$</td>
+                              <td className="py-2.5 px-4 text-gray-400 text-xs">{p.provider}{!p.via_checkout && <span className="text-gray-600"> · بلا زر الدفع</span>}</td>
+                              <td className="py-2.5 px-4 text-gray-500 text-xs">{p.paid_at ? new Date(p.paid_at).toLocaleString('ar-EG') : '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
 
                   <h2 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
                     <AlertTriangle size={14} className="text-yellow-500" />

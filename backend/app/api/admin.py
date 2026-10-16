@@ -196,11 +196,34 @@ def funnel_report(
             })
         abandoned_list.sort(key=lambda x: x["started_at"], reverse=True)
 
+    # (2026-10-16) بلاغ المالك: "ناس اشتركوا ما ظهروا أصلاً" — converted يعدّ فقط من سجّل حدث "بدأ الدفع" ثم دفع،
+    # فمن اشترك بلا ذلك الحدث (وسيلة لا تسجّله، دفعة يدوية، أو قبل تفعيل التتبّع) لا يظهر. المصدر الموثوق للاشتراك
+    # هو جدول Payment: كل دفعة مقبولة بالفترة (عدا المستبعدة من الإحصاء — دفعات اختبار).
+    paid_rows = (
+        db.query(Payment, User)
+        .join(User, User.id == Payment.user_id)
+        .filter(Payment.status == PaymentStatus.APPROVED, Payment.created_at >= start,
+                Payment.exclude_from_stats == False)  # noqa: E712
+        .order_by(Payment.created_at.desc())
+        .all()
+    )
+    paid_list = [{
+        "user_id": u.id, "email": u.email, "full_name": u.full_name,
+        "plan": p.plan.value if hasattr(p.plan, "value") else p.plan,
+        "amount_usd": p.amount_usd, "provider": p.provider,
+        "paid_at": p.created_at.isoformat() if p.created_at else None,
+        "via_checkout": u.id in checkout_users,
+    } for p, u in paid_rows]
+    paid_users = {x["user_id"] for x in paid_list}
+
     return {
         "window_days":      days,
         "pricing_viewed":   len(viewed_users),
         "checkout_started": len(checkout_users),
         "converted":        len(converted_users),
+        "paid_users":       len(paid_users),
+        "paid_total_usd":   round(sum(x["amount_usd"] or 0 for x in paid_list), 2),
+        "paid":             paid_list,
         "abandoned":        abandoned_list,
     }
 
