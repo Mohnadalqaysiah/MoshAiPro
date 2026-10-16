@@ -568,6 +568,7 @@ async def bot_check_outcomes(
     _broadcast_fanout_done_this_cycle: set = set()
     from app.services.smart_data import GULF_SYMBOL_MAP as _GULF_MAP
     _gulf_px_cycle: dict = {}   # سعر خليجي واحد لكل رمز بالدورة (عدة صفوف لنفس الرمز)
+    _INDEX_FUTURES_REF = {"NAS100", "US30", "SP500"}
 
     triggered = []
     for sig in active:
@@ -589,7 +590,11 @@ async def bot_check_outcomes(
             price = None
             try:
                 from app.services.tv_price_feed import tv_feed
-                if market_upper in TV_SYMBOL_MAP:
+                # (2026-10-16، تفويض المالك) المؤشرات الأمريكية: TV يعطي المؤشر النقدي (NASDAQ:NDX/DJ:DJI/SP:SPX) —
+                # بلا أسعار خارج ساعات نيويورك (NAS100 #5914 04:29 UTC لم تُرصد وبلغت وقفها) وأقل من العقد الآجل
+                # بنحو 196 نقطة (NQ) بينما المستويات من get_ohlcv = العقد الآجل. فتُقاس بالعقد الآجل (smart_data
+                # _FUTURES_SYMBOLS → yfinance NQ=F/YM=F/ES=F) — نفس مرجع بناء المستويات (قاعدة 16/09).
+                if market_upper in TV_SYMBOL_MAP and market_upper not in _INDEX_FUTURES_REF:
                     tv_p = tv_feed.get_price_sync(market_upper)
                     if tv_p and float(tv_p) > 0:
                         price = float(tv_p)
