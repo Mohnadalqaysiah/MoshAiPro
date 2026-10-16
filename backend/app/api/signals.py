@@ -17,7 +17,7 @@ from app.models.signal import Signal, SignalType, SignalStatus, SignalQuality
 from app.models.user import User, PlanType, UserRole
 from app.models.site_settings import SiteSettings
 from app.services.auth_service import get_current_user, check_subscription, deduct_trial
-from app.api.bot import _check_loss_streak_breaker, _has_active_signal
+from app.api.bot import _check_loss_streak_breaker, _has_active_signal, _extract_str
 from app.services.decision_grouping import verified_unique_decisions, decision_key
 from app.services.quality_report import OUTCOME_FIX_DATE, _r_multiple
 
@@ -248,6 +248,10 @@ async def analyze_market(
                         take_profit_2     = float(tp2 or tp1),
                         current_price     = analysis.get("current_price"),
                         ai_confidence     = conf,
+                        # (2026-10-16) سياق ICT لتقرير الجودة — كان يُحفظ بمسار الماسح فقط (تغطية 26%)
+                        wyckoff_phase     = _extract_str(analysis.get("wyckoff"), "phase"),
+                        premium_discount  = _extract_str(analysis.get("premium_discount"), "zone"),
+                        killzone          = _extract_str(analysis.get("kill_zone"), "active_session"),
                         risk_reward_ratio = rr,
                         signal_hash       = sig_hash,
                         expires_at        = expires_at,

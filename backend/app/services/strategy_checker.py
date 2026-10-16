@@ -11,6 +11,7 @@ from loguru import logger
 
 CHECK_INTERVAL_SEC = 300      # 5 minutes
 ALERT_COOLDOWN_SEC = 1800     # 30 minutes — avoid re-alerting every cycle
+OPEN_ALERT_HOURS = 24         # (2026-10-16) = أقصى مدة صفقة بالباكتيست — تنبيه مفتوح يمنع تكراره
 
 # per (strategy_id, symbol) last-sent timestamp — resets on restart, same
 # spirit as telegram-bot/bot.py's in-memory `last_alert` dict.
@@ -19,6 +20,42 @@ _last_sent: dict = {}
 
 def _norm_symbol(sym: str) -> str:
     return sym.replace("/", "").upper()
+
+
+async def _alert_levels(symbol: str, tf: str, side: str, rr: float, price) -> dict:
+    """(2026-10-16) مستويات التنبيه بقواعد الباكتيست نفسها (strategy_backtest.trade_levels): الدخول بسعر الآن، الوقف خلف
+    قاع/قمة آخر 10 شموع ± 0.1 ATR بحد أدنى max(0.5 ATR، 3× السبريد)، TP1 = 1R، TP2 = R/R الاستراتيجية.
+    كانت تُقتبس من قرار المحرك — فإن كان WAIT وصل التنبيه بلا دخول ولا وقف (بلاغ المالك)."""
+    from app.services.smart_data import smart_data
+    from app.services.strategy_backtest import trade_levels, SWING_LOOKBACK
+    df = await smart_data.get_ohlcv(_norm_symbol(symbol), tf, bars=60)
+    if df is None or len(df) < SWING_LOOKBACK + 1 or "atr" not in df.columns:
+        return {}
+    entry = float(price) if price else float(df["close"].iloc[-1])
+    lv = trade_levels(entry, df["low"].iloc[-SWING_LOOKBACK:], df["high"].iloc[-SWING_LOOKBACK:],
+                      float(df["atr"].iloc[-1] or 0), side, rr, _norm_symbol(symbol))
+    if not lv:
+        return {}
+    dp = 5 if entry < 20 else 3 if entry < 1000 else 2
+    return {"entry": round(entry, dp), "stop_loss": round(lv["sl"], dp), "tp1": round(lv["tp1"], dp),
+            "tp2": round(lv["tp2"], dp)}
+
+
+def _open_alert(db, strategy_id: int, symbol: str, side: str, price) -> bool:
+    """تنبيه سابق بنفس الاتجاه خلال 24 ساعة والسعر ما زال بين وقفه وهدفه الأول = الصفقة مفتوحة ← لا تكرار.
+    من StrategyTriggerEvent (يصمد بعد إعادة التشغيل، بخلاف _last_sent بالذاكرة)."""
+    from datetime import timedelta
+    from app.models.strategy import StrategyTriggerEvent
+    since = datetime.now(timezone.utc) - timedelta(hours=OPEN_ALERT_HOURS)
+    ev = (db.query(StrategyTriggerEvent)
+            .filter(StrategyTriggerEvent.strategy_id == strategy_id, StrategyTriggerEvent.symbol == symbol,
+                    StrategyTriggerEvent.telegram_sent == True, StrategyTriggerEvent.created_at >= since)  # noqa: E712
+            .order_by(StrategyTriggerEvent.created_at.desc()).first())
+    a = ((ev.diagnostics_json or {}).get("alert") if ev else None) or {}
+    if not a or a.get("side") != side or price is None:
+        return False
+    p, sl, tp1 = float(price), float(a["stop_loss"]), float(a["tp1"])
+    return (sl < p < tp1) if side == "BUY" else (tp1 < p < sl)
 
 
 _LOCK_KEY = 90210001  # arbitrary unique advisory-lock key for this task
@@ -87,7 +124,24 @@ async def strategy_checker():
 
                         telegram_sent = False
                         quota_blocked = limited and owner.strategy_free_alerts_left <= 0
-                        if result["triggered"] and s.trigger_send_telegram and s.tg_enabled and not quota_blocked:
+                        alert = None
+                        if result["triggered"]:
+                            # (2026-10-16) الاتجاه من قيم شروط الاستراتيجية (كالباكتيست)، وإلا من قرار المحرك؛ بلا اتجاه لا
+                            # يُرسل تنبيه "⚪ WAIT" — يُسجَّل السبب فقط.
+                            from app.services.strategy_backtest import infer_side
+                            side = infer_side([c for c in conditions if c.enabled]) or                                 (primary_analysis.get("recommendation") if primary_analysis.get("recommendation") in ("BUY", "SELL") else None)
+                            price_now = primary_analysis.get("current_price")
+                            if not side:
+                                result["block_reason"] = "اكتملت الشروط لكن لا اتجاه محدد (شروط مختلطة والمحرك على انتظار) — لم يُرسل تنبيه"
+                            elif _open_alert(db, s.id, symbol, side, price_now):
+                                result["block_reason"] = "تنبيه سابق بنفس الاتجاه ما زال مفتوحاً (السعر بين وقفه وهدفه الأول) — لم يُكرَّر"
+                            else:
+                                lv = await _alert_levels(symbol, primary_tf, side, float(s.exec_rr or 2.0), price_now)
+                                if lv:
+                                    alert = dict(lv, side=side)
+                                else:
+                                    result["block_reason"] = "تعذّر حساب المستويات (لا شموع كافية) — لم يُرسل تنبيه"
+                        if alert and s.trigger_send_telegram and s.tg_enabled and not quota_blocked:
                             key = (s.id, symbol)
                             last = _last_sent.get(key)
                             now = datetime.now(timezone.utc)
@@ -95,7 +149,8 @@ async def strategy_checker():
                             chat_id = s.tg_chat_override or (s.user.telegram_id if s.user else None)
                             token = get_bot_token()
                             if cooled_down and chat_id and token:
-                                text = build_telegram_message(s, result, symbol, primary_tf, primary_analysis)
+                                msg_analysis = dict(primary_analysis, levels={k: alert[k] for k in ("entry", "stop_loss", "tp1", "tp2")})
+                                text = build_telegram_message(s, result, symbol, primary_tf, msg_analysis)
                                 url = f"https://api.telegram.org/bot{token}/sendMessage"
                                 try:
                                     async with aiohttp.ClientSession() as sess:
@@ -130,6 +185,7 @@ async def strategy_checker():
                                 "min_score":     result.get("min_score"),
                                 "groups":        result.get("groups_detail"),
                                 "unsupported":   result.get("unsupported"),
+                                "alert":         alert if telegram_sent else None,   # (16/10) لمنع تكرار تنبيه مفتوح
                             },
                         ))
                 db.commit()

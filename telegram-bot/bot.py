@@ -1737,6 +1737,12 @@ async def monitor_watchlists(app: Application):
                                 "tp2":         _tp2 or _tp1,
                                 "confidence":  conf,
                                 "rr":          _rr,
+                                # (2026-10-16) سياق ICT لتقرير الجودة — كان يُحفظ بمسار الماسح فقط (تغطية 26%)
+                                **{k: v for k, v in (
+                                    ("wyckoff_phase", (data.get("wyckoff") or {}).get("phase") if isinstance(data.get("wyckoff"), dict) else data.get("wyckoff")),
+                                    ("premium_discount", (data.get("premium_discount") or {}).get("zone") if isinstance(data.get("premium_discount"), dict) else data.get("premium_discount")),
+                                    ("killzone", (data.get("kill_zone") or {}).get("active_session") if isinstance(data.get("kill_zone"), dict) else data.get("kill_zone")),
+                                ) if v},
                             })
                         except Exception as _save_e:
                             logger.warning(f"save-alert-signal: {_save_e}")

@@ -93,12 +93,12 @@ def infer_side(conditions) -> Optional[str]:
 
 # ─── محاكاة الصفقة ────────────────────────────────────────────────────────────
 
-def _simulate(p: pd.DataFrame, i: int, side: str, rr: float, now: datetime, symbol: str = "") -> Optional[Dict]:
+def trade_levels(entry: float, lows, highs, atr: float, side: str, rr: float, symbol: str = "") -> Optional[Dict]:
+    """قواعد الصفقة نفسها للباكتيست ولتنبيه الاستراتيجية الحي (2026-10-16) — ما اختُبر هو ما يُرسل.
+    lows/highs = آخر SWING_LOOKBACK شمعة حتى شمعة الإطلاق شاملة."""
     from app.services.spread_table import typical_spread, MIN_SL_SPREAD_MULT
-    entry = float(p.at[i, "close"])
-    atr = float(p.at[i, "atr"] or 0)
-    lo = float(p["low"].iloc[max(0, i - SWING_LOOKBACK + 1): i + 1].min())
-    hi = float(p["high"].iloc[max(0, i - SWING_LOOKBACK + 1): i + 1].max())
+    atr = float(atr or 0)
+    lo, hi = float(min(lows)), float(max(highs))
     buy = side == "BUY"
     sl = (lo - 0.1 * atr) if buy else (hi + 0.1 * atr)
     if (buy and sl >= entry) or (not buy and sl <= entry):
@@ -112,12 +112,23 @@ def _simulate(p: pd.DataFrame, i: int, side: str, rr: float, now: datetime, symb
     risk = abs(entry - sl)
     if risk <= 0:
         return None
-    cost_r = spread / risk           # (2026-10-14) السبريد يُخصم من كل صفقة بوحدات R
+    sgn = 1 if buy else -1
+    rr2 = max(1.0, rr)
+    return {"entry": entry, "sl": sl, "tp1": entry + sgn * risk, "tp2": entry + sgn * rr2 * risk,
+            "risk": risk, "spread": spread, "rr2": rr2}
+
+
+def _simulate(p: pd.DataFrame, i: int, side: str, rr: float, now: datetime, symbol: str = "") -> Optional[Dict]:
+    entry = float(p.at[i, "close"])
+    lv = trade_levels(entry, p["low"].iloc[max(0, i - SWING_LOOKBACK + 1): i + 1],
+                      p["high"].iloc[max(0, i - SWING_LOOKBACK + 1): i + 1], p.at[i, "atr"], side, rr, symbol)
+    if lv is None:
+        return None
+    buy = side == "BUY"
+    sl, tp1, tp2, risk, rr2 = lv["sl"], lv["tp1"], lv["tp2"], lv["risk"], lv["rr2"]
+    cost_r = lv["spread"] / risk     # (2026-10-14) السبريد يُخصم من كل صفقة بوحدات R
     sgn = 1 if buy else -1
     r_of = lambda px: sgn * (px - entry) / risk
-    tp1 = entry + sgn * risk
-    rr2 = max(1.0, rr)
-    tp2 = entry + sgn * rr2 * risk
     t0 = p.at[i, "close_t"]
     end = t0 + MAX_HOLD
     half = armed = False

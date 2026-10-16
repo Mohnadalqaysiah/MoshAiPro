@@ -543,6 +543,15 @@ async def send_test_alert(strategy_id: int, db: Session = Depends(get_db), user 
     analyses = await mosh_ai_engine_v5.analyze_market_multi_tf(_norm_symbol(symbol), tfs)
     primary_analysis = analyses.get(primary_tf) or next(iter(analyses.values()), {})
     result = evaluate_strategy(s.groups, conditions, analyses, s.min_score, price=primary_analysis.get("current_price"))
+    # (2026-10-16) نفس مستويات التنبيه الحي (قواعد الباكتيست) — كي تشبه الرسالة التجريبية ما سيصل فعلاً
+    from app.services.strategy_backtest import infer_side
+    from app.services.strategy_checker import _alert_levels
+    side = infer_side([c for c in conditions if c.enabled]) or \
+        (primary_analysis.get("recommendation") if primary_analysis.get("recommendation") in ("BUY", "SELL") else None)
+    if side:
+        lv = await _alert_levels(symbol, primary_tf, side, float(s.exec_rr or 2.0), primary_analysis.get("current_price"))
+        if lv:
+            primary_analysis = dict(primary_analysis, levels=lv)
     text = "🧪 [رسالة تجريبية]\n" + build_telegram_message(s, result, symbol, primary_tf, primary_analysis)
 
     chat_id = s.tg_chat_override or user.telegram_id

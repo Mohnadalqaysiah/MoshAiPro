@@ -1722,6 +1722,9 @@ def bot_save_alert_signal(
     tp2: float,
     confidence: float,
     rr: float = 0.0,
+    wyckoff_phase: Optional[str] = None,      # (2026-10-16) سياق ICT — كان يُحفظ بمسار الماسح فقط
+    premium_discount: Optional[str] = None,
+    killzone: Optional[str] = None,
     _: bool = Depends(verify_bot),
     db: Session = Depends(get_db),
 ):
@@ -1787,6 +1790,9 @@ def bot_save_alert_signal(
         signal_type       = ST(signal_type),
         signal_quality    = SignalQuality.PREMIUM if confidence >= 80 else SignalQuality.STANDARD,
         status            = SignalStatus.ACTIVE,
+        wyckoff_phase     = wyckoff_phase or None,
+        premium_discount  = premium_discount or None,
+        killzone          = killzone or None,
         entry_price       = round(entry, 5),
         stop_loss         = round(sl, 5),
         take_profit_1     = round(tp1, 5),
