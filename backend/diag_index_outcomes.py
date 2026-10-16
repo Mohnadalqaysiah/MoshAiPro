@@ -2,7 +2,7 @@
 (2026-10-16) تحقق للقراءة فقط: نتائج المؤشرات الأمريكية (NAS100/US30/SP500) المسجّلة قبل إصلاح مصدر السعر.
 
 قبل 16/10 كانت حلقة الرصد تقيس السعر اللحظي بالمؤشر النقدي (NDX/DJI/SPX) بينما المستويات من العقد الآجل — فرق ~196
-نقطة على NAS100 (diag_missed_outcome 5914). هنا يُعاد المشي على شموع العقد الآجل 15m (نفس مرجع المستويات، ~60 يوماً):
+نقطة على NAS100 (diag_missed_outcome 5914). هنا يُعاد المشي على شموع العقد الآجل 5m (نفس مرجع المستويات، ~60 يوماً؛ و15m للمقارنة):
 من الإنشاء حتى انتهاء المدة، الدخول أولاً ثم أول مستوى يُلمس (الوقف أولاً إن لُمس هو وهدف بنفس الشمعة = "غامض").
 يقارن بالنتيجة المسجّلة لكل قرار فريد. افتراضياً لا يكتب شيئاً.
 --apply (قرار المالك): يصحّح القرارات المخالفة فقط، بكل صفوفها — إلى نتيجة الشموع (NOT_TRIGGERED/EXPIRED ← EXPIRED بلا نقاط)،
@@ -28,11 +28,12 @@ def _utc(d):
     return d if d is None or d.tzinfo else d.replace(tzinfo=timezone.utc)
 
 
-def walk(bars, s):
+def walk(bars, s, bar_sec=300):
     buy = s.signal_type.value == "BUY"
     e, sl, t1, t2 = s.entry_price, s.stop_loss, s.take_profit_1, s.take_profit_2
     t0, tx = _utc(s.created_at).timestamp(), _utc(s.expires_at).timestamp()
-    w = [b for b in bars if t0 - 900 < b[0] <= tx]
+    # b[0] = وقت إغلاق الشمعة. الشمعة التي فُتحت قبل الصدور بأكثر من دقيقة تُستبعد (نفس هامش 60ث بحلقة الرصد)
+    w = [b for b in bars if b[0] - bar_sec >= t0 - 60 and b[0] - bar_sec < tx]
     if not w:
         return "NO_DATA"
     started = False
@@ -86,33 +87,38 @@ async def main():
     ).all()
     by_id = {s.id: s for s in rows}
     decs = sorted(verified_unique_decisions(rows), key=lambda d: _utc(d["created_at"]))
-    bars = {}
-    # (16/10) get_ohlcv يعيد ~420 شمعة فقط (4 أيام) — yfinance مباشرة: 15m حتى 60 يوماً، نفس العقود الآجلة (مرجع المستويات)
+    # (16/10) yfinance مباشرة (get_ohlcv يعيد ~4 أيام فقط): 5m هو الحكم (أدق)، و15m للمقارنة — نفس العقود الآجلة
+    # (مرجع المستويات)، 60 يوماً لكل منهما. خلاف 5m/15m يُطبع للشفافية؛ التصحيح بحكم 5m وحده.
     import yfinance as yf
+    from datetime import datetime
+    bars, bars15 = {}, {}
     for sym in INDICES:
-        try:
-            df = yf.Ticker(YF[sym]).history(period="60d", interval="15m")
-        except Exception as e:
-            print(f"{sym}: تعذّر جلب الشموع ({e})")
-            df = None
-        if df is None or not len(df):
-            bars[sym] = []
-            continue
-        ts = pd.to_datetime(df.index, utc=True)
-        bars[sym] = sorted(zip((t.timestamp() + 900 for t in ts), df["High"].astype(float), df["Low"].astype(float)))
+        for interval, sec, store in (("5m", 300, bars), ("15m", 900, bars15)):
+            try:
+                df = yf.Ticker(YF[sym]).history(period="60d", interval=interval)
+            except Exception as e:
+                print(f"{sym} {interval}: تعذّر جلب الشموع ({e})")
+                df = None
+            if df is None or not len(df):
+                store[sym] = []
+                continue
+            ts = pd.to_datetime(df.index, utc=True)
+            store[sym] = sorted(zip((t.timestamp() + sec for t in ts), df["High"].astype(float), df["Low"].astype(float)))
         if bars[sym]:
-            from datetime import datetime
-            print(f"{sym}: شموع 15m من {datetime.fromtimestamp(bars[sym][0][0], timezone.utc):%m-%d} "
+            print(f"{sym}: شموع 5m من {datetime.fromtimestamp(bars[sym][0][0], timezone.utc):%m-%d} "
                   f"إلى {datetime.fromtimestamp(bars[sym][-1][0], timezone.utc):%m-%d}")
 
-    same = diff = nodata = 0
+    same = diff = nodata = disagree = 0
     r_now = r_new = 0.0
     lines = []
     for d in decs:
         s = by_id.get(d["id"])
         if not s:
             continue
-        got = walk(bars.get(s.market, []), s)
+        got = walk(bars.get(s.market, []), s, 300)
+        got15 = walk(bars15.get(s.market, []), s, 900)
+        if got != got15 and got not in ("NO_DATA", "AMBIGUOUS"):
+            disagree += 1
         rec = d["status"]
         rn = _r_multiple(s.entry_price, s.stop_loss, s.take_profit_1, s.take_profit_2, rec) or 0.0
         if got in ("NO_DATA", "AMBIGUOUS"):
@@ -129,9 +135,10 @@ async def main():
             if "--apply" in sys.argv:
                 _fix(db, by_id, d, got)
             lines.append(f"  #{d['id']:<5} {s.market:<7} {s.timeframe:<4} {s.signal_type.value:<4} {_utc(s.created_at):%m-%d %H:%M} | "
-                         f"مسجّل {rec:<8} ({rn:+.2f}R) ← الشموع: {got:<13} ({rg:+.2f}R) | صفوف {len(d.get('row_ids') or [1])}")
+                         f"مسجّل {rec:<8} ({rn:+.2f}R) ← 5m: {got:<13} ({rg:+.2f}R) | 15m: {got15:<13} | صفوف {len(d.get('row_ids') or [1])}")
     print(f"\nقرارات مغلقة للمؤشرات منذ {OUTCOME_FIX_DATE:%m-%d}: {len(decs)}")
-    print(f"  تطابقت مع الشموع: {same} | خالفت: {diff} | بلا بيانات أو غامضة: {nodata}")
+    print(f"  تطابقت مع الشموع (5m): {same} | خالفت: {diff} | بلا بيانات أو غامضة: {nodata}")
+    print(f"  اختلف حكم 5m عن 15m في {disagree} قراراً (الحكم المعتمد 5m)")
     print(f"  مجموع R (المقارَنة فقط): المسجّل {r_now:+.2f}R ← حسب الشموع {r_new:+.2f}R")
     print("  ✅ صُحّحت المخالفة." if "--apply" in sys.argv else "  ℹ️ معاينة — لم يُعدَّل شيء (--apply للتصحيح).")
     if lines:
