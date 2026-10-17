@@ -11,6 +11,7 @@ import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
 import useSEO from '../hooks/useSEO'
+import useFAQSchema from '../hooks/useFAQSchema'
 import useTrialLimits from '../hooks/useTrialLimits'
 import PublicChatBot from '../components/PublicChatBot'
 import { DEMO, TICKER, BLOG, COND_KEYS, TXT, HERO_SCENE, RR } from '../components/landing/landingV2Text'
@@ -80,6 +81,9 @@ export default function LandingV2() {
       ? `منصة Qaffel AI تحلل الذهب والبيتكوين والفوركس بتقنية ICT/SMC والذكاء الاصطناعي. إشارات دقيقة على Telegram. ابدأ مجاناً بـ${trial.analyses} تحليلات.`
       : `Qaffel AI analyzes Gold, Bitcoin and Forex using ICT/SMC and AI. Accurate signals on Telegram. Start free with ${trial.analyses} analyses.`,
   })
+
+  // FAQPage من الأسئلة الظاهرة فعلاً بالصفحة (بدل نسخة ثابتة بـindex.html كانت تختلف عنها وتظهر بكل الصفحات)
+  useFAQSchema('ld-faq-home', T.faq.map(([q, a]) => ({ q, a })))
 
   const handleToggleLang = () => {
     const target = isAr ? 'en' : 'ar'
@@ -595,6 +599,7 @@ export default function LandingV2() {
             </ul></div>
             <div><h4>{T.fCompany}</h4><ul>
               <li><Link to={p('/about')}>{T.nav.about}</Link></li>
+              <li><Link to={p('/vision')}>{isAr ? 'رؤيتنا' : 'Our vision'}</Link></li>
               <li><Link to="/referral">{T.nav.referral}</Link></li>
               <li><Link to="/contact">{T.nav.contact}</Link></li>
             </ul></div>
@@ -605,7 +610,7 @@ export default function LandingV2() {
             </ul></div>
           </div>
           <p className="risk" id="risk">{T.risk}</p>
-          <div className="copy"><span>{T.rights}</span><span dir="ltr">@Qaffelbot · @qaffel_ai</span></div>
+          <div className="copy"><span>{T.rights}</span><span dir="ltr"><a href={TG_URL} target="_blank" rel="noreferrer">@Qaffelbot</a> · <a href="https://www.instagram.com/qaffel_ai/" target="_blank" rel="noreferrer">@qaffel_ai</a></span></div>
         </div>
       </footer>
 

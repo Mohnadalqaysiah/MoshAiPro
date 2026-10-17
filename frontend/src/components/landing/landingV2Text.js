@@ -1,4 +1,4 @@
-// (2026-10-17) نصوص الصفحة الرئيسية الجديدة (معاينة /preview-home). تُنقل إلى LangContext.jsx عند اعتمادها رئيسية.
+// (2026-10-17) نصوص الصفحة الرئيسية الجديدة (معتمدة على / و/en). BLOG = نفس روابط المقالات التي كانت بالرئيسية القديمة (لا تُحذف — قوة الربط الداخلي).
 // قواعد (qaffel-redesign-kit + DECISIONS): لا أرقام مختلقة، كل مثال موسوم "مثال توضيحي"، لا درجات A+ (المنصة لا تحفظها)،
 // أسعار الأمثلة واقعية (الذهب ~4,160 أكتوبر 2026)، {n}/{m} = حدود التجربة الحية (useTrialLimits).
 
@@ -54,6 +54,7 @@ export const BLOG = [
   { slug: 'build-your-own-trading-strategy', ar: 'ابنِ استراتيجيتك بدون برمجة', en: 'Build Your Own Strategy' },
   { slug: 'ict-strategy-automation', ar: 'أتمتة استراتيجية ICT على تلجرام', en: 'Automate ICT Strategy on Telegram' },
   { slug: 'trading-strategy-mistakes', ar: 'أخطاء شائعة بالاستراتيجيات', en: 'Common Strategy Mistakes' },
+  { slug: 'best-trading-strategy-guide', ar: 'أفضل استراتيجية للتداول', en: 'Best Trading Strategy' },
   { slug: 'best-time-to-trade-gold', ar: 'أفضل وقت لتداول الذهب', en: 'Best Time to Trade Gold' },
   { slug: 'best-market-analysis-method', ar: 'أفضل وسيلة لتحليل السوق', en: 'Best Market Analysis Method' },
 ]

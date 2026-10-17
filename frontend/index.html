@@ -82,7 +82,7 @@
       "url": "https://qaffel.com",
       "description": "AI-powered trading signals platform for Forex, Gold and Crypto using ICT/SMC institutional analysis. Real-time signals delivered via Telegram bot.",
       "applicationCategory": "FinanceApplication",
-      "operatingSystem": "Web, Android, iOS",
+      "operatingSystem": "Web",
       "inLanguage": ["ar", "en"],
       "aggregateRating": {
         "@type": "AggregateRating",
@@ -111,6 +111,13 @@
           "@type": "Offer",
           "name": "الباقة الشهرية",
           "price": "30",
+          "priceCurrency": "USD",
+          "availability": "https://schema.org/InStock"
+        },
+        {
+          "@type": "Offer",
+          "name": "الباقة السنوية",
+          "price": "179.9",
           "priceCurrency": "USD",
           "availability": "https://schema.org/InStock"
         }
@@ -170,47 +177,8 @@
     }
     </script>
 
-    <!-- Structured Data: FAQ (top questions for rich snippets) -->
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "FAQPage",
-      "mainEntity": [
-        {
-          "@type": "Question",
-          "name": "هل Qaffel AI مجاني؟",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "نعم، يمكنك البدء مجاناً بـ 10 تحليلات بدون بطاقة ائتمان. بعدها يمكنك الاشتراك بـ $7/أسبوع أو $30/شهر."
-          }
-        },
-        {
-          "@type": "Question",
-          "name": "ما هي الأسواق التي يحللها Qaffel AI؟",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "يحلل Qaffel AI: الذهب (XAUUSD)، البيتكوين (BTCUSD)، اليورو/دولار (EURUSD)، الجنيه/دولار (GBPUSD)، وأزواج فوركس وكريبتو إضافية."
-          }
-        },
-        {
-          "@type": "Question",
-          "name": "كيف تعمل إشارات Telegram؟",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "بعد ربط حسابك بالبوت @Qaffelbot على Telegram، تصلك الإشارات فوراً على هاتفك مع الدخول والوقف والأهداف وحجم الصفقة."
-          }
-        },
-        {
-          "@type": "Question",
-          "name": "ما هي تقنية ICT/SMC التي يستخدمها Qaffel AI؟",
-          "acceptedAnswer": {
-            "@type": "Answer",
-            "text": "يستخدم Qaffel AI تحليل Smart Money Concepts (SMC) وInner Circle Trader (ICT) المؤسسي: Order Blocks، FVG، Liquidity Sweep، BOS/CHoCH، Premium/Discount Zones."
-          }
-        }
-      ]
-    }
-    </script>
+    <!-- (2026-10-17) FAQPage الثابت أُزيل: كان يختلف عن أسئلة الرئيسية الظاهرة ويُضاف لكل صفحة (index.html قالب كل المسارات
+         وقالب المقالات المُسبقة العرض). الآن يُحقن من الأسئلة الظاهرة فعلاً بالرئيسية فقط (useFAQSchema 'ld-faq-home'). -->
   </head>
   <body>
     <div id="root"></div>
