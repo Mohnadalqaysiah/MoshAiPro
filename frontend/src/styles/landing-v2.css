@@ -293,3 +293,62 @@
 .qx .qrv{transition:transform .8s cubic-bezier(.2,.8,.2,1)}
 .qx .qrv.pre{transform:translateY(28px)}
 @media (prefers-reduced-motion:reduce){.qx *,.qx *::before,.qx *::after{animation:none!important;transition:none!important}.qx .qrv.pre{transform:none}}
+
+/* (2026-10-17) reviews — حقيقية فقط من /public/reviews؛ القسم مخفي إن كانت أقل من 3، والمتوسط مخفي إن كانت أقل من 10 */
+.qx .rv-head{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:28px;align-items:end;margin-bottom:28px}
+.qx .rv-score{padding:24px;display:flex;flex-direction:column;gap:8px}
+.qx .rv-num{font-size:54px;font-weight:700;color:#fff;line-height:1}
+.qx .stars{display:flex;gap:3px}
+.qx .stars i{width:18px;height:18px;background:rgba(255,255,255,.15);clip-path:polygon(50% 0,61% 35%,98% 35%,68% 57%,79% 91%,50% 70%,21% 91%,32% 57%,2% 35%,39% 35%)}
+.qx .stars i.on{background:var(--gold)}
+.qx .stars.sm i{width:14px;height:14px}
+.qx .rv-score small{color:var(--muted);font-size:13px}
+.qx .dist{display:flex;flex-direction:column;gap:5px;margin-top:6px}
+.qx .dist div{display:grid;grid-template-columns:14px 1fr;gap:10px;align-items:center;font-size:12px;color:var(--faint)}
+.qx .dist b{height:6px;border-radius:6px;background:rgba(255,255,255,.07);position:relative;overflow:hidden}
+.qx .dist b::after{content:"";position:absolute;inset-block:0;inset-inline-start:0;width:var(--w);background:var(--gold);border-radius:6px}
+.qx .rv-filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px}
+.qx .rv-filters button,.qx .seg button{min-height:42px;padding:0 16px;border-radius:999px;border:1px solid var(--line2);font-size:14px;color:var(--muted);transition:all .2s}
+.qx .rv-filters button[aria-pressed="true"],.qx .seg button[aria-pressed="true"]{background:var(--text);color:#05070D;border-color:var(--text)}
+.qx .reviews{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.qx .review{border-radius:20px;padding:24px;background:var(--panel);border:1px solid var(--line);display:flex;flex-direction:column;gap:14px;min-width:0}
+.qx .review blockquote{margin:0;font-size:15.5px;line-height:1.9;color:#E3EAF6;flex:1}
+.qx .review header{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.qx .verified{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--mint);padding:4px 9px;border-radius:999px;background:rgba(60,242,192,.1)}
+.qx .via{font-size:12px;color:var(--sky);padding:4px 9px;border-radius:999px;background:rgba(122,176,255,.1)}
+.qx .review footer{display:flex;align-items:center;gap:12px;padding-top:14px;border-top:1px solid var(--line)}
+.qx .avatar{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;font-family:var(--f-display);font-weight:700;color:#05070D;flex-shrink:0}
+.qx .review footer b{display:block;font-size:14px;color:#fff}
+.qx .review footer small{font-size:12px;color:var(--faint)}
+.qx .reply{font-size:13px;line-height:1.8;color:var(--muted);padding:10px 12px;border-radius:12px;background:rgba(3,6,12,.45);border-inline-start:2px solid var(--sky)}
+.qx .reply b{color:var(--sky);font-size:12px}
+.qx .rv-cta{margin-top:20px;padding:20px 24px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:16px}
+.qx .rv-cta b{color:#fff}.qx .rv-cta p{color:var(--muted);font-size:14px}
+@media (max-width:960px){.qx .rv-head{grid-template-columns:minmax(0,1fr)}.qx .reviews{grid-template-columns:minmax(0,1fr)}}
+
+/* (2026-10-17) referral — الحاسبة تطابق منطق العمولة الفعلي (subscription_service.py) */
+.qx .refx{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:40px;padding:clamp(24px,4vw,48px);overflow:hidden;
+  background:radial-gradient(60% 80% at 0% 0%,rgba(247,195,92,.12),transparent 60%),var(--panel)}
+.qx .ref-copy{display:flex;flex-direction:column;gap:20px;min-width:0}
+.qx .ref-steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:14px}
+.qx .ref-steps li{display:flex;gap:14px;align-items:flex-start}
+.qx .ref-steps li > span{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;flex-shrink:0;background:rgba(247,195,92,.14);color:var(--gold);font-weight:700}
+.qx .ref-steps b{display:block;color:#fff;font-size:15px}.qx .ref-steps small{color:var(--faint);font-size:13px}
+.qx .calc{border-radius:20px;padding:24px;background:rgba(3,6,12,.55);border:1px solid var(--line2);display:flex;flex-direction:column;gap:16px;min-width:0}
+.qx .calc-head{display:flex;justify-content:space-between;align-items:center}
+.qx .calc-head b{color:#fff}
+.qx .calc-lbl{display:flex;justify-content:space-between;align-items:center;font-size:14px;color:var(--muted)}
+.qx .calc-lbl output{font-size:22px;font-weight:700;color:#fff}
+.qx input[type=range]{width:100%;accent-color:var(--gold);height:28px;cursor:pointer}
+.qx .seg{display:flex;gap:8px;flex-wrap:wrap}
+.qx .tiers{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.qx .tier{padding:14px;border-radius:14px;border:1px solid var(--line);display:flex;flex-direction:column;gap:4px}
+.qx .tier .mono{font-size:24px;font-weight:700;color:var(--gold)}
+.qx .tier small{font-size:12px;color:var(--faint)}
+.qx .tier.t2{border-color:rgba(60,242,192,.45);background:rgba(60,242,192,.06)}
+.qx .tier.t2 .mono{color:var(--mint)}
+.qx .earn{padding:18px;border-radius:16px;background:linear-gradient(135deg,rgba(60,242,192,.12),rgba(247,195,92,.1));border:1px solid rgba(60,242,192,.35);display:flex;flex-direction:column;gap:4px}
+.qx .earn small{font-size:13px;color:var(--muted)}
+.qx .earn > .mono{font-size:40px;font-weight:700;color:#fff;line-height:1.1}
+.qx .calc-note{font-size:12px;color:var(--faint);line-height:1.8}
+@media (max-width:960px){.qx .refx{grid-template-columns:minmax(0,1fr)}}

@@ -197,3 +197,44 @@ export const HERO_SCENE = {
     note: 'Illustrative simulation of how the engine works — not a recommendation.',
   },
 }
+
+// (2026-10-17) نصوص الآراء والإحالة. الآراء حقيقية فقط (من /public/reviews)، والحاسبة على منطق العمولة الفعلي:
+// 5% من كل دفعة مقبولة لمن سجّل برابطك (بما فيها التجديدات)، وتصير 15% للدفعات التالية بعد أن يبلغ مجموع الدفعات المقبولة 25.
+export const RR = {
+  ar: {
+    navReviews: 'الآراء', navReferral: 'الإحالة',
+    rvEyebrow: 'آراء المشتركين', rvH1: 'من مشتركين ', rvH2: 'حقيقيين', rvH3: ' فقط.',
+    rvLead: 'كل رأي هنا كتبه مشترك فعلي، ويظهر بجانبه نوع اشتراكه ومدته. لا نحذف الآراء السلبية، ونرتّبها الأحدث أولاً.',
+    rvAvg: 'متوسط {n} تقييماً', rvAll: 'الكل', rvTags: { gold: 'الذهب', crypto: 'كريبتو', forex: 'فوركس', stocks: 'الأسهم', learn: 'التعلّم' },
+    verified: 'مشترك موثّق', via: 'وصلنا عبر {s}', team: 'رد فريق Qaffel',
+    plans: { weekly: 'اشتراك أسبوعي', monthly: 'اشتراك شهري', yearly: 'اشتراك سنوي' }, since: 'مشترك منذ {d}',
+    rvCtaB: 'مشترك في Qaffel؟', rvCtaP: 'شاركنا تجربتك. يظهر رأيك بعد التحقق من اشتراكك ومراجعته.', rvCtaBtn: 'اكتب رأيك',
+    refEyebrow: 'برنامج الإحالة', refH1: 'شارك Qaffel، واربح من ', refH2: 'كل تجديد.',
+    refLead: 'عمولة على كل دفعة يدفعها من سجّل عبر رابطك، بما فيها التجديدات، طوال اشتراكه. وبعد 25 دفعة مقبولة ترتفع عمولتك تلقائياً إلى 15%.',
+    refSteps: [['انسخ رابطك', 'من لوحة التحكم، قسم الإحالات'], ['صديقك يشترك', 'تُحتسب العمولة عند قبول دفعته'], ['اسحب أرباحك', 'بعد بلوغ الحد الأدنى للسحب']],
+    refBtn: 'احصل على رابطك', refDetails: 'تفاصيل البرنامج',
+    calcH: 'احسب أرباحك', calcUnit: 'USD / شهرياً', calcN: 'مشتركون نشطون عبر رابطك', calcPlan: 'نوع اشتراكاتهم',
+    calcMonthly: 'شهري ${p}', calcWeekly: 'أسبوعي ${p}',
+    t1: 'الآن · أول 25 دفعة', t2: 'بعد 25 دفعة مقبولة',
+    earnNow: 'أرباحك الشهرية التقديرية الآن', earnLater: 'بعد بلوغ 25 دفعة (خلال ~{m} شهر): {v} شهرياً', earnReached: 'تصل لعمولة 15% من الشهر الأول',
+    calcNote: 'تقدير مبني على أسعار الباقات الحالية ونسبة العمولة، ويفترض استمرار الاشتراكات. المرحلة تُحسب من عدد الدفعات المقبولة لا عدد الأشخاص، و15% تُطبَّق على الدفعات التالية بعد الوصول إلى 25.',
+  },
+  en: {
+    navReviews: 'Reviews', navReferral: 'Referral',
+    rvEyebrow: 'Member reviews', rvH1: 'From ', rvH2: 'real', rvH3: ' members only.',
+    rvLead: 'Every review here was written by an actual member, shown with their plan and tenure. We never remove negative reviews, and we list the newest first.',
+    rvAvg: 'Average of {n} ratings', rvAll: 'All', rvTags: { gold: 'Gold', crypto: 'Crypto', forex: 'Forex', stocks: 'Stocks', learn: 'Learning' },
+    verified: 'Verified member', via: 'Received via {s}', team: 'Qaffel team reply',
+    plans: { weekly: 'Weekly plan', monthly: 'Monthly plan', yearly: 'Yearly plan' }, since: 'Member since {d}',
+    rvCtaB: 'A Qaffel member?', rvCtaP: 'Share your experience. Your review appears once we verify your subscription and review it.', rvCtaBtn: 'Write a review',
+    refEyebrow: 'Referral program', refH1: 'Share Qaffel and earn from ', refH2: 'every renewal.',
+    refLead: 'A commission on every payment made by people who sign up through your link, renewals included, for as long as they subscribe. After 25 approved payments your rate rises to 15% automatically.',
+    refSteps: [['Copy your link', 'From your dashboard, Referrals section'], ['Your friend subscribes', 'Commission is credited when their payment is approved'], ['Withdraw', 'Once you reach the minimum payout']],
+    refBtn: 'Get your link', refDetails: 'Program details',
+    calcH: 'Estimate your earnings', calcUnit: 'USD / month', calcN: 'Active subscribers via your link', calcPlan: 'Their plan',
+    calcMonthly: 'Monthly ${p}', calcWeekly: 'Weekly ${p}',
+    t1: 'Now · first 25 payments', t2: 'After 25 approved payments',
+    earnNow: 'Estimated monthly earnings now', earnLater: 'After 25 payments (in ~{m} months): {v} per month', earnReached: 'You reach the 15% rate in the first month',
+    calcNote: 'Estimate based on current plan prices and commission rates, assuming subscriptions continue. The tier counts approved payments, not people, and 15% applies to payments after the 25th.',
+  },
+}

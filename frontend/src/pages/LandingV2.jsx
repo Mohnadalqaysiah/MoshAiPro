@@ -13,7 +13,7 @@ import { useLang } from '../contexts/LangContext'
 import useSEO from '../hooks/useSEO'
 import useTrialLimits from '../hooks/useTrialLimits'
 import PublicChatBot from '../components/PublicChatBot'
-import { DEMO, TICKER, BLOG, COND_KEYS, TXT, HERO_SCENE } from '../components/landing/landingV2Text'
+import { DEMO, TICKER, BLOG, COND_KEYS, TXT, HERO_SCENE, RR } from '../components/landing/landingV2Text'
 import '../styles/landing-v2.css'
 
 const HeroScene = lazy(() => import('../components/landing/HeroScene'))
@@ -65,6 +65,7 @@ export default function LandingV2() {
   const T = TXT[isAr ? 'ar' : 'en']
   const demo = DEMO[isAr ? 'ar' : 'en']
   const heroText = HERO_SCENE[isAr ? 'ar' : 'en']
+  const X = RR[isAr ? 'ar' : 'en']
   const navigate = useNavigate()
   const trial = useTrialLimits()
   const fmt = (s) => (s || '').replace('{n}', trial.analyses).replace('{m}', trial.chat)
@@ -167,8 +168,32 @@ export default function LandingV2() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [livePlans, isAr, trial.analyses, trial.chat])
 
+  // ── آراء حقيقية فقط (/public/reviews) — القسم مخفي إن كانت المعتمدة أقل من 3، والمتوسط إن كانت أقل من 10 ──
+  const [reviews, setReviews] = useState({ summary: { count: 0 }, items: [] })
+  const [rvTag, setRvTag] = useState('all')
+  useEffect(() => {
+    axios.get(`${API}/api/v1/public/reviews`, { params: rvTag === 'all' ? { limit: 12 } : { limit: 12, market: rvTag } })
+      .then((r) => setReviews(r.data)).catch(() => {})
+  }, [rvTag])
+  const showReviews = (reviews.summary?.count || 0) >= 3
+  const showAvg = (reviews.summary?.count || 0) >= 10
+  const fmtSince = (iso) => (iso ? new Date(iso).toLocaleDateString(isAr ? 'ar-EG' : 'en-US', { month: 'short', year: 'numeric' }) : '')
+
+  // ── حاسبة الإحالة: منطق subscription_service.py حرفياً — 5% من كل دفعة مقبولة (والتجديدات)، و15% بعد 25 دفعة مقبولة ──
+  const [refN, setRefN] = useState(10)
+  const [refPlan, setRefPlan] = useState('monthly')
+  const pW = Number(livePlans.weekly?.price_usd) || 0
+  const pM = Number(livePlans.monthly?.price_usd) || 0
+  const perMonth = refPlan === 'weekly' ? (pW * 52) / 12 : pM
+  const payPerMonth = refPlan === 'weekly' ? (refN * 52) / 12 : refN
+  const earnNow = refN * perMonth * 0.05
+  const earnT2 = refN * perMonth * 0.15
+  const monthsToT2 = payPerMonth > 0 ? Math.ceil(25 / payPerMonth) : null
+  const money = (v) => `$${v >= 100 ? Math.round(v) : v.toFixed(v < 10 ? 2 : 1)}`
+
   const tfBars = (k) => Array.from({ length: 12 }, (_, i) => 20 + Math.round(70 * Math.abs(Math.sin((i + 1) * (k + 1.3)))))
-  const navLinks = [['#engine', T.nav.engine], ['#features', T.nav.features], [p('/strategy-builder'), T.nav.builder, true], ['#pricing', T.nav.pricing], ['#faq', T.nav.faq]]
+  const navLinks = [['#engine', T.nav.engine], ['#features', T.nav.features], [p('/strategy-builder'), T.nav.builder, true],
+    ...(showReviews ? [['#reviews', X.navReviews]] : []), ['#pricing', T.nav.pricing], ['#referral', X.navReferral], ['#faq', T.nav.faq]]
 
   return (
     <div className="qx" dir={isAr ? 'rtl' : 'ltr'} ref={rootRef}>
@@ -383,6 +408,57 @@ export default function LandingV2() {
           </div>
         </section>
 
+        {/* ── reviews (حقيقية فقط) ── */}
+        {showReviews && (
+          <section className="s" id="reviews" style={{ paddingTop: 0 }}>
+            <div className="wrap">
+              <div className="rv-head qrv">
+                <div className="s-head" style={{ margin: 0 }}>
+                  <span className="eyebrow">{X.rvEyebrow}</span>
+                  <h2 className="h2">{X.rvH1}<span className="grad">{X.rvH2}</span>{X.rvH3}</h2>
+                  <p className="lead">{X.rvLead}</p>
+                </div>
+                {showAvg && (
+                  <div className="rv-score panel">
+                    <span className="mono rv-num">{Number(reviews.summary.average).toFixed(1)}</span>
+                    <span className="stars" aria-label={`${reviews.summary.average} / 5`}>{[1, 2, 3, 4, 5].map((k) => <i key={k} className={k <= Math.round(reviews.summary.average) ? 'on' : ''} />)}</span>
+                    <small>{X.rvAvg.replace('{n}', reviews.summary.count)}</small>
+                    <div className="dist" aria-hidden="true">
+                      {[5, 4, 3, 2, 1].map((k) => <div key={k}><span>{k}</span><b style={{ '--w': `${Math.round(((reviews.summary.distribution?.[k] || 0) / reviews.summary.count) * 100)}%` }} /></div>)}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="rv-filters" role="group">
+                {['all', ...Object.keys(X.rvTags)].map((k) => (
+                  <button key={k} type="button" aria-pressed={rvTag === k} onClick={() => setRvTag(k)}>{k === 'all' ? X.rvAll : X.rvTags[k]}</button>
+                ))}
+              </div>
+              <div className="reviews">
+                {reviews.items.slice(0, 6).map((r, i) => (
+                  <article key={r.id} className="review">
+                    <header>
+                      <span className="stars sm" aria-label={`${r.rating} / 5`}>{[1, 2, 3, 4, 5].map((k) => <i key={k} className={k <= r.rating ? 'on' : ''} />)}</span>
+                      {r.verified ? <span className="verified"><Check s={12} />{X.verified}</span> : <span className="via">{X.via.replace('{s}', r.source_note || '')}</span>}
+                    </header>
+                    <blockquote>{r.text}</blockquote>
+                    {r.admin_reply && <p className="reply"><b>{X.team}</b><br />{r.admin_reply}</p>}
+                    <footer>
+                      <span className="avatar" style={{ background: ['#3CF2C0', '#F7C35C', '#7AB0FF'][i % 3] }}>{(r.display_name || '?').trim()[0]}</span>
+                      <span><b>{r.display_name}{r.city ? ` · ${r.city}` : ''}</b>
+                        <small>{[r.plan && X.plans[r.plan], r.subscribed_since && X.since.replace('{d}', fmtSince(r.subscribed_since))].filter(Boolean).join(' · ')}</small></span>
+                    </footer>
+                  </article>
+                ))}
+              </div>
+              <div className="rv-cta panel qrv">
+                <div><b>{X.rvCtaB}</b><p>{X.rvCtaP}</p></div>
+                <Link to={user ? '/profile#review' : '/login'} className="btn btn-line">{X.rvCtaBtn}</Link>
+              </div>
+            </div>
+          </section>
+        )}
+
         {/* ── pricing ── */}
         <section className="s" id="pricing" style={{ paddingTop: 0 }}>
           <div className="wrap">
@@ -405,9 +481,45 @@ export default function LandingV2() {
               ))}
             </div>
             <p className="pricing-note">{T.priceNote}</p>
-            <div className="ref qrv">
-              <div><b>{T.refTitle}</b><p>{T.refLine}</p></div>
-              <Link to="/referral" className="btn btn-line">{T.refBtn}</Link>
+
+          </div>
+        </section>
+
+        {/* ── referral + calculator ── */}
+        <section className="s" id="referral" style={{ paddingTop: 0 }}>
+          <div className="wrap">
+            <div className="refx panel qrv">
+              <div className="ref-copy">
+                <span className="eyebrow">{X.refEyebrow}</span>
+                <h2 className="h2" style={{ fontSize: 'clamp(28px,3.6vw,42px)' }}>{X.refH1}<span className="grad">{X.refH2}</span></h2>
+                <p className="lead">{X.refLead}</p>
+                <ol className="ref-steps">
+                  {X.refSteps.map(([b, sm], i) => <li key={b}><span className="mono">{i + 1}</span><div><b>{b}</b><small>{sm}</small></div></li>)}
+                </ol>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  <Link to={user ? '/dashboard' : '/register'} className="btn btn-mint">{X.refBtn}</Link>
+                  <Link to="/referral" className="btn btn-line">{X.refDetails}</Link>
+                </div>
+              </div>
+              <div className="calc">
+                <div className="calc-head"><b>{X.calcH}</b><span className="mono" style={{ color: 'var(--faint)', fontSize: 12 }}>{X.calcUnit}</span></div>
+                <label className="calc-lbl" htmlFor="refN">{X.calcN} <output className="mono">{refN}</output></label>
+                <input type="range" id="refN" min="0" max="100" step="1" value={refN} onChange={(e) => setRefN(Number(e.target.value))} />
+                <div className="seg" role="group" aria-label={X.calcPlan}>
+                  {pM > 0 && <button type="button" aria-pressed={refPlan === 'monthly'} onClick={() => setRefPlan('monthly')}>{X.calcMonthly.replace('{p}', pM)}</button>}
+                  {pW > 0 && <button type="button" aria-pressed={refPlan === 'weekly'} onClick={() => setRefPlan('weekly')}>{X.calcWeekly.replace('{p}', pW)}</button>}
+                </div>
+                <div className="tiers">
+                  <div className="tier"><span className="mono">5%</span><small>{X.t1}</small></div>
+                  <div className="tier t2"><span className="mono">15%</span><small>{X.t2}</small></div>
+                </div>
+                <div className="earn">
+                  <small>{X.earnNow}</small>
+                  <span className="mono">{money(earnNow)}</span>
+                  {refN > 0 && <small>{monthsToT2 <= 1 ? X.earnReached : X.earnLater.replace('{m}', monthsToT2).replace('{v}', money(earnT2))}</small>}
+                </div>
+                <p className="calc-note">{X.calcNote}</p>
+              </div>
             </div>
           </div>
         </section>

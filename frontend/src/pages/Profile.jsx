@@ -7,6 +7,7 @@ import useSiteSettings from '../hooks/useSiteSettings'
 import { User, Mail, Phone, Lock, Save, CheckCircle, AlertCircle, Gift, Copy, ExternalLink, Users, DollarSign } from 'lucide-react'
 import TradingPreferencesPanel from '../components/TradingPreferencesPanel'
 import DeleteAccountSection from '../components/DeleteAccountSection'
+import ReviewForm from '../components/ReviewForm'
 
 import { subscriptionCta } from '../utils/subscriptionCta'
 
@@ -295,6 +296,8 @@ export default function Profile() {
           <Msg msg={pwMsg} />
         </form>
       </div>
+
+      <ReviewForm isAr={isAr} />
 
       <DeleteAccountSection isAr={isAr} />
     </div>

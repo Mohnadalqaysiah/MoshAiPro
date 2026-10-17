@@ -4054,3 +4054,81 @@ def admin_shadow_signals(
             "exit_time": s.exit_time.isoformat() if s.exit_time else None,
         } for s in page_rows],
     }
+
+
+# ─── (2026-10-17) آراء المشتركين — مراجعة وإدخال رأي حقيقي وصل خارج المنصة ─────────────────────────
+class ReviewModerateIn(BaseModel):
+    status: str                      # approved | rejected | pending
+    admin_reply: Optional[str] = None
+    reject_reason: Optional[str] = None
+
+
+class ReviewImportIn(BaseModel):
+    display_name: str
+    rating: int
+    text: str
+    market_tag: Optional[str] = None
+    city: Optional[str] = None
+    source_note: str                 # من أين وصل: "رسالة تيليجرام"، "واتساب"…
+    consent_confirmed: bool = False  # الأدمن يؤكد: رأي حقيقي من شخص حقيقي وافق على نشره
+
+
+@router.get("/reviews")
+def admin_list_reviews(status: str = Query(default="pending"), admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    from app.models.review import Review
+    q = db.query(Review)
+    if status != "all":
+        q = q.filter(Review.status == status)
+    rows = q.order_by(Review.created_at.desc()).limit(200).all()
+    emails = {u.id: u.email for u in db.query(User).filter(User.id.in_({r.user_id for r in rows if r.user_id} or {0})).all()}
+    counts = dict(db.query(Review.status, func.count(Review.id)).group_by(Review.status).all())
+    return {"counts": counts, "items": [{
+        "id": r.id, "status": r.status, "source": r.source, "source_note": r.source_note, "rating": r.rating, "text": r.text,
+        "display_name": r.display_name, "city": r.city, "market_tag": r.market_tag, "plan": r.plan_at_review,
+        "user_email": emails.get(r.user_id), "admin_reply": r.admin_reply, "reject_reason": r.reject_reason,
+        "created_at": r.created_at.isoformat() if r.created_at else None,
+    } for r in rows]}
+
+
+@router.post("/reviews/{review_id}/moderate")
+def admin_moderate_review(review_id: int, data: ReviewModerateIn, admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    """رفض الرأي فقط للإساءة أو محتوى غير متعلق أو بيانات شخصية — **لا لأنه سلبي** (قاعدة الحزمة، DECISIONS 17/10)."""
+    from app.models.review import Review
+    from app.api.reviews import clear_cache
+    r = db.query(Review).filter(Review.id == review_id).first()
+    if not r:
+        raise HTTPException(404, "الرأي غير موجود")
+    if data.status not in ("approved", "rejected", "pending"):
+        raise HTTPException(400, "حالة غير صالحة")
+    if data.status == "rejected" and not (data.reject_reason or "").strip():
+        raise HTTPException(400, "اذكر سبب الرفض (إساءة، غير متعلق، بيانات شخصية) — السلبية وحدها ليست سبباً")
+    r.status = data.status
+    r.reject_reason = (data.reject_reason or "").strip() or None if data.status == "rejected" else None
+    if data.admin_reply is not None:
+        r.admin_reply = data.admin_reply.strip() or None
+    r.approved_at = datetime.now(timezone.utc) if data.status == "approved" else None
+    db.commit()
+    clear_cache()
+    return {"success": True}
+
+
+@router.post("/reviews/import")
+def admin_import_review(data: ReviewImportIn, admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    """رأي **حقيقي** وصل خارج المنصة بموافقة صاحبه. يُعرض بمصدره ("عبر تيليجرام") وبلا شارة "مشترك موثّق".
+    ليس مساراً لكتابة آراء مختلقة."""
+    from app.models.review import Review
+    from app.api.reviews import clear_cache, MARKET_TAGS
+    if not data.consent_confirmed:
+        raise HTTPException(400, "أكّد أن الرأي حقيقي وأن صاحبه وافق على نشره")
+    text, name, note = data.text.strip(), data.display_name.strip(), data.source_note.strip()
+    if not 1 <= int(data.rating) <= 5 or not 20 <= len(text) <= 600 or not 2 <= len(name) <= 40 or not note:
+        raise HTTPException(400, "التقييم 1-5، النص 20-600 حرف، الاسم 2-40، والمصدر مطلوب")
+    r = Review(user_id=None, source="imported", source_note=note[:60], rating=int(data.rating), text=text,
+               display_name=name, city=(data.city or "").strip()[:40] or None,
+               market_tag=data.market_tag if data.market_tag in MARKET_TAGS else None,
+               consent_public=True, status="approved", approved_at=datetime.now(timezone.utc))
+    db.add(r)
+    db.commit()
+    clear_cache()
+    logger.info(f"⭐ Imported review #{r.id} by admin {admin.id} (source={note})")
+    return {"success": True, "id": r.id}

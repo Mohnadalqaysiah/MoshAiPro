@@ -11,6 +11,7 @@ import CouponsPanel from '../components/CouponsPanel'
 import StrategyStatsPanel from '../components/StrategyStatsPanel'
 import WeeklyMarketsPanel from '../components/WeeklyMarketsPanel'
 import ShadowSignalsPanel from '../components/ShadowSignalsPanel'
+import ReviewsAdminPanel from '../components/ReviewsAdminPanel'
 import useSiteSettings from '../hooks/useSiteSettings'
 import {
   Users, CreditCard, BarChart2, CheckCircle, XCircle, Clock,
@@ -19,7 +20,7 @@ import {
   X, ExternalLink, Shield, AlertTriangle, Settings, Mail, Upload, Signal, Send,
   FileText, TrendingUp as TrendUp, Bell, Sparkles,
   ShieldCheck, UserCog, MessageCircle, UserMinus, Paperclip, Gift, ChevronRight, Menu,
-  Lightbulb, Ticket, Filter, Copy, ChevronDown, Mic, Square, BellOff
+  Lightbulb, Ticket, Filter, Star, Copy, ChevronDown, Mic, Square, BellOff
 } from 'lucide-react'
 
 // (2026-10-05) الحد ثابت هون بس كاحتياط لحظة ما قبل تحميل الإعدادات —
@@ -1220,6 +1221,7 @@ export default function Admin() {
     { key:'signals',    icon:TrendingUp,    label:'الإشارات' },
     { key:'weekly',     icon:Calendar,      label:'الأداء الأسبوعي' },
     { key:'shadow',     icon:Lightbulb,     label:'صفقات الظل' },
+    { key:'reviews',    icon:Star,          label:'آراء المشتركين' },
     { key:'reports',    icon:FileText,      label:'تقارير الأداء' },
     { key:'strategies', icon:Sparkles,      label:'الاستراتيجيات والقوالب' },
     { key:'funnel',     icon:Filter,        label:'مسار الاشتراك' },
@@ -4136,6 +4138,7 @@ export default function Admin() {
           {tab === 'strategies' && <StrategyStatsPanel />}
           {tab === 'weekly' && <WeeklyMarketsPanel />}
           {tab === 'shadow' && <ShadowSignalsPanel />}
+          {tab === 'reviews' && <ReviewsAdminPanel />}
 
           {tab === 'diagnostic' && <DiagnosticPanel />}
 
