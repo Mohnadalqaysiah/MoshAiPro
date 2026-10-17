@@ -357,15 +357,13 @@ export default function HeroScene({ text = DEFAULT_TEXT, className = '' }) {
     const idle = window.requestIdleCallback || ((cb) => setTimeout(cb, 300))
     let handle = null
     const begin = () => { if (!disposed && handle === null) handle = idle(() => { start() }) }
-    const EV = ['pointerdown', 'touchstart', 'scroll', 'keydown', 'wheel']
-    const mobileStart = window.innerWidth < 760
-    if (mobileStart) EV.forEach((e) => window.addEventListener(e, begin, { once: true, passive: true }))
-    else if (document.readyState === 'complete') begin()
-    else window.addEventListener('load', begin, { once: true })
+    // (17/10) سطح المكتب أيضاً عند أول تفاعل (حركة الماوس تكفي) — أداة فحص جوجل بلا كرت شاشة ترسم WebGL على المعالج
+    // فيُحسب ~1.5ث حجب (TBT)؛ المستخدم الحقيقي يحرّك الماوس فوراً فيبدأ المشهد خلال جزء من الثانية.
+    const EV = ['pointermove', 'pointerdown', 'touchstart', 'scroll', 'keydown', 'wheel']
+    EV.forEach((e) => window.addEventListener(e, begin, { once: true, passive: true }))
     return () => {
       disposed = true
       EV.forEach((e) => window.removeEventListener(e, begin))
-      window.removeEventListener('load', begin)
       if (window.cancelIdleCallback && typeof handle === 'number') window.cancelIdleCallback(handle)
       cleanup()
     }
