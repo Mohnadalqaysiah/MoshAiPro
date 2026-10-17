@@ -736,4 +736,84 @@
     <priority>0.8</priority>
   </url>
 
+  <!-- مقالة: شرح اكتساح السيولة (Liquidity Sweep) — لماذا يضرب السعر وقفك ثم ينعكس؟ (عربي + English) -->
+  <url>
+    <loc>https://qaffel.com/blog/liquidity-sweep-explained</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/liquidity-sweep-explained" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/liquidity-sweep-explained" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/liquidity-sweep-explained" />
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://qaffel.com/en/blog/liquidity-sweep-explained</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/liquidity-sweep-explained" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/liquidity-sweep-explained" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/liquidity-sweep-explained" />
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- مقالة: شرح هيكل السوق: الفرق بين BOS وCHoCH وكيف تقرأ الاتجاه بدون مؤشرات (عربي + English) -->
+  <url>
+    <loc>https://qaffel.com/blog/bos-choch-market-structure</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/bos-choch-market-structure" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/bos-choch-market-structure" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/bos-choch-market-structure" />
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://qaffel.com/en/blog/bos-choch-market-structure</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/bos-choch-market-structure" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/bos-choch-market-structure" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/bos-choch-market-structure" />
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- مقالة: كيف تحسب حجم اللوت؟ دليل إدارة رأس المال ونسبة المخاطرة بأمثلة على الذهب والفوركس (عربي + English) -->
+  <url>
+    <loc>https://qaffel.com/blog/position-size-risk-management</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/position-size-risk-management" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/position-size-risk-management" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/position-size-risk-management" />
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://qaffel.com/en/blog/position-size-risk-management</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/position-size-risk-management" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/position-size-risk-management" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/position-size-risk-management" />
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
+  <!-- مقالة: منهج وايكوف (Wyckoff) — شرح مراحل التجميع والتصريف وكيف تقرأها على الشارت (عربي + English) -->
+  <url>
+    <loc>https://qaffel.com/blog/wyckoff-method-explained</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/wyckoff-method-explained" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/wyckoff-method-explained" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/wyckoff-method-explained" />
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.85</priority>
+  </url>
+  <url>
+    <loc>https://qaffel.com/en/blog/wyckoff-method-explained</loc>
+    <xhtml:link rel="alternate" hreflang="ar" href="https://qaffel.com/blog/wyckoff-method-explained" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://qaffel.com/en/blog/wyckoff-method-explained" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://qaffel.com/blog/wyckoff-method-explained" />
+    <lastmod>2026-10-17</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
 </urlset>
