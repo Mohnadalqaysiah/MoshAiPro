@@ -1,10 +1,10 @@
 import { useEffect } from 'react'
 import '../styles/app-v2.css'
 
-// (2026-10-17) هوية لوحة التحكم الجديدة — معاينة قبل التفعيل للجميع (طلب المالك).
-// ?newui=1 يفعّلها لهذا المتصفح فقط (localStorage)، ?newui=0 يلغيها. المشتركون لا يرونها حتى تُقلب القيمة الافتراضية.
+// (2026-10-17) هوية لوحة التحكم الجديدة — بدأت معاينة، وفعّلها المالك للجميع في نفس اليوم.
+// ?newui=0 يرجع الشكل القديم لهذا المتصفح فقط (احتياط للدعم الفني)، ?newui=1 يعيدها.
 const KEY = 'qaffel_newui'
-const DEFAULT_ON = false
+const DEFAULT_ON = true
 
 export function isNewUI() {
   try {
