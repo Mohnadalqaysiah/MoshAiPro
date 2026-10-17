@@ -44,7 +44,8 @@ const T = {
     payoffVal: '{x}× الخاسرة',
     tp2Hits: 'وصلت للهدف الثاني',
     whyProfit: 'نسبة النجاح وحدها لا تحكم: متوسط الصفقة الرابحة يساوي {x} أضعاف الخاسرة، لذلك تبقى النتيجة الصافية {sign} رغم أن الرابحة أقل عدداً.',
-    disclaimer: 'محسوبة على كل الإشارات المرسلة بمخاطرة ثابتة لكل صفقة، قبل السبريد والعمولة. الأداء السابق لا يضمن المستقبل.',
+    // (2026-10-16) سياسة الحساب المعتمدة من المالك تُعلَن للعميل — DECISIONS.md
+    disclaimer: 'تُحسب الإشارة رابحة عند بلوغ الهدف الأول، ويُحسب الهدف الثاني بكامل مسافته؛ إدارة الصفقة بعد الهدف الأول حسب خطة المتداول. «تأمين ⚖️» = عادت للدخول بعد رسالة التأمين (0، لا ربح ولا خسارة). محسوبة على كل الإشارات المرسلة بمخاطرة ثابتة لكل صفقة، قبل السبريد والعمولة. الأداء السابق لا يضمن المستقبل.',
   },
   en: {
     title: 'Signal Performance',
@@ -83,7 +84,7 @@ const T = {
     payoffVal: '{x}× the loss',
     tp2Hits: 'Reached TP2',
     whyProfit: 'Win rate alone doesn’t decide it: the average win is {x}× the average loss, so the net result stays {sign} even with fewer winners.',
-    disclaimer: 'Computed over every signal sent, fixed risk per trade, before spread and commission. Past performance does not guarantee future results.',
+    disclaimer: 'A signal counts as a win once TP1 is reached, and TP2 counts at its full distance; managing the trade after TP1 is up to the trader. "Breakeven ⚖️" = returned to entry after the breakeven alert (0, neither win nor loss). Computed over every signal sent, fixed risk per trade, before spread and commission. Past performance does not guarantee future results.',
   },
 }
 
