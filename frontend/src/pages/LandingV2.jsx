@@ -96,6 +96,7 @@ export default function LandingV2() {
   const [menuOpen, setMenuOpen] = useState(false)
   const lastY = useRef(0)
   const heroRef = useRef(null)
+  const heroH = useRef(600)
   useEffect(() => {
     const onScroll = () => {
       const y = window.scrollY
@@ -103,12 +104,13 @@ export default function LandingV2() {
       if (y > lastY.current + 8 && y > 160) setHideHdr(true)
       else if (y < lastY.current - 4) setHideHdr(false)
       lastY.current = y
-      const h = heroRef.current?.offsetHeight || 600
-      setShowBar(y > h - 80)
+      setShowBar(y > heroH.current - 80)   // ارتفاع مخزّن — لا قياس للتخطيط مع كل تمرير (forced reflow)
     }
+    const ro = new ResizeObserver(([e]) => { heroH.current = e.contentRect.height })
+    if (heroRef.current) ro.observe(heroRef.current)
     window.addEventListener('scroll', onScroll, { passive: true })
     onScroll()
-    return () => window.removeEventListener('scroll', onScroll)
+    return () => { window.removeEventListener('scroll', onScroll); ro.disconnect() }
   }, [])
   useReveal(rootRef)
 

@@ -14,7 +14,9 @@
 
     <!-- (2026-10-17) خطوط مستضافة ذاتياً + preload — فحص السرعة: Google Fonts كانت تُحمَّل بعد ظهور النص فيقفز التخطيط
          عند وصولها (CLS) وتطلب أصلاً ثالثاً. Cairo وInter ملفّا variable (كل الأوزان بملف واحد لكل لغة) ~112KB كلها. -->
+    <!-- الاثنان: طلبات axios قد تكون بلا اعتماد (anonymous) أو باعتماد — لكل نوع مجمّع اتصالات منفصل -->
     <link rel="preconnect" href="https://api.qaffel.com" crossorigin />
+    <link rel="preconnect" href="https://api.qaffel.com" />
     <link rel="preload" href="/fonts/cairo-arabic.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/cairo-latin.woff2" as="font" type="font/woff2" crossorigin />
     <style>
