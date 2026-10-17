@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { Users, Brain, Globe, Shield, Award, TrendingUp, CheckCircle, Star } from 'lucide-react'
+import { Users, Brain, Globe, Shield, Award, TrendingUp, Star } from 'lucide-react'
 import PublicLayout from '../components/PublicLayout'
 import { useLang } from '../contexts/LangContext'
 import useSEO from '../hooks/useSEO'
@@ -26,7 +26,7 @@ const T = {
     offerTitle: 'ماذا نقدّم؟',
     offerCols: [
       { icon: Brain, title: 'تحليل بالذكاء الاصطناعي', items: ['تحليل ICT/SMC المتقدم', 'تحديد Order Blocks و FVGs', 'رصد Liquidity و Smart Money', 'تحليل Wyckoff المؤسسي'] },
-      { icon: TrendingUp, title: 'إشارات وتوصيات دقيقة', items: ['إشارات شراء/بيع مع مستويات الدخول', 'حساب وقف الخسارة والأهداف', 'تحديد حجم الصفقة المناسب', 'تقييم جودة الإشارة (A+ إلى C)'] },
+      { icon: TrendingUp, title: 'إشارات وتوصيات دقيقة', items: ['إشارات شراء/بيع مع مستويات الدخول', 'حساب وقف الخسارة والأهداف', 'تحديد حجم الصفقة المناسب', 'متابعة نتيجة كل إشارة حتى إغلاقها'] },
       { icon: Users, title: 'تجربة مستخدم متميزة', items: ['واجهة عربية سهلة الاستخدام', 'تنبيهات فورية على Telegram', 'وكيل AI للمحادثة والاستفسار', 'دعم فني متواصل'] },
     ],
     valuesTitle: 'قيمنا',
@@ -63,7 +63,7 @@ const T = {
     offerTitle: 'What We Offer',
     offerCols: [
       { icon: Brain, title: 'AI-Powered Analysis', items: ['Advanced ICT/SMC analysis', 'Identifying Order Blocks & FVGs', 'Tracking Liquidity & Smart Money', 'Institutional Wyckoff analysis'] },
-      { icon: TrendingUp, title: 'Accurate Signals & Recommendations', items: ['Buy/sell signals with entry levels', 'Stop-loss and target calculation', 'Proper position sizing', 'Signal quality rating (A+ to C)'] },
+      { icon: TrendingUp, title: 'Accurate Signals & Recommendations', items: ['Buy/sell signals with entry levels', 'Stop-loss and target calculation', 'Proper position sizing', 'Tracking every signal’s outcome until it closes'] },
       { icon: Users, title: 'A Superior User Experience', items: ['Easy-to-use Arabic interface', 'Instant Telegram alerts', 'AI chat agent for questions', 'Ongoing technical support'] },
     ],
     valuesTitle: 'Our Values',
@@ -100,49 +100,35 @@ export default function About() {
     { name: isAr ? 'من نحن' : 'About Us', path: isAr ? '/about' : '/en/about' },
   ])
 
+  const ICO = ['', 'gold', 'sky', 'coral']
   return (
     <PublicLayout>
 
       {/* Hero */}
-      <section className="py-20 px-6 text-center relative overflow-hidden">
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-blue-600/10 rounded-full blur-3xl" />
-        </div>
-        <div className="max-w-3xl mx-auto relative">
-          <div className="inline-flex items-center gap-2 bg-blue-600/20 border border-blue-500/30 text-blue-300 text-xs px-4 py-1.5 rounded-full mb-6">
-            <Users size={12} />
-            {tx.badge}
-          </div>
-          <h1 className="text-4xl md:text-5xl font-bold mb-6 leading-tight">
-            {tx.h1a}<br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-l from-blue-400 to-purple-400">
-              {tx.h1b}
-            </span>
-          </h1>
-          <p className="text-gray-400 text-lg leading-relaxed">
-            {tx.heroSub}
-          </p>
+      <section className="qp-hero">
+        <div className="qp-wrap qp-narrow">
+          <span className="qp-eyebrow">{tx.badge}</span>
+          <h1 className="qp-h1">{tx.h1a}<br /><span className="qp-grad">{tx.h1b}</span></h1>
+          <p className="qp-lead">{tx.heroSub}</p>
         </div>
       </section>
 
       {/* Story */}
-      <section className="py-16 px-6">
-        <div className="max-w-4xl mx-auto">
-          <div className="grid md:grid-cols-2 gap-12 items-center">
+      <section className="qp-sec" style={{ paddingTop: 0 }}>
+        <div className="qp-wrap">
+          <div className="qp-grid qp-g2" style={{ alignItems: 'center', gap: 'clamp(24px,5vw,56px)' }}>
             <div>
-              <h2 className="text-2xl font-bold mb-4">{tx.storyTitle}</h2>
+              <h2 className="qp-h2" style={{ marginBottom: 16 }}>{tx.storyTitle}</h2>
               {tx.storyP.map((p, i) => (
-                <p key={i} className="text-gray-400 leading-relaxed mb-4 last:mb-0">{p}</p>
+                <p key={i} className="qp-sub" style={{ marginBottom: 14 }}>{p}</p>
               ))}
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="qp-grid qp-g2 keep2" style={{ gridTemplateColumns: 'repeat(2,minmax(0,1fr))' }}>
               {tx.storyCards.map((item, i) => (
-                <div key={i} className="bg-gray-900 border border-gray-800 rounded-xl p-4 text-center">
-                  <div className="w-10 h-10 bg-blue-600/20 rounded-xl flex items-center justify-center mx-auto mb-3">
-                    <item.icon size={20} className="text-blue-400" />
-                  </div>
-                  <p className="text-white text-sm font-medium">{item.label}</p>
-                  <p className="text-gray-500 text-xs mt-1">{item.desc}</p>
+                <div key={i} className="qp-card qp-hover" style={{ textAlign: 'center' }}>
+                  <span className={`qp-ico ${ICO[i % 4]}`} style={{ margin: '0 auto 12px' }}><item.icon size={20} /></span>
+                  <p style={{ color: '#fff', fontWeight: 700, fontSize: 15 }}>{item.label}</p>
+                  <p className="qp-faint" style={{ fontSize: 13, marginTop: 4 }}>{item.desc}</p>
                 </div>
               ))}
             </div>
@@ -151,23 +137,16 @@ export default function About() {
       </section>
 
       {/* What we offer */}
-      <section className="py-16 px-6 bg-gray-900/40">
-        <div className="max-w-4xl mx-auto">
-          <h2 className="text-2xl font-bold text-center mb-10">{tx.offerTitle}</h2>
-          <div className="grid md:grid-cols-3 gap-6">
+      <section className="qp-sec qp-band">
+        <div className="qp-wrap">
+          <div className="qp-head"><h2 className="qp-h2">{tx.offerTitle}</h2></div>
+          <div className="qp-grid qp-g3">
             {tx.offerCols.map((col, i) => (
-              <div key={i} className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-                <div className="w-10 h-10 bg-blue-600/20 rounded-xl flex items-center justify-center mb-4">
-                  <col.icon size={20} className="text-blue-400" />
-                </div>
-                <h3 className="font-semibold text-white mb-3">{col.title}</h3>
-                <ul className="space-y-2">
-                  {col.items.map((it, j) => (
-                    <li key={j} className="flex items-start gap-2 text-sm text-gray-400">
-                      <CheckCircle size={13} className="text-green-400 mt-0.5 flex-shrink-0" />
-                      {it}
-                    </li>
-                  ))}
+              <div key={i} className="qp-card qp-hover">
+                <span className={`qp-ico ${ICO[i % 4]}`} style={{ marginBottom: 16 }}><col.icon size={20} /></span>
+                <h3 className="qp-h3" style={{ marginBottom: 14 }}>{col.title}</h3>
+                <ul className="qp-check">
+                  {col.items.map((it, j) => <li key={j}>{it}</li>)}
                 </ul>
               </div>
             ))}
@@ -176,18 +155,16 @@ export default function About() {
       </section>
 
       {/* Values */}
-      <section className="py-16 px-6">
-        <div className="max-w-4xl mx-auto">
-          <h2 className="text-2xl font-bold text-center mb-10">{tx.valuesTitle}</h2>
-          <div className="grid md:grid-cols-2 gap-6">
+      <section className="qp-sec">
+        <div className="qp-wrap">
+          <div className="qp-head"><h2 className="qp-h2">{tx.valuesTitle}</h2></div>
+          <div className="qp-grid qp-g2">
             {tx.values.map((v, i) => (
-              <div key={i} className="flex gap-4 bg-gray-900 border border-gray-800 rounded-xl p-5">
-                <div className="w-10 h-10 bg-blue-600/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                  <v.icon size={20} className="text-blue-400" />
-                </div>
+              <div key={i} className="qp-card qp-hover" style={{ display: 'flex', gap: 16 }}>
+                <span className={`qp-ico ${ICO[i % 4]}`}><v.icon size={20} /></span>
                 <div>
-                  <h3 className="font-semibold text-white mb-1">{v.title}</h3>
-                  <p className="text-gray-400 text-sm leading-relaxed">{v.desc}</p>
+                  <h3 className="qp-h3" style={{ marginBottom: 6 }}>{v.title}</h3>
+                  <p className="qp-sub" style={{ fontSize: 14 }}>{v.desc}</p>
                 </div>
               </div>
             ))}
@@ -196,28 +173,24 @@ export default function About() {
       </section>
 
       {/* Disclaimer */}
-      <section className="py-8 px-6">
-        <div className="max-w-3xl mx-auto bg-yellow-950/30 border border-yellow-700/30 rounded-xl p-5">
-          <div className="flex items-start gap-3">
-            <Star size={16} className="text-yellow-400 mt-0.5 flex-shrink-0" />
-            <p className="text-yellow-300/80 text-sm leading-relaxed">
-              <strong>{tx.disclaimerLabel}</strong> {tx.disclaimer}
-            </p>
-          </div>
+      <div className="qp-wrap qp-narrow">
+        <div className="qp-note">
+          <Star size={16} />
+          <p><strong style={{ color: '#fff' }}>{tx.disclaimerLabel}</strong> {tx.disclaimer}</p>
         </div>
-      </section>
+      </div>
 
       {/* CTA */}
-      <section className="py-16 px-6 text-center">
-        <h2 className="text-2xl font-bold mb-3">{tx.ctaTitle}</h2>
-        <p className="text-gray-400 mb-6">{tx.ctaSub}</p>
-        <div className="flex items-center justify-center gap-3 flex-wrap">
-          <Link to={isAr ? '/register' : '/en/register'} className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-xl font-semibold transition">
-            {tx.ctaStart}
-          </Link>
-          <Link to={isAr ? '/vision' : '/en/vision'} className="border border-gray-700 hover:border-gray-500 text-gray-300 hover:text-white px-8 py-3 rounded-xl font-medium transition">
-            {tx.ctaVision}
-          </Link>
+      <section className="qp-sec">
+        <div className="qp-wrap">
+          <div className="qp-cta">
+            <h2 className="qp-h2">{tx.ctaTitle}</h2>
+            <p className="qp-lead">{tx.ctaSub}</p>
+            <div className="qp-btns">
+              <Link to={isAr ? '/register' : '/en/register'} className="qp-btn qp-mint">{tx.ctaStart}</Link>
+              <Link to={isAr ? '/vision' : '/en/vision'} className="qp-btn qp-line">{tx.ctaVision}</Link>
+            </div>
+          </div>
         </div>
       </section>
 

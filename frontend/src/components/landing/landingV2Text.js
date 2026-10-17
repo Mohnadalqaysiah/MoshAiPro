@@ -216,7 +216,7 @@ export const RR = {
     calcH: 'احسب أرباحك', calcUnit: 'USD / شهرياً', calcN: 'مشتركون نشطون عبر رابطك', calcPlan: 'نوع اشتراكاتهم',
     calcMonthly: 'شهري ${p}', calcWeekly: 'أسبوعي ${p}',
     t1: 'الآن · أول 25 دفعة', t2: 'بعد 25 دفعة مقبولة',
-    earnNow: 'أرباحك الشهرية التقديرية الآن', earnLater: 'بعد بلوغ 25 دفعة (خلال ~{m} شهر): {v} شهرياً', earnReached: 'تصل لعمولة 15% من الشهر الأول',
+    earnTotal: 'أرباحك التقديرية في أول 12 شهراً', earnFirst: 'الشهر الأول', earnSteady: 'شهرياً من الشهر {m} (15% على كل الدفعات)', earnSteadyLate: 'شهرياً عند بلوغ 15% (بعد السنة الأولى)',
     calcNote: 'تقدير مبني على أسعار الباقات الحالية ونسبة العمولة، ويفترض استمرار الاشتراكات. المرحلة تُحسب من عدد الدفعات المقبولة لا عدد الأشخاص، و15% تُطبَّق على الدفعات التالية بعد الوصول إلى 25.',
   },
   en: {
@@ -234,7 +234,7 @@ export const RR = {
     calcH: 'Estimate your earnings', calcUnit: 'USD / month', calcN: 'Active subscribers via your link', calcPlan: 'Their plan',
     calcMonthly: 'Monthly ${p}', calcWeekly: 'Weekly ${p}',
     t1: 'Now · first 25 payments', t2: 'After 25 approved payments',
-    earnNow: 'Estimated monthly earnings now', earnLater: 'After 25 payments (in ~{m} months): {v} per month', earnReached: 'You reach the 15% rate in the first month',
+    earnTotal: 'Estimated earnings in your first 12 months', earnFirst: 'First month', earnSteady: 'Per month from month {m} (15% on every payment)', earnSteadyLate: 'Per month once you reach 15% (after year one)',
     calcNote: 'Estimate based on current plan prices and commission rates, assuming subscriptions continue. The tier counts approved payments, not people, and 15% applies to payments after the 25th.',
   },
 }

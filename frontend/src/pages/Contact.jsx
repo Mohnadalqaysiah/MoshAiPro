@@ -91,109 +91,113 @@ export default function Contact() {
   return (
     <PublicLayout>
 
-      <main className="max-w-4xl mx-auto px-6 py-16">
-        <h1 className="text-3xl font-bold mb-2">{tx.h1}</h1>
-        <p className="text-gray-400 mb-12">{tx.sub}</p>
+      <section className="qp-hero">
+        <div className="qp-wrap qp-narrow">
+          <span className="qp-eyebrow">{isAr ? 'نحن هنا لمساعدتك' : "We're here to help"}</span>
+          <h1 className="qp-h1">{tx.h1}</h1>
+          <p className="qp-lead">{tx.sub}</p>
+        </div>
+      </section>
 
-        <div className="grid md:grid-cols-2 gap-12">
+      <div className="qp-wrap" style={{ paddingBottom: 'clamp(56px,8vw,96px)' }}>
+        <div className="qp-grid" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,340px),1fr))', alignItems: 'start' }}>
           {/* Contact Info */}
-          <div className="space-y-6">
-            <h2 className="text-xl font-semibold mb-6">{tx.infoTitle}</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <h2 className="qp-h3" style={{ fontSize: 20, marginBottom: 4 }}>{tx.infoTitle}</h2>
 
-            <a href="mailto:support@qaffel.com"
-               className="flex items-center gap-4 p-4 bg-gray-900 border border-gray-800 rounded-xl hover:border-blue-500 transition group">
-              <div className="w-12 h-12 bg-blue-600/20 rounded-xl flex items-center justify-center group-hover:bg-blue-600/30 transition">
-                <Mail className="w-6 h-6 text-blue-400" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-400">{tx.emailLabel}</p>
-                <p className="font-medium">support@qaffel.com</p>
-              </div>
+            <a href="mailto:support@qaffel.com" className="qp-card" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <span className="qp-ico lg"><Mail size={22} /></span>
+              <span>
+                <span className="qp-faint" style={{ display: 'block', fontSize: 13 }}>{tx.emailLabel}</span>
+                <span className="qp-mono" style={{ color: '#fff', fontWeight: 700 }}>support@qaffel.com</span>
+              </span>
             </a>
 
-            <div className="p-4 bg-blue-950/30 border border-blue-800/30 rounded-xl">
-              <p className="text-blue-300 text-sm font-medium mb-2 flex items-center gap-2">
-                <Clock size={14}/> {tx.hoursTitle}
+            <a href="https://t.me/Qaffelbot" target="_blank" rel="noreferrer" className="qp-card" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <span className="qp-ico lg sky"><Send size={20} /></span>
+              <span>
+                <span className="qp-faint" style={{ display: 'block', fontSize: 13 }}>Telegram</span>
+                <span className="qp-mono" style={{ color: '#fff', fontWeight: 700 }}>@Qaffelbot</span>
+              </span>
+            </a>
+
+            <div className="qp-card qp-goldline">
+              <p style={{ color: 'var(--gold)', fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <Clock size={15} /> {tx.hoursTitle}
               </p>
-              <p className="text-gray-400 text-sm">{tx.hours1}</p>
-              <p className="text-gray-400 text-sm mt-1">{tx.hours2}</p>
+              <p className="qp-sub" style={{ fontSize: 14 }}>{tx.hours1}</p>
+              <p className="qp-sub" style={{ fontSize: 14, marginTop: 4 }}>{tx.hours2}</p>
             </div>
 
-            <div className="p-4 bg-gray-900 border border-gray-800 rounded-xl">
-              <p className="text-gray-300 text-sm font-medium mb-2">{tx.responseTitle}</p>
-              <p className="text-gray-400 text-sm">{tx.responseBody()}</p>
+            <div className="qp-card">
+              <p style={{ color: '#fff', fontWeight: 700, fontSize: 14, marginBottom: 6 }}>{tx.responseTitle}</p>
+              <p className="qp-sub" style={{ fontSize: 14 }}>{tx.responseBody()}</p>
             </div>
           </div>
 
           {/* Contact Form */}
-          <div>
+          <div className="qp-card" style={{ padding: 'clamp(20px,3vw,32px)' }}>
             {sent ? (
-              <div className="flex flex-col items-center justify-center h-full gap-4 text-center py-8">
-                <CheckCircle className="w-16 h-16 text-green-400" />
-                <h3 className="text-xl font-bold">{tx.sentTitle}</h3>
-                <p className="text-gray-400 text-sm leading-relaxed">
-                  {tx.sentBody(form.email)}
-                </p>
-                <button onClick={() => { setSent(false); setForm({ name: '', email: '', subject: '', message: '' }) }}
-                        className="mt-2 text-blue-400 hover:underline text-sm">
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, textAlign: 'center', paddingBlock: 32 }}>
+                <span className="qp-ico lg" style={{ width: 64, height: 64, borderRadius: 20 }}><CheckCircle size={32} /></span>
+                <h3 className="qp-h3" style={{ fontSize: 22 }}>{tx.sentTitle}</h3>
+                <p className="qp-sub" style={{ fontSize: 14 }}>{tx.sentBody(form.email)}</p>
+                <button type="button" onClick={() => { setSent(false); setForm({ name: '', email: '', subject: '', message: '' }) }}
+                        className="qp-link" style={{ fontSize: 14, background: 'none', border: 0, cursor: 'pointer' }}>
                   {tx.sendAnother}
                 </button>
               </div>
             ) : (
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm text-gray-400 mb-1">{tx.name}</label>
-                    <input type="text" required value={form.name}
+              <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div className="qp-grid qp-g2" style={{ gap: 14 }}>
+                  <div className="qp-field">
+                    <label htmlFor="c-name">{tx.name}</label>
+                    <input id="c-name" type="text" required value={form.name}
                            onChange={e => setForm(p => ({...p, name: e.target.value}))}
-                           className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition"
-                           placeholder={tx.namePh} />
+                           className="qp-input" placeholder={tx.namePh} />
                   </div>
-                  <div>
-                    <label className="block text-sm text-gray-400 mb-1">{tx.emailLabel}</label>
-                    <input type="email" required value={form.email}
+                  <div className="qp-field">
+                    <label htmlFor="c-email">{tx.emailLabel}</label>
+                    <input id="c-email" type="email" required value={form.email}
                            onChange={e => setForm(p => ({...p, email: e.target.value}))}
-                           className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition"
-                           placeholder="email@example.com" dir="ltr" />
+                           className="qp-input" placeholder="email@example.com" dir="ltr" />
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm text-gray-400 mb-1">{tx.subject}</label>
-                  <select value={form.subject}
+                <div className="qp-field">
+                  <label htmlFor="c-subject">{tx.subject}</label>
+                  <select id="c-subject" value={form.subject}
                           onChange={e => setForm(p => ({...p, subject: e.target.value}))}
-                          className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition">
+                          className="qp-input">
                     <option value="">{tx.subjectChoose}</option>
                     {tx.subjects.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
 
-                <div>
-                  <label className="block text-sm text-gray-400 mb-1">{tx.message}</label>
-                  <textarea required rows={5} value={form.message}
+                <div className="qp-field">
+                  <label htmlFor="c-msg">{tx.message}</label>
+                  <textarea id="c-msg" required rows={5} value={form.message}
                              onChange={e => setForm(p => ({...p, message: e.target.value}))}
-                             className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition resize-none"
-                             placeholder={tx.messagePh} />
+                             className="qp-input" placeholder={tx.messagePh} />
                 </div>
 
                 {error && (
-                  <p className="text-red-400 text-sm flex items-center gap-1">
-                    <AlertCircle size={13}/> {error}
+                  <p style={{ color: 'var(--coral)', fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <AlertCircle size={14}/> {error}
                   </p>
                 )}
 
-                <button type="submit" disabled={loading}
-                        className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition">
+                <button type="submit" disabled={loading} className="qp-btn qp-mint" style={{ width: '100%' }}>
                   {loading
-                    ? <span className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full" />
-                    : <><Send className="w-4 h-4" /> {tx.send}</>
+                    ? <span className="animate-spin" style={{ width: 20, height: 20, border: '2px solid var(--mint-ink)', borderTopColor: 'transparent', borderRadius: 999 }} />
+                    : <><Send size={16} /> {tx.send}</>
                   }
                 </button>
               </form>
             )}
           </div>
         </div>
-      </main>
+      </div>
 
     </PublicLayout>
   )

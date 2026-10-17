@@ -102,7 +102,7 @@ export default function StrategyBuilderDemo({ isAr = true }) {
               </div>
               <div className="h-2.5 bg-gray-800 rounded-full overflow-hidden relative">
                 <div
-                  className={`h-full rounded-full transition-all duration-500 ${triggered ? 'bg-gradient-to-r from-green-500 to-emerald-400' : 'bg-gradient-to-r from-indigo-500 to-purple-500'}`}
+                  className={`h-full rounded-full transition-all duration-500 ${triggered ? 'bg-gradient-to-r from-green-500 to-emerald-400' : 'bg-gradient-to-r from-emerald-400 to-amber-300'}`}
                   style={{ width: `${score}%` }}
                 />
                 <div className="absolute top-0 bottom-0 w-px bg-white/40" style={{ left: `${MIN_SCORE}%` }} />
@@ -160,7 +160,7 @@ export default function StrategyBuilderDemo({ isAr = true }) {
 
             <Link
               to={user ? '/strategies' : '/register'}
-              className="group flex items-center justify-center gap-2 w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white px-6 py-3.5 rounded-2xl font-bold text-sm transition-all shadow-xl shadow-indigo-500/20 hover:shadow-indigo-500/40"
+              className="group flex items-center justify-center gap-2 w-full qp-btn qp-mint px-6 py-3.5 rounded-2xl font-bold text-sm"
             >
               <Zap size={16} className="fill-white" />
               {isAr ? 'جرّب أداة بناء الاستراتيجيات الحقيقية' : 'Try the Real Strategy Builder'}

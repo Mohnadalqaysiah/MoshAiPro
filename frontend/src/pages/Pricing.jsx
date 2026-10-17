@@ -428,25 +428,23 @@ export default function Pricing() {
           لعرض الخصم، لا أسوأه. لا يظهر لو وصل أصلاً بكوبون بالرابط
           (?coupon=) — عندها الخصم مطبَّق فعلاً، وعرض بوب أب ثاني لنفس الشيء تكرار مربك. */}
       {!searchParams.get('coupon') && <DiscountPopup />}
-      <div className="px-4 py-16 min-h-screen" dir={isAr ? 'rtl' : 'ltr'}>
-        <div className="max-w-4xl mx-auto">
-
-          {/* Header */}
-          <div className="text-center mb-12">
-            <div className="inline-flex items-center gap-2 q-glass px-4 py-1.5 rounded-full mb-4 text-sm" style={{ color: 'var(--q-acc3)' }}>
-              <Zap size={12} />
-              {isAr ? 'الباقات والأسعار' : 'Plans & Pricing'}
-            </div>
-            <h1 className="text-4xl font-bold text-white mb-3" style={{ textWrap: 'balance' }}>{t.title}</h1>
-            <p className="text-gray-400">{t.subtitle}</p>
+      <div className="px-4 pb-16 min-h-screen" dir={isAr ? 'rtl' : 'ltr'}>
+        {/* Header */}
+        <div className="qp-hero" style={{ marginInline: -16, marginBottom: 8 }}>
+          <div className="qp-wrap qp-narrow">
+            <span className="qp-eyebrow">{isAr ? 'الباقات والأسعار' : 'Plans & Pricing'}</span>
+            <h1 className="qp-h1">{t.title}</h1>
+            <p className="qp-lead">{t.subtitle}</p>
 
             {/* Trust badges */}
-            <div className="flex items-center justify-center gap-6 mt-6 text-xs text-gray-500">
-              <span className="flex items-center gap-1.5"><Shield size={13} className="text-emerald-400" /> {t.guarantee}</span>
-              <span className="flex items-center gap-1.5"><Clock size={13} style={{ color: 'var(--q-acc3)' }} /> {t.support}</span>
-              <span className="flex items-center gap-1.5"><Zap size={13} className="text-amber-400" /> {t.instant}</span>
+            <div className="qp-chips" style={{ marginTop: 24 }}>
+              <span className="qp-chip" style={{ fontSize: 13 }}><Shield size={14} style={{ color: 'var(--mint)' }} /> {t.guarantee}</span>
+              <span className="qp-chip" style={{ fontSize: 13 }}><Clock size={14} style={{ color: 'var(--sky)' }} /> {t.support}</span>
+              <span className="qp-chip" style={{ fontSize: 13 }}><Zap size={14} style={{ color: 'var(--gold)' }} /> {t.instant}</span>
             </div>
           </div>
+        </div>
+        <div className="max-w-5xl mx-auto">
 
           {step === 'plan' && (
             <>
@@ -465,14 +463,14 @@ export default function Pricing() {
                         isSelected ? 'shadow-xl' : 'q-glass q-glass-hover'
                       }`}
                       style={isSelected ? {
-                        background: 'linear-gradient(135deg, rgba(255,79,216,0.14), rgba(124,58,237,0.16))',
-                        borderColor: 'var(--q-acc1)',
-                        boxShadow: '0 20px 45px rgba(124,58,237,0.25)',
+                        background: 'linear-gradient(160deg, rgba(60,242,192,0.12), rgba(16,24,42,0.7) 60%)',
+                        borderColor: 'var(--mint)',
+                        boxShadow: '0 24px 60px -20px rgba(60,242,192,0.45)',
                       } : undefined}
                     >
                       {/* Best-value badge (السنوية) */}
                       {p.bestValue && !p.popular && (
-                        <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-emerald-600 text-white text-xs font-bold px-4 py-1 rounded-full flex items-center gap-1.5 shadow-lg">
+                        <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 text-xs font-bold px-4 py-1 rounded-full flex items-center gap-1.5 shadow-lg" style={{ background: "var(--gold)", color: "#2A1C00" }}>
                           <Star size={10} fill="white" />
                           {isAr ? 'أفضل قيمة' : 'Best value'}
                         </div>
@@ -489,14 +487,14 @@ export default function Pricing() {
                       {/* Selected indicator */}
                       {isSelected && (
                         <div className={`absolute top-4 ${isAr ? 'left-4' : 'right-4'} w-5 h-5 rounded-full grid place-items-center`} style={{ background: 'var(--q-acc1)' }}>
-                          <Check size={12} className="text-white" strokeWidth={3} />
+                          <Check size={12} style={{ color: 'var(--mint-ink)' }} strokeWidth={3} />
                         </div>
                       )}
 
                       {/* Price */}
                       <div className="mb-5">
                         <div className="flex items-end gap-1 mb-1">
-                          <span className="text-5xl font-black text-white">
+                          <span className="text-5xl font-black text-white qp-mono">
                             ${p.price}
                           </span>
                           <span className="text-gray-400 mb-2 text-sm">{period}</span>
@@ -517,7 +515,7 @@ export default function Pricing() {
                         {features.map((f, i) => (
                           <li key={i} className="flex items-center gap-2.5 text-sm">
                             <div className={`w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 ${isSelected ? '' : 'bg-gray-700/50'}`}
-                                 style={isSelected ? { background: 'rgba(255,79,216,0.22)' } : undefined}>
+                                 style={isSelected ? { background: 'rgba(60,242,192,0.18)' } : undefined}>
                               <Check size={10} style={isSelected ? { color: 'var(--q-acc1)' } : undefined} className={isSelected ? '' : 'text-gray-400'} strokeWidth={3} />
                             </div>
                             <span className={isSelected ? 'text-gray-200' : 'text-gray-400'}>{f}</span>
@@ -777,7 +775,7 @@ export default function Pricing() {
                     <button
                       onClick={submitPayment}
                       disabled={loading}
-                      className="flex-1 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 disabled:opacity-50 text-white font-bold py-3 rounded-xl text-sm transition"
+                      className="flex-1 qp-btn qp-mint disabled:opacity-50 font-bold py-3 rounded-xl text-sm transition"
                     >
                       {loading ? t.sendingBtn : t.confirmBtn}
                     </button>
@@ -798,7 +796,7 @@ export default function Pricing() {
 
           {step === 'activating' && (
             <div className="text-center q-glass rounded-2xl p-12 max-w-lg mx-auto">
-              <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5" style={{ background: 'rgba(124,58,237,0.18)' }}>
+              <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-5" style={{ background: 'rgba(60,242,192,0.12)' }}>
                 <Loader2 size={32} className="animate-spin" style={{ color: 'var(--q-acc2)' }} />
               </div>
               <h2 className="text-2xl font-bold text-white mb-3">{t.activatingTitle}</h2>

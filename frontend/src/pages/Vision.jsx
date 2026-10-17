@@ -97,76 +97,53 @@ export default function Vision() {
     { name: isAr ? 'رؤيتنا' : 'Our Vision', path: isAr ? '/vision' : '/en/vision' },
   ])
 
+  const ICO = ['', 'gold', 'sky', 'coral']
   return (
     <PublicLayout>
 
       {/* Hero */}
-      <section className="py-20 px-6 text-center relative overflow-hidden">
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-purple-600/10 rounded-full blur-3xl" />
-        </div>
-        <div className="max-w-3xl mx-auto relative">
-          <div className="inline-flex items-center gap-2 bg-purple-600/20 border border-purple-500/30 text-purple-300 text-xs px-4 py-1.5 rounded-full mb-6">
-            <Target size={12} />
-            {tx.badge}
-          </div>
-          <h1 className="text-4xl md:text-5xl font-bold mb-6 leading-tight">
-            {tx.h1a}<br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-l from-purple-400 to-blue-400">
-              {tx.h1b}
-            </span>
-          </h1>
-          <p className="text-gray-400 text-lg leading-relaxed">
-            {tx.heroSub}
-          </p>
+      <section className="qp-hero">
+        <div className="qp-wrap qp-narrow">
+          <span className="qp-eyebrow">{tx.badge}</span>
+          <h1 className="qp-h1">{tx.h1a}<br /><span className="qp-grad">{tx.h1b}</span></h1>
+          <p className="qp-lead">{tx.heroSub}</p>
         </div>
       </section>
 
       {/* Vision Statement */}
-      <section className="py-16 px-6">
-        <div className="max-w-4xl mx-auto">
-          <div className="grid md:grid-cols-2 gap-8">
-            <div className="bg-gradient-to-br from-blue-900/30 to-blue-800/10 border border-blue-700/30 rounded-2xl p-8">
-              <div className="w-12 h-12 bg-blue-600/30 rounded-xl flex items-center justify-center mb-5">
-                <Target size={24} className="text-blue-400" />
-              </div>
-              <h2 className="text-xl font-bold text-white mb-3">{tx.visionTitle}</h2>
-              <p className="text-gray-300 leading-relaxed">{tx.visionBody}</p>
+      <section className="qp-sec" style={{ paddingTop: 0 }}>
+        <div className="qp-wrap">
+          <div className="qp-grid qp-g2">
+            <div className="qp-card qp-mintline" style={{ padding: 'clamp(24px,3.4vw,36px)' }}>
+              <span className="qp-ico lg" style={{ marginBottom: 18 }}><Target size={24} /></span>
+              <h2 className="qp-h3" style={{ fontSize: 22, marginBottom: 10 }}>{tx.visionTitle}</h2>
+              <p className="qp-sub" style={{ color: '#C9D5EA' }}>{tx.visionBody}</p>
             </div>
-            <div className="bg-gradient-to-br from-purple-900/30 to-purple-800/10 border border-purple-700/30 rounded-2xl p-8">
-              <div className="w-12 h-12 bg-purple-600/30 rounded-xl flex items-center justify-center mb-5">
-                <Rocket size={24} className="text-purple-400" />
-              </div>
-              <h2 className="text-xl font-bold text-white mb-3">{tx.missionTitle}</h2>
-              <p className="text-gray-300 leading-relaxed">{tx.missionBody}</p>
+            <div className="qp-card qp-goldline" style={{ padding: 'clamp(24px,3.4vw,36px)' }}>
+              <span className="qp-ico lg gold" style={{ marginBottom: 18 }}><Rocket size={24} /></span>
+              <h2 className="qp-h3" style={{ fontSize: 22, marginBottom: 10 }}>{tx.missionTitle}</h2>
+              <p className="qp-sub" style={{ color: '#C9D5EA' }}>{tx.missionBody}</p>
             </div>
           </div>
         </div>
       </section>
 
       {/* Roadmap */}
-      <section className="py-16 px-6 bg-gray-900/40">
-        <div className="max-w-4xl mx-auto">
-          <h2 className="text-2xl font-bold text-center mb-3">{tx.roadmapTitle}</h2>
-          <p className="text-gray-400 text-center mb-12">{tx.roadmapSub}</p>
-          <div className="space-y-6">
+      <section className="qp-sec qp-band">
+        <div className="qp-wrap qp-narrow">
+          <div className="qp-head">
+            <h2 className="qp-h2">{tx.roadmapTitle}</h2>
+            <p className="qp-sub">{tx.roadmapSub}</p>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             {tx.roadmap.map((phase, i) => (
-              <div key={i} className={`border rounded-2xl p-6 ${phase.done ? 'border-green-700/40 bg-green-900/10' : 'border-gray-800 bg-gray-900'}`}>
-                <div className="flex items-center gap-3 mb-4">
-                  <span className={`text-xs font-bold px-3 py-1 rounded-full ${phase.done ? 'bg-green-900/50 text-green-400' : 'bg-blue-900/50 text-blue-400'}`}>
-                    {phase.phase}
-                  </span>
-                  <h3 className="font-semibold text-white">{phase.title}</h3>
+              <div key={i} className={`qp-card ${phase.done ? 'qp-mintline' : ''}`}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+                  <span className={`qp-pill ${phase.done ? 'done' : 'next'}`}>{phase.phase.replace(/\s*[✅🔄🔮]\s*$/u, '')}</span>
+                  <h3 className="qp-h3">{phase.title}</h3>
                 </div>
-                <ul className="grid md:grid-cols-2 gap-2">
-                  {phase.items.map((item, j) => (
-                    <li key={j} className="flex items-start gap-2 text-sm text-gray-400">
-                      <span className={`mt-1 flex-shrink-0 ${phase.done ? 'text-green-400' : 'text-blue-400'}`}>
-                        {phase.done ? '✓' : '◦'}
-                      </span>
-                      {item}
-                    </li>
-                  ))}
+                <ul className={`qp-check ${phase.done ? '' : 'todo'}`} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 10 }}>
+                  {phase.items.map((item, j) => <li key={j}>{item}</li>)}
                 </ul>
               </div>
             ))}
@@ -174,19 +151,17 @@ export default function Vision() {
         </div>
       </section>
 
-      {/* SEO-rich Why us section */}
-      <section className="py-16 px-6">
-        <div className="max-w-4xl mx-auto">
-          <h2 className="text-2xl font-bold text-center mb-12">{tx.whyTitle}</h2>
-          <div className="grid md:grid-cols-2 gap-6">
+      {/* Why us */}
+      <section className="qp-sec">
+        <div className="qp-wrap">
+          <div className="qp-head"><h2 className="qp-h2">{tx.whyTitle}</h2></div>
+          <div className="qp-grid qp-g2">
             {tx.why.map((item, i) => (
-              <div key={i} className="flex gap-4 bg-gray-900 border border-gray-800 rounded-xl p-5">
-                <div className="w-10 h-10 bg-blue-600/20 rounded-xl flex items-center justify-center flex-shrink-0">
-                  <item.icon size={20} className="text-blue-400" />
-                </div>
+              <div key={i} className="qp-card qp-hover" style={{ display: 'flex', gap: 16 }}>
+                <span className={`qp-ico ${ICO[i % 4]}`}><item.icon size={20} /></span>
                 <div>
-                  <h3 className="font-semibold text-white mb-1">{item.title}</h3>
-                  <p className="text-gray-400 text-sm leading-relaxed">{item.desc}</p>
+                  <h3 className="qp-h3" style={{ marginBottom: 6 }}>{item.title}</h3>
+                  <p className="qp-sub" style={{ fontSize: 14 }}>{item.desc}</p>
                 </div>
               </div>
             ))}
@@ -194,46 +169,29 @@ export default function Vision() {
         </div>
       </section>
 
-      {/* SEO Keywords section - naturally embedded */}
-      <section className="py-12 px-6 bg-gray-900/40">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-xl font-bold mb-4">{tx.marketsTitle}</h2>
-          <p className="text-gray-400 text-sm mb-6">
-            {tx.marketsSub}
-          </p>
-          <div className="flex flex-wrap justify-center gap-3">
-            {tx.markets.map((market, i) => (
-              <span key={i} className="bg-gray-800 border border-gray-700 text-gray-300 text-sm px-4 py-1.5 rounded-full">
-                {market}
-              </span>
-            ))}
+      {/* Markets */}
+      <section className="qp-sec qp-band" style={{ paddingBlock: 'clamp(40px,6vw,64px)' }}>
+        <div className="qp-wrap qp-narrow" style={{ textAlign: 'center' }}>
+          <h2 className="qp-h3" style={{ fontSize: 22, marginBottom: 10 }}>{tx.marketsTitle}</h2>
+          <p className="qp-sub" style={{ marginBottom: 22 }}>{tx.marketsSub}</p>
+          <div className="qp-chips">
+            {tx.markets.map((market, i) => <span key={i} className="qp-chip">{market}</span>)}
           </div>
-          <p className="text-gray-400 text-xs mt-6">
-            {tx.keywords}
-          </p>
+          <p className="qp-faint" style={{ fontSize: 12, marginTop: 22 }}>{tx.keywords}</p>
         </div>
       </section>
 
       {/* CTA */}
-      <section className="py-20 px-6">
-        <div className="max-w-2xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 bg-blue-600/20 border border-blue-500/30 text-blue-300 text-xs px-4 py-1.5 rounded-full mb-6">
-            <Star size={12} />
-            {tx.ctaBadge}
-          </div>
-          <h2 className="text-3xl font-bold mb-4">{tx.ctaTitle}</h2>
-          <p className="text-gray-400 mb-8">
-            {tx.ctaSub}
-          </p>
-          <div className="flex items-center justify-center gap-3 flex-wrap">
-            <Link to={isAr ? '/register' : '/en/register'}
-              className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-8 py-3.5 rounded-xl font-semibold transition-all hover:scale-105 shadow-lg shadow-blue-500/25">
-              {tx.ctaStart}
-              <ChevronCta size={18} />
-            </Link>
-            <Link to={isAr ? '/about' : '/en/about'} className="border border-gray-700 hover:border-gray-500 text-gray-300 hover:text-white px-8 py-3.5 rounded-xl font-medium transition">
-              {tx.ctaAbout}
-            </Link>
+      <section className="qp-sec">
+        <div className="qp-wrap">
+          <div className="qp-cta">
+            <span className="qp-eyebrow">{tx.ctaBadge}</span>
+            <h2 className="qp-h2" style={{ marginTop: 14 }}>{tx.ctaTitle}</h2>
+            <p className="qp-lead">{tx.ctaSub}</p>
+            <div className="qp-btns">
+              <Link to={isAr ? '/register' : '/en/register'} className="qp-btn qp-mint">{tx.ctaStart}<ChevronCta size={18} /></Link>
+              <Link to={isAr ? '/about' : '/en/about'} className="qp-btn qp-line">{tx.ctaAbout}</Link>
+            </div>
           </div>
         </div>
       </section>

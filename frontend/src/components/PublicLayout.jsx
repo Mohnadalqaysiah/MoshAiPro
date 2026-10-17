@@ -1,34 +1,52 @@
 /**
  * PublicLayout — Shared header + footer for all public pages
- * (Pricing, About, Contact, Terms, Privacy, Vision)
+ * (Pricing, About, Contact, Terms, Privacy, Vision, Strategy Builder, Blog…)
+ *
+ * (2026-10-17) بالهوية الجديدة (نفس الصفحة الرئيسية الجديدة): الهيدر والفوتر يعيدان استخدام أنماط .qx
+ * من landing-v2.css، والمحتوى داخل .qpub (public-v2.css) يعيد تعيين متغيرات الألوان فيتحوّل تلقائياً.
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
-import { LayoutDashboard, Menu, X, Star } from 'lucide-react'
 import { mirrorPath } from '../utils/langRoutes'
-import Logo from './Logo'
+import { TXT } from './landing/landingV2Text'
+import '../styles/landing-v2.css'
+import '../styles/public-v2.css'
 
 // ── Social icons (inline SVG, no extra lib needed) ─────────────────────
 const IconInstagram = () => (
-  <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-    <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/>
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" width="18" height="18" aria-hidden="true">
+    <rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4.2" /><circle cx="17.4" cy="6.6" r="1" fill="currentColor" stroke="none" />
   </svg>
 )
 const IconTelegram = () => (
-  <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-    <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.248l-1.97 9.289c-.145.658-.537.818-1.084.508l-3-2.21-1.447 1.394c-.16.16-.295.295-.605.295l.213-3.053 5.56-5.023c.242-.213-.054-.333-.373-.12l-6.871 4.326-2.962-.924c-.643-.204-.657-.643.136-.953l11.57-4.461c.537-.194 1.006.131.833.932z"/>
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinejoin="round" width="18" height="18" aria-hidden="true">
+    <path d="M21 4 L3 11 L10 13 L12 20 L21 4 Z" /><path d="M10 13 L21 4" />
   </svg>
 )
+const BrandMark = () => (
+  <span className="brand-mark"><svg width="22" height="22" viewBox="0 0 36 36" fill="none" aria-hidden="true"><circle cx="17" cy="17" r="11.5" stroke="#DDE5F2" strokeWidth="3.2" /><path d="M22 22 L31 31" stroke="#3CF2C0" strokeWidth="3.2" strokeLinecap="round" /></svg></span>
+)
 
-export default function PublicLayout({ children, bgClass = 'q-ground' }) {
+export default function PublicLayout({ children }) {
   const { user } = useAuth()
   const { lang, toggle, t } = useLang()
   const isAr = lang === 'ar'
-  const [mobileOpen, setMobileOpen] = useState(false)
+  const T = TXT[isAr ? 'ar' : 'en']
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [scrolled, setScrolled] = useState(false)
   const location = useLocation()
   const navigate  = useNavigate()
+  const p = (path) => (isAr ? path : `/en${path}`)
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 12)
+    window.addEventListener('scroll', onScroll, { passive: true })
+    onScroll()
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+  useEffect(() => { setMenuOpen(false) }, [location.pathname])
 
   // لو الصفحة الحالية إلها نسخة إنجليزية حقيقية على /en/*، بدّل اللغة عبر
   // التنقل لرابطها المكافئ (مو مجرد تبديل محلي) — عشان الرابط يعكس المحتوى فعلاً
@@ -39,190 +57,104 @@ export default function PublicLayout({ children, bgClass = 'q-ground' }) {
     if (mirror && mirror !== location.pathname) navigate(mirror)
   }
 
+  const bare = location.pathname.replace(/^\/en(?=\/|$)/, '') || '/'
+  const isOn = (to) => { const b = to.replace(/^\/en(?=\/|$)/, ''); return bare === b || bare.startsWith(b + '/') }
+
+  // [المسار, النص, رابط عادي خارج React؟]
+  const navLinks = [
+    [p('/strategy-builder'), T.nav.builder],
+    [p('/pricing'), T.nav.pricing],
+    ['/referral', T.nav.referral],
+    [p('/blog'), T.nav.blog],
+    [p('/about'), T.nav.about],
+    [p('/contact'), T.nav.contact],
+  ]
+  const moreLinks = [
+    [p('/vision'), t.footer.vision],
+    ['/games/challenge', T.nav.games, true],
+  ]
+  const navItem = ([to, label, native]) => native
+    ? <a key={to} href={to}>{label}</a>
+    : <Link key={to} to={to} className={isOn(to) ? 'on' : undefined} aria-current={isOn(to) ? 'page' : undefined}>{label}</Link>
+
   return (
-    <div className={`min-h-screen ${bgClass} text-white`} dir={isAr ? 'rtl' : 'ltr'}>
+    <div className="qpub" dir={isAr ? 'rtl' : 'ltr'}>
 
       {/* ── Header ──────────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-50 q-panel backdrop-blur-xl border-b q-line">
-        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2.5 group">
-            <span className="w-9 h-9 rounded-xl q-logo grid place-items-center overflow-hidden flex-shrink-0">
-              <Logo className="w-6 h-6 object-contain" />
-            </span>
-            <span className="font-bold text-lg tracking-tight">
-              Qaffel <span style={{ color: 'var(--q-acc3)' }}>AI</span>
-            </span>
-          </Link>
-
-          {/* Desktop nav */}
-          <nav className="hidden md:flex items-center gap-6 text-sm text-gray-400">
-            <a href="/#features" className="hover:text-white transition-colors">{t.nav.features}</a>
-            <Link to={isAr ? '/strategy-builder' : '/en/strategy-builder'} className="hover:text-white transition-colors">
-              {isAr ? 'بناء الاستراتيجيات' : 'Strategy Builder'}
-            </Link>
-            {/* صفحة HTML مستقلة خارج React — رابط عادي يحمّلها، لا Link */}
-            <a href="/games/challenge" className="hover:text-white transition-colors">{isAr ? 'الألعاب التعليمية' : 'Learning Games'}</a>
-            <Link to="/pricing"  className="hover:text-white transition-colors">{t.nav.pricing}</Link>
-            <Link to="/referral" className="hover:text-yellow-400 text-yellow-500/70 transition-colors font-medium">
-              💰 {isAr ? 'الإحالات' : 'Referrals'}
-            </Link>
-            <Link to="/about"   className="hover:text-white transition-colors">{t.nav.about}</Link>
-            <Link to="/contact" className="hover:text-white transition-colors">{t.nav.contact}</Link>
-          </nav>
-
-          <div className="flex items-center gap-2 shrink-0">
-            <button onClick={handleToggleLang}
-              className="text-xs border border-white/10 hover:border-blue-500/50 text-gray-400 hover:text-white px-3 py-1.5 rounded-lg transition-all font-medium">
-              {isAr ? 'EN' : 'ع'}
-            </button>
-            {user ? (
-              <Link to="/dashboard"
-                className="hidden md:flex items-center gap-1.5 text-sm q-cta text-white px-4 py-2 rounded-xl font-semibold transition-all">
-                <LayoutDashboard size={14} /> {t.nav.dashboard}
-              </Link>
-            ) : (
-              <>
-                <Link to="/login"
-                  className="hidden md:block text-sm text-gray-400 hover:text-white px-4 py-2 rounded-xl hover:bg-white/5 transition-colors">
-                  {t.nav.login}
-                </Link>
-                <Link to="/register"
-                  className="hidden md:block text-sm q-cta text-white px-4 py-2 rounded-xl font-semibold transition-all">
-                  {t.nav.start}
-                </Link>
-              </>
-            )}
-            <button className="md:hidden p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
-              onClick={() => setMobileOpen(o => !o)}>
-              {mobileOpen ? <X size={20} /> : <Menu size={20} />}
-            </button>
-          </div>
-        </div>
-
-        {/* Mobile dropdown */}
-        {mobileOpen && (
-          <div className="md:hidden border-t q-line bg-gray-900/95 backdrop-blur-xl px-4 py-4 space-y-1">
-            {[
-              { href: '/#features', label: t.nav.features },
-              { to: isAr ? '/strategy-builder' : '/en/strategy-builder', label: isAr ? 'بناء الاستراتيجيات' : 'Strategy Builder' },
-              { href: '/games/challenge', label: isAr ? 'الألعاب التعليمية' : 'Learning Games' },
-              { to: '/pricing',     label: t.nav.pricing },
-              { to: '/about',       label: t.nav.about },
-              { to: '/contact',     label: t.nav.contact },
-              { to: '/referral',    label: `💰 ${isAr ? 'برنامج الإحالات' : 'Referral Program'}` },
-            ].map((l, i) => l.href
-              ? <a key={i} href={l.href} onClick={() => setMobileOpen(false)} className="block py-2.5 px-3 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-colors">{l.label}</a>
-              : <Link key={i} to={l.to} onClick={() => setMobileOpen(false)} className="block py-2.5 px-3 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-colors">{l.label}</Link>
-            )}
-            <div className="pt-2 border-t q-line space-y-2">
+      <div className="qx qx-bar" dir={isAr ? 'rtl' : 'ltr'}>
+        <header className={`hdr ${scrolled || menuOpen ? 'scrolled' : ''}`}>
+          <div className="wrap">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 36 }}>
+              <Link to={isAr ? '/' : '/en'} className="brand" aria-label="Qaffel AI"><BrandMark /><span dir="ltr">Qaffel <span className="grad">AI</span></span></Link>
+              <nav className="nav" aria-label={T.menu} style={{ gap: 24 }}>
+                {navLinks.map(navItem)}
+              </nav>
+            </div>
+            <div className="hdr-actions">
+              <button className="lang" type="button" onClick={handleToggleLang} aria-label={isAr ? 'English' : 'العربية'}>{isAr ? 'EN' : 'ع'}</button>
               {user ? (
-                <Link to="/dashboard" onClick={() => setMobileOpen(false)}
-                  className="flex items-center gap-2 w-full py-2.5 px-3 rounded-xl text-sm q-cta text-white font-semibold">
-                  <LayoutDashboard size={14} /> {t.nav.dashboard}
-                </Link>
-              ) : (
-                <>
-                  <Link to="/login" onClick={() => setMobileOpen(false)}
-                    className="block py-2.5 px-3 rounded-xl text-sm text-center text-gray-300 border border-white/10 transition-colors">
-                    {t.nav.login}
-                  </Link>
-                  <Link to="/register" onClick={() => setMobileOpen(false)}
-                    className="block py-2.5 px-3 rounded-xl text-sm text-center q-cta text-white font-semibold">
-                    {t.nav.start}
-                  </Link>
-                </>
-              )}
+                <Link to="/dashboard" className="btn btn-mint">{T.dashboard}</Link>
+              ) : (<>
+                <Link to="/login" className="login" style={{ fontSize: 15, color: 'var(--muted)', padding: '10px 12px' }}>{T.login}</Link>
+                <Link to="/register" className="btn btn-mint">{T.start}</Link>
+              </>)}
+              <button type="button" className="burger" aria-label={T.menu} aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">{menuOpen ? <path d="M6 6 L18 18 M18 6 L6 18" /> : <path d="M4 7 H20 M4 12 H20 M4 17 H20" />}</svg>
+              </button>
             </div>
           </div>
-        )}
-      </header>
+          <div className={`mnav ${menuOpen ? 'open' : ''}`} onClick={() => setMenuOpen(false)}>
+            {[...navLinks, ...moreLinks].map(navItem)}
+            {!user && <Link to="/login">{T.login}</Link>}
+          </div>
+        </header>
+      </div>
 
       {/* ── Page Content ────────────────────────────────────────────────── */}
       <main>{children}</main>
 
       {/* ── Footer ──────────────────────────────────────────────────────── */}
-      <footer className="border-t q-line py-12 px-4 bg-black/20">
-        <div className="max-w-6xl mx-auto">
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-8 mb-10">
-
-            {/* Brand */}
-            <div className="col-span-2 md:col-span-1">
-              <Link to="/" className="flex items-center gap-2.5 mb-4">
-                <span className="w-8 h-8 rounded-xl q-logo grid place-items-center overflow-hidden flex-shrink-0">
-                  <Logo className="w-5 h-5 object-contain" />
-                </span>
-                <span className="font-bold text-sm">Qaffel AI</span>
-              </Link>
-              <p className="text-gray-400 text-xs leading-relaxed mb-4">
-                {isAr
-                  ? 'منصة تداول ذكية مدعومة بالذكاء الاصطناعي وتحليل ICT/SMC المؤسسي.'
-                  : 'Smart trading platform powered by AI and institutional ICT/SMC analysis.'}
-              </p>
-              {/* Social Media */}
-              <div className="flex items-center gap-3">
-                <a href="https://www.instagram.com/qaffel_ai/" target="_blank" rel="noreferrer"
-                  className="text-gray-400 hover:text-pink-400 transition-colors" aria-label="Instagram">
-                  <IconInstagram />
-                </a>
-                <a href="https://t.me/Qaffelbot" target="_blank" rel="noreferrer"
-                  className="text-gray-400 hover:text-blue-400 transition-colors" aria-label="Telegram Bot">
-                  <IconTelegram />
-                </a>
+      <div className="qx qx-foot" dir={isAr ? 'rtl' : 'ltr'}>
+        <footer>
+          <div className="wrap">
+            <div className="f-grid f5">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <Link to={isAr ? '/' : '/en'} className="brand"><BrandMark /><span dir="ltr">Qaffel <span className="grad">AI</span></span></Link>
+                <p style={{ color: 'var(--faint)', fontSize: 14, maxWidth: '34ch' }}>{T.fAbout}</p>
+                <div className="socials">
+                  <a href="https://t.me/Qaffelbot" target="_blank" rel="noreferrer" aria-label="Telegram"><IconTelegram /></a>
+                  <a href="https://www.instagram.com/qaffel_ai/" target="_blank" rel="noreferrer" aria-label="Instagram"><IconInstagram /></a>
+                </div>
               </div>
+              <div><h4>{T.fPlatform}</h4><ul>
+                <li><Link to="/register">{T.fRegister}</Link></li>
+                <li><Link to="/login">{T.login}</Link></li>
+                <li><Link to={p('/pricing')}>{T.nav.pricing}</Link></li>
+                <li><Link to={p('/strategy-builder')}>{T.nav.builder}</Link></li>
+                <li><a href="/games/challenge">{T.nav.games}</a></li>
+              </ul></div>
+              <div><h4>{T.fCompany}</h4><ul>
+                <li><Link to={p('/about')}>{T.nav.about}</Link></li>
+                <li><Link to={p('/vision')}>{t.footer.vision}</Link></li>
+                <li><Link to={p('/blog')}>{T.nav.blog}</Link></li>
+                <li><Link to="/referral">{T.nav.referral}</Link></li>
+              </ul></div>
+              <div><h4>{T.fLegal}</h4><ul>
+                <li><Link to={p('/terms')}>{T.fTerms}</Link></li>
+                <li><Link to={p('/privacy')}>{T.fPrivacy}</Link></li>
+                <li><a href="#risk">{T.fRisk}</a></li>
+              </ul></div>
+              <div><h4>{t.footer.contact}</h4><ul>
+                <li><Link to={p('/contact')}>{t.footer.contactUs}</Link></li>
+                <li><a href="mailto:support@qaffel.com" dir="ltr">support@qaffel.com</a></li>
+                <li><a href="https://t.me/Qaffelbot" target="_blank" rel="noreferrer" dir="ltr">@Qaffelbot</a></li>
+              </ul></div>
             </div>
-
-            {/* Links */}
-            {[
-              { title: t.footer.platform, links: [
-                { to: '/register', label: t.footer.register },
-                { to: '/login',    label: t.footer.login },
-                { to: '/pricing',  label: t.footer.pricing },
-                { to: '/blog',     label: isAr ? 'المدونة' : 'Blog' },
-                { to: isAr ? '/strategy-builder' : '/en/strategy-builder', label: isAr ? 'بناء الاستراتيجيات' : 'Strategy Builder' },
-                { native: '/games/challenge', label: isAr ? 'الألعاب التعليمية' : 'Learning Games' },
-              ]},
-              { title: t.footer.company, links: [
-                { to: '/about',    label: t.footer.about },
-                { to: '/vision',   label: t.footer.vision },
-                { to: '/referral', label: isAr ? 'برنامج الإحالات' : 'Referral Program' },
-              ]},
-              { title: t.footer.legal, links: [
-                { to: '/terms',   label: t.footer.terms },
-                { to: '/privacy', label: t.footer.privacy },
-              ]},
-              { title: t.footer.contact, links: [
-                { to: '/contact',                       label: t.footer.contactUs },
-                { href: 'https://t.me/Qaffelbot',       label: '@Qaffelbot (Telegram)' },
-                { href: 'https://www.instagram.com/qaffel_ai/', label: '@qaffel_ai (Instagram)' },
-              ]},
-            ].map((col, i) => (
-              <div key={i}>
-                <h4 className="font-bold text-sm mb-4 text-gray-300">{col.title}</h4>
-                <ul className="space-y-2.5">
-                  {col.links.map((l, j) => (
-                    <li key={j}>
-                      {l.native
-                        ? <a href={l.native} className="text-xs text-gray-400 hover:text-blue-400 transition-colors">{l.label}</a>
-                        : l.href
-                        ? <a href={l.href} target="_blank" rel="noreferrer" className="text-xs text-gray-400 hover:text-blue-400 transition-colors">{l.label}</a>
-                        : <Link to={l.to} className="text-xs text-gray-400 hover:text-blue-400 transition-colors">{l.label}</Link>
-                      }
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
+            <p className="risk" id="risk">{T.risk}</p>
+            <div className="copy"><span>{T.rights}</span><span dir="ltr">@Qaffelbot · @qaffel_ai</span></div>
           </div>
-
-          <div className="border-t q-line pt-6 flex flex-col md:flex-row items-center justify-between gap-3 text-xs text-gray-700">
-            <span>{t.footer.copy}</span>
-            <span className="flex items-center gap-1.5">
-              <Star size={10} className="text-yellow-600 fill-yellow-600" />
-              {t.footer.disclaimer}
-            </span>
-          </div>
-        </div>
-      </footer>
+        </footer>
+      </div>
     </div>
   )
 }

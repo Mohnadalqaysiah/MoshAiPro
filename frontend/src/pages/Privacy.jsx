@@ -1,5 +1,5 @@
-import { Link } from 'react-router-dom'
 import PublicLayout from '../components/PublicLayout'
+import LegalDoc from '../components/LegalDoc'
 import { useLang } from '../contexts/LangContext'
 import useSEO from '../hooks/useSEO'
 import useBreadcrumbSchema from '../hooks/useBreadcrumbSchema'
@@ -106,30 +106,8 @@ export default function Privacy() {
   ])
   return (
     <PublicLayout>
-      {/* Content */}
-      <main className="max-w-3xl mx-auto px-6 py-16">
-        <h1 className="text-3xl font-bold mb-2">{tx.h1}</h1>
-        <p className="text-gray-400 mb-10 text-sm">{tx.updated}</p>
-
-        <div className="space-y-8 text-gray-300 leading-relaxed">
-          {tx.sections.map((s, i) => (
-            <section key={i}>
-              <h2 className="text-xl font-semibold text-white mb-3">{s.h}</h2>
-              {s.p && <p>{s.p}</p>}
-              {s.ul && (
-                <ul className={`list-disc list-inside space-y-1 text-gray-400 ${s.p ? 'mt-3' : 'mt-2'}`}>
-                  {s.ul.map((li, j) => <li key={j}>{li}</li>)}
-                </ul>
-              )}
-            </section>
-          ))}
-
-          <section>
-            <h2 className="text-xl font-semibold text-white mb-3">{isAr ? '7. التواصل' : '7. Contact'}</h2>
-            <p>{tx.contactLabel} <Link to={isAr ? '/contact' : '/en/contact'} className="text-blue-400 hover:underline">{tx.contactLink}</Link></p>
-          </section>
-        </div>
-      </main>
+      <LegalDoc isAr={isAr} eyebrow={isAr ? 'خصوصيتك أولاً' : 'Your privacy'} h1={tx.h1} updated={tx.updated} sections={tx.sections}
+        contactLabel={tx.contactLabel} contactLink={tx.contactLink} />
     </PublicLayout>
   )
 }

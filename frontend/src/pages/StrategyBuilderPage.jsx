@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
-import { Layers, Zap, Bell, Gauge, Globe, ArrowRight, BookOpen, ChevronDown, Blocks } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { Layers, Zap, Bell, Gauge, Globe, ArrowRight, BookOpen, Blocks } from 'lucide-react'
+import { useEffect } from 'react'
 import PublicLayout from '../components/PublicLayout'
 import StrategyBuilderDemo from '../components/StrategyBuilderDemo'
 import { useAuth } from '../contexts/AuthContext'
@@ -143,7 +143,6 @@ export default function StrategyBuilderPage() {
   const { lang } = useLang()
   const isAr = lang === 'ar'
   const tx = T[isAr ? 'ar' : 'en']
-  const [openFaq, setOpenFaq] = useState(null)
   useReveal()
 
   useSEO({
@@ -160,61 +159,50 @@ export default function StrategyBuilderPage() {
   ])
   useFAQSchema('ld-faq-strategy-builder', tx.faq)
 
+  const ICO = ['', 'gold', 'sky', 'coral']
   return (
     <PublicLayout>
 
       {/* Hero */}
-      <section className="py-20 px-6 text-center relative overflow-hidden">
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-3xl" />
-        </div>
-        <div className="max-w-3xl mx-auto relative">
-          <div className="inline-flex items-center gap-2 bg-indigo-600/20 border border-indigo-500/30 text-indigo-300 text-xs px-4 py-1.5 rounded-full mb-6">
-            <Layers size={12} />
-            {tx.badge}
-          </div>
-          <h1 className="text-3xl md:text-5xl font-black mb-5 leading-tight">
-            {tx.h1a} <span className="bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">{tx.h1b}</span>
-          </h1>
-          <p className="text-gray-400 text-lg leading-relaxed mb-8">{tx.heroSub}</p>
-          <div className="flex items-center justify-center gap-3 flex-wrap">
-            <Link
-              to={user ? (isAr ? '/strategies' : '/en/strategies') : (isAr ? '/register' : '/en/register')}
-              className="group flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white px-8 py-3.5 rounded-2xl font-bold transition-all shadow-xl shadow-indigo-500/20"
-            >
-              <Zap size={16} className="fill-white" />
+      <section className="qp-hero">
+        <div className="qp-wrap qp-narrow">
+          <span className="qp-eyebrow">{tx.badge}</span>
+          <h1 className="qp-h1">{tx.h1a} <span className="qp-grad">{tx.h1b}</span></h1>
+          <p className="qp-lead">{tx.heroSub}</p>
+          <div className="qp-btns">
+            <Link to={user ? (isAr ? '/strategies' : '/en/strategies') : (isAr ? '/register' : '/en/register')} className="qp-btn qp-mint">
+              <Zap size={16} />
               {user ? tx.ctaLogin : tx.ctaTry}
-              <ArrowRight size={15} className="group-hover:translate-x-0.5 transition-transform rtl:rotate-180" />
+              <ArrowRight size={15} className="rtl:rotate-180" />
             </Link>
+            <a href="#demo" className="qp-btn qp-line">{isAr ? 'جرّب العرض التفاعلي' : 'Try the live demo'}</a>
           </div>
         </div>
       </section>
 
       {/* Features */}
-      <section className="py-16 px-6">
-        <div className="max-w-5xl mx-auto grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      <section className="qp-sec" style={{ paddingTop: 0 }}>
+        <div className="qp-wrap qp-grid qp-g4">
           {tx.features.map((f, i) => (
-            <div key={i} className="glass border border-white/8 rounded-2xl p-5">
-              <f.icon size={20} className="text-indigo-400 mb-3" />
-              <h3 className="font-bold text-white text-sm mb-1.5">{f.title}</h3>
-              <p className="text-gray-400 text-xs leading-relaxed">{f.desc}</p>
+            <div key={i} className="qp-card qp-hover">
+              <span className={`qp-ico ${ICO[i % 4]}`} style={{ marginBottom: 14 }}><f.icon size={20} /></span>
+              <h3 className="qp-h3" style={{ fontSize: 16, marginBottom: 6 }}>{f.title}</h3>
+              <p className="qp-sub" style={{ fontSize: 14 }}>{f.desc}</p>
             </div>
           ))}
         </div>
       </section>
 
       {/* How it works */}
-      <section className="py-16 px-6 bg-white/[0.01]">
-        <div className="max-w-4xl mx-auto">
-          <h2 className="text-2xl md:text-3xl font-black text-center mb-10">{tx.howTitle}</h2>
-          <div className="grid sm:grid-cols-3 gap-6">
-            {tx.how.map((s, i) => (
-              <div key={i} className="text-center">
-                <div className="w-12 h-12 mx-auto rounded-2xl bg-indigo-600/15 border border-indigo-500/25 flex items-center justify-center text-indigo-300 font-black mb-4">
-                  {s.step}
-                </div>
-                <h3 className="font-bold text-white mb-1.5">{s.title}</h3>
-                <p className="text-gray-400 text-sm leading-relaxed">{s.desc}</p>
+      <section className="qp-sec qp-band">
+        <div className="qp-wrap">
+          <div className="qp-head"><h2 className="qp-h2">{tx.howTitle}</h2></div>
+          <div className="qp-grid qp-g3">
+            {tx.how.map((st, i) => (
+              <div key={i} style={{ textAlign: 'center' }}>
+                <div className="qp-step" style={{ marginBottom: 16 }}>{st.step}</div>
+                <h3 className="qp-h3" style={{ marginBottom: 6 }}>{st.title}</h3>
+                <p className="qp-sub" style={{ fontSize: 14, maxWidth: '32ch', marginInline: 'auto' }}>{st.desc}</p>
               </div>
             ))}
           </div>
@@ -222,23 +210,22 @@ export default function StrategyBuilderPage() {
       </section>
 
       {/* Interactive demo — عنده عنوانه ومقدّمته الخاصة أصلاً */}
-      <StrategyBuilderDemo isAr={isAr} />
+      <div id="demo" style={{ scrollMarginTop: 80 }}>
+        <StrategyBuilderDemo isAr={isAr} />
+      </div>
 
       {/* Glossary */}
-      <section className="py-16 px-6">
-        <div className="max-w-4xl mx-auto">
-          <div className="text-center mb-10">
-            <div className="inline-flex items-center gap-2 bg-indigo-600/15 border border-indigo-500/25 text-indigo-300 text-xs px-4 py-1.5 rounded-full mb-4">
-              <BookOpen size={12} />
-              {tx.glossaryTitle}
-            </div>
-            <p className="text-gray-400 max-w-xl mx-auto text-sm">{tx.glossarySub}</p>
+      <section className="qp-sec">
+        <div className="qp-wrap">
+          <div className="qp-head">
+            <span className="qp-eyebrow"><BookOpen size={14} /> {tx.glossaryTitle}</span>
+            <p className="qp-sub">{tx.glossarySub}</p>
           </div>
-          <div className="grid sm:grid-cols-2 gap-4">
+          <div className="qp-grid qp-g2">
             {tx.glossary.map((g, i) => (
-              <div key={i} className="glass border border-white/8 rounded-2xl p-5">
-                <h3 className="font-bold text-indigo-300 text-sm mb-1.5">{g.term}</h3>
-                <p className="text-gray-400 text-xs leading-relaxed">{g.desc}</p>
+              <div key={i} className="qp-card">
+                <h3 className="qp-h3" style={{ fontSize: 16, color: 'var(--mint)', marginBottom: 6 }}>{g.term}</h3>
+                <p className="qp-sub" style={{ fontSize: 14 }}>{g.desc}</p>
               </div>
             ))}
           </div>
@@ -246,25 +233,20 @@ export default function StrategyBuilderPage() {
       </section>
 
       {/* Example strategies */}
-      <section className="py-16 px-6 bg-white/[0.01]">
-        <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-10">
-            <div className="inline-flex items-center gap-2 bg-purple-600/15 border border-purple-500/25 text-purple-300 text-xs px-4 py-1.5 rounded-full mb-4">
-              <Blocks size={12} />
-              {tx.examplesTitle}
-            </div>
-            <p className="text-gray-400 max-w-xl mx-auto text-sm">{tx.examplesSub}</p>
+      <section className="qp-sec qp-band">
+        <div className="qp-wrap">
+          <div className="qp-head">
+            <span className="qp-eyebrow"><Blocks size={14} /> {tx.examplesTitle}</span>
+            <p className="qp-sub">{tx.examplesSub}</p>
           </div>
-          <div className="grid md:grid-cols-3 gap-5">
+          <div className="qp-grid qp-g3">
             {tx.examples.map((ex, i) => (
-              <div key={i} className="glass border border-white/8 rounded-2xl p-6 flex flex-col">
-                <h3 className="font-bold text-white mb-3">{ex.name}</h3>
-                <div className="flex flex-wrap gap-1.5 mb-4">
-                  {ex.conditions.map(c => (
-                    <span key={c} className="text-[11px] bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 px-2 py-1 rounded-lg">{c}</span>
-                  ))}
+              <div key={i} className={`qp-card qp-hover ${i === 0 ? 'qp-mintline' : i === 1 ? 'qp-goldline' : ''}`} style={{ display: 'flex', flexDirection: 'column' }}>
+                <h3 className="qp-h3" style={{ marginBottom: 12 }}>{ex.name}</h3>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
+                  {ex.conditions.map(c => <span key={c} className="qp-chip sm">{c}</span>)}
                 </div>
-                <p className="text-gray-400 text-sm leading-relaxed">{ex.desc}</p>
+                <p className="qp-sub" style={{ fontSize: 14 }}>{ex.desc}</p>
               </div>
             ))}
           </div>
@@ -272,44 +254,30 @@ export default function StrategyBuilderPage() {
       </section>
 
       {/* FAQ */}
-      <section className="py-16 px-6">
-        <div className="max-w-2xl mx-auto">
-          <h2 className="text-2xl md:text-3xl font-black text-center mb-10">{tx.faqTitle}</h2>
-          <div className="space-y-3">
-            {tx.faq.map((f, i) => {
-              const open = openFaq === i
-              return (
-                <div key={i} className="glass border border-white/8 rounded-2xl overflow-hidden">
-                  <button
-                    onClick={() => setOpenFaq(open ? null : i)}
-                    className="w-full flex items-center justify-between gap-3 px-5 py-4 text-start"
-                  >
-                    <span className="font-semibold text-white text-sm">{f.q}</span>
-                    <ChevronDown size={16} className={`flex-shrink-0 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
-                  </button>
-                  {open && (
-                    <p className="px-5 pb-4 text-gray-400 text-sm leading-relaxed">{f.a}</p>
-                  )}
-                </div>
-              )
-            })}
+      <section className="qp-sec">
+        <div className="qp-wrap qp-narrow">
+          <div className="qp-head"><h2 className="qp-h2">{tx.faqTitle}</h2></div>
+          <div className="qp-faq">
+            {tx.faq.map((f, i) => (
+              <details key={i}>
+                <summary>{f.q}</summary>
+                <p>{f.a}</p>
+              </details>
+            ))}
           </div>
         </div>
       </section>
 
       {/* Related articles */}
-      <section className="py-16 px-6 bg-white/[0.01]">
-        <div className="max-w-4xl mx-auto">
-          <h2 className="text-xl font-bold text-white mb-6">{tx.relatedTitle}</h2>
-          <div className="grid sm:grid-cols-2 gap-3">
+      <section className="qp-sec" style={{ paddingTop: 0 }}>
+        <div className="qp-wrap qp-narrow">
+          <h2 className="qp-h3" style={{ fontSize: 20, marginBottom: 16 }}>{tx.relatedTitle}</h2>
+          <div className="qp-grid qp-g2" style={{ gap: 12 }}>
             {RELATED_POSTS.map(p => (
-              <Link
-                key={p.slug}
-                to={isAr ? `/blog/${p.slug}` : `/en/blog/${p.slug}`}
-                className="group flex items-center justify-between gap-3 glass border border-white/8 hover:border-indigo-500/30 rounded-xl px-4 py-3.5 transition-colors"
-              >
-                <span className="text-sm text-gray-300 group-hover:text-white transition-colors">{isAr ? p.titleAr : p.titleEn}</span>
-                <ArrowRight size={14} className="flex-shrink-0 text-gray-500 group-hover:text-indigo-400 group-hover:translate-x-0.5 transition-all rtl:rotate-180" />
+              <Link key={p.slug} to={isAr ? `/blog/${p.slug}` : `/en/blog/${p.slug}`} className="qp-card"
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '14px 18px' }}>
+                <span style={{ fontSize: 14, color: '#C9D5EA' }}>{isAr ? p.titleAr : p.titleEn}</span>
+                <ArrowRight size={15} className="rtl:rotate-180" style={{ color: 'var(--mint)', flexShrink: 0 }} />
               </Link>
             ))}
           </div>

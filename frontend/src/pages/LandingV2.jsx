@@ -184,11 +184,21 @@ export default function LandingV2() {
   const [refPlan, setRefPlan] = useState('monthly')
   const pW = livePlans.weekly?.enabled !== false ? Number(livePlans.weekly?.price_usd) || 0 : 0
   const pM = livePlans.monthly?.enabled !== false ? Number(livePlans.monthly?.price_usd) || 0 : 0
-  const perMonth = refPlan === 'weekly' ? (pW * 52) / 12 : pM
+  // (17/10، بلاغ المالك "تحسب أقل من الفعلي") محاكاة شهرية لـ12 شهراً: الدفعات حتى الـ25 بـ5% وما بعدها بـ15% — حتى داخل نفس الشهر.
+  // كان يعرض 5% على كل دفعات الشهر الأول ولو تجاوزت 25 (50 مشتركاً شهرياً: يعرض $75 والفعلي $150).
+  const price = refPlan === 'weekly' ? pW : pM
   const payPerMonth = refPlan === 'weekly' ? (refN * 52) / 12 : refN
-  const earnNow = refN * perMonth * 0.05
-  const earnT2 = refN * perMonth * 0.15
-  const monthsToT2 = payPerMonth > 0 ? Math.ceil(25 / payPerMonth) : null
+  const ref12 = (() => {
+    let done = 0, total = 0, first = 0, fullFrom = null
+    for (let m = 1; m <= 12; m++) {
+      const at5 = Math.max(0, Math.min(payPerMonth, 25 - done))
+      const e = at5 * price * 0.05 + (payPerMonth - at5) * price * 0.15
+      if (m === 1) first = e
+      if (fullFrom === null && at5 === 0 && payPerMonth > 0) fullFrom = m
+      total += e; done += payPerMonth
+    }
+    return { first, total, steady: payPerMonth * price * 0.15, fullFrom }
+  })()
   const money = (v) => `$${v >= 100 ? Math.round(v) : v.toFixed(v < 10 ? 2 : 1)}`
 
   const tfBars = (k) => Array.from({ length: 12 }, (_, i) => 20 + Math.round(70 * Math.abs(Math.sin((i + 1) * (k + 1.3)))))
@@ -514,9 +524,14 @@ export default function LandingV2() {
                   <div className="tier t2"><span className="mono">15%</span><small>{X.t2}</small></div>
                 </div>
                 <div className="earn">
-                  <small>{X.earnNow}</small>
-                  <span className="mono">{money(earnNow)}</span>
-                  {refN > 0 && <small>{monthsToT2 <= 1 ? X.earnReached : X.earnLater.replace('{m}', monthsToT2).replace('{v}', money(earnT2))}</small>}
+                  <small>{X.earnTotal}</small>
+                  <span className="mono">{money(ref12.total)}</span>
+                  {refN > 0 && (
+                    <div className="earn-rows">
+                      <div><small>{X.earnFirst}</small><b className="mono">{money(ref12.first)}</b></div>
+                      <div><small>{ref12.fullFrom ? X.earnSteady.replace('{m}', ref12.fullFrom) : X.earnSteadyLate}</small><b className="mono">{money(ref12.steady)}</b></div>
+                    </div>
+                  )}
                 </div>
                 <p className="calc-note">{X.calcNote}</p>
               </div>
