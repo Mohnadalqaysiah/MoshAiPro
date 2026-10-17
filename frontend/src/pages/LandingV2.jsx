@@ -49,7 +49,7 @@ function useReveal(rootRef) {
   useEffect(() => {
     const RM = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     if (RM || !('IntersectionObserver' in window) || !rootRef.current) return
-    const els = rootRef.current.querySelectorAll('.rv')
+    const els = rootRef.current.querySelectorAll('.qrv')
     const io = new IntersectionObserver((es) => es.forEach((e) => {
       if (e.isIntersecting) { e.target.classList.remove('pre'); io.unobserve(e.target) }
     }), { threshold: 0.12 })
@@ -198,10 +198,10 @@ export default function LandingV2() {
           <div className="hdr-actions">
             <button className="lang" type="button" onClick={handleToggleLang} aria-label={isAr ? 'English' : 'العربية'}>{isAr ? 'EN' : 'ع'}</button>
             {user ? (
-              <Link to="/dashboard" className="btn btn-primary">{T.dashboard}</Link>
+              <Link to="/dashboard" className="btn btn-mint">{T.dashboard}</Link>
             ) : (<>
               <Link to="/login" className="login" style={{ fontSize: 15, color: 'var(--muted)', padding: '10px 12px' }}>{T.login}</Link>
-              <Link to="/register" className="btn btn-primary">{T.start}</Link>
+              <Link to="/register" className="btn btn-mint">{T.start}</Link>
             </>)}
             <button type="button" className="burger" aria-label={T.menu} aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">{menuOpen ? <path d="M6 6 L18 18 M18 6 L6 18" /> : <path d="M4 7 H20 M4 12 H20 M4 17 H20" />}</svg>
@@ -223,17 +223,17 @@ export default function LandingV2() {
         <section className="hero" ref={heroRef} aria-label="Qaffel AI">
           <Suspense fallback={null}><HeroScene /></Suspense>
           <div className="wrap hero-grid">
-            <div className="hero-copy rv">
+            <div className="hero-copy qrv">
               <span className="pill"><b>AI</b><span className="dot" /> {T.heroPill}</span>
               <h1>{T.h1a}<br />{T.h1b}<span className="grad">{T.h1c}</span></h1>
               <p className="lead">{T.heroLead}</p>
               <div className="hero-ctas">
-                <Link to={user ? '/dashboard' : '/register'} className="btn btn-primary">{user ? T.dashboard : fmt(T.heroCta)}<Arrow /></Link>
-                <a href="#engine" className="btn btn-ghost">{T.heroCta2}</a>
+                <Link to={user ? '/dashboard' : '/register'} className="btn btn-mint">{user ? T.dashboard : fmt(T.heroCta)}<Arrow /></Link>
+                <a href="#engine" className="btn btn-line">{T.heroCta2}</a>
               </div>
               <div className="hero-note">{T.notes.map((n) => <span key={n}><Check s={15} w={2.4} />{n}</span>)}</div>
             </div>
-            <div className="stage rv" onPointerMove={onStageMove} onPointerLeave={onStageLeave}>
+            <div className="stage qrv" onPointerMove={onStageMove} onPointerLeave={onStageLeave}>
               <div className="sig" ref={cardRef} style={{ '--ry': isAr ? '-10deg' : '10deg' }}>
                 <div className="sig-top">
                   <div className="sym"><span className="mono">XAUUSD</span><span className="tag mono">1H</span></div>
@@ -280,12 +280,12 @@ export default function LandingV2() {
         {/* ── engine ── */}
         <section className="s" id="engine" ref={engineRef}>
           <div className="wrap">
-            <div className="s-head rv">
+            <div className="s-head qrv">
               <span className="eyebrow">{T.engineEyebrow}</span>
               <h2 className="h2">{T.engineH}</h2>
               <p className="lead">{T.engineLead}</p>
             </div>
-            <div className="console rv">
+            <div className="console qrv">
               <div className="panel c-left">
                 <div className="mk-list" role="group" aria-label={T.pickMarket}>
                   {demo.map((x, i) => (
@@ -305,7 +305,7 @@ export default function LandingV2() {
                     )
                   })}
                 </div>
-                <button className="btn btn-ghost" type="button" onClick={() => run()} style={{ alignSelf: 'stretch' }}>{running ? T.running : T.rerun}</button>
+                <button className="btn btn-line" type="button" onClick={() => run()} style={{ alignSelf: 'stretch' }}>{running ? T.running : T.rerun}</button>
               </div>
               <div className="panel c-right">
                 <div className="tabs" role="tablist">
@@ -358,13 +358,13 @@ export default function LandingV2() {
         {/* ── features (bento) ── */}
         <section className="s" id="features" style={{ paddingTop: 0 }}>
           <div className="wrap">
-            <div className="s-head rv">
+            <div className="s-head qrv">
               <span className="eyebrow">{T.featEyebrow}</span>
               <h2 className="h2">{T.featH1}<span className="grad">{T.featH2}</span></h2>
             </div>
             <div className="bento">
               {T.feats.map(([h, txt], i) => (
-                <article key={h} className={`card ${BENTO[i]} rv`}
+                <article key={h} className={`card ${BENTO[i]} qrv`}
                   onPointerMove={(e) => { const r = e.currentTarget.getBoundingClientRect(); e.currentTarget.style.setProperty('--mx', `${e.clientX - r.left}px`); e.currentTarget.style.setProperty('--my', `${e.clientY - r.top}px`) }}>
                   <span className="ic" style={FEAT_COLORS[i] ? { color: FEAT_COLORS[i] } : undefined}>{FEAT_ICONS[i]}</span>
                   <h3>{h}</h3>
@@ -389,12 +389,12 @@ export default function LandingV2() {
         {/* ── strategy builder (light) ── */}
         <section className="s" id="builder" style={{ paddingTop: 0 }}>
           <div className="wrap">
-            <div className="s-head rv">
+            <div className="s-head qrv">
               <span className="eyebrow">{T.buildEyebrow}</span>
               <h2 className="h2">{T.buildH}</h2>
               <p className="lead">{T.buildLead}</p>
             </div>
-            <div className="builder rv">
+            <div className="builder qrv">
               <div className="panel b-panel" role="group" aria-label={T.condTitle}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                   <b style={{ color: '#fff' }}>{T.condTitle}</b><span className="mono" style={{ color: 'var(--faint)', fontSize: 13 }}>XAUUSD · 15M</span>
@@ -405,7 +405,7 @@ export default function LandingV2() {
                     <span className="mono">+{w}</span>
                   </button>
                 ))}
-                <Link to={p('/strategy-builder')} className="btn btn-ghost" style={{ marginTop: 8 }}>{T.openBuilder}<Arrow /></Link>
+                <Link to={p('/strategy-builder')} className="btn btn-line" style={{ marginTop: 8 }}>{T.openBuilder}<Arrow /></Link>
               </div>
               <div className="phone">
                 <div className="phone-head"><span className="tg"><TgIcon /></span><span><b dir="ltr">@Qaffelbot</b><small>{T.connected}</small></span></div>
@@ -427,13 +427,13 @@ export default function LandingV2() {
         {/* ── pricing ── */}
         <section className="s" id="pricing" style={{ paddingTop: 0 }}>
           <div className="wrap">
-            <div className="s-head center rv">
+            <div className="s-head center qrv">
               <span className="eyebrow">{T.priceEyebrow}</span>
               <h2 className="h2">{T.priceH}</h2>
             </div>
             <div className="plans" style={{ '--n': Math.min(plans.length, 4) }}>
               {plans.map((pl) => (
-                <div key={pl.key} className={`plan ${pl.hot ? 'hot' : ''} rv`}>
+                <div key={pl.key} className={`plan ${pl.hot ? 'hot' : ''} qrv`}>
                   <h3>{pl.name}{pl.save ? <span className="badge">{T.save.replace('{p}', pl.save)}</span> : null}</h3>
                   <div className="price">
                     {pl.price == null
@@ -441,14 +441,14 @@ export default function LandingV2() {
                       : <><span className="mono">${pl.price}</span><small>{pl.period}</small></>}
                   </div>
                   <ul>{pl.feats.map((f) => <li key={f}><Check s={16} w={2.6} />{f}</li>)}</ul>
-                  <Link to={pl.href} className={`btn ${pl.hot ? 'btn-primary' : 'btn-ghost'}`}>{pl.price == null ? T.start : T.subscribe}</Link>
+                  <Link to={pl.href} className={`btn ${pl.hot ? 'btn-mint' : 'btn-line'}`}>{pl.price == null ? T.start : T.subscribe}</Link>
                 </div>
               ))}
             </div>
             <p className="pricing-note">{T.priceNote}</p>
-            <div className="ref rv">
+            <div className="ref qrv">
               <div><b>{T.refTitle}</b><p>{T.refLine}</p></div>
-              <Link to="/referral" className="btn btn-ghost">{T.refBtn}</Link>
+              <Link to="/referral" className="btn btn-line">{T.refBtn}</Link>
             </div>
           </div>
         </section>
@@ -456,12 +456,12 @@ export default function LandingV2() {
         {/* ── faq ── */}
         <section className="s" id="faq" style={{ paddingTop: 0 }}>
           <div className="wrap faq-grid">
-            <div className="s-head rv" style={{ margin: 0 }}>
+            <div className="s-head qrv" style={{ margin: 0 }}>
               <span className="eyebrow">{T.faqEyebrow}</span>
               <h2 className="h2">{T.faqH}</h2>
               <p className="lead">{T.faqLead} <a href={TG_URL} target="_blank" rel="noreferrer" dir="ltr" style={{ color: 'var(--mint)' }}>@Qaffelbot</a></p>
             </div>
-            <div className="rv">
+            <div className="qrv">
               {T.faq.map(([q, a], i) => (
                 <div key={q} className="qa" data-open={openQ === i}>
                   <button type="button" aria-expanded={openQ === i} onClick={() => setOpenQ(openQ === i ? -1 : i)}>
@@ -478,19 +478,19 @@ export default function LandingV2() {
         {/* ── learn ── */}
         <section className="s" style={{ paddingTop: 0 }}>
           <div className="wrap">
-            <div className="s-head rv" style={{ marginBottom: 24 }}>
+            <div className="s-head qrv" style={{ marginBottom: 24 }}>
               <span className="eyebrow">{T.learnEyebrow}</span>
               <h2 className="h2" style={{ fontSize: 'clamp(24px,3vw,34px)' }}>{T.learnH}</h2>
             </div>
-            <div className="chips rv">{BLOG.map((b) => <Link key={b.slug} to={isAr ? `/blog/${b.slug}` : `/en/blog/${b.slug}`}>{isAr ? b.ar : b.en}</Link>)}</div>
+            <div className="chips qrv">{BLOG.map((b) => <Link key={b.slug} to={isAr ? `/blog/${b.slug}` : `/en/blog/${b.slug}`}>{isAr ? b.ar : b.en}</Link>)}</div>
           </div>
         </section>
 
         {/* ── cta ── */}
         <div className="wrap">
-          <div className="cta rv">
+          <div className="cta qrv">
             <div><h2>{T.ctaH1}<span className="grad">{T.ctaH2}</span></h2><p>{fmt(T.ctaP)}</p></div>
-            <Link to={user ? '/dashboard' : '/register'} className="btn btn-primary" style={{ minHeight: 60, padding: '0 34px', fontSize: 17 }}>{user ? T.dashboard : T.ctaBtn}</Link>
+            <Link to={user ? '/dashboard' : '/register'} className="btn btn-mint" style={{ minHeight: 60, padding: '0 34px', fontSize: 17 }}>{user ? T.dashboard : T.ctaBtn}</Link>
           </div>
         </div>
       </main>
@@ -529,7 +529,7 @@ export default function LandingV2() {
       {/* ── mobile sticky bar ── */}
       {!user && (
         <div className={`mbar ${showBar ? 'show' : ''}`}>
-          <Link to="/register" className="btn btn-primary">{T.start}</Link>
+          <Link to="/register" className="btn btn-mint">{T.start}</Link>
           <a href={TG_URL} target="_blank" rel="noreferrer" className="tgbtn" aria-label="Telegram"><TgIcon s={20} /></a>
         </div>
       )}
