@@ -68,7 +68,7 @@ export const TXT = {
     heroPill: 'يراقب الأسواق الآن · ICT · SMC · Wyckoff',
     h1a: 'اقرأ السوق', h1b: 'كما تقرؤه ', h1c: 'المؤسسات.',
     heroLead: 'Qaffel يحلل الذهب والبيتكوين والفوركس والأسهم الخليجية على ثلاثة أطر زمنية، ويرفض أي إشارة تعارض الإطار الأعلى، ثم يرسل لك الخطة كاملة على تيليجرام بالعربي.',
-    heroCta: 'ابدأ بـ {n} تحليلات مجانية', heroCta2: 'شاهد المحرك يعمل',
+    heroCta: 'ابدأ بـ {n} تحليلات مجانية', heroCta2: 'جرّب المحرك بنفسك',
     notes: ['بدون بطاقة ائتمان', 'لا تجديد تلقائي', 'تنبيهات على تيليجرام'],
     buy: '▲ شراء', sell: '▼ بيع', wait: '■ انتظار',
     lvEntry: 'منطقة الدخول', lvSl: 'وقف الخسارة', lvTp1: 'الهدف الأول', lvTp2: 'الهدف الثاني',
@@ -125,7 +125,7 @@ export const TXT = {
     heroPill: 'Watching the markets now · ICT · SMC · Wyckoff',
     h1a: 'Read the market', h1b: 'the way ', h1c: 'institutions do.',
     heroLead: 'Qaffel analyzes gold, bitcoin, forex and Gulf stocks across three timeframes, rejects any signal that fights the higher timeframe, and sends you the full plan on Telegram.',
-    heroCta: 'Start with {n} free analyses', heroCta2: 'Watch the engine work',
+    heroCta: 'Start with {n} free analyses', heroCta2: 'Try the engine yourself',
     notes: ['No credit card', 'No auto-renewal', 'Telegram alerts'],
     buy: '▲ Buy', sell: '▼ Sell', wait: '■ Wait',
     lvEntry: 'Entry zone', lvSl: 'Stop loss', lvTp1: 'Target 1', lvTp2: 'Target 2',
@@ -174,5 +174,26 @@ export const TXT = {
     fPlatform: 'Platform', fCompany: 'Company', fLegal: 'Legal', fRegister: 'Sign up', fTerms: 'Terms', fPrivacy: 'Privacy policy', fRisk: 'Risk disclosure',
     risk: 'Risk disclosure: content is technical analysis for educational purposes only and is not financial or investment advice. Trading currencies, metals, cryptocurrencies and stocks carries high risk, and past results do not guarantee future results.',
     rights: '© 2026 Qaffel AI. All rights reserved.',
+  },
+}
+
+// (2026-10-17) نصوص مشهد الـHero (HeroScene). مصطلحات ICT بالإنجليزية في اللغتين. بلا درجة A+ (المنصة لا تحفظها).
+// R:R حتى الهدف الثاني، والهدف الأول على 1R كما في المنصة.
+export const HERO_SCENE = {
+  ar: {
+    steps: ['بيانات السوق', 'رصد ICT', 'تقييم الذكاء الاصطناعي', 'الإشارة'],
+    labels: { sweep: 'اكتساح سيولة', ob: 'Order Block', fvg: 'FVG', bos: 'كسر هيكل BOS', ai: 'الذكاء الاصطناعي',
+      tp2: 'هدف 2', tp1: 'هدف 1', entry: 'دخول', sl: 'وقف' },
+    side: '▲ شراء', symbol: 'XAUUSD · 1H', grade: '', rr: 'R:R 1:3.6',
+    toastTitle: '@Qaffelbot', toastText: 'إشارة جديدة · XAUUSD شراء',
+    note: 'محاكاة توضيحية لطريقة عمل المحرك، وليست توصية.',
+  },
+  en: {
+    steps: ['Market data', 'ICT detection', 'AI review', 'Signal'],
+    labels: { sweep: 'Liquidity sweep', ob: 'Order Block', fvg: 'FVG', bos: 'BOS', ai: 'AI',
+      tp2: 'TP2', tp1: 'TP1', entry: 'Entry', sl: 'Stop' },
+    side: '▲ Buy', symbol: 'XAUUSD · 1H', grade: '', rr: 'R:R 1:3.6',
+    toastTitle: '@Qaffelbot', toastText: 'New signal · XAUUSD buy',
+    note: 'Illustrative simulation of how the engine works — not a recommendation.',
   },
 }

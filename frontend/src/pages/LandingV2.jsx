@@ -13,7 +13,7 @@ import { useLang } from '../contexts/LangContext'
 import useSEO from '../hooks/useSEO'
 import useTrialLimits from '../hooks/useTrialLimits'
 import PublicChatBot from '../components/PublicChatBot'
-import { DEMO, TICKER, BLOG, COND_KEYS, TXT } from '../components/landing/landingV2Text'
+import { DEMO, TICKER, BLOG, COND_KEYS, TXT, HERO_SCENE } from '../components/landing/landingV2Text'
 import '../styles/landing-v2.css'
 
 const HeroScene = lazy(() => import('../components/landing/HeroScene'))
@@ -64,6 +64,7 @@ export default function LandingV2() {
   const isAr = lang === 'ar'
   const T = TXT[isAr ? 'ar' : 'en']
   const demo = DEMO[isAr ? 'ar' : 'en']
+  const heroText = HERO_SCENE[isAr ? 'ar' : 'en']
   const navigate = useNavigate()
   const trial = useTrialLimits()
   const fmt = (s) => (s || '').replace('{n}', trial.analyses).replace('{m}', trial.chat)
@@ -115,17 +116,6 @@ export default function LandingV2() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
   useReveal(rootRef)
-
-  // ── hero card tilt ──
-  const cardRef = useRef(null)
-  const onStageMove = (e) => {
-    const c = cardRef.current
-    if (!c || window.innerWidth < 960) return
-    const r = c.getBoundingClientRect()
-    const x = (e.clientX - r.left) / r.width - 0.5, y = (e.clientY - r.top) / r.height - 0.5
-    c.style.setProperty('--ry', `${x * 18}deg`); c.style.setProperty('--rx', `${-y * 14}deg`)
-  }
-  const onStageLeave = () => { const c = cardRef.current; if (c) { c.style.setProperty('--ry', isAr ? '-10deg' : '10deg'); c.style.setProperty('--rx', '6deg') } }
 
   // ── engine console ──
   const [eng, setEng] = useState({ m: 0, stage: 5, tab: 'sig' })
@@ -221,7 +211,6 @@ export default function LandingV2() {
       <main id="top">
         {/* ── hero ── */}
         <section className="hero" ref={heroRef} aria-label="Qaffel AI">
-          <Suspense fallback={null}><HeroScene /></Suspense>
           <div className="wrap hero-grid">
             <div className="hero-copy qrv">
               <span className="pill"><b>AI</b><span className="dot" /> {T.heroPill}</span>
@@ -233,38 +222,8 @@ export default function LandingV2() {
               </div>
               <div className="hero-note">{T.notes.map((n) => <span key={n}><Check s={15} w={2.4} />{n}</span>)}</div>
             </div>
-            <div className="stage qrv" onPointerMove={onStageMove} onPointerLeave={onStageLeave}>
-              <div className="sig" ref={cardRef} style={{ '--ry': isAr ? '-10deg' : '10deg' }}>
-                <div className="sig-top">
-                  <div className="sym"><span className="mono">XAUUSD</span><span className="tag mono">1H</span></div>
-                  <span className="side buy">{T.buy}</span>
-                </div>
-                <div className="chart">
-                  <svg viewBox="0 0 400 112" preserveAspectRatio="none" aria-hidden="true">
-                    <defs><linearGradient id="qxar" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#3CF2C0" stopOpacity=".35" /><stop offset="1" stopColor="#3CF2C0" stopOpacity="0" /></linearGradient></defs>
-                    <rect x="0" y="52" width="400" height="14" fill="rgba(247,195,92,.14)" />
-                    <line x1="0" y1="92" x2="400" y2="92" stroke="#FF6B7A" strokeDasharray="4 5" />
-                    <line x1="0" y1="24" x2="400" y2="24" stroke="#3CF2C0" strokeDasharray="4 5" opacity=".7" />
-                    <line x1="0" y1="8" x2="400" y2="8" stroke="#3CF2C0" strokeDasharray="4 5" opacity=".7" />
-                    <path d={`M${demo[0].pts.replace(/ /g, ' L')} L400,112 L0,112 Z`} fill="url(#qxar)" />
-                    <polyline points={demo[0].pts} fill="none" stroke="#3CF2C0" strokeWidth="2.4" />
-                    <circle cx="400" cy="25" r="4" fill="#3CF2C0" />
-                  </svg>
-                </div>
-                <div className="lv">
-                  <div><span>{T.lvEntry}</span><span className="mono" style={{ color: '#fff' }}>{demo[0].lv[0]}</span></div>
-                  <div><span>{T.lvSl}</span><span className="mono" style={{ color: 'var(--coral)' }}>{demo[0].lv[1]}</span></div>
-                  <div><span>{T.lvTp1}</span><span className="mono" style={{ color: 'var(--mint)' }}>{demo[0].lv[2]}</span></div>
-                  <div><span>{T.lvTp2}</span><span className="mono" style={{ color: 'var(--mint)' }}>{demo[0].lv[3]}</span></div>
-                </div>
-                <div className="tfrow" aria-label={T.tfAlign}>{['4H', '1H', '15m'].map((tf) => <span key={tf}>✓ {tf}</span>)}</div>
-                <p className="disc">{T.example}</p>
-                <div className="toast">
-                  <span className="tg"><TgIcon /></span>
-                  <span><b dir="ltr">@Qaffelbot</b><small>{T.toast}</small></span>
-                </div>
-              </div>
-            </div>
+            {/* (2026-10-17) المشهد الجديد: دماغ AI يحلل شارت شموع ويصدر الإشارة — يرسم المراحل والقرار وإشعار تيليجرام بنفسه */}
+            <Suspense fallback={<div className="hs-fallback" />}><HeroScene text={heroText} /></Suspense>
           </div>
         </section>
 

@@ -66,14 +66,14 @@
 }
 
 /* hero */
-.qx .hero{position:relative;isolation:isolate;overflow:hidden;margin-top:-72px;padding-top:72px;
-  /* poster: يظهر قبل تحميل المشهد وعند غياب WebGL */
-  background:radial-gradient(60% 50% at 20% 30%,rgba(60,242,192,.10),transparent 60%),radial-gradient(50% 45% at 80% 20%,rgba(247,195,92,.08),transparent 60%),var(--bg)}
-.qx .hero::after{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
-  background:radial-gradient(60% 55% at 78% 40%,rgba(5,7,13,.92) 0%,rgba(5,7,13,.55) 55%,transparent 80%),
-             linear-gradient(180deg,transparent 60%,var(--bg) 100%)}
-.qx[dir="ltr"] .hero::after{background:radial-gradient(60% 55% at 22% 40%,rgba(5,7,13,.92) 0%,rgba(5,7,13,.55) 55%,transparent 80%),linear-gradient(180deg,transparent 60%,var(--bg) 100%)}
-.qx .hero-grid{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);gap:48px;align-items:center;padding-block:72px 120px;min-height:680px}
+/* (2026-10-17) Hero بعمودين: النص + مشهد HeroScene (دماغ AI وشارت شموع) — لا خلفية ثلاثية الأبعاد كاملة بعد الآن */
+.qx .hero{position:relative;overflow:hidden;margin-top:-72px;padding-top:72px;
+  background:radial-gradient(45% 55% at 22% 48%,rgba(60,242,192,.10),transparent 70%),radial-gradient(35% 40% at 12% 18%,rgba(247,195,92,.09),transparent 70%),radial-gradient(60% 60% at 90% 10%,rgba(122,176,255,.06),transparent 70%)}
+.qx .hero::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.35;
+  background-image:linear-gradient(rgba(150,180,230,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(150,180,230,.07) 1px,transparent 1px);
+  background-size:56px 56px;-webkit-mask-image:radial-gradient(70% 70% at 30% 50%,#000,transparent 75%);mask-image:radial-gradient(70% 70% at 30% 50%,#000,transparent 75%)}
+.qx .hero-grid{position:relative;display:grid;grid-template-columns:minmax(0,.92fr) minmax(0,1.08fr);gap:32px;align-items:center;padding-block:56px 96px;min-height:700px}
+.qx .hs-fallback{height:640px}
 .qx .hero-copy{display:flex;flex-direction:column;gap:26px;min-width:0}
 .qx .pill{align-self:flex-start;display:inline-flex;align-items:center;gap:10px;padding:8px 14px;padding-inline-start:8px;border-radius:999px;background:rgba(255,255,255,.04);border:1px solid var(--line2);font-size:13px;color:#C9D5EA;backdrop-filter:blur(8px)}
 .qx .pill b{font-family:var(--f-mono);font-size:11px;padding:3px 8px;border-radius:999px;background:var(--mint);color:var(--mint-ink)}
@@ -112,8 +112,8 @@
 .qx .toast b{display:block;font-size:13px;color:#fff}.qx .toast small{font-size:12px;color:var(--muted)}
 .qx .disc{font-size:11.5px;color:var(--faint);margin-top:12px}
 @media (max-width:960px){
-  .qx .hero-grid{grid-template-columns:minmax(0,1fr);padding-block:40px 90px;min-height:0;gap:36px}
-  .qx .hero::after,.qx[dir="ltr"] .hero::after{background:linear-gradient(180deg,rgba(5,7,13,.75) 0%,rgba(5,7,13,.5) 45%,var(--bg) 100%)}
+  .qx .hero-grid{grid-template-columns:minmax(0,1fr);padding-block:40px 64px;min-height:0;gap:8px}
+  .qx .hs-fallback{height:470px}
   .qx .toast{inset-inline-end:8px;bottom:-26px}
   .qx .sig{width:100%;transform:none;animation:none}
   .qx .hero h1{font-size:clamp(32px,9vw,40px)}
