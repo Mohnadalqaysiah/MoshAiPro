@@ -25,8 +25,8 @@ export function NeuralOrb({ size = 28, active = false, className = '' }) {
           <stop offset="100%" stopColor="#6366F1" stopOpacity="0.05" />
         </radialGradient>
         <linearGradient id={`l${uid}`} x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#22D3EE" />
-          <stop offset="1" stopColor="#A78BFA" />
+          <stop style={{ stopColor: 'var(--hex1, #22D3EE)' }} />
+          <stop offset="1" style={{ stopColor: 'var(--hex2, #A78BFA)' }} />
         </linearGradient>
       </defs>
       <circle cx="16" cy="16" r="15" fill={`url(#o${uid})`} stroke={`url(#l${uid})`} strokeOpacity="0.55" />

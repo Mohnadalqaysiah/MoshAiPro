@@ -729,9 +729,9 @@ export default function Dashboard() {
               </form>
             </div>
             <div className="relative hidden md:block w-[200px] h-[150px]" aria-hidden="true">
-              <i className="absolute rounded-full end-0 top-1.5 w-[140px] h-[140px] shadow-2xl" style={{ background: 'radial-gradient(circle at 35% 30%,#FFD1F5,#FF4FD8 45%,#7C3AED 90%)' }} />
-              <i className="absolute rounded-full end-[130px] top-[70px] w-16 h-16 opacity-90" style={{ background: 'radial-gradient(circle at 35% 30%,#CFFAFE,#22D3EE 50%,#0E7490)' }} />
-              <i className="absolute rounded-full end-[118px] top-3.5 w-[30px] h-[30px]" style={{ background: 'radial-gradient(circle at 35% 30%,#fff,#C4B5FD 60%,#7C3AED)' }} />
+              <i className="absolute rounded-full end-0 top-1.5 w-[140px] h-[140px] shadow-2xl" style={{ background: 'var(--orb1, radial-gradient(circle at 35% 30%,#FFD1F5,#FF4FD8 45%,#7C3AED 90%))' }} />
+              <i className="absolute rounded-full end-[130px] top-[70px] w-16 h-16 opacity-90" style={{ background: 'var(--orb2, radial-gradient(circle at 35% 30%,#CFFAFE,#22D3EE 50%,#0E7490))' }} />
+              <i className="absolute rounded-full end-[118px] top-3.5 w-[30px] h-[30px]" style={{ background: 'var(--orb3, radial-gradient(circle at 35% 30%,#fff,#C4B5FD 60%,#7C3AED))' }} />
               <div className="absolute bottom-0 end-6 flex items-end gap-1.5 h-[60px]">
                 {[22, 34, 40, 28, 18, 48, 56].map((h, i) => (
                   <b key={i} className={`w-2 rounded-[3px] ${i % 3 === 1 ? 'bg-[rgba(15,7,36,0.7)]' : 'bg-white/85'}`} style={{ height: h }} />

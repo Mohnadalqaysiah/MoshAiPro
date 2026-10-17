@@ -10,6 +10,7 @@ import { useLang } from '../contexts/LangContext'
 import { useTheme } from '../contexts/ThemeContext'
 import useSiteSettings from '../hooks/useSiteSettings'
 import useMarkets from '../hooks/useMarkets'
+import useAppTheme from '../hooks/useAppTheme'
 import Logo from './Logo'
 
 const TrialBanner        = lazy(() => import('./TrialBanner'))
@@ -389,7 +390,7 @@ function ProfilePanel({ isAr }) {
       <div className="rounded-2xl q-glass p-4">
         <div className="relative w-24 h-24 mx-auto mb-2 grid place-items-center">
           <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full" aria-hidden="true">
-            <defs><linearGradient id="q-hex" x1="0" x2="1"><stop offset="0" stopColor="#FF4FD8" /><stop offset="1" stopColor="#22D3EE" /></linearGradient></defs>
+            <defs><linearGradient id="q-hex" x1="0" x2="1"><stop offset="0" style={{ stopColor: 'var(--hex1, #FF4FD8)' }} /><stop offset="1" style={{ stopColor: 'var(--hex2, #22D3EE)' }} /></linearGradient></defs>
             <polygon points="50,3 91,26 91,74 50,97 9,74 9,26" fill="none" stroke="url(#q-hex)" strokeWidth="2.5" />
           </svg>
           <div className="w-[70px] h-[70px] grid place-items-center text-2xl font-extrabold text-white bg-gradient-to-br from-[var(--q-acc3)] via-[var(--q-acc2)] to-[var(--q-acc1)]"
@@ -449,6 +450,7 @@ function ProfilePanel({ isAr }) {
 
 // ── Shell ───────────────────────────────────────────────────────────────────
 export default function AppShell({ children }) {
+  useAppTheme()
   const { lang } = useLang()
   const isAr = lang === 'ar'
   const location = useLocation()

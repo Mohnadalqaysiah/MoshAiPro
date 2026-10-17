@@ -1,0 +1,118 @@
+/* (2026-10-17) هوية لوحة التحكم الجديدة (نفس ألوان الصفحة الرئيسية: نعناعي + ذهبي على أزرق-رمادي داكن).
+   كل شيء تحت :root.qapp — الكلاس يُضاف من useAppTheme (معاينة ?newui=1 حتى التفعيل للجميع).
+   الطريقة: إعادة تعيين --tw-gray-* و--q-* (كل bg/text/border-gray-* وq-glass/q-cta مربوطة بها)، ثم تحويل بقايا
+   الأزرق/النيلي/البنفسجي/الوردي المكتوبة مباشرة. الأخضر/الأحمر/الأصفر (شراء/بيع/تحذير) لا تُمس — لها معنى. */
+
+:root.qapp{
+  --mint:#3CF2C0; --mint-ink:#03231A; --gold:#F7C35C; --sky:#7AB0FF; --coral:#FF6B7A;
+  --acc-text:#3CF2C0; --acc-text2:#9DF7DE;
+  --tint:rgba(60,242,192,.10); --tint2:rgba(60,242,192,.16); --tint-line:rgba(60,242,192,.30);
+
+  --tw-gray-50: 238 243 251;  --tw-gray-100: 226 233 245; --tw-gray-200: 201 213 234;
+  --tw-gray-300: 184 196 218; --tw-gray-400: 163 176 200; --tw-gray-500: 126 139 166;
+  --tw-gray-600: 84 98 128;   --tw-gray-700: 40 54 84;    --tw-gray-800: 22 32 54;
+  --tw-gray-900: 15 23 41;    --tw-gray-950: 7 11 20;
+
+  --q-acc1:#3CF2C0; --q-acc2:#F7C35C; --q-acc3:#3CF2C0;
+  --q-glass:rgba(16,24,42,.62); --q-glass2:rgba(26,38,64,.80); --q-line:rgba(150,180,230,.14);
+  --q-panel:rgba(5,7,13,.55);
+  --q-ground:
+    radial-gradient(1100px 640px at 85% -10%, rgba(60,242,192,.07), transparent 60%),
+    radial-gradient(900px 600px at 0% 100%, rgba(247,195,92,.05), transparent 55%),
+    linear-gradient(180deg, #070B14, #05070D);
+  color-scheme: dark;
+}
+:root.qapp body{background:#05070D}
+
+/* الوضع الفاتح بنفس الهوية: أبيض وأزرق-رمادي فاتح، والنعناعي يصير أخضر مزرق أغمق للنصوص (قراءة على الأبيض) */
+:root.qapp.theme-light{
+  --acc-text:#0B8F72; --acc-text2:#0B8F72;
+  --tint:rgba(11,143,114,.08); --tint2:rgba(11,143,114,.13); --tint-line:rgba(11,143,114,.28);
+
+  --tw-gray-50: 15 23 41;     --tw-gray-100: 22 32 54;    --tw-gray-200: 40 54 84;
+  --tw-gray-300: 61 76 104;   --tw-gray-400: 90 104 132;  --tw-gray-500: 140 152 176;
+  --tw-gray-600: 205 214 228; --tw-gray-700: 226 232 241; --tw-gray-800: 255 255 255;
+  --tw-gray-900: 246 248 251; --tw-gray-950: 232 237 244;
+
+  --q-acc1:#0B8F72; --q-acc2:#C9922A; --q-acc3:#0B8F72;
+  --q-glass:rgba(255,255,255,.82); --q-glass2:#ffffff; --q-line:rgba(15,23,41,.10);
+  --q-panel:rgba(255,255,255,.55);
+  --q-ground:
+    radial-gradient(1100px 640px at 85% -10%, rgba(60,242,192,.14), transparent 60%),
+    radial-gradient(900px 600px at 0% 100%, rgba(247,195,92,.12), transparent 55%),
+    linear-gradient(180deg, #F6F8FB, #EEF2F7);
+  color-scheme: light;
+}
+:root.qapp.theme-light body{background:#F6F8FB}
+
+/* ── مكوّنات AppShell (q-*) ── */
+:root.qapp .q-logo{background:linear-gradient(145deg,#1A2440,#0B1222);border:1px solid rgba(150,180,230,.26);box-shadow:none}
+:root.qapp .q-nav-on{background:var(--tint2);box-shadow:inset 0 0 0 1px var(--tint-line)}
+:root.qapp .q-rail-on{background:var(--tint2)!important;border-color:var(--tint-line)!important}
+:root.qapp .q-cta{background:var(--mint);color:var(--mint-ink)!important;box-shadow:0 8px 24px -8px rgba(60,242,192,.55)}
+:root.qapp .q-cta:hover{filter:brightness(1.05)}
+:root.qapp .q-conf{background:linear-gradient(90deg,var(--mint),var(--gold))}
+:root.qapp .q-hero{
+  background:radial-gradient(70% 120% at 0% 100%,rgba(60,242,192,.22),transparent 60%),radial-gradient(60% 120% at 100% 0%,rgba(247,195,92,.18),transparent 60%),linear-gradient(120deg,#0F2230,#0F1729 55%,#1B1A12);
+  border:1px solid rgba(150,180,230,.22);box-shadow:0 20px 50px -24px rgba(0,0,0,.7)}
+:root.qapp .q-art-buy {background:linear-gradient(135deg,rgba(52,211,153,.32),rgba(60,242,192,.14) 60%,rgba(15,23,41,.4))}
+:root.qapp .q-art-sell{background:linear-gradient(135deg,rgba(251,113,133,.32),rgba(255,107,122,.12) 60%,rgba(15,23,41,.4))}
+:root.qapp .q-art-wait{background:linear-gradient(135deg,rgba(163,176,200,.22),rgba(15,23,41,.4))}
+:root.qapp.theme-light .q-nav-on{background:var(--tint2)}
+:root.qapp.theme-light .q-cta{color:var(--mint-ink)!important}
+:root.qapp.theme-light .q-logo{color:#fff!important}
+
+/* ── بقايا الألوان القديمة المكتوبة مباشرة ──
+   أزرق/نيلي ← نعناعي، بنفسجي ← سماوي (يبقى تمييز الفئات: فوركس/كريبتو)، وردي ← ذهبي. */
+:root.qapp{--sky-text:#7AB0FF;--sky-tint:rgba(122,176,255,.12);--sky-line:rgba(122,176,255,.32)}
+:root.qapp.theme-light{--sky-text:#2F6FD6;--sky-tint:rgba(47,111,214,.08);--sky-line:rgba(47,111,214,.26)}
+
+/* نصوص */
+:root.qapp :is([class^="text-blue-"],[class*=" text-blue-"],[class^="text-indigo-"],[class*=" text-indigo-"]){color:var(--acc-text)!important}
+:root.qapp :is([class^="text-purple-"],[class*=" text-purple-"],[class^="text-violet-"],[class*=" text-violet-"]){color:var(--sky-text)!important}
+:root.qapp :is([class^="text-pink-"],[class*=" text-pink-"],[class^="text-fuchsia-"],[class*=" text-fuchsia-"]){color:var(--gold)!important}
+:root.qapp.theme-light :is([class^="text-pink-"],[class*=" text-pink-"],[class^="text-fuchsia-"],[class*=" text-fuchsia-"]){color:#A9741A!important}
+:root.qapp :is([class*="hover:text-blue-"],[class*="hover:text-indigo-"]):hover{color:var(--acc-text)!important}
+:root.qapp :is([class*="hover:text-purple-"],[class*="hover:text-violet-"]):hover{color:var(--sky-text)!important}
+
+/* خلفيات: أي درجة ← لمسة شفافة؛ الصلبة (500/600/700 بالضبط) ← زر نعناعي بنص داكن */
+:root.qapp :is([class*="bg-blue-"],[class*="bg-indigo-"]){background-color:var(--tint)!important}
+:root.qapp :is([class*="bg-purple-"],[class*="bg-violet-"]){background-color:var(--sky-tint)!important}
+:root.qapp :is([class*="bg-pink-"],[class*="bg-fuchsia-"]){background-color:rgba(247,195,92,.12)!important}
+:root.qapp :is([class~="bg-blue-500"],[class~="bg-blue-600"],[class~="bg-blue-700"],[class~="bg-indigo-500"],[class~="bg-indigo-600"],[class~="bg-indigo-700"],
+  [class~="bg-purple-500"],[class~="bg-purple-600"],[class~="bg-purple-700"],[class~="bg-violet-600"]){background-color:var(--mint)!important;color:var(--mint-ink)!important}
+:root.qapp :is([class~="bg-blue-500"],[class~="bg-blue-600"],[class~="bg-blue-700"],[class~="bg-indigo-600"],[class~="bg-purple-600"]):hover{background-color:#62F5CF!important}
+
+/* إطارات وحلقات */
+:root.qapp :is([class*="border-blue-"],[class*="border-indigo-"]){border-color:var(--tint-line)!important}
+:root.qapp :is([class*="border-purple-"],[class*="border-violet-"]){border-color:var(--sky-line)!important}
+:root.qapp :is([class*="border-pink-"],[class*="border-fuchsia-"]){border-color:rgba(247,195,92,.32)!important}
+:root.qapp :is([class*="ring-blue-"],[class*="ring-indigo-"]){--tw-ring-color:var(--tint-line)!important}
+:root.qapp :is([class*="ring-purple-"],[class*="ring-violet-"]){--tw-ring-color:var(--sky-line)!important}
+:root.qapp :is([class*="focus:border-blue-"],[class*="focus:border-indigo-"]):focus{border-color:var(--mint)!important}
+:root.qapp :is([class*="accent-purple-"],[class*="accent-pink-"],[class*="accent-blue-"]){accent-color:var(--mint)}
+:root.qapp :is([class*="shadow-purple-"],[class*="shadow-indigo-"],[class*="shadow-blue-"]){--tw-shadow-color:rgba(60,242,192,.22)!important}
+
+/* تدرّجات: نقاط البداية/النهاية تُستبدل بلمسات شفافة (تبقى الفئات مميّزة)، والتدرّج الصلب (رمز 500/600 بالضبط) ← زر نعناعي */
+:root.qapp :is([class*="from-blue-"],[class*="from-indigo-"]){--tw-gradient-from:var(--tint) var(--tw-gradient-from-position)!important;--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)!important}
+:root.qapp :is([class*="from-purple-"],[class*="from-violet-"],[class*="from-fuchsia-"],[class*="from-pink-"]){--tw-gradient-from:var(--sky-tint) var(--tw-gradient-from-position)!important;--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)!important}
+:root.qapp :is([class*="to-blue-"],[class*="to-indigo-"]){--tw-gradient-to:transparent var(--tw-gradient-to-position)!important}
+:root.qapp :is([class*="to-purple-"],[class*="to-violet-"],[class*="to-fuchsia-"],[class*="to-pink-"],[class*="via-purple-"],[class*="via-violet-"]){--tw-gradient-to:rgba(247,195,92,.10) var(--tw-gradient-to-position)!important}
+:root.qapp :is([class~="from-blue-500"],[class~="from-blue-600"],[class~="from-indigo-500"],[class~="from-indigo-600"],[class~="from-purple-500"],[class~="from-purple-600"],[class~="from-violet-600"]){
+  background-image:none!important;background-color:var(--mint)!important;color:var(--mint-ink)!important}
+:root.qapp .bg-clip-text.text-transparent{background-image:linear-gradient(100deg,var(--mint) 10%,#9DF7DE 45%,var(--gold) 90%)!important;color:transparent!important}
+:root.qapp.theme-light .bg-clip-text.text-transparent{background-image:linear-gradient(100deg,#0B8F72 10%,#0E7C66 45%,#B07A12 90%)!important}
+
+/* ألوان مكتوبة كقيم مباشرة بالمكوّنات — تُمرَّر عبر متغيرات بقيمة افتراضية قديمة (Dashboard، AppShell، ChatBot، النوافذ) */
+:root.qapp{
+  --orb1:radial-gradient(circle at 35% 30%,#E6FFF8,#3CF2C0 45%,#0E7C66 90%);
+  --orb2:radial-gradient(circle at 35% 30%,#FFF4D6,#F7C35C 50%,#9A6A12);
+  --orb3:radial-gradient(circle at 35% 30%,#fff,#BFD6FF 60%,#4C7BD9);
+  --hex1:#3CF2C0; --hex2:#F7C35C;
+  --ring-grad:linear-gradient(135deg,#3CF2C0,#F7C35C);
+  --glow:#3CF2C0; --hero-input:rgba(5,7,13,.55);
+}
+:root.qapp [class*="bg-[rgba(20,8,48"]{background-color:var(--hero-input)!important}
+
+/* زر "تحليل ذكي" العائم خلفيته داكنة ثابتة (#0B1020) — في الوضع الفاتح كان نصه الأبيض يتحوّل داكناً فيختفي (خلل قديم بالشكلين) */
+:root.theme-light .qchat-pill{color:#fff!important}

@@ -124,7 +124,7 @@ export default function UpgradeModal({ open, onClose, reason = 'trial_expired' }
             )}
             {monthly != null && (
               <div className="flex-1 text-center rounded-xl py-2.5 border"
-                style={{ borderColor: 'var(--q-acc1,#FF4FD8)', background: 'linear-gradient(135deg, rgba(255,79,216,0.12), rgba(124,58,237,0.14))' }}>
+                style={{ borderColor: 'var(--q-acc1,#FF4FD8)', background: 'var(--tint2, linear-gradient(135deg, rgba(255,79,216,0.12), rgba(124,58,237,0.14)))' }}>
                 <div className="text-[11px]" style={{ color: 'var(--q-acc1,#FF4FD8)' }}>{isAr ? `${plans?.monthly?.name || 'شهري'} — الأوفر` : `${plans?.monthly?.name_en || 'Monthly'} — best value`}</div>
                 <div className="text-lg font-bold text-white">${monthly}</div>
               </div>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import axios from "axios";
 import { Link } from "react-router-dom";
+import useAppTheme from "../hooks/useAppTheme";
 import { useAuth } from "../contexts/AuthContext";
 import { useLang } from "../contexts/LangContext";
 import StrategyBuilderTour from "../components/StrategyBuilderTour";
@@ -581,6 +582,7 @@ function BacktestModal({ rec, isAr, onClose, showToast }) {
    MAIN COMPONENT
 ========================================================================= */
 export default function StrategyBuilder() {
+  useAppTheme();
   const { user } = useAuth();
   const { lang } = useLang();
   const isAr = lang === "ar";

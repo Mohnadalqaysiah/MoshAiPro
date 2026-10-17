@@ -77,7 +77,7 @@ export default function DiscountPopup() {
       >
         {/* توهّج زخرفي */}
         <div className="absolute -top-16 -inset-x-10 h-40 opacity-40 blur-3xl"
-          style={{ background: 'radial-gradient(60% 100% at 50% 0%, #8B5CF6, transparent)' }} />
+          style={{ background: 'radial-gradient(60% 100% at 50% 0%, var(--glow, #8B5CF6), transparent)' }} />
 
         <button onClick={dismiss} className="absolute top-3 end-3 z-10 text-gray-400 hover:text-white p-1" aria-label={isAr ? 'إغلاق' : 'Close'}>
           <X size={18} />
@@ -110,7 +110,7 @@ export default function DiscountPopup() {
             onClick={claim}
             className="w-full flex items-center justify-center gap-2 rounded-2xl py-3.5 text-base font-bold text-white transition-transform hover:scale-[1.02] active:scale-95"
             style={{
-              background: 'linear-gradient(135deg,#8B5CF6,#EC4899)',
+              background: 'var(--cta-grad, linear-gradient(135deg,#8B5CF6,#EC4899))',
               boxShadow: '0 10px 30px rgba(236,72,153,0.35)',
             }}
           >

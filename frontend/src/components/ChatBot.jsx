@@ -465,12 +465,12 @@ export default function ChatBot() {
         ) : (
           <div className="relative">
             {!seen && (
-              <span className="absolute inset-0 rounded-full animate-ping opacity-25" style={{ background: 'linear-gradient(135deg,#22D3EE,#8B5CF6)', animationDuration: '2.4s' }} />
+              <span className="absolute inset-0 rounded-full animate-ping opacity-25" style={{ background: 'var(--ring-grad, linear-gradient(135deg,#22D3EE,#8B5CF6))', animationDuration: '2.4s' }} />
             )}
             <div
-              className="relative flex items-center gap-2.5 rounded-full ps-2 pe-2 sm:pe-4 py-2 text-sm font-semibold text-white shadow-2xl transition-transform group-hover:scale-[1.03]"
+              className="qchat-pill relative flex items-center gap-2.5 rounded-full ps-2 pe-2 sm:pe-4 py-2 text-sm font-semibold text-white shadow-2xl transition-transform group-hover:scale-[1.03]"
               style={{
-                background: 'linear-gradient(#0B1020,#0B1020) padding-box, linear-gradient(135deg,#22D3EE,#8B5CF6) border-box',
+                background: 'linear-gradient(#0B1020,#0B1020) padding-box, var(--ring-grad, linear-gradient(135deg,#22D3EE,#8B5CF6)) border-box',
                 border: '1.5px solid transparent',
                 boxShadow: '0 8px 30px rgba(34,211,238,0.22), 0 0 0 1px rgba(139,92,246,0.15)',
               }}
