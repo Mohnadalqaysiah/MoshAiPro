@@ -12,7 +12,8 @@ import './App.css'
 // قبل ما يترسم أي حرف على الشاشة. "/" هو أعلى صفحة زيارة بالموقع، فتأجيلها
 // كسول ما بيوفّر شي — كل زائر تقريباً محتاجها فوراً، فصارت جزء من حزمة
 // index الرئيسية مباشرة.
-import Landing from './pages/Landing'
+// (2026-10-17) الرئيسية صارت LandingV2 — بنفس المبدأ تُحمَّل مباشرة (مشهد HeroScene داخلها يبقى lazy).
+import LandingV2 from './pages/LandingV2'
 
 // (2026-09-04) لسا lazy بحق: تُعرَض حصراً جوا ProtectedRoute، فتحميلها
 // بالصفحات العامة كان "JavaScript غير مستخدَم" بتقرير Lighthouse.
@@ -32,8 +33,6 @@ const Contact        = lazy(() => import('./pages/Contact'))
 const About          = lazy(() => import('./pages/About'))
 const StrategyBuilderPage = lazy(() => import('./pages/StrategyBuilderPage'))
 const Vision         = lazy(() => import('./pages/Vision'))
-// (2026-10-17) معاينة الواجهة الجديدة قبل اعتمادها رئيسية — noindex، غير مرتبطة من أي مكان
-const LandingV2      = lazy(() => import('./pages/LandingV2'))
 const SaudiLanding   = lazy(() => import('./pages/SaudiLanding'))
 const UAELanding     = lazy(() => import('./pages/UAELanding'))
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
@@ -102,9 +101,10 @@ function AppRoutes() {
       <LangRouteSync />
       <Routes>
         {/* Landing & Public Pages — accessible to all */}
-        <Route path="/"                  element={<Landing />} />
-        <Route path="/preview-home"      element={<LandingV2 />} />
-        <Route path="/en/preview-home"   element={<LandingV2 />} />
+        <Route path="/"                  element={<LandingV2 />} />
+        {/* رابط المعاينة القديم (17/10) — يحوّل للرئيسية بعد اعتمادها */}
+        <Route path="/preview-home"      element={<Navigate to="/" replace />} />
+        <Route path="/en/preview-home"   element={<Navigate to="/en" replace />} />
         <Route path="/terms"             element={<Terms />} />
         <Route path="/privacy"           element={<Privacy />} />
         <Route path="/contact"           element={<Contact />} />
@@ -124,7 +124,7 @@ function AppRoutes() {
         {/* English mirrors — نفس الصفحات المذكورة فوق، كلها bilingual الآن.
             بادئة /en تفرض عرض المحتوى الإنجليزي (LangRouteSync) بدل الاعتماد
             على تفضيل محفوظ بالمتصفح، عشان قوقل يقدر يفهرس نسخة إنجليزية حقيقية. */}
-        <Route path="/en"                element={<Landing />} />
+        <Route path="/en"                element={<LandingV2 />} />
         <Route path="/en/pricing"        element={<Pricing />} />
         <Route path="/en/referral"       element={<ReferralProgram />} />
         <Route path="/en/blog"           element={<BlogList />} />

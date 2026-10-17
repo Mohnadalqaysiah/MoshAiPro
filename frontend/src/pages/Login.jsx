@@ -6,7 +6,7 @@ import { Mail, Lock, AlertCircle } from 'lucide-react'
 import useSEO from '../hooks/useSEO'
 import useBreadcrumbSchema from '../hooks/useBreadcrumbSchema'
 import { mirrorPath } from '../utils/langRoutes'
-import Logo from '../components/Logo'
+import AuthShell from '../components/AuthShell'
 import GoogleAuthButton from '../components/GoogleAuthButton'
 
 const T = {
@@ -81,23 +81,13 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4" dir={isAr ? 'rtl' : 'ltr'}>
-      <div className="w-full max-w-md">
-        {/* Lang toggle */}
-        <div className="flex justify-end mb-4">
-          <button onClick={handleToggleLang}
-            className="text-xs border border-gray-700 hover:border-blue-500/50 text-gray-400 hover:text-white px-3 py-1.5 rounded-lg transition-all font-medium">
-            {isAr ? 'EN' : 'ع'}
-          </button>
-        </div>
-
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <Logo className="w-14 h-14 mx-auto mb-4 rounded-2xl" />
-          <h1 className="text-2xl font-bold text-white">Qaffel <span className="text-blue-400">AI</span></h1>
-          <p className="text-gray-400 text-sm mt-1">{tx.tagline}</p>
-        </div>
-
+    <AuthShell isAr={isAr} onToggleLang={handleToggleLang}
+      eyebrow={isAr ? 'مرحباً بعودتك' : 'Welcome back'}
+      title={isAr ? 'تابع السوق' : 'Back to the market'} titleGrad={isAr ? 'من حيث توقفت.' : 'where you left off.'}
+      lead={tx.tagline}
+      points={isAr
+        ? ['تحليل ICT/SMC للذهب والبيتكوين والفوركس والأسهم الخليجية', 'تنبيهات فورية على تيليجرام بالخطة كاملة', 'نتيجة كل إشارة تُتابَع حتى إغلاقها']
+        : ['ICT/SMC analysis for gold, Bitcoin, forex and Gulf stocks', 'Instant Telegram alerts with the full plan', 'Every signal is tracked until it closes']}>
         {/* Card */}
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8">
           <h2 className="text-lg font-semibold text-white mb-6">{tx.heading}</h2>
@@ -166,7 +156,6 @@ export default function Login() {
             </Link>
           </p>
         </div>
-      </div>
-    </div>
+    </AuthShell>
   )
 }

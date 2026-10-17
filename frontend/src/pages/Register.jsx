@@ -7,7 +7,7 @@ import useSEO from '../hooks/useSEO'
 import useTrialLimits from '../hooks/useTrialLimits'
 import useBreadcrumbSchema from '../hooks/useBreadcrumbSchema'
 import { mirrorPath } from '../utils/langRoutes'
-import Logo from '../components/Logo'
+import AuthShell from '../components/AuthShell'
 import GoogleAuthButton from '../components/GoogleAuthButton'
 
 // Simple math captcha — generates client-side, no external API needed
@@ -129,21 +129,11 @@ export default function Register() {
   const inputPad = isAr ? 'pr-10 pl-4' : 'pl-10 pr-4'
 
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4 py-10" dir={isAr ? 'rtl' : 'ltr'}>
-      <div className="w-full max-w-md">
-        <div className="flex justify-end mb-4">
-          <button onClick={handleToggleLang}
-            className="text-xs border border-gray-700 hover:border-blue-500/50 text-gray-400 hover:text-white px-3 py-1.5 rounded-lg transition-all font-medium">
-            {isAr ? 'EN' : 'ع'}
-          </button>
-        </div>
-
-        <div className="text-center mb-8">
-          <Logo className="w-14 h-14 mx-auto mb-4 rounded-2xl" />
-          <h1 className="text-2xl font-bold text-white">Qaffel <span className="text-blue-400">AI</span></h1>
-          <p className="text-gray-400 text-sm mt-1">{tx.tagline}</p>
-        </div>
-
+    <AuthShell isAr={isAr} onToggleLang={handleToggleLang}
+      eyebrow={tx.tagline}
+      title={isAr ? 'ابدأ مجاناً،' : 'Start free,'} titleGrad={isAr ? 'بدون بطاقة ائتمان.' : 'no credit card.'}
+      lead={tx.freeTitle.replace(/^✨\s*/u, '')}
+      points={tx.freeBenefits.map(fmtTrial)}>
         {/* Referral banner */}
         {ref && (
           <div className="bg-green-900/20 border border-green-700/30 rounded-xl p-3 mb-4 flex items-center gap-2">
@@ -151,17 +141,6 @@ export default function Register() {
             <p className="text-green-300 text-xs">{tx.referredVia} <span className="font-mono font-bold">{ref}</span></p>
           </div>
         )}
-
-        {/* Trial benefits */}
-        <div className="bg-blue-900/20 border border-blue-700/30 rounded-xl p-4 mb-6">
-          <p className="text-blue-300 text-xs font-semibold mb-2">{tx.freeTitle}</p>
-          {tx.freeBenefits.map(f => (
-            <div key={f} className="flex items-center gap-2 text-xs text-gray-300 mt-1">
-              <CheckCircle size={12} className="text-green-400 flex-shrink-0" />
-              <span>{fmtTrial(f)}</span>
-            </div>
-          ))}
-        </div>
 
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8">
           <h2 className="text-lg font-semibold text-white mb-6">{tx.heading}</h2>
@@ -256,7 +235,6 @@ export default function Register() {
             <Link to={isAr ? '/login' : '/en/login'} className="text-blue-400 hover:text-blue-300">{tx.login}</Link>
           </p>
         </div>
-      </div>
-    </div>
+    </AuthShell>
   )
 }

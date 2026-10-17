@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useLang } from '../contexts/LangContext'
 import { useAuth } from '../contexts/AuthContext'
 import useSEO from '../hooks/useSEO'
 import useBreadcrumbSchema from '../hooks/useBreadcrumbSchema'
-import { mirrorPath } from '../utils/langRoutes'
-import Logo from '../components/Logo'
+import PublicLayout from '../components/PublicLayout'
 import {
   Gift, Users, DollarSign, Star, ChevronRight, ChevronLeft,
   Share2, CheckCircle, Zap, TrendingUp, Shield, Copy, ArrowUpRight
@@ -185,7 +184,7 @@ const T = {
 }
 
 export default function ReferralProgram() {
-  const { lang, toggle } = useLang()
+  const { lang } = useLang()
   const { user } = useAuth()
   const isAr = lang === 'ar'
 
@@ -200,8 +199,6 @@ export default function ReferralProgram() {
   const tx = T[isAr ? 'ar' : 'en']
   const ChevronCta = isAr ? ChevronLeft : ChevronRight
   const [openFaq, setOpenFaq] = useState(null)
-  const location = useLocation()
-  const navigate  = useNavigate()
   useReveal()
 
   useBreadcrumbSchema([
@@ -209,48 +206,8 @@ export default function ReferralProgram() {
     { name: isAr ? 'الإحالات' : 'Referrals', path: isAr ? '/referral' : '/en/referral' },
   ])
 
-  const handleToggleLang = () => {
-    const target = isAr ? 'en' : 'ar'
-    const mirror = mirrorPath(location.pathname, target)
-    toggle()
-    if (mirror && mirror !== location.pathname) navigate(mirror)
-  }
-
   return (
-    <div className="min-h-screen bg-[#070b14] text-white overflow-x-hidden" dir={tx.dir}>
-
-      {/* ── Navbar ────────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-50 bg-[#070b14]/80 backdrop-blur-xl border-b border-white/5">
-        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2.5 group">
-            <Logo className="w-9 h-9 rounded-xl shadow-lg shadow-blue-500/30" />
-            <span className="font-bold text-lg tracking-tight">
-              Qaffel <span className="text-blue-400">AI</span>
-            </span>
-          </Link>
-          <div className="flex items-center gap-2 shrink-0">
-            <button onClick={handleToggleLang}
-              className="text-xs border border-white/10 hover:border-blue-500/50 text-gray-400 hover:text-white px-3 py-1.5 rounded-lg transition-all font-medium">
-              {isAr ? 'EN' : 'ع'}
-            </button>
-            {user ? (
-              <Link to="/affiliate"
-                className="text-sm bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-400 hover:to-orange-400 text-white px-4 py-2 rounded-xl font-semibold transition-all shadow-md">
-                {isAr ? 'لوحتي' : 'My Dashboard'}
-              </Link>
-            ) : (
-              <>
-                <Link to="/login" className="hidden md:block text-sm text-gray-400 hover:text-white px-4 py-2 rounded-xl hover:bg-white/5 transition-colors">
-                  {tx.nav.login}
-                </Link>
-                <Link to="/register" className="text-sm bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white px-4 py-2 rounded-xl font-semibold transition-all shadow-md">
-                  {tx.nav.start}
-                </Link>
-              </>
-            )}
-          </div>
-        </div>
-      </header>
+    <PublicLayout>
 
       {/* ── Hero ──────────────────────────────────────────────────────── */}
       <section className="relative pt-24 pb-20 overflow-hidden">
@@ -468,10 +425,6 @@ export default function ReferralProgram() {
         </div>
       </section>
 
-      {/* ── Footer ────────────────────────────────────────────────────── */}
-      <footer className="border-t border-white/5 py-8 text-center text-sm text-gray-400">
-        <p>© 2025 Qaffel AI — <Link to="/" className="hover:text-gray-400 transition-colors">{isAr ? 'الصفحة الرئيسية' : 'Home'}</Link></p>
-      </footer>
-    </div>
+    </PublicLayout>
   )
 }

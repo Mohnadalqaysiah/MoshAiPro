@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import axios from 'axios'
-import { TrendingUp, Mail, Lock, ShieldCheck, CheckCircle, AlertCircle, ArrowRight } from 'lucide-react'
+import AuthShell from '../components/AuthShell'
+import { Mail, Lock, ShieldCheck, CheckCircle, AlertCircle, ArrowRight } from 'lucide-react'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -42,18 +43,11 @@ export default function ForgotPassword() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center px-4" dir="rtl">
-      <div className="w-full max-w-md">
-
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-blue-600 mb-4">
-            <TrendingUp size={28} className="text-white" />
-          </div>
-          <h1 className="text-2xl font-bold text-white">Qaffel <span className="text-blue-400">AI</span></h1>
-          <p className="text-gray-400 text-sm mt-1">استعادة كلمة المرور</p>
-        </div>
-
+    <AuthShell isAr
+      eyebrow="استعادة كلمة المرور"
+      title="نسيت كلمة المرور؟" titleGrad="نساعدك تستعيدها."
+      lead="أدخل بريدك، وسنرسل لك رمز تحقق من 6 أرقام لتعيين كلمة مرور جديدة."
+      points={['الرمز يصل إلى بريدك المسجّل فقط', 'إن لم تجده، تحقق من مجلد Spam/Junk']}>
         {/* Steps indicator */}
         <div className="flex items-center justify-center gap-2 mb-6">
           {[1, 2, 3].map(s => (
@@ -168,7 +162,6 @@ export default function ForgotPassword() {
             <Link to="/login" className="text-blue-400 hover:text-blue-300">العودة لتسجيل الدخول</Link>
           </p>
         </div>
-      </div>
-    </div>
+    </AuthShell>
   )
 }

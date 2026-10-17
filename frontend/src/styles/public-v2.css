@@ -218,3 +218,33 @@
 .qpub [class~="border-white/8"]{border-color:var(--line)}
 .qpub [class~="border-white/8"][class*="hover:border-"]:hover{border-color:rgba(60,242,192,.35)}
 .qpub [class~="from-white/4"]{background:var(--panel)}
+
+/* ── صفحات الدخول والتسجيل (AuthShell) ── */
+.qauth{display:flex;flex-direction:column;
+  background:radial-gradient(60% 50% at 80% 10%,rgba(60,242,192,.09),transparent 70%),radial-gradient(50% 50% at 10% 90%,rgba(247,195,92,.07),transparent 70%),var(--bg)}
+.qauth-top{display:flex;align-items:center;justify-content:space-between;gap:12px;max-width:1180px;width:100%;margin-inline:auto;padding:18px 16px}
+.qauth-brand{display:flex;align-items:center;gap:12px;font-weight:800;font-size:20px;color:#fff}
+.qauth-mark{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;background:linear-gradient(145deg,#1A2440,#0B1222);border:1px solid var(--line2)}
+.qauth-home{font-size:14px;color:var(--muted);padding:10px 12px;border-radius:10px}
+.qauth-home:hover{color:#fff}
+.qauth-lang{min-width:44px;height:42px;border-radius:10px;border:1px solid var(--line2);background:transparent;font-family:'Inter',sans-serif;font-size:12px;color:var(--muted);cursor:pointer}
+.qauth-lang:hover{color:#fff;border-color:var(--mint)}
+.qauth-grid{flex:1;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,460px);gap:clamp(32px,6vw,88px);align-items:center;
+  max-width:1180px;width:100%;margin-inline:auto;padding:24px 16px 56px}
+.qauth-side .qp-h1{margin-top:14px}
+.qauth-main{min-width:0}
+/* بطاقة النموذج الموجودة (bg-gray-900 rounded-2xl) */
+.qauth main .rounded-2xl.bg-gray-900{background:var(--panel);border-color:var(--line2);border-radius:24px;backdrop-filter:blur(12px);box-shadow:0 30px 80px -40px rgba(0,0,0,.8)}
+.qauth main input:not([type=checkbox]):not([type=radio]){min-height:48px;border-radius:12px;background-color:rgba(5,7,13,.6);border-color:var(--line2);font-size:15px}
+.qauth main input:focus{outline:none;border-color:var(--mint);--tw-ring-color:rgba(60,242,192,.25)}
+.qauth main button[type=submit]{min-height:50px;border-radius:14px;font-weight:700;font-size:15px}
+.qauth main button[type=submit]:disabled{opacity:.6}
+.qauth main label{font-weight:600}
+@media (max-width:900px){
+  .qauth-grid{grid-template-columns:minmax(0,1fr);align-items:start;align-content:start;gap:40px;padding-top:8px}
+  .qauth-side{order:2}
+  .qauth-side .qp-h1{font-size:26px!important}
+}
+/* صفحة الإحالات: تدرّج أصفر-برتقالي القديم ← ذهبي الهوية */
+.qpub main [class*="from-yellow-500"][class*="to-orange-500"]{background:var(--gold)!important;color:#2A1C00!important}
+.qpub main .bg-clip-text[class*="from-yellow-400"]{background-image:linear-gradient(100deg,var(--gold) 10%,#FBE3A6 50%,var(--gold) 90%)}

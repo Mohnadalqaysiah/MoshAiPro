@@ -1,6 +1,6 @@
 /**
- * LandingV2 (2026-10-17) — الصفحة الرئيسية بالهوية الجديدة (qaffel-redesign-kit)، **معاينة** على /preview-home
- * و/en/preview-home قبل استبدال Landing.jsx (طلب المالك: يراها أولاً ثم نحسّن ثم نعتمدها). noindex.
+ * LandingV2 (2026-10-17) — الصفحة الرئيسية بالهوية الجديدة (qaffel-redesign-kit). بدأت معاينة على /preview-home،
+ * واعتمدها المالك رئيسية على / و/en في نفس اليوم (Landing.jsx القديم حُذف — راجع DECISIONS.md).
  * المراحل 1–3 من AGENT_BRIEF فقط (تصميم + جوال + أداء). المرحلة 4 (آخر إشارة حقيقية) مؤجَّلة بقرار المالك 17/10،
  * والمرحلة 5 (تجربة بلا تسجيل) بعد مراجعة 30/10 — المحرك هنا أمثلة موسومة.
  * يحافظ على منطق Landing: useAuth، useLang + mirrorPath، useSEO، useTrialLimits، /subscription/plans الحية.
@@ -71,22 +71,20 @@ export default function LandingV2() {
   const p = (path) => (isAr ? path : `/en${path}`)
   const rootRef = useRef(null)
 
+  // نفس عنوان ووصف الرئيسية القديمة حرفياً — لا تغيير بما يراه جوجل بالبحث
   useSEO({
-    title: isAr ? 'Qaffel AI | معاينة الواجهة الجديدة' : 'Qaffel AI | New home preview',
-    description: isAr ? 'معاينة داخلية للصفحة الرئيسية الجديدة.' : 'Internal preview of the new home page.',
+    title: isAr
+      ? 'Qaffel AI | إشارات تداول ذكية بالذكاء الاصطناعي'
+      : 'Qaffel AI | Smart AI Trading Signals',
+    description: isAr
+      ? `منصة Qaffel AI تحلل الذهب والبيتكوين والفوركس بتقنية ICT/SMC والذكاء الاصطناعي. إشارات دقيقة على Telegram. ابدأ مجاناً بـ${trial.analyses} تحليلات.`
+      : `Qaffel AI analyzes Gold, Bitcoin and Forex using ICT/SMC and AI. Accurate signals on Telegram. Start free with ${trial.analyses} analyses.`,
   })
-  // معاينة: لا فهرسة. (الخطوط: خطوط الموقع المحمّلة أصلاً — لا تحميل إضافي)
-  useEffect(() => {
-    const robots = document.createElement('meta')
-    robots.name = 'robots'; robots.content = 'noindex,nofollow'
-    document.head.appendChild(robots)
-    return () => robots.remove()
-  }, [])
 
   const handleToggleLang = () => {
     const target = isAr ? 'en' : 'ar'
     toggle()
-    navigate(target === 'en' ? '/en/preview-home' : '/preview-home')
+    navigate(target === 'en' ? '/en' : '/')
   }
 
   // ── header: زجاجي بعد التمرير، يختفي عند النزول السريع؛ الشريط السفلي بعد الـHero ──
@@ -207,13 +205,12 @@ export default function LandingV2() {
 
   return (
     <div className="qx" dir={isAr ? 'rtl' : 'ltr'} ref={rootRef}>
-      <span className="preview">{T.preview}</span>
 
       {/* ── header ── */}
       <header className={`hdr ${scrolled ? 'scrolled' : ''} ${hideHdr && !menuOpen ? 'hide' : ''}`}>
         <div className="wrap">
           <div style={{ display: 'flex', alignItems: 'center', gap: 40 }}>
-            <Link to={p('/preview-home')} className="brand" aria-label="Qaffel AI"><BrandMark /><span dir="ltr">Qaffel <span className="grad">AI</span></span></Link>
+            <Link to={isAr ? '/' : '/en'} className="brand" aria-label="Qaffel AI"><BrandMark /><span dir="ltr">Qaffel <span className="grad">AI</span></span></Link>
             <nav className="nav" aria-label={T.menu}>
               {navLinks.map(([href, label, route]) => route
                 ? <Link key={href} to={href}>{label}</Link>
