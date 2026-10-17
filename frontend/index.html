@@ -12,12 +12,16 @@
       #root{min-height:100vh}
     </style>
 
-    <!-- Fonts — non-blocking async load to eliminate render-blocking -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap" />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap" media="print" onload="this.media='all'" />
-    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap" /></noscript>
+    <!-- (2026-10-17) خطوط مستضافة ذاتياً + preload — فحص السرعة: Google Fonts كانت تُحمَّل بعد ظهور النص فيقفز التخطيط
+         عند وصولها (CLS) وتطلب أصلاً ثالثاً. Cairo وInter ملفّا variable (كل الأوزان بملف واحد لكل لغة) ~112KB كلها. -->
+    <link rel="preconnect" href="https://api.qaffel.com" crossorigin />
+    <link rel="preload" href="/fonts/cairo-arabic.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/cairo-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <style>
+      @font-face{font-family:'Cairo';font-style:normal;font-weight:200 1000;font-display:swap;src:url(/fonts/cairo-arabic.woff2) format('woff2');unicode-range:U+0600-06FF,U+0750-077F,U+0870-0891,U+0897-08E1,U+08E3-08FF,U+200C-200E,U+2010-2011,U+204F,U+2E41,U+FB50-FDFF,U+FE70-FE74,U+FE76-FEFC}
+      @font-face{font-family:'Cairo';font-style:normal;font-weight:200 1000;font-display:swap;src:url(/fonts/cairo-latin.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+      @font-face{font-family:'Inter';font-style:normal;font-weight:100 900;font-display:swap;src:url(/fonts/inter-latin.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+    </style>
 
     <!-- Favicon + PWA -->
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />

@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import axios from 'axios'
-import { signInWithGoogle } from '../firebase'
+// (2026-10-17) Firebase يُحمَّل عند الحاجة فقط (زر Google بصفحتي الدخول والتسجيل) — كان يُحمَّل بكل صفحة: iframe.js
+// 93KB + getProjectConfig بسلسلة ~3 ثوانٍ في فحص السرعة، حتى لزائر لن يضغط الزر.
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const AuthContext = createContext(null)
@@ -50,6 +51,7 @@ export function AuthProvider({ children }) {
   // signInWithPopup + بعث الـID token للخادم للتحقق — نفس شكل استجابة
   // login/register (token + user)، فباقي التطبيق ما يحتاج يميّز المصدر.
   const loginWithGoogle = async (ref = '') => {
+    const { signInWithGoogle } = await import('../firebase')
     const idToken = await signInWithGoogle()
     const url = ref
       ? `${API}/api/v1/auth/google?ref=${encodeURIComponent(ref)}`

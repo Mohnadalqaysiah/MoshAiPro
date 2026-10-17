@@ -18,7 +18,6 @@ import '../styles/landing-v2.css'
 
 const HeroScene = lazy(() => import('../components/landing/HeroScene'))
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-const FONTS = 'https://fonts.googleapis.com/css2?family=Alexandria:wght@400;600;700;800;900&family=IBM+Plex+Sans+Arabic:wght@400;500;600&family=JetBrains+Mono:wght@500;600;700&display=swap'
 const TG_URL = 'https://t.me/Qaffelbot'
 const SAVINGS_RE = /توفير|وفّر|وفر |save|%/i
 
@@ -76,16 +75,11 @@ export default function LandingV2() {
     title: isAr ? 'Qaffel AI | معاينة الواجهة الجديدة' : 'Qaffel AI | New home preview',
     description: isAr ? 'معاينة داخلية للصفحة الرئيسية الجديدة.' : 'Internal preview of the new home page.',
   })
-  // معاينة: لا فهرسة + الخطوط مرة واحدة
+  // معاينة: لا فهرسة. (الخطوط: خطوط الموقع المحمّلة أصلاً — لا تحميل إضافي)
   useEffect(() => {
     const robots = document.createElement('meta')
     robots.name = 'robots'; robots.content = 'noindex,nofollow'
     document.head.appendChild(robots)
-    if (!document.querySelector(`link[href="${FONTS}"]`)) {
-      const pc = document.createElement('link'); pc.rel = 'preconnect'; pc.href = 'https://fonts.gstatic.com'; pc.crossOrigin = ''
-      const f = document.createElement('link'); f.rel = 'stylesheet'; f.href = FONTS
-      document.head.append(pc, f)
-    }
     return () => robots.remove()
   }, [])
 
@@ -154,7 +148,11 @@ export default function LandingV2() {
   }, [])
   const plans = useMemo(() => {
     const out = [{ key: 'trial', name: T.trialName, price: null, period: '', feats: T.trialFeats.map(fmt), href: '/register', hot: false }]
-    const w = Number(livePlans.weekly?.price_usd), m = Number(livePlans.monthly?.price_usd), y = Number(livePlans.yearly?.price_usd)
+    // (17/10) التوفير يُقارن بباقة معروضة فقط — كان "وفّر 89%" مقابل سعر أسبوعي لباقة معطّلة (enabled=false)
+    const on = (k) => livePlans[k] && livePlans[k].enabled !== false && Number(livePlans[k].price_usd) > 0
+    const w = on('weekly') ? Number(livePlans.weekly.price_usd) : 0
+    const m = on('monthly') ? Number(livePlans.monthly.price_usd) : 0
+    const y = on('yearly') ? Number(livePlans.yearly.price_usd) : 0
     const saveM = w && m ? Math.round((1 - m / (w * 52 / 12)) * 100) : 0
     const saveY = m && y ? Math.round((1 - y / (m * 12)) * 100) : 0
     for (const [key, period, save] of [['weekly', T.perWeek, 0], ['monthly', T.perMonth, saveM], ['yearly', T.perYear, saveY]]) {
@@ -182,8 +180,8 @@ export default function LandingV2() {
   // ── حاسبة الإحالة: منطق subscription_service.py حرفياً — 5% من كل دفعة مقبولة (والتجديدات)، و15% بعد 25 دفعة مقبولة ──
   const [refN, setRefN] = useState(10)
   const [refPlan, setRefPlan] = useState('monthly')
-  const pW = Number(livePlans.weekly?.price_usd) || 0
-  const pM = Number(livePlans.monthly?.price_usd) || 0
+  const pW = livePlans.weekly?.enabled !== false ? Number(livePlans.weekly?.price_usd) || 0 : 0
+  const pM = livePlans.monthly?.enabled !== false ? Number(livePlans.monthly?.price_usd) || 0 : 0
   const perMonth = refPlan === 'weekly' ? (pW * 52) / 12 : pM
   const payPerMonth = refPlan === 'weekly' ? (refN * 52) / 12 : refN
   const earnNow = refN * perMonth * 0.05

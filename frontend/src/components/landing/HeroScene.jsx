@@ -324,8 +324,8 @@ export default function HeroScene({ text = DEFAULT_TEXT, className = '' }) {
         LABEL_KEYS.forEach((k) => {
           const el = labelRefs.current[k]; if (!el) return
           const a = anchors[k]; v3.copy(a.v).project(camera)
-          el.style.left = (((v3.x + 1) / 2) * W).toFixed(1) + 'px'
-          el.style.top = (((1 - v3.y) / 2) * H).toFixed(1) + 'px'
+          // (Qaffel) translate لا left/top — تحريك left/top كل إطار كان يُحسب "إزاحة تخطيط" (CLS 0.115 بفحص السرعة)
+          el.style.translate = `${(((v3.x + 1) / 2) * W).toFixed(1)}px ${(((1 - v3.y) / 2) * H).toFixed(1)}px`
           el.style.opacity = (a.always ? 0.9 : clamp((t - a.from) / 0.5) * fade).toFixed(2)
         })
 
@@ -352,10 +352,20 @@ export default function HeroScene({ text = DEFAULT_TEXT, className = '' }) {
       }
     }
 
+    // (Qaffel، فحص السرعة) three ثقيل (~176KB مضغوطاً + تهيئة ~0.4ث على جوال ضعيف): سطح المكتب بعد اكتمال التحميل،
+    // والجوال عند أول تفاعل (لمس/تمرير) — فلا يحجب الخيط الرئيسي أثناء التحميل (TBT).
     const idle = window.requestIdleCallback || ((cb) => setTimeout(cb, 300))
-    const handle = idle(() => { start() })
+    let handle = null
+    const begin = () => { if (!disposed && handle === null) handle = idle(() => { start() }) }
+    const EV = ['pointerdown', 'touchstart', 'scroll', 'keydown', 'wheel']
+    const mobileStart = window.innerWidth < 760
+    if (mobileStart) EV.forEach((e) => window.addEventListener(e, begin, { once: true, passive: true }))
+    else if (document.readyState === 'complete') begin()
+    else window.addEventListener('load', begin, { once: true })
     return () => {
       disposed = true
+      EV.forEach((e) => window.removeEventListener(e, begin))
+      window.removeEventListener('load', begin)
       if (window.cancelIdleCallback && typeof handle === 'number') window.cancelIdleCallback(handle)
       cleanup()
     }

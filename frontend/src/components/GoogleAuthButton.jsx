@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 
 const T = {
@@ -26,6 +26,8 @@ export default function GoogleAuthButton({ isAr, refCode = '', onSuccess, onErro
   const { loginWithGoogle } = useAuth()
   const tx = T[isAr ? 'ar' : 'en']
   const [loading, setLoading] = useState(false)
+  // تحميل Firebase مسبقاً عند ظهور الزر — فعند الضغط يكون جاهزاً وتفتح نافذة Google دون أن يحجبها المتصفح
+  useEffect(() => { import('../firebase').catch(() => {}) }, [])
 
   const handleClick = async () => {
     setLoading(true)
