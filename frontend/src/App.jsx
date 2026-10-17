@@ -32,6 +32,8 @@ const Contact        = lazy(() => import('./pages/Contact'))
 const About          = lazy(() => import('./pages/About'))
 const StrategyBuilderPage = lazy(() => import('./pages/StrategyBuilderPage'))
 const Vision         = lazy(() => import('./pages/Vision'))
+// (2026-10-17) معاينة الواجهة الجديدة قبل اعتمادها رئيسية — noindex، غير مرتبطة من أي مكان
+const LandingV2      = lazy(() => import('./pages/LandingV2'))
 const SaudiLanding   = lazy(() => import('./pages/SaudiLanding'))
 const UAELanding     = lazy(() => import('./pages/UAELanding'))
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
@@ -101,6 +103,8 @@ function AppRoutes() {
       <Routes>
         {/* Landing & Public Pages — accessible to all */}
         <Route path="/"                  element={<Landing />} />
+        <Route path="/preview-home"      element={<LandingV2 />} />
+        <Route path="/en/preview-home"   element={<LandingV2 />} />
         <Route path="/terms"             element={<Terms />} />
         <Route path="/privacy"           element={<Privacy />} />
         <Route path="/contact"           element={<Contact />} />
