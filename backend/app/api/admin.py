@@ -3964,3 +3964,14 @@ def admin_strategy_stats(
         "templates": templates,
         "recent": recent,
     }
+
+
+# ─── (2026-10-17) الأداء الأسبوعي حسب السوق — مقياس المالك (DECISIONS 13/10 الخطوة 2) ─────────────────
+@router.get("/weekly-markets")
+def admin_weekly_markets(
+    weeks: int = Query(default=8, ge=2, le=26),
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    from app.services.weekly_markets import weekly_table
+    return weekly_table(db, weeks)
