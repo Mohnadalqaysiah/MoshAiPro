@@ -3975,3 +3975,82 @@ def admin_weekly_markets(
 ):
     from app.services.weekly_markets import weekly_table
     return weekly_table(db, weeks)
+
+
+# ─── (2026-10-17) صفقات الظل — ما حسبته المنصة ولم ترسله (للمراجعة الداخلية فقط) ─────────────────────
+_SHADOW_REASON_AR = {
+    "crypto_weekend": "كريبتو العطلة (موقوف السبت والأحد)",
+    "HTF_CONFLICT": "تعارض مع الفريم الأكبر",
+    "COMMODITY_COUNTER_4H_TREND": "سلع عكس اتجاه 4 ساعات",
+    "SL_INSIDE_SPREAD_NOISE": "وقف داخل ضجيج السبريد",
+}
+
+
+def _shadow_reason_label(reason: str) -> str:
+    r = reason or ""
+    if r.startswith("tpl:"):
+        from app.services.strategy_templates import get_template
+        t = get_template(r[4:])
+        return f"قالب: {t['name_ar']}" if t else r
+    if r.startswith("ZONE_CONFLICT_"):
+        return "تعارض المنطقة: " + {"ZONE_CONFLICT_SELL_IN_DISCOUNT": "بيع في منطقة خصم",
+                                    "ZONE_CONFLICT_BUY_IN_PREMIUM": "شراء في منطقة علاوة"}.get(r, r[14:])
+    for k, v in _SHADOW_REASON_AR.items():
+        if r.startswith(k):
+            return v
+    return r
+
+
+@router.get("/shadow-signals")
+def admin_shadow_signals(
+    reason: Optional[str] = Query(default=None, description="سبب واحد، أو فارغ للكل"),
+    days: int = Query(default=30, ge=1, le=120),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=10, le=200),
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """صفقات حسبتها المنصة ولم ترسلها لأحد: كريبتو العطلة، قواعد الرفض بتجربتها الصامتة، وقوالب الذهب بتجربة الظل.
+    لكل سبب: العدد، المقيَّم، الرابحة/الخاسرة، ومتوسط R — "لو أرسلناها، هل كانت ستربح؟"."""
+    from app.models.shadow_signal import ShadowSignal
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    rows = db.query(ShadowSignal).filter(ShadowSignal.created_at >= since).order_by(ShadowSignal.created_at.desc()).all()
+    decided = ("TP1_HIT", "TP2_HIT", "SL_HIT", "TP1_BE", "EXPIRED_TP1")
+
+    by_reason = {}
+    for s in rows:
+        b = by_reason.setdefault(s.reason, {"reason": s.reason, "label": _shadow_reason_label(s.reason),
+                                            "total": 0, "evaluated": 0, "pending": 0, "wins": 0, "losses": 0, "r": 0.0})
+        b["total"] += 1
+        if s.outcome is None:
+            b["pending"] += 1
+            continue
+        b["evaluated"] += 1
+        if s.outcome in decided and s.r_multiple is not None:
+            b["r"] += s.r_multiple
+            if s.outcome == "SL_HIT":
+                b["losses"] += 1
+            else:
+                b["wins"] += 1
+    summary = []
+    for b in by_reason.values():
+        n = b["wins"] + b["losses"]
+        summary.append({**b, "r": round(b["r"], 2), "win_rate": round(b["wins"] / n * 100, 1) if n else None,
+                        "avg_r": round(b["r"] / n, 3) if n else None})
+    summary.sort(key=lambda x: -x["total"])
+
+    items = [s for s in rows if not reason or s.reason == reason]
+    total = len(items)
+    page_rows = items[(page - 1) * page_size: page * page_size]
+    return {
+        "summary": summary,
+        "total": total, "page": page, "page_size": page_size,
+        "items": [{
+            "id": s.id, "reason": s.reason, "label": _shadow_reason_label(s.reason), "source": s.source,
+            "market": s.market, "timeframe": s.timeframe, "side": s.signal_type,
+            "entry": s.entry_price, "sl": s.stop_loss, "tp1": s.take_profit_1, "tp2": s.take_profit_2,
+            "created_at": s.created_at.isoformat() if s.created_at else None,
+            "outcome": s.outcome, "r": s.r_multiple,
+            "exit_time": s.exit_time.isoformat() if s.exit_time else None,
+        } for s in page_rows],
+    }
