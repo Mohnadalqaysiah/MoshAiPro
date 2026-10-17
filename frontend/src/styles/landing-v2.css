@@ -354,5 +354,8 @@
 .qx .earn{padding:18px;border-radius:16px;background:linear-gradient(135deg,rgba(60,242,192,.12),rgba(247,195,92,.1));border:1px solid rgba(60,242,192,.35);display:flex;flex-direction:column;gap:4px}
 .qx .earn small{font-size:13px;color:var(--muted)}
 .qx .earn > .mono{font-size:40px;font-weight:700;color:#fff;line-height:1.1}
+.qx .earn-rows{display:flex;flex-direction:column;gap:6px;margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.1)}
+.qx .earn-rows > div{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.qx .earn-rows b{font-size:17px;color:#fff}
 .qx .calc-note{font-size:12px;color:var(--faint);line-height:1.8}
 @media (max-width:960px){.qx .refx{grid-template-columns:minmax(0,1fr)}}
