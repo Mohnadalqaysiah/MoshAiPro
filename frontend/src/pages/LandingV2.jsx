@@ -432,7 +432,7 @@ export default function LandingV2() {
                 {showAvg && (
                   <div className="rv-score panel">
                     <span className="mono rv-num">{Number(reviews.summary.average).toFixed(1)}</span>
-                    <span className="stars" aria-label={`${reviews.summary.average} / 5`}>{[1, 2, 3, 4, 5].map((k) => <i key={k} className={k <= Math.round(reviews.summary.average) ? 'on' : ''} />)}</span>
+                    <span className="stars" role="img" aria-label={`${reviews.summary.average} / 5`}>{[1, 2, 3, 4, 5].map((k) => <i key={k} className={k <= Math.round(reviews.summary.average) ? 'on' : ''} />)}</span>
                     <small>{X.rvAvg.replace('{n}', reviews.summary.count)}</small>
                     <div className="dist" aria-hidden="true">
                       {[5, 4, 3, 2, 1].map((k) => <div key={k}><span>{k}</span><b style={{ '--w': `${Math.round(((reviews.summary.distribution?.[k] || 0) / reviews.summary.count) * 100)}%` }} /></div>)}
@@ -449,7 +449,7 @@ export default function LandingV2() {
                 {reviews.items.slice(0, 6).map((r, i) => (
                   <article key={r.id} className="review">
                     <header>
-                      <span className="stars sm" aria-label={`${r.rating} / 5`}>{[1, 2, 3, 4, 5].map((k) => <i key={k} className={k <= r.rating ? 'on' : ''} />)}</span>
+                      <span className="stars sm" role="img" aria-label={`${r.rating} / 5`}>{[1, 2, 3, 4, 5].map((k) => <i key={k} className={k <= r.rating ? 'on' : ''} />)}</span>
                       {r.verified ? <span className="verified"><Check s={12} />{X.verified}</span> : <span className="via">{X.via.replace('{s}', r.source_note || '')}</span>}
                     </header>
                     <blockquote>{r.text}</blockquote>
