@@ -4007,8 +4007,8 @@ def admin_shadow_signals(
     days: int = Query(default=30, ge=1, le=120),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=10, le=200),
-    scope: str = Query(default="clean", pattern="^(clean|legacy|all)$",
-                       description="clean: بعد إصلاح المستويات فقط (افتراضي) | legacy: قبله | all"),
+    scope: str = Query(default="clean", pattern="^(clean|legacy_valid|combined|legacy|all)$",
+                       description="clean: بعد الإصلاح (افتراضي، الرسمي) | legacy_valid: قديمة سليمة (تأكيدي) | combined | legacy | all"),
     admin: User = Depends(get_admin_user),
     db: Session = Depends(get_db),
 ):
@@ -4031,7 +4031,7 @@ def admin_shadow_signals(
         for opp in st.opportunities(ss):
             dup_ids.update(x.id for x in opp[1:])
         summary.append({"reason": rsn, "label": _shadow_reason_label(rsn), "template": rsn.startswith("tpl:"),
-                        **st.summarize(ss)})
+                        **st.summarize(ss, official=scope in st.OFFICIAL_SCOPES)})
     summary.sort(key=lambda x: -x["rows"])
 
     items = [s for s in rows if not reason or s.reason == reason]
@@ -4040,7 +4040,9 @@ def admin_shadow_signals(
     nr = lambda s: st.net_r(s)
     return {
         "scope": scope,
-        "counts": {"clean": sum(1 for s in every if st.is_clean(s)), "legacy": sum(1 for s in every if not st.is_clean(s))},
+        "counts": {"clean": sum(1 for s in every if st.is_clean(s)), "legacy": sum(1 for s in every if not st.is_clean(s)),
+                   "legacy_valid": len(st.filter_scope(every, "legacy_valid"))},
+        "official": scope in st.OFFICIAL_SCOPES,
         "min_required": st.MIN_INDEPENDENT,
         "summary": summary,
         "total": total, "page": page, "page_size": page_size,
@@ -4051,7 +4053,7 @@ def admin_shadow_signals(
             "created_at": s.created_at.isoformat() if s.created_at else None,
             "outcome": s.outcome, "r": s.r_multiple,
             "r_net": round(nr(s), 3) if nr(s) is not None else None,
-            "legacy": not st.is_clean(s), "duplicate": s.id in dup_ids,
+            "legacy": not st.is_clean(s), "legacy_valid": st.is_legacy_valid(s), "duplicate": s.id in dup_ids,
             "exit_time": s.exit_time.isoformat() if s.exit_time else None,
         } for s in page_rows],
     }

@@ -47,7 +47,9 @@ export default function ShadowSignalsPanel() {
   const verdict = (b) => <span className={VCLS[b.verdict] || 'text-gray-500'}>{b.verdict_label}</span>
   const R = (v) => (v == null ? '—' : `${v > 0 ? '+' : ''}${v}R`)
   const rc = (v) => (v > 0 ? 'text-emerald-400' : v < 0 ? 'text-red-400' : 'text-gray-400')
-  const SCOPES = [['clean', 'بعد إصلاح المستويات'], ['legacy', 'قديمة (قبل الإصلاح)'], ['all', 'الكل']]
+  const SCOPES = [['clean', 'بعد الإصلاح (الرسمي)'], ['legacy_valid', 'قديمة سليمة (تأكيدي)'], ['combined', 'الاثنتان'],
+    ['legacy', 'كل القديم كما هو']]
+  const scopeCount = (k, c) => (k === 'combined' ? c.clean + c.legacy_valid : c[k])
 
   return (
     <div className="space-y-5">
@@ -60,7 +62,7 @@ export default function ShadowSignalsPanel() {
           {SCOPES.map(([k, l]) => (
             <button key={k} onClick={() => { setScope(k); setPage(1); load({ scope: k, page: 1 }) }}
               className={`text-xs px-3 py-1.5 rounded-lg border ${scope === k ? 'border-amber-500 text-amber-300 bg-amber-900/20' : 'border-gray-700 text-gray-500'}`}>
-              {l}{data?.counts ? ` (${k === 'all' ? data.counts.clean + data.counts.legacy : data.counts[k]})` : ''}
+              {l}{data?.counts ? ` (${scopeCount(k, data.counts)})` : ''}
             </button>
           ))}
           <span className="w-px h-5 bg-gray-700 mx-1" />
@@ -77,9 +79,16 @@ export default function ShadowSignalsPanel() {
       </div>
 
       {error && <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg p-3">{error}</div>}
-      {scope !== 'clean' && (
+      {(scope === 'legacy_valid' || scope === 'combined') && (
+        <div className="text-xs text-sky-300 bg-sky-500/10 border border-sky-500/30 rounded-lg p-3 leading-relaxed">
+          سجلات قبل الإصلاح التي تحقق شروط السجلات الجديدة نفسها (فحص الجهة، بلا TP2 قبل TP1، وصفقة عطلة واحدة لكل رمز وفريم).
+          صالحة للقراءة، لكنها من 14–18/10 فقط وأغلبها كريبتو وعطلة، ورأينا أرقامها قبل التسجيل — لذلك <b>للتأكيد لا للحكم</b>:
+          الحكم الرسمي على "بعد الإصلاح" وحده.
+        </div>
+      )}
+      {scope === 'legacy' && (
         <div className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 leading-relaxed">
-          تعرض سجلات قبل إصلاح المستويات (18/10): بعضها بمستويات معكوسة تُحسب خسارة فورية، فأرقامها لا تصلح للحكم على أي فلتر.
+          تعرض كل سجلات قبل إصلاح المستويات (18/10) كما هي: بعضها بمستويات معكوسة تُحسب خسارة فورية، فأرقامها لا تصلح للحكم على أي فلتر.
           محفوظة كما هي للرجوع فقط.
         </div>
       )}
@@ -152,7 +161,9 @@ export default function ShadowSignalsPanel() {
                     <td className="px-4 py-2 text-xs text-gray-400" dir="ltr">{fmt(s.created_at)}</td>
                     <td className="px-3 py-2 text-xs text-gray-300">
                       {s.label}
-                      {s.legacy && <span className="ms-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300">قبل الإصلاح</span>}
+                      {s.legacy && (s.legacy_valid
+                        ? <span className="ms-1 text-[10px] px-1.5 py-0.5 rounded bg-sky-900/40 text-sky-300">قديمة سليمة</span>
+                        : <span className="ms-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300">قبل الإصلاح</span>)}
                       {s.duplicate && <span className="ms-1 text-[10px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-400" title="نفس فرصة صف أقدم — لا تُحسب مرتين">مكرر</span>}
                     </td>
                     <td className="px-3 py-2 text-center text-white">{s.market} <span className="text-gray-500 text-xs">{s.timeframe}</span></td>

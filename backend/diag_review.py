@@ -94,16 +94,32 @@ def main():
                .order_by(ShadowSignal.created_at).all())
     legacy = sum(1 for s in every if not st.is_clean(s))
     sh = st.filter_scope(every, "clean")
-    print(f"  مستبعد (قبل إصلاح المستويات): {legacy} صفاً — مقروء بـdiag_shadow_audit ولا يدخل الحكم")
-    reasons = sorted({s.reason for s in sh})
+    lv = st.filter_scope(every, "legacy_valid")
+    print(f"  قديمة (قبل إصلاح المستويات): {legacy} صفاً — منها {len(lv)} سليمة تُعرض كسطر تأكيد ولا تدخل الحكم الرسمي")
+    reasons = sorted({s.reason for s in sh} | {s.reason for s in lv})
     if not reasons:
         print("  لا صفقات مرفوضة نظيفة بعد")
+
+    def _reps(rows):
+        return [s for s in st.representatives(rows) if s.outcome in ("TP1_HIT", "TP2_HIT", "SL_HIT") and s.r_multiple is not None]
     for rsn in reasons:
         rows = [s for s in sh if s.reason == rsn]
-        reps = [s for s in st.representatives(rows)
-                if s.outcome in ("TP1_HIT", "TP2_HIT", "SL_HIT") and s.r_multiple is not None]
+        reps = _reps(rows)
         print(_line(rsn, [s.r_multiple for s in reps], base, mode="relax",
                     nets=[st.net_r(s) for s in reps], rows=len(rows)))
+        # (2026-10-18) تأكيد من القديمة السليمة — نفس شروط الجديدة، لكن رأينا أرقامها قبل التسجيل فلا تُحكِّم
+        lrows = [s for s in lv if s.reason == rsn]
+        lreps = _reps(lrows)
+        if lreps:
+            la = sum(s.r_multiple for s in lreps) / len(lreps)
+            ln = [x for x in (st.net_r(s) for s in lreps) if x is not None]
+            lna = sum(ln) / len(ln) if ln else None
+            agree = ""
+            if reps:
+                oa = sum(s.r_multiple for s in reps) / len(reps)
+                agree = " — يتفق مع الرسمي" if (oa > 0) == (la > 0) else " — يخالف الرسمي: انتظر بيانات أكثر"
+            print(f"      ↳ تأكيدي (قديمة سليمة): {len(lrows)} صفاً → {len(lreps)} فرصة، توقّع {la:+.2f}R"
+                  + (f"، بعد سبريد الجدول {lna:+.2f}R" if lna is not None else "") + agree)
 
     print("\n" + "═" * 90 + "\n(3) قوالب الذهب بتجربة الظل مقابل المحرك\n" + "═" * 90)
     from app.services.template_shadow import SHADOW_START, SHADOW_TEMPLATES
@@ -135,10 +151,15 @@ def main():
         print(f"  {key:<26} {len(rs):>3} صفقة | صافٍ {net:+.2f}R | أسابيع رابحة {won}/{len(weeks)} | تراجع {dd:.2f}R\n      {verdict}")
 
     print("\n" + "═" * 90 + "\n(4) كريبتو العطلة بالظل — يُعاد إن ≥ 30 صفقة ومتوسط ≥ 0R (الموعد ~09/11)\n" + "═" * 90)
-    cw_rows = st.filter_scope(db.query(ShadowSignal).filter(ShadowSignal.reason == "crypto_weekend").all(), "clean")
+    cw_all = db.query(ShadowSignal).filter(ShadowSignal.reason == "crypto_weekend").all()
+    cw_rows = st.filter_scope(cw_all, "clean")
     cw = [s.r_multiple for s in st.representatives(cw_rows)
           if s.outcome in ("TP1_HIT", "TP2_HIT", "SL_HIT") and s.r_multiple is not None]
     print(f"  (نظيفة فقط: {len(cw_rows)} صفاً → {len(cw)} فرصة محسومة)")
+    cw_lv = [s.r_multiple for s in st.representatives(st.filter_scope(cw_all, "legacy_valid"))
+             if s.outcome in ("TP1_HIT", "TP2_HIT", "SL_HIT") and s.r_multiple is not None]
+    if cw_lv:
+        print(f"      ↳ تأكيدي (قديمة سليمة بقاعدة الحي): {len(cw_lv)} فرصة، متوسط {sum(cw_lv) / len(cw_lv):+.2f}R")
     if cw:
         avg = sum(cw) / len(cw)
         v = "🟢 يُعاد تداول الكريبتو بالعطلة" if len(cw) >= 30 and avg >= 0 else \
