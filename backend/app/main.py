@@ -247,7 +247,8 @@ async def root():
     }
 
 
-@app.get("/health")
+# (2026-10-18) HEAD أيضاً — UptimeRobot يفحص بطلب HEAD، وكان يرجع 405 فيُبلغ عن توقف وهمي
+@app.api_route("/health", methods=["GET", "HEAD"])
 async def health_check():
     return {"status": "healthy"}
 
