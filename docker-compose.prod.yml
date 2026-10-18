@@ -68,10 +68,14 @@ services:
       - moshnet
     command: python bot.py
 
+  # (2026-10-18) لا يعمل إلا بطلب صريح: `docker compose --profile docker-nginx up -d nginx`.
+  # system nginx على السيرفر هو المسؤول عن 80/443 وSSL. بعد إعادة تشغيل السيرفر قامت هذه الحاوية تلقائياً
+  # (restart: always) بينما system nginx كان disabled بالإقلاع، فدخلت حلقة إعادة تشغيل والموقع والـAPI توقفا ~16 ساعة.
   nginx:
+    profiles: ["docker-nginx"]
     image: nginx:alpine
     container_name: moshapi_nginx
-    restart: always
+    restart: "no"
     ports:
       - "80:80"
       - "443:443"

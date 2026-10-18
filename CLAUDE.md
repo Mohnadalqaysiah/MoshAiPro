@@ -138,6 +138,7 @@ docker compose -f docker-compose.prod.yml up -d backend
 ## ملاحظات مهمة
 
 - **لا تشغّل Docker nginx** — system nginx هو المسؤول عن SSL وport 80
+- خدمة `nginx` بـdocker-compose.prod.yml خلف profile `docker-nginx` (منذ 2026-10-18) فلا يشغّلها `up -d` الكامل. و**system nginx يجب أن يكون `enabled`** (`systemctl enable nginx`) — كان disabled فلم يقم بعد إعادة تشغيل السيرفر وتوقف الموقع ~16 ساعة.
 - عند `docker compose up` كامل → أضف `--scale nginx=0` أو أبعد nginx من الأمر
 - الـ backend يعمل على port `127.0.0.1:8000` (يصل إليه system nginx مباشرة)
 - **ضغط gzip في system nginx** (`/etc/nginx/nginx.conf`): `gzip_types` و`gzip_proxied any` مفعّلة يدوياً منذ 2026-10-17 — بدونها يصل JS بلا ضغط (3-4× أكبر). تُكرَّر عند إعادة تثبيت nginx.
