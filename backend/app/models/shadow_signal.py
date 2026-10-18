@@ -40,3 +40,6 @@ class ShadowSignal(Base):
     entry_time        = Column(DateTime(timezone=True), nullable=True)
     exit_time         = Column(DateTime(timezone=True), nullable=True)
     evaluated_at      = Column(DateTime(timezone=True), nullable=True)
+    # (2026-10-18) نسخة التحقق من المستويات (app/services/shadow_levels.py). NULL = قبل الإصلاح: قد تكون المستويات
+    # معكوسة (تدقيق 18/10: 299 من 793). 1 = مرّت بنفس فحص الجهة الحي. السجلات القديمة لا تُعدَّل ولا تُحذف.
+    levels_version    = Column(Integer, nullable=True, index=True)

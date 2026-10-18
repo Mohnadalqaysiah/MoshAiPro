@@ -59,6 +59,13 @@ def record_shadow(db, *, source: str, symbol: str, timeframe: str, signal_type: 
     لكل مشترك. لا يرمي استثناء أبداً."""
     try:
         from app.models.shadow_signal import ShadowSignal
+        from app.services.shadow_levels import final_levels_valid, LEVELS_VERSION
+        # (2026-10-18) لا يُحفظ صف ظل بمستويات غير صالحة — نفس فحص الجهة الحي (shadow_levels.py)، لكل المسارات
+        bad = final_levels_valid(signal_type, entry, sl, tp1, tp2)
+        if bad:
+            logger.info(f"🌑 SHADOW_LEVELS_REJECTED {bad}: {reason} {symbol}/{timeframe} {signal_type} "
+                        f"e={entry} sl={sl} tp1={tp1} [{source}]")
+            return None
         h = hashlib.md5(f"{reason}-{symbol}-{timeframe}-{signal_type}-{round(float(entry), 4)}".encode()).hexdigest()
         if db.query(ShadowSignal.id).filter(ShadowSignal.signal_hash == h).first():
             return None
@@ -77,7 +84,7 @@ def record_shadow(db, *, source: str, symbol: str, timeframe: str, signal_type: 
             entry_price=float(entry), stop_loss=float(sl), take_profit_1=float(tp1),
             take_profit_2=float(tp2 or tp1), ai_confidence=float(confidence or 0),
             risk_reward_ratio=float(rr) if rr else None, expires_at=expires_at,
-            user_id=user_id, signal_hash=h, reason=reason[:60],
+            user_id=user_id, signal_hash=h, reason=reason[:60], levels_version=LEVELS_VERSION,
         )
         db.add(sh)
         db.commit()

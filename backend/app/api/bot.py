@@ -325,8 +325,13 @@ async def bot_analyze(
             _why = str(analysis.get("rejection_reason") or "")
             if _pre in ("BUY", "SELL") and _why.startswith(_LEARN_REJECTIONS) \
                     and signal_user_id is not None and _smart_data.is_market_open(symbol):
-                _lv = dict(analysis.get("_pre_reject_levels") or {})
-                if _lv.get("entry") and _lv.get("stop_loss") and _lv.get("tp1"):
+                # (2026-10-18) نفس فحص الجهة الحي (_institutional_gate Rule 6) قبل سقف TP1 — بنفس ترتيب المسار الحي.
+                # مستويات بُنيت لاتجاه غير اتجاه الرفض تُرفض ولا تُحفظ (راجع app/services/shadow_levels.py).
+                from app.services.shadow_levels import normalize_rejected_levels
+                _lv, _bad = normalize_rejected_levels(_pre, analysis.get("_pre_reject_levels") or {})
+                if _bad:
+                    logger.info(f"🌑 SHADOW_LEVELS_REJECTED {_bad}: {_why[:40]} {symbol}/{timeframe} {_pre}")
+                if _lv:
                     from datetime import timedelta
                     from app.services.weekend_policy import record_shadow
                     _capped = mosh_ai_engine_v5._cap_tp1({"recommendation": _pre, "levels": _lv}, symbol, timeframe)["levels"]

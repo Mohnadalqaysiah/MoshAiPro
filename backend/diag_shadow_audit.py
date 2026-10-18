@@ -24,6 +24,7 @@ from app.models.shadow_signal import ShadowSignal
 from app.models.signal import Signal
 from app.services.spread_table import typical_spread
 from app.services.quality_report import _r_multiple as live_r
+from app.services.shadow_levels import final_levels_valid
 
 DECIDED = ("TP1_HIT", "TP2_HIT", "SL_HIT")
 WINS = ("TP1_HIT", "TP2_HIT")
@@ -214,6 +215,31 @@ def main():
         print("     ", m)
     exp = Counter(s.outcome for s in rows if (s.outcome or "").startswith("EXPIRED"))
     print(f"   منتهية بلا هدف ولا وقف (مستبعدة من R بالتقرير كما بالصفقات الفعلية): {dict(exp) or 'لا شيء'}")
+
+    # ── G) قديم مقابل جديد (levels_version) ───────────────────────────────────
+    print("\n" + "═" * 110 + "\nG) السجلات قبل إصلاح المستويات (levels_version فارغ) مقابل بعده (=1)\n" + "═" * 110)
+    has_ver = hasattr(ShadowSignal, "levels_version")
+    old = [s for s in rows if not has_ver or s.levels_version is None]
+    new = [s for s in rows if has_ver and s.levels_version is not None]
+    print(f"   قديمة (قبل الإصلاح، لا تُعدَّل ولا تُحذف): {len(old)} | جديدة (بعد الإصلاح): {len(new)}")
+    print("   تطبيق فحص الجهة الجديد (shadow_levels.final_levels_valid) على القديمة — قراءة فقط:")
+    verdict = defaultdict(Counter)
+    for s in old:
+        verdict[s.reason][final_levels_valid(s.signal_type, s.entry_price, s.stop_loss,
+                                             s.take_profit_1, s.take_profit_2) or "PASS"] += 1
+    for reason, c in sorted(verdict.items(), key=lambda kv: -sum(kv[1].values())):
+        n = sum(c.values())
+        rej = {k: v for k, v in c.items() if k != "PASS"}
+        print(f"     {reason}: يجتاز {c['PASS']} من {n} ({pct(c['PASS'], n)}) | يُرفض: {rej or 0}")
+    if new:
+        print("   الجديدة — نتائج كل سبب:")
+        nb = defaultdict(list)
+        for s in new:
+            nb[s.reason].append(s)
+        for reason, ss in sorted(nb.items(), key=lambda kv: -len(kv[1])):
+            bad = sum(1 for s in ss if final_levels_valid(s.signal_type, s.entry_price, s.stop_loss,
+                                                          s.take_profit_1, s.take_profit_2))
+            print(f"     {reason}: {fmt(stats(ss))} | غير صالحة (يجب 0): {bad}")
 
     if tpl:
         print("\n" + "═" * 110 + "\nقوالب (tpl:) — محاكاة الباكتيست: نصف عند TP1 + تعادل + خصم سبريد الجدول\n" + "═" * 110)
