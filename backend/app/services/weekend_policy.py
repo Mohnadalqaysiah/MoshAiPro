@@ -69,6 +69,17 @@ def record_shadow(db, *, source: str, symbol: str, timeframe: str, signal_type: 
         h = hashlib.md5(f"{reason}-{symbol}-{timeframe}-{signal_type}-{round(float(entry), 4)}".encode()).hexdigest()
         if db.query(ShadowSignal.id).filter(ShadowSignal.signal_hash == h).first():
             return None
+        if reason == "crypto_weekend":
+            # (2026-10-18، المرحلة 1.1) نفس قاعدة النظام الحي (_has_active_signal، bot.py:145): صفقة نشطة واحدة لكل
+            # (رمز، فريم) أياً كان الاتجاه. الحي يفحص جدول signals، وبالعطلة لا يُنشأ فيه شيء — فكان كل مرور للماسح
+            # بسعر مختلف قليلاً يُنشئ صف ظل جديداً (BNBUSD/4h شراء سُجّل 7 مرات خلال 90 دقيقة يوم 18/10).
+            now = datetime.now(timezone.utc)
+            if db.query(ShadowSignal.id).filter(
+                ShadowSignal.reason == "crypto_weekend", ShadowSignal.market == symbol.upper(),
+                ShadowSignal.timeframe == timeframe,
+                ShadowSignal.outcome.is_(None), ShadowSignal.expires_at > now,
+            ).first():
+                return None
         if reason != "crypto_weekend":
             # (2026-10-14) صفقات مرفوضة: الماسح يعيد نفس الفكرة كل دورة بسعر مختلف قليلاً — صفقة ظل مفتوحة
             # واحدة لكل (سبب، رمز، فريم، اتجاه) كما يفعل النظام الحي (_has_active_signal)، وإلا تضخّمت العينة.
