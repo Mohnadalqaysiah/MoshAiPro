@@ -31,12 +31,61 @@ def is_clean(s) -> bool:
     return is_template(s) or getattr(s, "levels_version", None) is not None
 
 
+def tp2_before_tp1(s) -> bool:
+    """TP2 أقرب من TP1. النظام القديم حفظها كما هي (المقيّم يتجاهل TP2)، والجديد يبدّلهما قبل السقف كما يفعل الحي —
+    فالصفقة المحفوظة قديماً ليست نفس الصفقة التي يحفظها النظام الآن، فلا تُخلط بها. TP2 = TP1 يعني لا هدف ثانٍ."""
+    t1, t2 = float(s.take_profit_1 or 0), float(s.take_profit_2 or 0)
+    if not t2 or t2 == t1:
+        return False
+    return t2 < t1 if s.signal_type == "BUY" else t2 > t1
+
+
+def is_legacy_valid(s) -> bool:
+    """(2026-10-18) سجل قديم (قبل الإصلاح) يحقق نفس شروط السجل الجديد بالضبط: فحص الجهة الحالي، وبلا TP2 قبل TP1."""
+    from app.services.shadow_levels import final_levels_valid
+    if is_clean(s):
+        return False
+    if final_levels_valid(s.signal_type, s.entry_price, s.stop_loss, s.take_profit_1, s.take_profit_2):
+        return False
+    return not tp2_before_tp1(s)
+
+
+def weekend_live_rule(rows: list) -> list:
+    """قاعدة المحرك الحي بأثر رجعي على كريبتو العطلة القديم: صفقة مفتوحة واحدة لكل (رمز، فريم) أياً كان الاتجاه
+    (نفس weekend_policy.record_shadow منذ المرحلة 1.1). الصف يُبقى إن لم يكن قبله صف مُبقى مفتوح بنفس الرمز والفريم.
+    الأسباب الأخرى تمر كما هي."""
+    keep, open_until = [], {}
+    for s in sorted(rows, key=lambda x: _aware(x.created_at)):
+        if s.reason != "crypto_weekend":
+            keep.append(s)
+            continue
+        k, t = (s.market, s.timeframe), _aware(s.created_at)
+        if k in open_until and t <= open_until[k]:
+            continue
+        keep.append(s)
+        open_until[k] = _aware(s.exit_time) or _aware(s.expires_at) or t
+    return keep
+
+
+SCOPES = ("clean", "legacy_valid", "combined", "legacy", "all")
+OFFICIAL_SCOPES = ("clean",)
+
+
 def filter_scope(rows: list, scope: str) -> list:
-    """scope: clean (افتراضي) | legacy (قبل إصلاح المستويات) | all."""
+    """scope:
+      clean        بعد إصلاح المستويات (افتراضي، والحكم الرسمي عليه وحده)
+      legacy_valid قديمة تحقق شروط الجديدة نفسها + قاعدة العطلة الحية بأثر رجعي — للتأكيد لا للحكم
+      combined     clean + legacy_valid
+      legacy       كل القديم كما هو (فيه المعكوس) — للرجوع فقط
+      all          كل الصفوف كما هي"""
     if scope == "all":
         return list(rows)
     if scope == "legacy":
         return [s for s in rows if not is_clean(s)]
+    if scope == "legacy_valid":
+        return weekend_live_rule([s for s in rows if is_legacy_valid(s)])
+    if scope == "combined":
+        return [s for s in rows if is_clean(s)] + weekend_live_rule([s for s in rows if is_legacy_valid(s)])
     return [s for s in rows if is_clean(s)]
 
 
@@ -93,8 +142,9 @@ def net_r(s) -> Optional[float]:
     return None if c is None else float(s.r_multiple) - c
 
 
-def summarize(rows: list) -> Dict:
-    """ملخّص سبب واحد على الفرص المستقلة (الممثّلون)، مع أعداد الصفوف للشفافية."""
+def summarize(rows: list, official: bool = True) -> Dict:
+    """ملخّص سبب واحد على الفرص المستقلة (الممثّلون)، مع أعداد الصفوف للشفافية.
+    official=False (نطاق فيه بيانات قديمة): نص الحكم يُوسم "تأكيدي" — الحكم الرسمي على البيانات الجديدة وحدها."""
     opps = opportunities(rows)
     reps = [o[0] for o in opps]
     dec = [s for s in reps if s.outcome in DECIDED and s.r_multiple is not None]
@@ -121,6 +171,9 @@ def summarize(rows: list) -> Dict:
         "min_required": MIN_INDEPENDENT,
     }
     out["verdict"], out["verdict_label"] = _verdict(out, tpl)
+    out["official"] = official
+    if not official and out["verdict"] not in ("no_data",):
+        out["verdict_label"] = "تأكيدي (بيانات قديمة رأيناها): " + out["verdict_label"]
     return out
 
 

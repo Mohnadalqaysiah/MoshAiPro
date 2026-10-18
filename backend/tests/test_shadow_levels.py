@@ -310,7 +310,10 @@ def test_live_paths_do_not_use_shadow_levels():
     for p in (ROOT / "app").rglob("*.py"):
         if "from app.services.shadow_levels import" in p.read_text(encoding="utf-8"):
             users.append(p.relative_to(ROOT).as_posix())
-    assert sorted(users) == ["app/api/bot.py", "app/services/weekend_policy.py"], users
+    # shadow_stats.py (المرحلة 2): قراءة التقارير فقط — يطبّق نفس الفحص على السجلات القديمة لتمييز السليم منها
+    assert sorted(users) == ["app/api/bot.py", "app/services/shadow_stats.py", "app/services/weekend_policy.py"], users
+    rep = (ROOT / "app/services/shadow_stats.py").read_text(encoding="utf-8")
+    assert "db.add(" not in rep and "commit(" not in rep, "shadow_stats للقراءة فقط"
     bot = (ROOT / "app/api/bot.py").read_text(encoding="utf-8")
     i = bot.index("from app.services.shadow_levels import normalize_rejected_levels")
     block_start = bot.rindex("_LEARN_REJECTIONS", 0, i)

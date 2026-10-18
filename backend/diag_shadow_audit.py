@@ -222,6 +222,13 @@ def main():
     old = [s for s in rows if not has_ver or s.levels_version is None]
     new = [s for s in rows if has_ver and s.levels_version is not None]
     print(f"   قديمة (قبل الإصلاح، لا تُعدَّل ولا تُحذف): {len(old)} | جديدة (بعد الإصلاح): {len(new)}")
+    try:
+        from app.services import shadow_stats as _st
+        lv = _st.filter_scope(rows, "legacy_valid")
+        print(f"   قديمة سليمة (شروط الجديدة نفسها + صفقة عطلة واحدة لكل رمز وفريم): {len(lv)} — "
+              f"حسب السبب: {dict(Counter(s.reason for s in lv))}")
+    except Exception as _e:
+        print(f"   (تعذّر حساب القديمة السليمة: {_e})")
     print("   تطبيق فحص الجهة الجديد (shadow_levels.final_levels_valid) على القديمة — قراءة فقط:")
     verdict = defaultdict(Counter)
     for s in old:

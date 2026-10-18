@@ -147,13 +147,78 @@ def test_admin_endpoint_defaults_to_clean_independent():
         r.expires_at = r.created_at + timedelta(hours=3)
     db = _db(rows)
     res = A.admin_shadow_signals(reason=None, days=30, page=1, page_size=50, scope="clean", admin=None, db=db)
-    assert res["counts"] == {"clean": 2, "legacy": 1}
+    assert res["counts"]["clean"] == 2 and res["counts"]["legacy"] == 1 and res["official"] is True
     b = res["summary"][0]
     assert b["rows"] == 2 and b["opportunities"] == 1 and b["decided"] == 1 and b["r_gross"] == -1.0
     assert b["verdict"] == "insufficient"
     assert {i["duplicate"] for i in res["items"]} == {True, False} and not any(i["legacy"] for i in res["items"])
     leg = A.admin_shadow_signals(reason=None, days=30, page=1, page_size=50, scope="legacy", admin=None, db=db)
     assert leg["total"] == 1 and leg["items"][0]["legacy"] is True
+
+
+# ─── القديمة السليمة ─────────────────────────────────────────────────────────────
+def test_legacy_valid_same_conditions_as_new():
+    ok = row(version=None)                                                    # بيع سليم قديم
+    inverted = row(version=None, sl=4154, tp1=4166)                           # معكوس
+    tp2_first = row(version=None, tp1=4142, tp2=4154)                        # TP2 قبل TP1 (بيع)
+    no_tp2 = row(version=None, tp2=4154, tp1=4154)                           # TP2 = TP1 = لا هدف ثانٍ → مقبول
+    tight = row(version=None, market="EURUSD", entry=1.08, sl=1.08005, tp1=1.07995, tp2=1.07995)  # وقف أضيق من 0.01%
+    clean = row(version=1)
+    tpl = row(reason="tpl:gold_session_sell", version=None)
+    assert st.is_legacy_valid(ok) and st.is_legacy_valid(no_tp2) and st.is_legacy_valid(tight)
+    assert not st.is_legacy_valid(inverted) and not st.is_legacy_valid(tp2_first)
+    assert not st.is_legacy_valid(clean) and not st.is_legacy_valid(tpl)       # ليست "قديمة"
+
+
+def test_weekend_live_rule_retroactive():
+    """حالة 18/10: BNBUSD/4h شراء 7 مرات خلال 90 دقيقة → تبقى الأولى فقط، كما يفعل النظام الآن."""
+    wk = [row(reason="crypto_weekend", market="BNBUSD", tf="4h", side="BUY", entry=711.0 + i * 0.3, sl=706.6,
+              tp1=715.5, tp2=720.0, version=None, minutes=i * 15, exp_h=72, outcome=None, r=None) for i in range(7)]
+    other_tf = row(reason="crypto_weekend", market="BNBUSD", tf="1h", side="BUY", entry=711.0, sl=708.0, tp1=714.0,
+                   tp2=716.0, version=None, minutes=20, exp_h=24, outcome=None, r=None)
+    other_side = row(reason="crypto_weekend", market="BNBUSD", tf="4h", side="SELL", entry=711.0, sl=715.0, tp1=707.0,
+                     tp2=703.0, version=None, minutes=30, exp_h=72, outcome=None, r=None)
+    htf = row(version=None, minutes=5)                                       # سبب آخر — يمر كما هو
+    kept = st.weekend_live_rule(wk + [other_tf, other_side, htf])
+    assert wk[0] in kept and not any(x in kept for x in wk[1:])
+    assert other_tf in kept and other_side not in kept and htf in kept
+    # بعد إغلاق الأولى تُسمح فكرة جديدة
+    first = row(reason="crypto_weekend", market="ADAUSD", tf="4h", side="BUY", entry=0.21, sl=0.208, tp1=0.212, tp2=0.216,
+                version=None, minutes=0, exp_h=72, exit_min=60)
+    later = row(reason="crypto_weekend", market="ADAUSD", tf="4h", side="BUY", entry=0.2101, sl=0.208, tp1=0.212, tp2=0.216,
+                version=None, minutes=90, exp_h=72)
+    assert len(st.weekend_live_rule([first, later])) == 2
+
+
+def test_scopes_legacy_valid_and_combined():
+    clean = row(version=1, minutes=5000)
+    ok = row(version=None)
+    bad = row(version=None, sl=4154, tp1=4166, minutes=10)
+    rows = [clean, ok, bad]
+    assert st.filter_scope(rows, "legacy_valid") == [ok]
+    assert st.filter_scope(rows, "combined") == [clean, ok]
+    assert st.filter_scope(rows, "legacy") == [ok, bad]
+
+
+def test_non_official_scope_marks_verdict_as_confirmation():
+    rows = [row(version=None, minutes=i * 300, outcome="TP1_HIT", r=1.0) for i in range(30)]
+    s = st.summarize(rows, official=False)
+    assert s["official"] is False and s["verdict_label"].startswith("تأكيدي")
+    assert st.summarize(rows)["verdict_label"].startswith("المنع")
+
+
+def test_admin_legacy_valid_scope():
+    import app.api.admin as A
+    now = datetime.now(timezone.utc)
+    rows = [row(version=None, minutes=0), row(version=None, sl=4154, tp1=4166, minutes=200), row(version=1, minutes=400)]
+    for r in rows:
+        r.created_at = now - timedelta(hours=10) + (r.created_at - T0)
+        r.expires_at = r.created_at + timedelta(hours=3)
+    db = _db(rows)
+    res = A.admin_shadow_signals(reason=None, days=30, page=1, page_size=50, scope="legacy_valid", admin=None, db=db)
+    assert res["counts"]["legacy_valid"] == 1 and res["official"] is False and res["total"] == 1
+    assert res["items"][0]["legacy_valid"] is True
+    assert res["summary"][0]["verdict_label"] in ("لا نتائج بعد",) or res["summary"][0]["verdict_label"].startswith("تأكيدي")
 
 
 # ─── diag_review ───────────────────────────────────────────────────────────────
@@ -183,7 +248,8 @@ def test_diag_review_reads_clean_opportunities_rules_unchanged():
     with redirect_stdout(buf):
         R.main()
     out = buf.getvalue()
-    assert "مستبعد (قبل إصلاح المستويات): 30 صفاً" in out
+    assert "قديمة (قبل إصلاح المستويات): 30 صفاً — منها 30 سليمة" in out
+    assert "↳ تأكيدي (قديمة سليمة): 30 صفاً → 30 فرصة، توقّع -1.00R" in out and "يخالف الرسمي" in out
     assert "(40 صفاً → 20 فرصة محسومة)" in out
     assert "ن=20" in out and "بعد سبريد الجدول" in out
 
