@@ -221,6 +221,23 @@ def test_admin_legacy_valid_scope():
     assert res["summary"][0]["verdict_label"] in ("لا نتائج بعد",) or res["summary"][0]["verdict_label"].startswith("تأكيدي")
 
 
+# ─── شرط الصافي لقاعدة التخفيف (18/10، قبل المراجعة) ───────────────────────────────
+def test_relax_rule_requires_positive_net():
+    import diag_review as R
+    rs = [1.0, -0.2] * 20                        # ن=40، إجمالي +0.4R، موجب بالنصفين
+    pos = R._line("X", rs, 0, mode="relax", nets=[x - 0.05 for x in rs])
+    assert "🟢 مرشّحة للتخفيف" in pos
+    neg = R._line("X", rs, 0, mode="relax", nets=[x - 0.6 for x in rs])      # صافٍ −0.2R
+    assert "🟢" not in neg and "تمنع خاسرات بعد السبريد" in neg
+    unknown = R._line("X", rs, 0, mode="relax", nets=[None] * len(rs))       # لا سبريد بالجدول
+    assert "🟢" not in unknown and "لا سبريد بالجدول" in unknown
+    small = R._line("X", rs[:20], 0, mode="relax", nets=[x - 0.05 for x in rs[:20]])
+    assert "🟢" not in small and "ن<30" in small
+    # قاعدة الرفض الجديد (1) لم تتغير ولا تتأثر بالصافي
+    rej = R._line("X", [-1.0, 0.2] * 20, 0, mode="reject")
+    assert "🟠 مرشّح لتجربة صامتة" in rej
+
+
 # ─── diag_review ───────────────────────────────────────────────────────────────
 def test_diag_review_reads_clean_opportunities_rules_unchanged():
     import diag_review as R
