@@ -4007,42 +4007,41 @@ def admin_shadow_signals(
     days: int = Query(default=30, ge=1, le=120),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=10, le=200),
+    scope: str = Query(default="clean", pattern="^(clean|legacy|all)$",
+                       description="clean: بعد إصلاح المستويات فقط (افتراضي) | legacy: قبله | all"),
     admin: User = Depends(get_admin_user),
     db: Session = Depends(get_db),
 ):
     """صفقات حسبتها المنصة ولم ترسلها لأحد: كريبتو العطلة، قواعد الرفض بتجربتها الصامتة، وقوالب الذهب بتجربة الظل.
-    لكل سبب: العدد، المقيَّم، الرابحة/الخاسرة، ومتوسط R — "لو أرسلناها، هل كانت ستربح؟"."""
+
+    (2026-10-18، المرحلة 2) كل الأرقام من app/services/shadow_stats.py — نفس قراءة diag_review:
+    نظيف فقط افتراضياً (levels_version)، على الفرص المستقلة لا الصفوف، وR بعد سبريد الجدول بجانب الإجمالي،
+    ولا "حكم" قبل 30 فرصة مستقلة محسومة. القديم يُعرض بـscope=legacy مميَّزاً، ولا يُعدَّل."""
     from app.models.shadow_signal import ShadowSignal
+    from app.services import shadow_stats as st
     since = datetime.now(timezone.utc) - timedelta(days=days)
-    rows = db.query(ShadowSignal).filter(ShadowSignal.created_at >= since).order_by(ShadowSignal.created_at.desc()).all()
-    decided = ("TP1_HIT", "TP2_HIT", "SL_HIT", "TP1_BE", "EXPIRED_TP1")
+    every = db.query(ShadowSignal).filter(ShadowSignal.created_at >= since).order_by(ShadowSignal.created_at.desc()).all()
+    rows = st.filter_scope(every, scope)
 
     by_reason = {}
     for s in rows:
-        b = by_reason.setdefault(s.reason, {"reason": s.reason, "label": _shadow_reason_label(s.reason),
-                                            "total": 0, "evaluated": 0, "pending": 0, "wins": 0, "losses": 0, "r": 0.0})
-        b["total"] += 1
-        if s.outcome is None:
-            b["pending"] += 1
-            continue
-        b["evaluated"] += 1
-        if s.outcome in decided and s.r_multiple is not None:
-            b["r"] += s.r_multiple
-            if s.outcome == "SL_HIT":
-                b["losses"] += 1
-            else:
-                b["wins"] += 1
-    summary = []
-    for b in by_reason.values():
-        n = b["wins"] + b["losses"]
-        summary.append({**b, "r": round(b["r"], 2), "win_rate": round(b["wins"] / n * 100, 1) if n else None,
-                        "avg_r": round(b["r"] / n, 3) if n else None})
-    summary.sort(key=lambda x: -x["total"])
+        by_reason.setdefault(s.reason, []).append(s)
+    summary, dup_ids = [], set()
+    for rsn, ss in by_reason.items():
+        for opp in st.opportunities(ss):
+            dup_ids.update(x.id for x in opp[1:])
+        summary.append({"reason": rsn, "label": _shadow_reason_label(rsn), "template": rsn.startswith("tpl:"),
+                        **st.summarize(ss)})
+    summary.sort(key=lambda x: -x["rows"])
 
     items = [s for s in rows if not reason or s.reason == reason]
     total = len(items)
     page_rows = items[(page - 1) * page_size: page * page_size]
+    nr = lambda s: st.net_r(s)
     return {
+        "scope": scope,
+        "counts": {"clean": sum(1 for s in every if st.is_clean(s)), "legacy": sum(1 for s in every if not st.is_clean(s))},
+        "min_required": st.MIN_INDEPENDENT,
         "summary": summary,
         "total": total, "page": page, "page_size": page_size,
         "items": [{
@@ -4051,6 +4050,8 @@ def admin_shadow_signals(
             "entry": s.entry_price, "sl": s.stop_loss, "tp1": s.take_profit_1, "tp2": s.take_profit_2,
             "created_at": s.created_at.isoformat() if s.created_at else None,
             "outcome": s.outcome, "r": s.r_multiple,
+            "r_net": round(nr(s), 3) if nr(s) is not None else None,
+            "legacy": not st.is_clean(s), "duplicate": s.id in dup_ids,
             "exit_time": s.exit_time.isoformat() if s.exit_time else None,
         } for s in page_rows],
     }

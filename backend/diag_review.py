@@ -10,6 +10,11 @@
   (4) كريبتو العطلة (~09/11): يُعاد إن كان متوسط الظل ≥ 0R على ≥ 30 صفقة، وإلا يبقى الإيقاف.
 كل "مرشّح" يعني: يُعرض على المالك — لا شيء يُطبَّق من هنا.
 
+(2026-10-18، المرحلة 2) صفقات الظل في (2) و(4) تُقرأ عبر app/services/shadow_stats.py: **النظيفة فقط** (levels_version —
+تدقيق 18/10 وجد 254 من 797 قديمة بمستويات معكوسة قلبت الحكم)، و**فرصة مستقلة لا صف** (797 صفاً = 557 فرصة). هذا تنظيف
+للبيانات لا تعديل للقواعد: العتبات والنصفان كما سُجّلت أعلاه حرفياً، وتُطبَّق على R الإجمالي كما سُجّلت. يُعرض بجانبها R بعد
+سبريد الجدول (تقدير لا قياس) مع تنبيه إن اختلف الاتجاه — تعديل القاعدة نفسها قرار المالك.
+
     docker exec moshapi_backend python diag_review.py [أيام=30]
 """
 import sys
@@ -28,7 +33,7 @@ def _halves(rs):
     return sum(a) / len(a), sum(b) / len(b)
 
 
-def _line(name, rs, base_total, mode="reject"):
+def _line(name, rs, base_total, mode="reject", nets=None, rows=None):
     n = len(rs)
     if not n:
         return f"  {name:<34} لا صفقات"
@@ -47,6 +52,15 @@ def _line(name, rs, base_total, mode="reject"):
             ("✅ القاعدة تمنع خاسرات — تبقى" if avg < 0 else "⚪ تبقى — " + "، ".join(
                 x for x, ok in (("ن<30", ok_n), ("التوقّع ليس أفضل من +0.3R", ok_e), ("ليس موجباً بالنصفين", ok_h)) if not ok))
         extra = ""
+    if nets is not None:
+        ok = [x for x in nets if x is not None]
+        if ok:
+            na = sum(ok) / len(ok)
+            extra += f" | بعد سبريد الجدول {na:+.2f}R"
+            if (na > 0) != (avg > 0):
+                verdict += "\n      ⚠️ الاتجاه ينقلب بعد السبريد — لا يُعتمد الحكم الإجمالي وحده (قرار المالك)"
+    if rows is not None:
+        extra += f" | ({rows} صفاً → {n} فرصة محسومة)"
     return f"  {name:<34} ن={n:<4} توقّع {avg:+.2f}R | النصفان {hs}{extra}\n      {verdict}"
 
 
@@ -73,16 +87,23 @@ def main():
     for name, f in cands:
         print(_line(name, [d["r"] for d in decided if f(d)], base))
 
-    print("\n" + "═" * 90 + "\n(2) قواعد الرفض القائمة — صفقات منعتها (بجدول الظل، مُقيَّمة)\n" + "═" * 90)
-    sh = (db.query(ShadowSignal).filter(ShadowSignal.created_at >= since, ShadowSignal.r_multiple.isnot(None),
-                                        ~ShadowSignal.reason.like("tpl:%"), ShadowSignal.reason != "crypto_weekend")
-            .order_by(ShadowSignal.created_at).all())
+    from app.services import shadow_stats as st
+    print("\n" + "═" * 90 + "\n(2) قواعد الرفض القائمة — صفقات منعتها (بجدول الظل، نظيفة، فرص مستقلة)\n" + "═" * 90)
+    every = (db.query(ShadowSignal).filter(ShadowSignal.created_at >= since,
+                                           ~ShadowSignal.reason.like("tpl:%"), ShadowSignal.reason != "crypto_weekend")
+               .order_by(ShadowSignal.created_at).all())
+    legacy = sum(1 for s in every if not st.is_clean(s))
+    sh = st.filter_scope(every, "clean")
+    print(f"  مستبعد (قبل إصلاح المستويات): {legacy} صفاً — مقروء بـdiag_shadow_audit ولا يدخل الحكم")
     reasons = sorted({s.reason for s in sh})
     if not reasons:
-        print("  لا صفقات مرفوضة مُقيَّمة بعد")
+        print("  لا صفقات مرفوضة نظيفة بعد")
     for rsn in reasons:
-        print(_line(rsn, [s.r_multiple for s in sh if s.reason == rsn and s.outcome in ("TP1_HIT", "TP2_HIT", "SL_HIT")],
-                    base, mode="relax"))
+        rows = [s for s in sh if s.reason == rsn]
+        reps = [s for s in st.representatives(rows)
+                if s.outcome in ("TP1_HIT", "TP2_HIT", "SL_HIT") and s.r_multiple is not None]
+        print(_line(rsn, [s.r_multiple for s in reps], base, mode="relax",
+                    nets=[st.net_r(s) for s in reps], rows=len(rows)))
 
     print("\n" + "═" * 90 + "\n(3) قوالب الذهب بتجربة الظل مقابل المحرك\n" + "═" * 90)
     from app.services.template_shadow import SHADOW_START, SHADOW_TEMPLATES
@@ -114,9 +135,10 @@ def main():
         print(f"  {key:<26} {len(rs):>3} صفقة | صافٍ {net:+.2f}R | أسابيع رابحة {won}/{len(weeks)} | تراجع {dd:.2f}R\n      {verdict}")
 
     print("\n" + "═" * 90 + "\n(4) كريبتو العطلة بالظل — يُعاد إن ≥ 30 صفقة ومتوسط ≥ 0R (الموعد ~09/11)\n" + "═" * 90)
-    cw = [s.r_multiple for s in db.query(ShadowSignal).filter(
-        ShadowSignal.reason == "crypto_weekend", ShadowSignal.r_multiple.isnot(None),
-        ShadowSignal.outcome.in_(["TP1_HIT", "TP2_HIT", "SL_HIT"])).all()]
+    cw_rows = st.filter_scope(db.query(ShadowSignal).filter(ShadowSignal.reason == "crypto_weekend").all(), "clean")
+    cw = [s.r_multiple for s in st.representatives(cw_rows)
+          if s.outcome in ("TP1_HIT", "TP2_HIT", "SL_HIT") and s.r_multiple is not None]
+    print(f"  (نظيفة فقط: {len(cw_rows)} صفاً → {len(cw)} فرصة محسومة)")
     if cw:
         avg = sum(cw) / len(cw)
         v = "🟢 يُعاد تداول الكريبتو بالعطلة" if len(cw) >= 30 and avg >= 0 else \
