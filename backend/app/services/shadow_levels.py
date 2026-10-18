@@ -70,20 +70,25 @@ def normalize_rejected_levels(side: str, levels: dict) -> Tuple[Optional[dict], 
 
 def final_levels_valid(side: str, entry, sl, tp1, tp2=None) -> Optional[str]:
     """فحص دفاعي للمستويات النهائية قبل الحفظ (بعد _cap_tp1) — None = صالحة، وإلا سبب الرفض.
-    TP2 غائب أو قبل TP1 مقبول (يعني لا هدف ثانٍ، والمقيّم يتجاهله: has_tp2 بـadmin.py:1918)."""
+    TP2 غائب أو قبل TP1 مقبول (يعني لا هدف ثانٍ، والمقيّم يتجاهله: has_tp2 بـadmin.py:1918).
+
+    (2026-10-18، المرحلة 1.1) جهات صارمة **بلا سماحية**: السماحية 0.0001 جزء من Rule 6 الحي الذي يعمل **قبل**
+    _cap_tp1 (وطُبّقت هنا في normalize_rejected_levels). بعد السقف يقع TP1 على 1R، ومع وقف أصغر من 0.01% من السعر
+    (شائع بقاعدة SL_INSIDE_SPREAD_NOISE) كانت السماحية ترفض صفقة لا يرفضها الحي — 6 من 91 بالبيانات (القسم G)، وهي
+    أضيق الوقوف بالذات، أي تحيّز بعيّنة قاعدة السبريد. الفحص هنا يمنع المعكوسة فقط، لا يعيد تطبيق Rule 6."""
     if side not in ("BUY", "SELL"):
         return "INVALID_SIDE"
     e, s, t1 = _f(entry), _f(sl), _f(tp1)
     if not e or not s or not t1:
         return "MISSING_LEVELS"
     if side == "BUY":
-        if s >= e * (1 - _TOL):
+        if s >= e:
             return "BUY_SL_ABOVE_ENTRY"
-        if t1 <= e * (1 + _TOL):
+        if t1 <= e:
             return "BUY_TP1_BELOW_ENTRY"
     else:
-        if s <= e * (1 + _TOL):
+        if s <= e:
             return "SELL_SL_BELOW_ENTRY"
-        if t1 >= e * (1 - _TOL):
+        if t1 >= e:
             return "SELL_TP1_ABOVE_ENTRY"
     return None

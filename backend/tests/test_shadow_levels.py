@@ -114,6 +114,30 @@ def test_final_levels_valid():
     assert final_levels_valid("BUY", 100, 101, 102) == "BUY_SL_ABOVE_ENTRY"
 
 
+def test_final_check_strict_after_cap_keeps_tight_stops():
+    """(1.1) وقف أصغر من 0.01% من السعر: بعد _cap_tp1 يقع TP1=1R داخل سماحية Rule 6 — الحي لا يرفضه (السماحية قبل السقف)،
+    فالفحص النهائي يجب ألا يرفضه. كان يُسقط 6 من 91 من عيّنة قاعدة السبريد (القسم G)."""
+    assert final_levels_valid("BUY", 1.08000, 1.07995, 1.08005) is None
+    assert final_levels_valid("SELL", 1.08000, 1.08005, 1.07995) is None
+    # المعكوسة والمساوية للدخول ما زالت مرفوضة
+    assert final_levels_valid("BUY", 1.08000, 1.08000, 1.08005) == "BUY_SL_ABOVE_ENTRY"
+    assert final_levels_valid("SELL", 1.08000, 1.08005, 1.08000) == "SELL_TP1_ABOVE_ENTRY"
+    assert final_levels_valid("SELL", 1.08000, 1.07995, 1.07990) == "SELL_SL_BELOW_ENTRY"
+
+
+def test_raw_levels_still_use_live_tolerance():
+    """السماحية تبقى في المرحلة الخام (قبل السقف) كما في الحي."""
+    assert normalize_rejected_levels("BUY", L(1.08000, 1.07995, 1.08200))[1] == "BUY_SL_ABOVE_ENTRY"
+
+
+def test_init_db_migration_serialized_with_advisory_lock():
+    src = (ROOT / "app/database.py").read_text(encoding="utf-8")
+    i, j = src.index("pg_advisory_lock(90210008)"), src.index("pg_advisory_unlock(90210008)")
+    k = src.index("ADD COLUMN IF NOT EXISTS levels_version")
+    assert i < k < j, "الترحيل يجب أن يكون بين القفل وفكّه"
+    assert "90210008" not in (ROOT / "app/services").joinpath("shadow_evaluator.py").read_text(encoding="utf-8")
+
+
 # ─── 2) تطابق مع فحص الجهة الحي ─────────────────────────────────────────────────
 def test_live_gate_rule6_text_unchanged():
     src = (ROOT / "app/services/ai_engine_v5.py").read_text(encoding="utf-8")
@@ -174,6 +198,51 @@ def test_record_shadow_saves_valid_with_version_and_refuses_inverted():
     rows = db.query(ShadowSignal).all()
     assert ok and wk and bad is None
     assert len(rows) == 2 and all(r.levels_version == LEVELS_VERSION for r in rows)
+
+
+def test_record_shadow_saves_tight_stop_spread_trade():
+    from app.models.shadow_signal import ShadowSignal
+    from app.services.weekend_policy import record_shadow
+    db = _db()
+    sid = record_shadow(db, source="rejected", reason="SL_INSIDE_SPREAD_NOISE", symbol="EURUSD", timeframe="15m",
+                        signal_type="BUY", entry=1.08000, sl=1.07995, tp1=1.08005, tp2=1.08020,
+                        expires_at=datetime.now(timezone.utc) + timedelta(hours=3))
+    assert sid and db.query(ShadowSignal).count() == 1
+
+
+def test_crypto_weekend_one_open_per_symbol_timeframe_like_live():
+    """(1.1) نفس _has_active_signal الحي: صفقة نشطة واحدة لكل (رمز، فريم) أياً كان الاتجاه."""
+    from app.models.shadow_signal import ShadowSignal
+    from app.services.weekend_policy import record_shadow
+    db = _db()
+    exp = datetime.now(timezone.utc) + timedelta(hours=72)
+
+    def wk(tf, side, e, sl, tp1):
+        return record_shadow(db, source="scanner", symbol="BNBUSD", timeframe=tf, signal_type=side,
+                             entry=e, sl=sl, tp1=tp1, expires_at=exp)
+    first = wk("4h", "BUY", 711.06, 706.64, 715.47)
+    again_price = wk("4h", "BUY", 710.48, 706.64, 714.31)       # نفس الفكرة بسعر مختلف قليلاً (حالة 18/10)
+    other_side = wk("4h", "SELL", 711.00, 715.00, 707.00)       # الحي يمنع الاتجاه الآخر أيضاً
+    other_tf = wk("1h", "BUY", 711.00, 708.00, 714.00)          # فريم آخر = مسموح كما بالحي
+    assert first and again_price is None and other_side is None and other_tf
+    row = db.query(ShadowSignal).get(first)
+    row.outcome = "SL_HIT"; db.commit()                         # بعد حسم الأولى تُسمح فكرة جديدة
+    assert wk("4h", "BUY", 709.00, 705.00, 713.00)
+    assert db.query(ShadowSignal).filter(ShadowSignal.reason == "crypto_weekend").count() == 3
+
+
+def test_rejected_reasons_dedupe_unchanged():
+    """قاعدة الأسباب المرفوضة كما كانت: واحدة مفتوحة لكل (سبب، رمز، فريم، اتجاه) — الاتجاه الآخر مسموح."""
+    from app.services.weekend_policy import record_shadow
+    db = _db()
+    exp = datetime.now(timezone.utc) + timedelta(hours=3)
+    a = record_shadow(db, source="rejected", reason="HTF_CONFLICT_REJECTED", symbol="ETHUSD", timeframe="15m",
+                      signal_type="BUY", entry=2400, sl=2390, tp1=2410, expires_at=exp)
+    b = record_shadow(db, source="rejected", reason="HTF_CONFLICT_REJECTED", symbol="ETHUSD", timeframe="15m",
+                      signal_type="BUY", entry=2401, sl=2391, tp1=2411, expires_at=exp)
+    c = record_shadow(db, source="rejected", reason="HTF_CONFLICT_REJECTED", symbol="ETHUSD", timeframe="15m",
+                      signal_type="SELL", entry=2400, sl=2410, tp1=2390, expires_at=exp)
+    assert a and b is None and c
 
 
 # ─── 4) التقييم بعد الإصلاح: TP1 / TP2 / SL ──────────────────────────────────────

@@ -54,11 +54,18 @@ def init_db() -> None:
         except Exception as e:
             print(f"⚠️ signalstatus BREAKEVEN: {e}")
         # (2026-10-18) عمود نسخة التحقق لصفقات الظل — create_all لا يضيف أعمدة لجدول قائم. idempotent.
+        # (المرحلة 1.1) قفل استشاري: عاملا uvicorn (--workers 2) يشغّلان init_db معاً، فكان CREATE INDEX IF NOT EXISTS
+        # يتسابق ويرمي "duplicate key … pg_class_relname_nsp_index" (النتيجة سليمة لكن التحذير مضلّل). القفل يسلسلهما:
+        # الثاني ينتظر ثم يجد العمود والفهرس فلا يفعل شيئاً. المفتاح خاص بهذه الخطوة (90210008).
         try:
             from sqlalchemy import text
             with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
-                conn.execute(text("ALTER TABLE shadow_signals ADD COLUMN IF NOT EXISTS levels_version INTEGER"))
-                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_shadow_signals_levels_version ON shadow_signals (levels_version)"))
+                conn.execute(text("SELECT pg_advisory_lock(90210008)"))
+                try:
+                    conn.execute(text("ALTER TABLE shadow_signals ADD COLUMN IF NOT EXISTS levels_version INTEGER"))
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_shadow_signals_levels_version ON shadow_signals (levels_version)"))
+                finally:
+                    conn.execute(text("SELECT pg_advisory_unlock(90210008)"))
         except Exception as e:
             print(f"⚠️ shadow_signals.levels_version: {e}")
     print("✅ Database initialized successfully")
