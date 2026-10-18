@@ -1,6 +1,8 @@
 /**
  * ShadowSignalsPanel (2026-10-17) — صفقات الظل: ما حسبته المنصة ولم ترسله لأحد (مراجعة داخلية فقط).
  * كريبتو العطلة، قواعد الرفض بتجربتها الصامتة، وقوالب الذهب بتجربة الظل. المصدر: GET /api/v1/admin/shadow-signals
+ * (2026-10-18، المرحلة 2) الأرقام والحكم من الخادم (shadow_stats.py): نظيفة فقط افتراضياً، فرص مستقلة لا صفوف،
+ * R بعد سبريد الجدول بجانب الإجمالي، ولا حكم قبل 30 فرصة. الواجهة لا تحسب أي حكم بنفسها.
  */
 import { useState, useEffect } from 'react'
 import axios from 'axios'
@@ -18,6 +20,7 @@ const fmt = (iso) => (iso ? iso.replace('T', ' ').slice(5, 16) : '—')
 
 export default function ShadowSignalsPanel() {
   const [days, setDays] = useState(30)
+  const [scope, setScope] = useState('clean')
   const [reason, setReason] = useState('')
   const [page, setPage] = useState(1)
   const [data, setData] = useState(null)
@@ -25,10 +28,10 @@ export default function ShadowSignalsPanel() {
   const [error, setError] = useState('')
 
   const load = async (o = {}) => {
-    const d = o.days ?? days, r = o.reason ?? reason, p = o.page ?? page
+    const d = o.days ?? days, r = o.reason ?? reason, p = o.page ?? page, sc = o.scope ?? scope
     setLoading(true); setError('')
     try {
-      const q = new URLSearchParams({ days: d, page: p, page_size: 50 })
+      const q = new URLSearchParams({ days: d, page: p, page_size: 50, scope: sc })
       if (r) q.set('reason', r)
       const res = await axios.get(`${API}/api/v1/admin/shadow-signals?${q}`)
       setData(res.data)
@@ -39,13 +42,12 @@ export default function ShadowSignalsPanel() {
   useEffect(() => { load() }, [])
 
   const pages = data ? Math.max(1, Math.ceil(data.total / data.page_size)) : 1
-  const verdict = (b) => {
-    if (b.avg_r == null) return <span className="text-gray-500">لا نتائج بعد</span>
-    if (b.reason.startsWith('tpl:')) return <span className={b.avg_r > 0 ? 'text-emerald-400' : 'text-red-400'}>{b.avg_r > 0 ? 'القالب رابح حتى الآن' : 'القالب خاسر حتى الآن'}</span>
-    return b.avg_r < 0
-      ? <span className="text-emerald-400">المنع كان صحيحاً (منع خاسرات)</span>
-      : <span className="text-amber-400">المنع حجب رابحات حتى الآن</span>
-  }
+  const VCLS = { blocks_losers: 'text-emerald-400', positive: 'text-emerald-400', blocks_winners: 'text-amber-400',
+    negative: 'text-red-400', insufficient: 'text-gray-500', no_data: 'text-gray-500', no_spread: 'text-gray-500' }
+  const verdict = (b) => <span className={VCLS[b.verdict] || 'text-gray-500'}>{b.verdict_label}</span>
+  const R = (v) => (v == null ? '—' : `${v > 0 ? '+' : ''}${v}R`)
+  const rc = (v) => (v > 0 ? 'text-emerald-400' : v < 0 ? 'text-red-400' : 'text-gray-400')
+  const SCOPES = [['clean', 'بعد إصلاح المستويات'], ['legacy', 'قديمة (قبل الإصلاح)'], ['all', 'الكل']]
 
   return (
     <div className="space-y-5">
@@ -55,6 +57,13 @@ export default function ShadowSignalsPanel() {
           <p className="text-xs text-gray-500 mt-1">صفقات حسبتها المنصة ولم ترسلها لأحد — لنعرف: لو أرسلناها، هل كانت ستربح؟</p>
         </div>
         <div className="flex items-center gap-2">
+          {SCOPES.map(([k, l]) => (
+            <button key={k} onClick={() => { setScope(k); setPage(1); load({ scope: k, page: 1 }) }}
+              className={`text-xs px-3 py-1.5 rounded-lg border ${scope === k ? 'border-amber-500 text-amber-300 bg-amber-900/20' : 'border-gray-700 text-gray-500'}`}>
+              {l}{data?.counts ? ` (${k === 'all' ? data.counts.clean + data.counts.legacy : data.counts[k]})` : ''}
+            </button>
+          ))}
+          <span className="w-px h-5 bg-gray-700 mx-1" />
           {[7, 14, 30, 60].map((d) => (
             <button key={d} onClick={() => { setDays(d); setPage(1); load({ days: d, page: 1 }) }}
               className={`text-xs px-3 py-1.5 rounded-lg border ${days === d ? 'border-blue-500 text-blue-400 bg-blue-900/20' : 'border-gray-700 text-gray-500'}`}>
@@ -68,6 +77,12 @@ export default function ShadowSignalsPanel() {
       </div>
 
       {error && <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/30 rounded-lg p-3">{error}</div>}
+      {scope !== 'clean' && (
+        <div className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 leading-relaxed">
+          تعرض سجلات قبل إصلاح المستويات (18/10): بعضها بمستويات معكوسة تُحسب خسارة فورية، فأرقامها لا تصلح للحكم على أي فلتر.
+          محفوظة كما هي للرجوع فقط.
+        </div>
+      )}
 
       {data && (
         <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-x-auto">
@@ -75,32 +90,36 @@ export default function ShadowSignalsPanel() {
             <thead className="text-xs text-gray-400 bg-gray-950/60">
               <tr>
                 <th className="text-right px-4 py-2.5">السبب</th>
-                <th className="px-3 py-2.5">صفقات</th>
-                <th className="px-3 py-2.5">قُيّمت</th>
+                <th className="px-3 py-2.5">صفوف ← فرص مستقلة</th>
+                <th className="px-3 py-2.5">محسومة</th>
                 <th className="px-3 py-2.5">رابحة / خاسرة</th>
-                <th className="px-3 py-2.5">المجموع</th>
-                <th className="px-3 py-2.5">المتوسط</th>
+                <th className="px-3 py-2.5">المجموع (إجمالي)</th>
+                <th className="px-3 py-2.5">المتوسط (إجمالي)</th>
+                <th className="px-3 py-2.5">المتوسط بعد السبريد</th>
                 <th className="text-right px-3 py-2.5">ماذا يعني حتى الآن</th>
               </tr>
             </thead>
             <tbody>
-              {data.summary.length === 0 && <tr><td colSpan={7} className="text-center text-gray-500 py-6">لا صفقات ظل بهذه الفترة</td></tr>}
+              {data.summary.length === 0 && <tr><td colSpan={8} className="text-center text-gray-500 py-6">{scope === 'clean' ? 'لا صفقات ظل نظيفة بهذه الفترة بعد — تتجمع من لحظة نشر الإصلاح' : 'لا صفقات ظل بهذه الفترة'}</td></tr>}
               {data.summary.map((b) => (
                 <tr key={b.reason} onClick={() => { const r = reason === b.reason ? '' : b.reason; setReason(r); setPage(1); load({ reason: r, page: 1 }) }}
                   className={`border-t border-gray-800/70 cursor-pointer hover:bg-gray-800/40 ${reason === b.reason ? 'bg-blue-900/20' : ''}`}>
                   <td className="px-4 py-2.5 text-white text-xs">{b.label}</td>
-                  <td className="px-3 py-2.5 text-center">{b.total}</td>
-                  <td className="px-3 py-2.5 text-center text-gray-400">{b.evaluated}{b.pending ? <span className="text-gray-600"> (+{b.pending} بانتظار)</span> : ''}</td>
+                  <td className="px-3 py-2.5 text-center">{b.rows} ← <b>{b.opportunities}</b>{b.rows_pending ? <span className="text-gray-600 text-xs"> ({b.rows_pending} بانتظار)</span> : ''}</td>
+                  <td className="px-3 py-2.5 text-center text-gray-400">{b.decided}<span className="text-gray-600 text-xs"> /{b.min_required}</span></td>
                   <td className="px-3 py-2.5 text-center"><span className="text-emerald-400">{b.wins}</span> / <span className="text-red-400">{b.losses}</span></td>
-                  <td className={`px-3 py-2.5 text-center font-semibold ${b.r > 0 ? 'text-emerald-400' : b.r < 0 ? 'text-red-400' : 'text-gray-400'}`} dir="ltr">{b.r > 0 ? '+' : ''}{b.r}R</td>
-                  <td className="px-3 py-2.5 text-center" dir="ltr">{b.avg_r != null ? `${b.avg_r > 0 ? '+' : ''}${b.avg_r}R` : '—'}</td>
+                  <td className={`px-3 py-2.5 text-center font-semibold ${rc(b.r_gross)}`} dir="ltr">{b.template ? <span className="text-gray-600 text-xs">صافٍ أصلاً</span> : R(b.r_gross)}</td>
+                  <td className={`px-3 py-2.5 text-center ${rc(b.avg_gross)}`} dir="ltr">{b.template ? '—' : R(b.avg_gross)}</td>
+                  <td className={`px-3 py-2.5 text-center font-semibold ${rc(b.avg_net)}`} dir="ltr">{R(b.avg_net)}</td>
                   <td className="px-3 py-2.5 text-xs">{verdict(b)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
           <div className="px-4 py-2 text-[11px] text-gray-500 border-t border-gray-800">
-            اضغط على سبب لعرض صفقاته فقط. الحكم النهائي بمراجعة 30/10 بقواعد مسجّلة (30 صفقة على الأقل وثبات بالنصفين) — الأرقام المبكرة مؤشر لا حكم.
+            اضغط على سبب لعرض صفقاته فقط. الأرقام على <b>الفرص المستقلة</b> (نفس الفكرة على أكثر من فريم = فرصة واحدة).
+            "بعد السبريد" تقدير من جدول سبريد ثابت (لا أسعار bid/ask مخزّنة)، والقوالب يُخصم سبريدها أصلاً. لا حكم قبل {data.min_required} فرصة
+            محسومة؛ الحكم النهائي بمراجعة 30/10 بقواعد مسجّلة (diag_review) — الأرقام المبكرة مؤشر لا حكم.
           </div>
         </div>
       )}
@@ -122,6 +141,7 @@ export default function ShadowSignalsPanel() {
                 <th className="px-3 py-2">TP1</th>
                 <th className="px-3 py-2">النتيجة</th>
                 <th className="px-3 py-2">R</th>
+                <th className="px-3 py-2">R بعد السبريد</th>
               </tr>
             </thead>
             <tbody>
@@ -130,7 +150,11 @@ export default function ShadowSignalsPanel() {
                 return (
                   <tr key={s.id} className="border-t border-gray-800/70">
                     <td className="px-4 py-2 text-xs text-gray-400" dir="ltr">{fmt(s.created_at)}</td>
-                    <td className="px-3 py-2 text-xs text-gray-300">{s.label}</td>
+                    <td className="px-3 py-2 text-xs text-gray-300">
+                      {s.label}
+                      {s.legacy && <span className="ms-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300">قبل الإصلاح</span>}
+                      {s.duplicate && <span className="ms-1 text-[10px] px-1.5 py-0.5 rounded bg-gray-800 text-gray-400" title="نفس فرصة صف أقدم — لا تُحسب مرتين">مكرر</span>}
+                    </td>
                     <td className="px-3 py-2 text-center text-white">{s.market} <span className="text-gray-500 text-xs">{s.timeframe}</span></td>
                     <td className={`px-3 py-2 text-center ${s.side === 'BUY' ? 'text-emerald-400' : 'text-red-400'}`}>{s.side === 'BUY' ? 'شراء' : 'بيع'}</td>
                     <td className="px-3 py-2 text-center font-mono text-xs" dir="ltr">{s.entry}</td>
@@ -138,6 +162,7 @@ export default function ShadowSignalsPanel() {
                     <td className="px-3 py-2 text-center font-mono text-xs" dir="ltr">{s.tp1}</td>
                     <td className={`px-3 py-2 text-center text-xs ${oc}`}>{ol}</td>
                     <td className={`px-3 py-2 text-center ${s.r > 0 ? 'text-emerald-400' : s.r < 0 ? 'text-red-400' : 'text-gray-500'}`} dir="ltr">{s.r != null ? `${s.r > 0 ? '+' : ''}${Number(s.r).toFixed(2)}` : '—'}</td>
+                    <td className={`px-3 py-2 text-center ${s.r_net > 0 ? 'text-emerald-400' : s.r_net < 0 ? 'text-red-400' : 'text-gray-500'}`} dir="ltr">{s.r_net != null ? `${s.r_net > 0 ? '+' : ''}${Number(s.r_net).toFixed(2)}` : '—'}</td>
                   </tr>
                 )
               })}
