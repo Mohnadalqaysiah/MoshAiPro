@@ -73,6 +73,9 @@ def init_db() -> None:
             with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
                 conn.execute(text("SELECT pg_advisory_lock(90210008)"))
                 try:
+                    # (2026-10-19) من حظر البوت — services/telegram_reach.py. أولاً: نموذج User يقرأه
+                    # كل استعلام مستخدم (الدخول نفسه) — لا يُعلَّق على نجاح خطوة قبله
+                    conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_blocked_at TIMESTAMPTZ"))
                     conn.execute(text("ALTER TABLE shadow_signals ADD COLUMN IF NOT EXISTS levels_version INTEGER"))
                     conn.execute(text("CREATE INDEX IF NOT EXISTS ix_shadow_signals_levels_version ON shadow_signals (levels_version)"))
                 finally:
