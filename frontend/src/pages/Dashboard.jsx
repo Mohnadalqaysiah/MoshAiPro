@@ -834,7 +834,7 @@ export default function Dashboard() {
             ) : (
               <div className="grid md:grid-cols-2 gap-3.5">
                 {featured.map((sig, i) => {
-                  const rec        = sig.recommendation || sig.signal_type || 'WATCH'
+                  const rec        = sig.locked ? 'LOCKED' : (sig.recommendation || sig.signal_type || 'WATCH')
                   const confidence = sig.ai_confidence_score || sig.ai_confidence || 0
                   const market     = sig.market || sig.symbol || 'N/A'
                   const levels     = sig.levels || {}
@@ -848,8 +848,9 @@ export default function Dashboard() {
                   const fmt = (v, d = 5) => v != null ? (typeof v === 'number' ? v.toFixed(d) : v) : '—'
                   const isBuy = rec === 'BUY', isSell = rec === 'SELL'
                   const art = isBuy ? 'q-art-buy' : isSell ? 'q-art-sell' : 'q-art-wait'
-                  const recLabel = isBuy ? `▲ ${tx.buy}` : isSell ? `▼ ${tx.sell}` : `◈ ${tx.watch}`
-                  const recCls = isBuy ? 'text-emerald-300 border-emerald-400/40' : isSell ? 'text-rose-300 border-rose-400/40' : 'text-gray-200 border-white/20'
+                  // (2026-10-19) المموّهة بلا اتجاه ولا ثقة — "🔒 إشارة" فقط
+                  const recLabel = locked ? (isAr ? '🔒 إشارة' : '🔒 Signal') : isBuy ? `▲ ${tx.buy}` : isSell ? `▼ ${tx.sell}` : `◈ ${tx.watch}`
+                  const recCls = locked ? 'text-amber-300 border-amber-400/40' : isBuy ? 'text-emerald-300 border-emerald-400/40' : isSell ? 'text-rose-300 border-rose-400/40' : 'text-gray-200 border-white/20'
                   const isMetal = /^XA[UG]/.test(market)
                   return (
                     <article
@@ -874,7 +875,7 @@ export default function Dashboard() {
                         {locked ? (
                           <div className="flex items-center gap-2 mt-3 text-xs">
                             <Lock size={12} className="text-amber-300 flex-shrink-0" />
-                            <span className="text-gray-400">{isAr ? 'تفاصيل الدخول وSL/TP مقفلة —' : 'Entry & SL/TP locked —'}</span>
+                            <span className="text-gray-400">{isAr ? 'الاتجاه والدخول والوقف والأهداف للمشتركين —' : 'Direction, entry & SL/TP for subscribers —'}</span>
                             <span className="text-amber-300 font-semibold hover:underline">{isAr ? 'اشترك لرؤيتها' : 'Subscribe to view'}</span>
                           </div>
                         ) : (
@@ -897,11 +898,11 @@ export default function Dashboard() {
                         )}
                         <div className="flex items-center justify-between gap-3 mt-3 pt-3 border-t q-line text-xs text-gray-400">
                           <span className="truncate">{sig.news_context ? `📰 ${sig.news_context}` : (sig.summary || '')}</span>
-                          <span className="flex items-center gap-2 flex-shrink-0">
+                          {!locked && <span className="flex items-center gap-2 flex-shrink-0">
                             {tx.conf}
                             <span className="w-20 h-1.5 rounded-full bg-white/10 overflow-hidden"><span className="block h-full q-conf" style={{ width: `${confidence}%` }} /></span>
                             <b className="text-white tabular-nums">{Math.round(confidence)}%</b>
-                          </span>
+                          </span>}
                         </div>
                         {sig.expires_at && (
                           <div className="mt-1.5 text-[11px]"><ExpiryCountdown expiresAt={sig.expires_at} /></div>
@@ -991,7 +992,7 @@ export default function Dashboard() {
             {rest.length > 0 && (
               <div className="divide-y divide-gray-700/40">
                 {rest.slice(0, signalsLimit).map((sig, i) => {
-                  const rec        = sig.recommendation || sig.signal_type || 'WATCH'
+                  const rec        = sig.locked ? 'LOCKED' : (sig.recommendation || sig.signal_type || 'WATCH')
                   const confidence = sig.ai_confidence_score || sig.ai_confidence || 0
                   const market     = sig.market || sig.symbol || 'N/A'
                   const levels     = sig.levels || {}
@@ -1009,9 +1010,11 @@ export default function Dashboard() {
 
                   const isBuy  = rec === 'BUY'
                   const isSell = rec === 'SELL'
-                  const accentBg  = isBuy ? 'bg-green-500' : isSell ? 'bg-red-500' : 'bg-gray-500'
-                  const recLabel  = isBuy ? '▲ شراء' : isSell ? '▼ بيع' : '◈ مراقبة'
-                  const recBadge  = isBuy
+                  const accentBg  = locked ? 'bg-amber-500' : isBuy ? 'bg-green-500' : isSell ? 'bg-red-500' : 'bg-gray-500'
+                  const recLabel  = locked ? '🔒 إشارة' : isBuy ? '▲ شراء' : isSell ? '▼ بيع' : '◈ مراقبة'
+                  const recBadge  = locked
+                    ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
+                    : isBuy
                     ? 'bg-green-500/15 text-green-400 border border-green-500/30'
                     : isSell
                     ? 'bg-red-500/15 text-red-400 border border-red-500/30'
@@ -1035,19 +1038,19 @@ export default function Dashboard() {
                             {rr != null && (
                               <span className="text-xs text-gray-400">R/R <span className="text-white font-medium">{typeof rr === 'number' ? rr.toFixed(1) : rr}</span></span>
                             )}
-                            <div className="flex items-center gap-1.5">
+                            {!locked && <div className="flex items-center gap-1.5">
                               <div className="w-16 h-1.5 bg-gray-700 rounded-full overflow-hidden">
                                 <div className={`h-full rounded-full ${confColor}`} style={{ width: `${confidence}%` }} />
                               </div>
                               <span className="text-xs text-gray-300 font-medium w-9 text-left">{Math.round(confidence)}%</span>
-                            </div>
+                            </div>}
                             {sig.expires_at && <ExpiryCountdown expiresAt={sig.expires_at} className="text-[11px]" />}
                           </div>
                         </div>
                         {locked ? (
                           <div className="flex items-center gap-2 mt-2 text-xs">
                             <Lock size={12} className="text-yellow-500 flex-shrink-0" />
-                            <span className="text-gray-500">تفاصيل الدخول وSL/TP مقفلة — </span>
+                            <span className="text-gray-500">الاتجاه والدخول والوقف والأهداف للمشتركين — </span>
                             <span className="text-yellow-400 font-semibold hover:underline">اشترك لرؤية التفاصيل الكاملة</span>
                           </div>
                         ) : (entryMin || entryExact || sl || tp1) && (

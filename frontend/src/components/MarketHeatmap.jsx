@@ -16,6 +16,9 @@ const CAT_LABEL = {
 }
 
 function cellStyle(rec, conf) {
+  if (rec === 'LOCKED') {   // (2026-10-19) إشارة مموّهة لغير المشترك — بلا اتجاه
+    return { bg: 'bg-amber-500/10 border-amber-500/30', text: 'text-amber-300', labelAr: '🔒 إشارة', labelEn: '🔒 Signal' }
+  }
   if (rec === 'BUY') {
     return conf >= 75
       ? { bg: 'bg-green-500/25 border-green-500/50',  text: 'text-green-300', labelAr: '▲ شراء',  labelEn: '▲ BUY'  }
@@ -134,7 +137,7 @@ export default function MarketHeatmap({ onAnalyzeResult }) {
             <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
               {items.map(m => {
                 const sig  = signals[m.symbol]
-                const rec  = sig?.recommendation || sig?.signal_type || 'NONE'
+                const rec  = sig?.locked ? 'LOCKED' : (sig?.recommendation || sig?.signal_type || 'NONE')
                 const conf = sig?.ai_confidence_score || sig?.ai_confidence || 0
                 const c    = cellStyle(rec, conf)
                 const isAn = analyzing === m.symbol
