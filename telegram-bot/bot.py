@@ -882,7 +882,18 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ─────────────────────── SIGNALS ──────────────────────────────────────────
     if d == "m_signals":
         await q.edit_message_text("⏳ جاري جلب الإشارات…")
-        res  = await _get("/api/v1/signals/latest", {"limit": 8})
+        # (2026-10-19) كان /signals/latest بمفتاح البوت ← 401 دائماً ← "لا توجد إشارات" للجميع
+        res  = await _get("/api/v1/bot/latest-signals", {"telegram_id": tgid, "limit": 8})
+        if not res.get("linked"):
+            await q.edit_message_text(
+                "🔗 *ربط الحساب مطلوب لعرض الإشارات.*",
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🌐 فتح المنصة", web_app=WebAppInfo(url=FRONTEND_URL))],
+                    [InlineKeyboardButton("🔙 رجوع",       callback_data="m_back")],
+                ]),
+            )
+            return
         sigs = res.get("data", [])
 
         STATUS_ICONS = {

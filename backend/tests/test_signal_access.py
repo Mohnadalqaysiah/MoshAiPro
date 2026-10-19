@@ -140,6 +140,30 @@ def test_latest_subscriber_and_unlimited_see_all():
     assert all(not x["locked"] for x in _latest(_user(), free=0))   # 0 = بلا حد من الإعدادات
 
 
+def test_bot_latest_signals_uses_linked_user():
+    """زر "آخر الإشارات" بالبوت: كان يرجع 401 دائماً (مفتاح البوت بدل توكن مستخدم). الآن باسم المستخدم المرتبط."""
+    import app.api.bot as B
+    sigs = [_sig() for _ in range(5)]
+    for i, x in enumerate(sigs):
+        x.id, x.notes = 200 + i, None
+    db = SimpleNamespace(query=lambda *a: _ListQ(sigs))
+    o_link, o_lim = B._get_linked_user, S._trial_signal_daily_limit
+    S._trial_signal_daily_limit = lambda db: 3
+    try:
+        B._get_linked_user = lambda tg, db: None
+        r = asyncio.run(B.bot_latest_signals(telegram_id="1", limit=8, _=True, db=db))
+        assert r == {"linked": False, "data": []}                   # غير مرتبط: لا شيء
+        B._get_linked_user = lambda tg, db: _user()
+        r = asyncio.run(B.bot_latest_signals(telegram_id="1", limit=8, _=True, db=db))
+        assert r["linked"] and [x["locked"] for x in r["data"]] == [False] * 3 + [True] * 2
+        assert all(x["signal_type"] is None for x in r["data"][3:])   # نفس تمويه الموقع
+        B._get_linked_user = lambda tg, db: _user(plan=PlanType.WEEKLY)
+        r = asyncio.run(B.bot_latest_signals(telegram_id="1", limit=8, _=True, db=db))
+        assert not any(x["locked"] for x in r["data"])
+    finally:
+        B._get_linked_user, S._trial_signal_daily_limit = o_link, o_lim
+
+
 if __name__ == "__main__":
     n = 0
     for name, fn in list(globals().items()):
