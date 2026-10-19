@@ -3,7 +3,7 @@ Mosh AI Pro v5 - Admin API
 Full control: Users, Payments, Markets
 """
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from pydantic import BaseModel
@@ -1191,7 +1191,8 @@ def _get_bot_token(db: Session) -> str:
     return _settings.TELEGRAM_BOT_TOKEN or ""
 
 
-def _send_telegram_message(chat_id: str, text: str, db: Session = None, token: str = None, _err: list = None) -> bool:
+def _send_telegram_message(chat_id: str, text: str, db: Session = None, token: str = None, _err: list = None,
+                           reply_markup: Optional[dict] = None) -> bool:
     """إرسال رسالة تيليجرام واحدة.
 
     (2026-10-11) إن رفض تيليجرام تنسيق HTML (رمز < أو & في النص) تُعاد
@@ -1204,6 +1205,8 @@ def _send_telegram_message(chat_id: str, text: str, db: Session = None, token: s
         return False
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML", "disable_web_page_preview": True}
+    if reply_markup:
+        payload["reply_markup"] = reply_markup     # (2026-10-19) أزرار تحت الرسالة (تقرير الأداء)
     try:
         resp = requests.post(url, json=payload, timeout=10)
         if resp.status_code == 429:
@@ -1213,6 +1216,8 @@ def _send_telegram_message(chat_id: str, text: str, db: Session = None, token: s
             resp = requests.post(url, json=payload, timeout=10)
         if resp.status_code == 400 and "parse entities" in resp.text:
             payload = {"chat_id": chat_id, "text": _re.sub(r"<[^>]+>", "", text), "disable_web_page_preview": True}
+            if reply_markup:
+                payload["reply_markup"] = reply_markup
             resp = requests.post(url, json=payload, timeout=10)
         if resp.status_code != 200 and _err is not None:
             try:
@@ -1342,6 +1347,116 @@ def send_telegram_message(
     background.add_task(_broadcast_task, chat_ids, text, token, log.id)
     return {"message": f"⏳ جاري إرسال {total} رسالة — تابع النتيجة في سجل الإعلانات أدناه",
             "sent": 0, "total": total, "log_id": log.id}
+
+
+# ─── (2026-10-19) إعلان بصورة — رفع صورة من اللوحة وإرسالها مع نص ───────────────────────────────────────
+_PHOTO_MAX_BYTES = 10 * 1024 * 1024        # حد تيليجرام لـsendPhoto
+_CAPTION_MAX = 1024                        # حد تيليجرام لنص الصورة
+
+
+def _send_telegram_photo(chat_id: str, caption: str, token: str, photo_bytes: bytes = None, filename: str = "image.jpg",
+                         file_id: str = None, _err: list = None):
+    """يرسل صورة: أول مرة برفع الملف، وبعدها بـfile_id الذي يعيده تيليجرام (لا يُرفع الملف لكل مستلم).
+    يعيد (نجح؟، file_id). نص HTML يُعاد نصاً عادياً إن رفضه تيليجرام، كما بـ_send_telegram_message."""
+    import re as _re
+    url = f"https://api.telegram.org/bot{token}/sendPhoto"
+    data = {"chat_id": chat_id, "caption": caption, "parse_mode": "HTML"}
+
+    def _post(d):
+        if file_id:
+            return requests.post(url, data={**d, "photo": file_id}, timeout=30)
+        return requests.post(url, data=d, files={"photo": (filename, photo_bytes)}, timeout=60)
+    try:
+        resp = _post(data)
+        if resp.status_code == 429:
+            import time as _t
+            _t.sleep(resp.json().get("parameters", {}).get("retry_after", 5))
+            resp = _post(data)
+        if resp.status_code == 400 and "parse entities" in resp.text:
+            resp = _post({"chat_id": chat_id, "caption": _re.sub(r"<[^>]+>", "", caption)})
+        if resp.status_code != 200:
+            if _err is not None:
+                try:
+                    _err.append(resp.json().get("description", str(resp.status_code))[:200])
+                except Exception:
+                    _err.append(str(resp.status_code))
+            return False, file_id
+        photos = (resp.json().get("result") or {}).get("photo") or []
+        return True, file_id or (photos[-1].get("file_id") if photos else None)
+    except Exception as e:
+        if _err is not None:
+            _err.append(type(e).__name__)
+        return False, file_id
+
+
+def _photo_broadcast_task(chat_ids: list, caption: str, token: str, photo_bytes: bytes, filename: str, log_id: int):
+    import time as _t
+    ok = failed = 0
+    errs: list = []
+    fid = None
+    for i, cid in enumerate(chat_ids):
+        sent, fid = _send_telegram_photo(cid, caption, token, photo_bytes=photo_bytes, filename=filename,
+                                         file_id=fid, _err=errs)
+        ok, failed = (ok + 1, failed) if sent else (ok, failed + 1)
+        _t.sleep(0.05)
+        if (i + 1) % 25 == 0:
+            _update_broadcast_log(log_id, ok, failed, errs, done=False)
+    _update_broadcast_log(log_id, ok, failed, errs, done=True)
+
+
+@router.post("/telegram/send-photo")
+async def send_telegram_photo(
+    background: BackgroundTasks,
+    file: UploadFile = File(...),
+    title: Optional[str] = Form(default=None),
+    message: str = Form(default=""),
+    test_to_me: bool = Form(default=False),
+    user_ids: Optional[str] = Form(default=None),   # "1,5,9" — فارغ = الجميع
+    admin: User = Depends(get_admin_user),
+    db: Session = Depends(get_db),
+):
+    """إعلان بصورة لكل من لديه تيليجرام (نفس مستلمي /telegram/send)، أو تجربة للأدمن نفسه أولاً.
+    يُسجَّل بسجل الإعلانات (telegram_broadcasts) بنفس طريقة النص."""
+    from app.models.telegram_broadcast import TelegramBroadcast
+    token = _get_bot_token(db)
+    if not token:
+        raise HTTPException(400, "TELEGRAM_BOT_TOKEN غير مضبوط")
+    if not (file.content_type or "").startswith("image/"):
+        raise HTTPException(400, "الملف يجب أن يكون صورة (JPG أو PNG)")
+    photo = await file.read()
+    if not photo:
+        raise HTTPException(400, "الصورة فارغة")
+    if len(photo) > _PHOTO_MAX_BYTES:
+        raise HTTPException(400, "حجم الصورة أكبر من 10 ميغابايت (حد تيليجرام)")
+    caption = _format_broadcast(title, message) if (title or message) else "<i>— Qaffel AI</i>"
+    if len(caption) > _CAPTION_MAX:
+        raise HTTPException(400, f"نص الصورة {len(caption)} حرفاً — حد تيليجرام {_CAPTION_MAX}. اختصر النص أو أرسله كرسالة منفصلة")
+    fname = file.filename or "image.jpg"
+
+    if test_to_me:
+        if not admin.telegram_id:
+            raise HTTPException(400, "حسابك غير مربوط بتيليجرام — اربطه من البوت أولاً")
+        errs: list = []
+        ok, _ = _send_telegram_photo(admin.telegram_id, caption, token, photo_bytes=photo, filename=fname, _err=errs)
+        return {"message": "✅ وصلتك الصورة على تيليجرام" if ok else f"❌ فشلت التجربة: {errs[-1] if errs else ''}",
+                "sent": int(ok), "total": 1}
+
+    ids = [int(x) for x in (user_ids or "").split(",") if x.strip().isdigit()]
+    if ids:
+        users = db.query(User).filter(User.id.in_(ids), User.telegram_id != None).all()   # noqa: E711
+    else:
+        users = db.query(User).filter(User.telegram_id != None, User.is_active == True,   # noqa: E711, E712
+                                      User.plan != PlanType.BANNED).all()
+    chat_ids = [u.telegram_id for u in users if u.telegram_id]
+    if not chat_ids:
+        return {"message": "لا يوجد مستخدمون لديهم تيليجرام", "sent": 0, "total": 0}
+    log = TelegramBroadcast(admin_id=admin.id, title=title, preview=("🖼 " + (message or ""))[:300], total=len(chat_ids))
+    db.add(log)
+    db.commit()
+    db.refresh(log)
+    background.add_task(_photo_broadcast_task, chat_ids, caption, token, photo, fname, log.id)
+    return {"message": f"⏳ جاري إرسال الصورة لـ {len(chat_ids)} مستخدم — تابع النتيجة في سجل الإعلانات أدناه",
+            "sent": 0, "total": len(chat_ids), "log_id": log.id}
 
 
 # ⚠️ ليس /users/ip-groups: /users/{user_id} مُعرَّف قبله فيلتقط "ip-groups" كرقم
@@ -2287,40 +2402,52 @@ def _build_performance_report(signals: list, days: int, db: Session) -> tuple[st
     avg_r   = total_r / len(_rs) if _rs else 0.0
 
     # ── Telegram (HTML) ──────────────────────────────────────────────────────
+    # (2026-10-19، طلب المالك "يصل بشكل غير احترافي") تصميم جديد: الرقم الرئيسي صافي R، ثم توزيع **كل** الأسواق
+    # (لا قائمة مقطوعة بأول 10 — كانت تُخفي أغلب القرارات خلف "و15 آخر")، ثم أبرز الصفقات وعدد الخسائر صراحة.
+    # النقاط حُذفت من التلغرام: لا تُجمع بين الرموز (DECISIONS.md). الإيميل أدناه دون تغيير.
     pts_sign = "+" if total_pts >= 0 else ""
     r_sign   = "+" if total_r >= 0 else ""
+    k_bar    = max(0, min(10, round(win_rate / 10)))
+
+    def fr(v):
+        return f"{v:+.2f}R".replace("-", "−") if v is not None else "—"
+
     tg_lines = [
-        f"📊 <b>تقرير أداء Qaffel AI</b>",
-        f"🗓 الفترة: {period}",
-        "━━━━━━━━━━━━━━━━━━━━━━",
-        f"📈 قرارات فريدة: <b>{len(closed)}</b>  <i>(وصلت فعلياً لـ{total_rows} مستخدم)</i>",
-        f"✅ رابحة: <b>{len(wins)}</b>  │  ❌ خاسرة: <b>{len(losses)}</b>",
-        f"🏆 نسبة نجاح القرارات: <b>{win_rate}%</b>",
-        f"⚡ صافي النتيجة: <b>{r_sign}{total_r:.2f}R</b>  <i>(متوسط {avg_r:+.2f}R للصفقة)</i>",
-        "━━━━━━━━━━━━━━━━━━━━━━",
+        f"📊 <b>تقرير أداء Qaffel AI</b>  ·  {period}",
+        "━━━━━━━━━━━━━━━━━━",
     ]
-    if conflicts:
-        tg_lines.insert(4, f"⚠️ {conflicts} قرار بنتائج متضاربة بين المستخدمين — يحتاج تحقيق")
-
-    if closed:
-        tg_lines.append("📋 <b>القرارات:</b>")
-        for d in closed[:10]:  # أقصى 10
-            st    = d["status"]
-            icon  = "✅" if st in ("TP1_HIT", "TP2_HIT") else "❌"
-            tp    = "TP2" if st == "TP2_HIT" else "TP1" if st == "TP1_HIT" else "SL"
-            pts   = d["points"]
-            sign  = "+" if pts >= 0 else ""
-            stype = "شراء" if d["signal_type"] == "BUY" else "بيع"
-            r_txt = f"{d['r']:+.2f}R · " if d.get("r") is not None else ""
-            tg_lines.append(
-                f"{icon} {d['market']} {stype} — {tp}  <code>{r_txt}{sign}{pts:.1f} نقطة</code>"
-            )
-        if len(closed) > 10:
-            tg_lines.append(f"<i>... و {len(closed)-10} قرار آخر</i>")
-
+    if not closed:
+        tg_lines += ["لا قرارات مغلقة بهذه الفترة بعد."]
+    else:
+        tg_lines += [
+            f"<b>{r_sign}{total_r:.2f}R</b>  صافي النتيجة   <i>(متوسط {fr(avg_r)} للصفقة)</i>".replace("-", "−"),
+            f"✅ {len(wins)} رابحة   ❌ {len(losses)} خاسرة   ·   نسبة النجاح <b>{win_rate}%</b>",
+            "▰" * k_bar + "▱" * (10 - k_bar),
+        ]
+        if conflicts:
+            tg_lines.append(f"⚠️ {conflicts} قرار بنتائج متضاربة بين المستخدمين — يحتاج تحقيق")
+        by_mkt: dict = {}
+        for d in closed:
+            m = by_mkt.setdefault(d["market"], {"w": 0, "l": 0, "r": 0.0})
+            m["w" if d["status"] in ("TP1_HIT", "TP2_HIT") else "l"] += 1
+            m["r"] += d["r"] or 0.0
+        tg_lines += ["", "<b>حسب السوق</b>"]
+        for mkt, m in sorted(by_mkt.items(), key=lambda kv: -kv[1]["r"]):
+            dot = "🟢" if m["r"] > 0 else "🔴" if m["r"] < 0 else "⚪"
+            tg_lines.append(f"{dot} <code>{mkt}</code>  ✅{m['w']} ❌{m['l']}  <b>{fr(m['r'])}</b>")
+        top = sorted([d for d in wins if d.get("r") is not None], key=lambda d: -d["r"])[:3]
+        if top:
+            tg_lines += ["", "<b>أبرز الصفقات</b>"]
+            for d in top:
+                stype = "شراء" if d["signal_type"] == "BUY" else "بيع"
+                tgt = "الهدف 2 🏆" if d["status"] == "TP2_HIT" else "الهدف 1 ✅"
+                tg_lines.append(f"{d['market']} {stype} — {tgt}  <b>{fr(d['r'])}</b>")
+        if losses:
+            tg_lines.append(f"❌ الخسائر: {len(losses)} صفقة × −1R (وقف محسوب مسبقاً)")
     tg_lines += [
-        "━━━━━━━━━━━━━━━━━━━━━━",
-        "🤖 <i>Qaffel AI — التداول الذكي</i>",
+        "",
+        f"<i>{len(closed)} قراراً فريداً وصلت لـ {total_rows:,} مستلماً  ·  R = النتيجة كمضاعف للمخاطرة</i>",
+        "<i>تحليل فني للمعلومات فقط — ليس نصيحة استثمارية.</i>",
     ]
     tg_text = "\n".join(tg_lines)
 
@@ -2541,11 +2668,14 @@ def send_performance_report(
         if not tg_users:
             return {"message": "لا يوجد مستخدمون لديهم تيليجرام", "sent": 0}
 
+        _front = (getattr(_settings, "FRONTEND_URL", None) or "https://qaffel.com").rstrip("/")
+        _kb = {"inline_keyboard": [[{"text": "📊 التفاصيل في حسابي", "url": f"{_front}/dashboard?tab=performance"}]]}
+
         def _tg_broadcast():
             import time as _t
             sent = 0
             for u in tg_users:
-                ok = _send_telegram_message(u.telegram_id, tg_text)
+                ok = _send_telegram_message(u.telegram_id, tg_text, reply_markup=_kb)
                 if ok:
                     sent += 1
                 _t.sleep(0.05)

@@ -6,6 +6,7 @@ Qaffel AI Bot v2 — Professional Edition
 import os, asyncio, aiohttp
 from datetime import datetime, timezone, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand, WebAppInfo, Poll
+import messages as M   # (2026-10-19) نصوص الرسائل الموحّدة (HTML) — راجع messages.py
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, ContextTypes, PollAnswerHandler,
 )
@@ -1040,84 +1041,13 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        total   = st.get("total_signals", 0)
-        wins    = st.get("wins", 0)
-        loss    = st.get("losses", 0)
-        wr      = st.get("win_rate", 0)
-        pts     = st.get("total_points", 0)
-        active  = st.get("active_signals", 0)
-        best    = st.get("best_trade", 0)
-        worst   = st.get("worst_trade", 0)
-        recent  = st.get("recent_trades", [])
-        plan    = st.get("plan_label", "")
-        ends    = st.get("ends_at", "")
-        name    = st.get("full_name", "") or "مستخدم"
-        ref_pts = st.get("referral_points", 0)
-        wl      = st.get("watchlist_filter") or []
-
-        # ── شريط Win Rate مرئي (10 خانات) ──
-        filled_wr  = round(wr / 10)
-        wr_bar     = "🟢" * filled_wr + "⚫" * (10 - filled_wr)
-
-        # ── شريط الأداء العام ──
-        pts_sign   = "+" if pts >= 0 else ""
-        pts_emoji  = "📈" if pts >= 0 else "📉"
-
-        # ── بطاقة الخطة ──
-        plan_icons = {"trial": "🔵", "weekly": "🟡", "monthly": "🟣"}
-        plan_icon  = plan_icons.get(st.get("plan",""), "⚪")
-        plan_line  = f"{plan_icon} *{plan}*"
-        if ends:
-            plan_line += f"  ·  ينتهي `{ends}`"
-
-        # ── آخر الصفقات بتنسيق أجمل ──
-        recent_lines = ""
-        if recent:
-            recent_lines = "\n📋 *آخر الصفقات:*\n"
-            for t in recent[:5]:
-                pts_r  = t.get("points", 0)
-                sign_r = "+" if pts_r >= 0 else ""
-                icon_r = t.get("icon", "○")
-                mkt    = t.get("market", "")
-                typ    = "▲" if t.get("type") == "BUY" else "▼"
-                date   = t.get("closed_at", "")
-                pts_fmt = f"`{sign_r}{pts_r:.1f}`"
-                recent_lines += f"  {icon_r} {typ} *{mkt}*  {pts_fmt} نق  _{date}_\n"
-
-        # (2026-10-03) إحصائيات البوت صارت تُحصر تلقائياً برموز قائمة
-        # المراقبة الشخصية (notify_watchlist) — نفس ما يشوفه بالداشبورد
-        # بالضبط (راجع get_user_lifetime_stats بsignals.py). لو مخصّص
-        # رموزاً معيّنة، ننبّهه هون حتى ما يستغرب رقماً أصغر من "الكل".
-        wl_note = (
-            f"📍 _محسوبة على {len(wl)} رمز مخصَّص بقائمة مراقبتك فقط_\n"
-            if wl else ""
-        )
-
-        text = (
-            f"📊 *لوحة إحصائياتك*\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"👤 *{name}*\n"
-            f"{plan_line}\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"{wl_note}"
-            f"📦 *الصفقات المغلقة:* {total}\n"
-            f"  ✅ رابحة: *{wins}*   ❌ خاسرة: *{loss}*   ⏳ نشطة: *{active}*\n\n"
-            f"🏆 *نسبة الربح:* *{wr:.1f}%*\n"
-            f"  {wr_bar}\n\n"
-            f"{pts_emoji} إجمالي النقاط: `{pts_sign}{pts:.1f}`\n"
-        )
-        if best:
-            text += f"  🥇 أفضل: `+{best:.1f}` نقطة\n"
-        if worst:
-            text += f"  💔 أسوأ:  `{worst:.1f}` نقطة\n"
-        if ref_pts:
-            text += f"  🎁 نقاط إحالة: `{ref_pts}`\n"
-        text += recent_lines
-        text += f"━━━━━━━━━━━━━━━━━━━━━━"
+        # (2026-10-19) بطاقة موحّدة بـR (messages.stats_card) — "إجمالي النقاط" كان يجمع نقاطاً غير قابلة للجمع بين
+        # الرموز (فارق المضاعف 1200 ضعف — DECISIONS.md) فيُظهر رقماً سالباً ضخماً بينما النتيجة بالمخاطرة موجبة.
+        text = M.stats_card(st, MARKET_NAMES)
 
         await q.edit_message_text(
             text,
-            parse_mode="Markdown",
+            parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("🔄 تحديث",        callback_data="m_stats"),
                  InlineKeyboardButton("🌐 الداشبورد",    web_app=WebAppInfo(url=FRONTEND_URL))],
@@ -1325,9 +1255,14 @@ async def broadcast_new_signals(app: Application):
                             continue
                     last_alert[bc_key] = {"time": now_bc, "direction": sig_type}
 
-                    msg_full   = fmt_new_signal(sig)
-                    msg_masked = fmt_new_signal_masked(sig)
+                    # (2026-10-19) تصميم موحّد (messages.py): المموّهة بلا اتجاه ولا ثقة ولا مستويات، وزر لفتح
+                    # الإشارة نفسها بالحساب (/dashboard?signal=ID — الربط موجود بـDashboard.jsx منذ 28/09).
+                    _mname = MARKET_NAMES.get(sig.get("market", ""), sig.get("market", ""))
+                    _tfl   = TF_LABELS.get(sig.get("timeframe", ""), sig.get("timeframe", ""))
+                    msg_full   = M.signal_full(sig, _mname, _tfl, get_confidence(sig))
+                    msg_masked = M.signal_masked(sig, _mname, _tfl)
                     kb_full    = InlineKeyboardMarkup([
+                        [InlineKeyboardButton("📱 عرض في حسابي", url=f"{FRONTEND_URL}/dashboard?signal={sig['id']}")],
                         [
                             InlineKeyboardButton("📊 تحليل هذا الزوج", callback_data=f"sym_{sig['market']}"),
                             InlineKeyboardButton("📡 كل الإشارات",     callback_data="m_signals"),
@@ -1339,7 +1274,7 @@ async def broadcast_new_signals(app: Application):
                         ],
                     ])
                     kb_masked  = InlineKeyboardMarkup([[
-                        InlineKeyboardButton("💳 اشترك الآن", url=f"{FRONTEND_URL}/pricing"),
+                        InlineKeyboardButton("💳 فعّل اشتراكك", url=f"{FRONTEND_URL}/pricing"),
                     ]])
                     # (2026-08-31) إشارات المراقبة الشخصية (monitor_watchlists)
                     # محفوظة بـuser_id صاحبها، وهو أصلاً استلم تنبيه شخصي عنها
@@ -1384,7 +1319,7 @@ async def broadcast_new_signals(app: Application):
                         try:
                             await app.bot.send_message(
                                 chat_id=int(tid), text=msg,
-                                parse_mode="Markdown", reply_markup=kb,
+                                parse_mode="HTML", reply_markup=kb,
                             )
                             sent += 1
                             deliveries.append({"telegram_id": tid, "ok": True,
@@ -1439,14 +1374,24 @@ async def outcome_checker(app: Application):
             sent_result_ids: set = set()
             for o in outcomes:
                 try:
+                    # (2026-10-19) جمهوران: المشترك (نتيجة + زر للصفقة بحسابه)، والمنتهي اشتراكه (audience=expired —
+                    # الرابحة مفصّلة مع دعوة للاشتراك، الخاسرة مختصرة؛ كل النتائج تصل ولا تُخفى خسارة).
+                    _mname = MARKET_NAMES.get(o.get("market", ""), o.get("market", ""))
+                    if o.get("audience") == "expired":
+                        _txt = M.outcome_expired(o, _mname)
+                        _kb = InlineKeyboardMarkup([[InlineKeyboardButton("💳 جدّد اشتراكك", url=f"{FRONTEND_URL}/pricing")]])                             if o.get("status") in ("TP1_HIT", "TP2_HIT") else None
+                    else:
+                        _txt = M.outcome_subscriber(o, _mname)
+                        _kb = InlineKeyboardMarkup([
+                            [InlineKeyboardButton("📱 عرض في حسابي", url=f"{FRONTEND_URL}/dashboard?signal={o.get('signal_id')}")],
+                            [InlineKeyboardButton("📈 إحصائياتي", callback_data="m_stats"),
+                             InlineKeyboardButton("📡 الإشارات",  callback_data="m_signals")],
+                        ])
                     await app.bot.send_message(
                         chat_id=int(o["telegram_id"]),
-                        text=fmt_outcome(o),
-                        parse_mode="Markdown",
-                        reply_markup=InlineKeyboardMarkup([[
-                            InlineKeyboardButton("📈 إحصائياتي", callback_data="m_stats"),
-                            InlineKeyboardButton("📡 الإشارات",  callback_data="m_signals"),
-                        ]]),
+                        text=_txt,
+                        parse_mode="HTML",
+                        reply_markup=_kb,
                     )
                     sent_result_ids.add(o.get("signal_id"))
                     await asyncio.sleep(0.05)

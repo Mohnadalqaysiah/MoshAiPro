@@ -445,6 +445,15 @@ def bot_expiring(
     return {"users": result, "count": len(result)}
 
 
+def _expired_wants_result(user, market: str) -> bool:
+    """(2026-10-19) منتهي الاشتراك/التجربة: يستلم نتيجة الإشارة العامة إلا إن أوقف الإشعارات، أو خصّص قائمة مراقبة
+    لا تشمل الرمز (نفس اتفاقية البث: قائمة فارغة = كل الرموز)."""
+    if user.notifications_enabled is False:
+        return False
+    wl = [s.upper() for s in (user.notify_watchlist or [])]
+    return not wl or (market or "").upper() in wl
+
+
 @router.get("/check-outcomes")
 async def bot_check_outcomes(
     range_check: bool = True,
@@ -952,6 +961,9 @@ async def bot_check_outcomes(
                     "pnl_points":   points,
                     "pnl_pct":      pnl_pct,
                     "confidence":   sig.ai_confidence,
+                    # (2026-10-19) لرسائل النتيجة الجديدة: "بعد X من الإشارة" وجمهور الرسالة
+                    "created_at":   sig.created_at.isoformat() if sig.created_at else None,
+                    "audience":     "subscriber",
                 }
 
                 # إذا كانت الإشارة مُبثّة لكل المشتركين → نُضيف كل المشتركين
@@ -974,6 +986,11 @@ async def bot_check_outcomes(
                                 valid = not sub.trial_ends_at or sub.trial_ends_at > now_utc
                             if valid and sub.telegram_id:
                                 triggered.append({"telegram_id": sub.telegram_id, **payload})
+                            elif sub.telegram_id and _expired_wants_result(sub, sig.market):
+                                # (2026-10-19، قرار المالك) المنتهي اشتراكه يستلم **كل** نتائج الإشارات العامة — الرابحة مفصّلة
+                                # والخاسرة مختصرة (telegram-bot/messages.outcome_expired) — لتشجيعه على الاشتراك بصورة صادقة.
+                                # لا يُخفى أي وقف. يحترم إيقاف الإشعارات وقائمة المراقبة.
+                                triggered.append({"telegram_id": sub.telegram_id, **payload, "audience": "expired"})
                 else:
                     # إشارة خاصة بمستخدم واحد
                     user = db.query(User).filter(User.id == sig.user_id).first()
@@ -1707,6 +1724,12 @@ def bot_user_stats(
         "worst_trade":    round(float(worst), 2),
         "recent_trades":  recent,
         "watchlist_filter":  stats["watchlist_filter"],
+        # (2026-10-19) بطاقة البوت الجديدة بـR (telegram-bot/messages.stats_card)
+        "plan":           str(user.plan.value if hasattr(user.plan, "value") else user.plan).lower(),
+        "total_r":        stats["total_r"],
+        "avg_r":          stats["avg_r"],
+        "best_r":         stats["best_r"],
+        "worst_r":        stats["worst_r"],
         "referral_count":    aff_count,
         "affiliate_code":    user.affiliate_code,
         "referral_points":   user.referral_points or 0,

@@ -440,8 +440,17 @@ def get_user_lifetime_stats(db: Session, user: User) -> dict:
     q = db.query(Signal).filter(Signal.status.in_(closed), Signal.created_at >= eff_start)
     if symbols_filter:
         q = q.filter(Signal.market.in_(symbols_filter))
-    decisions = verified_unique_decisions(q.all())
+    rows_all = q.all()
+    decisions = verified_unique_decisions(rows_all)
     decisions.sort(key=lambda d: d["exit_executed"] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+    # (2026-10-19) R لكل قرار — نفس صيغة التقارير (quality_report._r_multiple). "إجمالي النقاط" يجمع نقاطاً غير قابلة
+    # للجمع بين الرموز (DECISIONS.md)، فيبقى للتوافق فقط والعرض الأساسي صار بـR.
+    from app.services.quality_report import _r_multiple
+    _rep = {r.id: r for r in rows_all}
+    for d in decisions:
+        r0 = _rep.get(d["id"])
+        d["r"] = _r_multiple(r0.entry_price, r0.stop_loss, r0.take_profit_1, r0.take_profit_2, d["status"]) if r0 else None
+    _rs = [d["r"] for d in decisions if d.get("r") is not None]
 
     wins   = [d for d in decisions if d["points"] > 0]
     losses = [d for d in decisions if d["points"] < 0]
@@ -464,6 +473,7 @@ def get_user_lifetime_stats(db: Session, user: User) -> dict:
             "type":       d["signal_type"],
             "status":     d["status"],
             "points":     round(d["points"], 2),
+            "r":          round(d["r"], 2) if d.get("r") is not None else None,
             "closed_at":  d["exit_executed"].strftime("%d/%m %H:%M") if d["exit_executed"] else "",
         })
 
@@ -478,6 +488,10 @@ def get_user_lifetime_stats(db: Session, user: User) -> dict:
         "active_signals": active_count,
         "recent_trades":  recent,
         "watchlist_filter": symbols_filter,
+        "total_r":      round(sum(_rs), 2) if _rs else 0.0,
+        "avg_r":        round(sum(_rs) / len(_rs), 3) if _rs else None,
+        "best_r":       round(max(_rs), 2) if _rs else None,
+        "worst_r":      round(min(_rs), 2) if _rs else None,
     }
 
 

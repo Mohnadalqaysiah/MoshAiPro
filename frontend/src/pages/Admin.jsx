@@ -683,6 +683,14 @@ export default function Admin() {
 
   // Messages state
   const [messageForm, setMessageForm] = useState({ title:'', message:'', user_ids:[] })
+  // (2026-10-19) صورة اختيارية مع الإعلان — تُرسل sendPhoto والنص يصبح تعليقها (حد تيليجرام 1024 حرفاً)
+  const [messageImage, setMessageImage] = useState(null)
+  const [messageImageUrl, setMessageImageUrl] = useState(null)
+  const pickMessageImage = (file) => {
+    if (messageImageUrl) URL.revokeObjectURL(messageImageUrl)
+    if (file && file.size > 10 * 1024 * 1024) { setMessageMsg({ type:'err', text:'حجم الصورة أكبر من 10 ميغابايت' }); file = null }
+    setMessageImage(file || null); setMessageImageUrl(file ? URL.createObjectURL(file) : null)
+  }
   const [messageSending, setMessageSending] = useState(false)
   const [tgHistory, setTgHistory] = useState([])
   const [messageMsg, setMessageMsg] = useState(null)
@@ -1095,15 +1103,27 @@ export default function Admin() {
   }
   const sendMessage = async (e, test = false) => {
     e?.preventDefault?.()
-    if (!messageForm.message.trim()) return
+    if (!messageForm.message.trim() && !messageImage) return
     setMessageSending(true); setMessageMsg(null)
     try {
-      const payload = { title: messageForm.title || undefined, message: messageForm.message, test_to_me: test }
-      if (!test && messageForm.user_ids.length > 0) payload.user_ids = messageForm.user_ids.map(id => parseInt(id))
-      const r = await axios.post(`${API}/api/v1/admin/telegram/send`, payload)
+      let r
+      if (messageImage) {
+        const fd = new FormData()
+        fd.append('file', messageImage)
+        if (messageForm.title) fd.append('title', messageForm.title)
+        fd.append('message', messageForm.message)
+        fd.append('test_to_me', test ? 'true' : 'false')
+        if (!test && messageForm.user_ids.length > 0) fd.append('user_ids', messageForm.user_ids.join(','))
+        r = await axios.post(`${API}/api/v1/admin/telegram/send-photo`, fd)
+      } else {
+        const payload = { title: messageForm.title || undefined, message: messageForm.message, test_to_me: test }
+        if (!test && messageForm.user_ids.length > 0) payload.user_ids = messageForm.user_ids.map(id => parseInt(id))
+        r = await axios.post(`${API}/api/v1/admin/telegram/send`, payload)
+      }
       setMessageMsg({ type: r.data.message?.startsWith('❌') ? 'err' : 'ok', text: r.data.message })
       if (!test) {
         setMessageForm(f => ({ ...f, title:'', message:'', user_ids:[] }))
+        pickMessageImage(null)
         loadTgHistory(); setTimeout(loadTgHistory, 15000); setTimeout(loadTgHistory, 60000)
       }
     } catch (err) { setMessageMsg({ type:'err', text: err.response?.data?.detail || 'فشل الإرسال' }) }
@@ -2276,11 +2296,32 @@ export default function Admin() {
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">نص الرسالة</label>
                   <textarea
-                    required rows={6} value={messageForm.message}
+                    required={!messageImage} rows={6} value={messageForm.message}
                     onChange={e => setMessageForm(f => ({ ...f, message: e.target.value }))}
                     placeholder="اكتب الرسالة التي تريد إرسالها..."
                     className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white resize-y"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">صورة (اختياري)</label>
+                  {messageImageUrl ? (
+                    <div className="flex items-start gap-3">
+                      <img src={messageImageUrl} alt="" className="max-h-40 rounded-lg border border-gray-700" />
+                      <button type="button" onClick={() => pickMessageImage(null)}
+                        className="text-xs text-red-400 hover:text-red-300 px-2 py-1 rounded hover:bg-gray-800">✕ إزالة الصورة</button>
+                    </div>
+                  ) : (
+                    <input type="file" accept="image/jpeg,image/png,image/webp"
+                      onChange={e => pickMessageImage(e.target.files?.[0])}
+                      className="block w-full text-sm text-gray-400 file:mr-0 file:ml-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-gray-800 file:text-gray-200 hover:file:bg-gray-700" />
+                  )}
+                  {messageImage && (() => {
+                    const n = (messageForm.title || '').length + messageForm.message.length + 40
+                    return <p className={`text-xs mt-1 ${n > 1024 ? 'text-red-400' : 'text-gray-500'}`}>
+                      النص يظهر تحت الصورة — حد تيليجرام 1024 حرفاً (تقريباً {n}){n > 1024 ? ' — اختصر النص' : ''}
+                    </p>
+                  })()}
                 </div>
 
                 <div>
