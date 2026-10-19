@@ -986,16 +986,49 @@ def signals_backtest(
 
 
 # ── Must be LAST — catches /{signal_id} after all static routes ──────────────
+_OPEN_STATUSES = (SignalStatus.PENDING, SignalStatus.ACTIVE)
+
+
+def _can_see_signal_levels(signal: Signal, user: User, db: Session) -> bool:
+    """(2026-10-19) ثغرة مُغلقة: كانت /signals/{id} بلا مصادقة — الأرقام متسلسلة فكان أي زائر يقرأ اتجاه ومستويات
+    كل إشارة نشطة لحظة صدورها، فيُلغي التمويه والاشتراك معاً.
+    القاعدة: المغلقة (ربح/خسارة/تأمين/انتهاء) مكشوفة لكل مسجّل — نفس ما يصل المنتهي اشتراكه على تيليجرام.
+    النشطة: الأدمن والمشترك، أو من وصلته هذه الإشارة نفسها (صفّه، أو نسخة منها بحصة التجربة)."""
+    if signal.status not in _OPEN_STATUSES:
+        return True
+    if _has_full_signal_access(user) or signal.user_id == user.id:
+        return True
+    return db.query(Signal.id).filter(
+        Signal.user_id == user.id,
+        Signal.market == signal.market,
+        Signal.signal_type == signal.signal_type,
+        Signal.entry_price == signal.entry_price,
+        Signal.status.in_(_OPEN_STATUSES),
+    ).first() is not None
+
+
 @router.get("/{signal_id}")
 async def get_signal_details(
     signal_id: int,
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get detailed signal information"""
+    """Get detailed signal information — يتطلب تسجيل الدخول؛ النشطة مموّهة لغير المشترك (راجع _can_see_signal_levels)"""
     try:
         signal = db.query(Signal).filter(Signal.id == signal_id).first()
         if not signal:
             raise HTTPException(status_code=404, detail="Signal not found")
+        if not _can_see_signal_levels(signal, user, db):
+            # نفس قاعدة الإشارة المموّهة على تيليجرام: لا اتجاه ولا ثقة ولا مستويات ولا شرح
+            return {"success": True, "data": {
+                "id": signal.id,
+                "market": signal.market,
+                "timeframe": signal.timeframe,
+                "status": signal.status.value,
+                "created_at": signal.created_at.isoformat(),
+                "expires_at": signal.expires_at.isoformat() if signal.expires_at else None,
+                "locked": True,
+            }}
         return {
             "success": True,
             "data": {
@@ -1020,6 +1053,7 @@ async def get_signal_details(
                 "profit_loss_percentage": signal.profit_loss_percentage,
                 "created_at": signal.created_at.isoformat(),
                 "expires_at": signal.expires_at.isoformat() if signal.expires_at else None,
+                "locked": False,
             }
         }
     except HTTPException:

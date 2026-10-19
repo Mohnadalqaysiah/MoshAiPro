@@ -115,6 +115,8 @@ export default function Dashboard() {
       .then(res => {
         const d = res.data?.data
         if (!d) return
+        // (2026-10-19) إشارة نشطة لغير المشترك تصل مموّهة (بلا اتجاه/مستويات) — نوجّهه للاشتراك بدل نافذة فارغة
+        if (d.locked) { navigate('/pricing'); return }
         setQuickResult({
           ...d,
           recommendation: d.signal_type,
