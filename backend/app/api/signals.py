@@ -79,11 +79,8 @@ router = APIRouter()
 def _trial_signal_daily_limit(db: Session) -> int:
     """عدد الإشارات الكاملة (غير مموّهة) المسموحة يومياً لمستخدمي التجربة —
     قابل للتعديل من لوحة الإدارة (SiteSettings)، مطابق لنمط trial_analysis_limit."""
-    row = db.query(SiteSettings).filter(SiteSettings.key == "trial_signal_daily_limit").first()
-    try:
-        return int(row.value) if row and row.value else 3
-    except Exception:
-        return 3
+    from app.services.signal_quota import daily_limit
+    return daily_limit(db)
 
 
 def _has_full_signal_access(user: Optional[User]) -> bool:
@@ -333,9 +330,20 @@ async def get_latest_signals(
         free_limit  = _trial_signal_daily_limit(db)
         unlimited   = free_limit <= 0   # 0 = غير محدود، بنفس اتفاقية باقي حدود لوحة الإدارة
 
+        # (2026-10-19، قرار المالك "وحّد") الحصة يومية وموحّدة مع تيليجرام (signal_quota): ما فُتح اليوم بأي قناة يبقى
+        # مفتوحاً، وما تبقّى من الحصة يُفتح للأقدم صدوراً أولاً. قبله "أحدث N الآن" — إشارة رآها مفتوحة تُقفل حين تصدر
+        # N أحدث منها، وحصة الموقع منفصلة عن حصة تيليجرام.
+        if full_access or unlimited:
+            open_ids = {s.id for s in signals}
+        else:
+            from app.services.signal_quota import unlocked_today, try_unlock
+            opened = unlocked_today(db, user.id)
+            open_ids = {s.id for s in reversed(signals)
+                        if try_unlock(db, user.id, s, "web", limit=free_limit, opened=opened)}
+
         data = []
         for i, s in enumerate(signals):
-            unlocked = full_access or unlimited or i < free_limit
+            unlocked = s.id in open_ids
             item = {
                 "id":               s.id,
                 "symbol":           s.market,
@@ -1008,18 +1016,15 @@ def _can_see_signal_levels(signal: Signal, user: User, db: Session) -> bool:
     """(2026-10-19) ثغرة مُغلقة: كانت /signals/{id} بلا مصادقة — الأرقام متسلسلة فكان أي زائر يقرأ اتجاه ومستويات
     كل إشارة نشطة لحظة صدورها، فيُلغي التمويه والاشتراك معاً.
     القاعدة: المغلقة (ربح/خسارة/تأمين/انتهاء) مكشوفة لكل مسجّل — نفس ما يصل المنتهي اشتراكه على تيليجرام.
-    النشطة: الأدمن والمشترك، أو من وصلته هذه الإشارة نفسها (صفّه، أو نسخة منها بحصة التجربة)."""
+    النشطة: الأدمن والمشترك، وغيرهم من الحصة اليومية الموحّدة (signal_quota — نفس حصة تيليجرام).
+    (2026-10-19) أُلغيت قاعدة "صفّه/نسخة باسمه": تنبيه المراقبة يُنشئ صفاً باسم المستخدم **قبل** قرار الحصة، فمن
+    وصله التنبيه مموّهاً كان يجد المستويات كاملة هنا."""
     if signal.status not in _OPEN_STATUSES:
         return True
-    if _has_full_signal_access(user) or signal.user_id == user.id:
+    if _has_full_signal_access(user):
         return True
-    return db.query(Signal.id).filter(
-        Signal.user_id == user.id,
-        Signal.market == signal.market,
-        Signal.signal_type == signal.signal_type,
-        Signal.entry_price == signal.entry_price,
-        Signal.status.in_(_OPEN_STATUSES),
-    ).first() is not None
+    from app.services.signal_quota import try_unlock
+    return try_unlock(db, user.id, signal, "web", limit=_trial_signal_daily_limit(db))
 
 
 @router.get("/{signal_id}")

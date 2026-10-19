@@ -1628,6 +1628,7 @@ def bot_active_subscribers(
 @router.post("/consume-signal-notification")
 def bot_consume_signal_notification(
     telegram_id: str = Body(..., embed=True),
+    signal_id: Optional[int] = Body(None, embed=True),
     _: bool = Depends(verify_bot),
     db: Session = Depends(get_db),
 ):
@@ -1649,6 +1650,13 @@ def bot_consume_signal_notification(
         free_limit = 3
     if free_limit <= 0:
         return {"unlocked": True}
+
+    # (2026-10-19، قرار المالك "وحّد") حصة واحدة مع الموقع (signal_quota): الإشارة تُسجَّل باسمه فتبقى مفتوحة بالموقع
+    # حتى نهاية اليوم، وما فتحه بالموقع لا يُحسب مرة ثانية هنا. العدّاد القديم أدناه احتياط لطلب بلا signal_id فقط.
+    sig = db.query(Signal).filter(Signal.id == signal_id).first() if signal_id else None
+    if sig is not None:
+        from app.services.signal_quota import try_unlock
+        return {"unlocked": try_unlock(db, user.id, sig, "telegram", limit=free_limit)}
 
     now = datetime.now(timezone.utc)
     if not user.signal_notif_seen_date or user.signal_notif_seen_date.date() != now.date():
