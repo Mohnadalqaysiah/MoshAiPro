@@ -83,6 +83,7 @@ class _DB:
         eng = create_engine("sqlite://")
         Base.metadata.create_all(eng, tables=[SignalUnlock.__table__, SiteSettings.__table__])
         self.s = sessionmaker(bind=eng)()
+        self.engine = eng
         self.signals, self.users = list(signals), list(users)
         if free is not None:
             self.s.add(SiteSettings(key="trial_signal_daily_limit", value=str(free)))
@@ -96,6 +97,9 @@ class _DB:
         if owner is User:
             return _Rows(self.users)
         return self.s.query(*ents)
+
+    def get_bind(self):
+        return self.engine
 
     def add(self, o):
         self.s.add(o)
@@ -164,10 +168,10 @@ def test_own_watch_copy_does_not_bypass_quota():
 
 
 # ─── /signals/latest ─────────────────────────────────────────────────────────
-def test_latest_trial_opens_oldest_first_and_masks_rest_without_direction():
+def test_latest_trial_opens_newest_first_and_masks_rest_without_direction():
     db = _DB(signals=[_sig(i) for i in range(5)], free=3)    # 100 الأحدث … 104 الأقدم
     d = _latest(db, _user())
-    assert [x["id"] for x in d if not x["locked"]] == [102, 103, 104]
+    assert [x["id"] for x in d if not x["locked"]] == [100, 101, 102]
     for x in d:
         if x["locked"]:
             for k in ("recommendation", "signal_type", "ai_confidence", "ai_confidence_score", "entry_price",
@@ -186,6 +190,25 @@ def test_latest_opened_signal_stays_open_when_newer_arrive():
     d = {x["id"]: x["locked"] for x in _latest(db, u)}
     assert d == {110: True, 111: True, 112: True, 100: False, 101: False, 102: False}
     assert db.unlock_count() == 3
+
+
+def test_latest_different_list_sizes_open_same_decisions():
+    """بلاغ ما بعد النشر: 4 مكوّنات بأحجام مختلفة (10/50/200) فتحت 5 إشارات لحساب بحد 3."""
+    db, u = _DB(signals=[_sig(i) for i in range(8)], free=3), _user()
+    for lim in (2, 200, 10, 50, 1):
+        _latest(db, u, limit=lim)
+    assert db.unlock_count() == 3
+    assert [x["id"] for x in _latest(db, u, limit=200) if not x["locked"]] == [100, 101, 102]
+
+
+def test_quota_uses_user_lock_on_postgres():
+    """القفل نفسه لا يُختبر على SQLite — نتحقق أنه يُطلب بمفتاح المستخدم حين تكون القاعدة Postgres."""
+    from app.services import signal_quota as Q
+    calls = []
+    fake = SimpleNamespace(get_bind=lambda: SimpleNamespace(dialect=SimpleNamespace(name="postgresql")),
+                           execute=lambda sql, params: calls.append((str(sql), params)))
+    Q._lock_user(fake, 138)
+    assert calls and "pg_advisory_xact_lock" in calls[0][0] and calls[0][1]["uid"] == 138
 
 
 def test_latest_repeat_calls_do_not_consume_more():
@@ -238,10 +261,10 @@ def test_telegram_and_web_share_one_quota():
     d = {x["id"]: x["locked"] for x in _latest(db, u)}
     assert d[100] is False                                   # نفس الإشارة مفتوحة بالموقع
     assert sum(1 for v in d.values() if not v) == 3          # والحصة 3 لا 4
-    db.signals = [sigs[1]]
-    assert _consume(db, 101)["unlocked"] is False            # نفدت الحصة بالقناتين
-    db.signals = [sigs[4]]
-    assert _consume(db, 104)["unlocked"] is True             # فتحها الموقع ← تصل كاملة على تيليجرام بلا خصم
+    db.signals = [sigs[3]]
+    assert _consume(db, 103)["unlocked"] is False            # نفدت الحصة بالقناتين
+    db.signals = [sigs[2]]
+    assert _consume(db, 102)["unlocked"] is True             # فتحها الموقع ← تصل كاملة على تيليجرام بلا خصم
     assert db.unlock_count() == 3
 
 
