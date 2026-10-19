@@ -349,7 +349,11 @@ async def get_latest_signals(
                     "news_context":     s.notes,
                 })
             else:
+                # (2026-10-19، قرار المالك) المموّهة بلا اتجاه ولا ثقة — كانت تُظهرهما وتخفي المستويات فقط،
+                # والاتجاه وحده يكفي للدخول. نفس قاعدة الإشارة المموّهة على تيليجرام و/signals/{id}.
                 item.update({
+                    "recommendation": None, "signal_type": None,
+                    "ai_confidence": None, "ai_confidence_score": None,
                     "entry_price": None, "stop_loss": None,
                     "take_profit_1": None, "take_profit_2": None,
                     "risk_reward_ratio": None,

@@ -910,6 +910,10 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"━━━━━━━━━━━━━━━━━━━━━━\n"
             )
             for s in sigs:
+                if s.get("locked"):   # (2026-10-19) مموّهة: بلا اتجاه ولا ثقة ولا مستويات
+                    mname = MARKET_NAMES.get(s.get("market", ""), s.get("market", ""))
+                    msg += f"🔒 *{mname}*  إشارة — تفاصيلها لمشتركي الخطط\n─────────────────────\n"
+                    continue
                 stype  = s.get("signal_type", "BUY")
                 status = s.get("status", "ACTIVE")
                 conf   = get_confidence(s)

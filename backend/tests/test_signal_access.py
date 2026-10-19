@@ -99,6 +99,47 @@ def test_closed_visible_to_any_logged_in():
         assert d["locked"] is False and d["entry_price"] == 2400.0
 
 
+class _ListQ(_Q):
+    def order_by(self, *a):
+        return self
+
+    def limit(self, *a):
+        return self
+
+    def all(self):
+        return self._r
+
+
+def _latest(user, n=5, free=3):
+    sigs = [_sig() for _ in range(n)]
+    for i, x in enumerate(sigs):
+        x.id, x.notes = 100 + i, None
+    orig, S._trial_signal_daily_limit = S._trial_signal_daily_limit, lambda db: free
+    try:
+        db = SimpleNamespace(query=lambda *a: _ListQ(sigs))
+        return asyncio.run(S.get_latest_signals(limit=10, hours=12, user=user, db=db))["data"]
+    finally:
+        S._trial_signal_daily_limit = orig
+
+
+def test_latest_trial_keeps_free_signals_and_masks_rest_without_direction():
+    d = _latest(_user())
+    free, masked = d[:3], d[3:]
+    assert all(not x["locked"] and x["signal_type"] == "SELL" and x["entry_price"] == 2400.0 and x["ai_confidence"] == 78
+               for x in free)                                       # الـ3 المجانية كاملة كما هي
+    assert masked and all(x["locked"] for x in masked)
+    for x in masked:
+        for k in ("recommendation", "signal_type", "ai_confidence", "ai_confidence_score", "entry_price",
+                  "stop_loss", "take_profit_1", "take_profit_2", "risk_reward_ratio"):
+            assert x[k] is None, k
+        assert x["market"] == "XAUUSD" and x["timeframe"] == "4h"
+
+
+def test_latest_subscriber_and_unlimited_see_all():
+    assert all(not x["locked"] and x["signal_type"] == "SELL" for x in _latest(_user(plan=PlanType.MONTHLY)))
+    assert all(not x["locked"] for x in _latest(_user(), free=0))   # 0 = بلا حد من الإعدادات
+
+
 if __name__ == "__main__":
     n = 0
     for name, fn in list(globals().items()):
