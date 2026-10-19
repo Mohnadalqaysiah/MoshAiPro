@@ -331,15 +331,16 @@ async def get_latest_signals(
         unlimited   = free_limit <= 0   # 0 = غير محدود، بنفس اتفاقية باقي حدود لوحة الإدارة
 
         # (2026-10-19، قرار المالك "وحّد") الحصة يومية وموحّدة مع تيليجرام (signal_quota): ما فُتح اليوم بأي قناة يبقى
-        # مفتوحاً، وما تبقّى من الحصة يُفتح للأقدم صدوراً أولاً. قبله "أحدث N الآن" — إشارة رآها مفتوحة تُقفل حين تصدر
+        # مفتوحاً، وما تبقّى من الحصة يُفتح للأحدث أولاً. قبله "أحدث N الآن" — إشارة رآها مفتوحة تُقفل حين تصدر
         # N أحدث منها، وحصة الموقع منفصلة عن حصة تيليجرام.
+        # الأحدث أولاً لا الأقدم: مكوّنات الداشبورد تطلب أحجاماً مختلفة (10/50/200) — "الأقدم" يختلف بينها فيفتح كل طلب
+        # غير ما يعرضه الآخر، أما "الأحدث" فواحد للجميع. والقرار دفعة واحدة تحت قفل المستخدم (open_batch).
         if full_access or unlimited:
             open_ids = {s.id for s in signals}
         else:
-            from app.services.signal_quota import unlocked_today, try_unlock
-            opened = unlocked_today(db, user.id)
-            open_ids = {s.id for s in reversed(signals)
-                        if try_unlock(db, user.id, s, "web", limit=free_limit, opened=opened)}
+            from app.services.signal_quota import open_batch
+            flags = open_batch(db, user.id, signals, "web", limit=free_limit)
+            open_ids = {s.id for s, ok in zip(signals, flags) if ok}
 
         data = []
         for i, s in enumerate(signals):
