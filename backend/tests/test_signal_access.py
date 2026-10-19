@@ -113,7 +113,7 @@ class _ListQ(_Q):
 def _latest(user, n=5, free=3):
     sigs = [_sig() for _ in range(n)]
     for i, x in enumerate(sigs):
-        x.id, x.notes = 100 + i, None
+        x.id, x.notes, x.entry_price = 100 + i, None, 2400.0 + i   # إشارات مختلفة لا نسخ
     orig, S._trial_signal_daily_limit = S._trial_signal_daily_limit, lambda db: free
     try:
         db = SimpleNamespace(query=lambda *a: _ListQ(sigs))
@@ -125,7 +125,7 @@ def _latest(user, n=5, free=3):
 def test_latest_trial_keeps_free_signals_and_masks_rest_without_direction():
     d = _latest(_user())
     free, masked = d[:3], d[3:]
-    assert all(not x["locked"] and x["signal_type"] == "SELL" and x["entry_price"] == 2400.0 and x["ai_confidence"] == 78
+    assert all(not x["locked"] and x["signal_type"] == "SELL" and x["entry_price"] >= 2400.0 and x["ai_confidence"] == 78
                for x in free)                                       # الـ3 المجانية كاملة كما هي
     assert masked and all(x["locked"] for x in masked)
     for x in masked:
@@ -140,12 +140,31 @@ def test_latest_subscriber_and_unlimited_see_all():
     assert all(not x["locked"] for x in _latest(_user(), free=0))   # 0 = بلا حد من الإعدادات
 
 
+def test_latest_dedupes_copies_of_same_decision():
+    """بلاغ المالك: نفس إشارة NAS100 ظهرت 6 مرات (صف لكل مشترك) فاستهلكت الحصة المجانية ثم ظهرت مقفلة بجانب نفسها."""
+    copies = [_sig() for _ in range(6)]                     # نفس القرار، 6 مشتركين
+    for i, x in enumerate(copies):
+        x.id, x.notes, x.user_id = 300 + i, None, 10 + i
+    other = [_sig() for _ in range(2)]
+    for i, x in enumerate(other):
+        x.id, x.notes, x.entry_price, x.market = 400 + i, None, 100.0 + i, "BTCUSD"
+    rows = copies[:3] + other[:1] + copies[3:] + other[1:]
+    orig, S._trial_signal_daily_limit = S._trial_signal_daily_limit, lambda db: 3
+    try:
+        db = SimpleNamespace(query=lambda *a: _ListQ(rows))
+        d = asyncio.run(S.get_latest_signals(limit=10, hours=12, user=_user(), db=db))["data"]
+    finally:
+        S._trial_signal_daily_limit = orig
+    assert [x["id"] for x in d] == [300, 400, 401]          # قرار واحد لكل إشارة، بترتيبها
+    assert not any(x["locked"] for x in d)                  # 3 قرارات فريدة = كلها ضمن الحصة المجانية
+
+
 def test_bot_latest_signals_uses_linked_user():
     """زر "آخر الإشارات" بالبوت: كان يرجع 401 دائماً (مفتاح البوت بدل توكن مستخدم). الآن باسم المستخدم المرتبط."""
     import app.api.bot as B
     sigs = [_sig() for _ in range(5)]
     for i, x in enumerate(sigs):
-        x.id, x.notes = 200 + i, None
+        x.id, x.notes, x.entry_price = 200 + i, None, 2400.0 + i
     db = SimpleNamespace(query=lambda *a: _ListQ(sigs))
     o_link, o_lim = B._get_linked_user, S._trial_signal_daily_limit
     S._trial_signal_daily_limit = lambda db: 3

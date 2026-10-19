@@ -314,9 +314,20 @@ async def get_latest_signals(
                 ),
             )
             .order_by(Signal.created_at.desc())
-            .limit(limit)
+            .limit(max(limit * 40, 400))
             .all()
         )
+        # (2026-10-19، بلاغ المالك من حساب تجربة) كل إشارة تُخزَّن صفاً لكل مشترك، فكانت القائمة تعرض نفس القرار
+        # مرات متتالية (NAS100 بيع ×6): الحصة المجانية (3) تُستهلك على نسخ نفس الإشارة، وبقية نسخها تظهر مقفلة
+        # بجانبها. الآن قرار واحد لكل decision_key (نفس معيار التقارير)، الأحدث أولاً. الصفوف نفسها لا تُمس.
+        _seen: set = set()
+        _unique = []
+        for s in signals:
+            k = decision_key(s.market, s.timeframe, s.signal_type, s.entry_price)
+            if k not in _seen:
+                _seen.add(k)
+                _unique.append(s)
+        signals = _unique[:limit]
 
         full_access = _has_full_signal_access(user)
         free_limit  = _trial_signal_daily_limit(db)
