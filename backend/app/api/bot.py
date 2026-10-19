@@ -1664,6 +1664,25 @@ def bot_consume_signal_notification(
     return {"unlocked": True, "remaining": free_limit - user.signal_notif_seen_today}
 
 
+@router.get("/latest-signals")
+async def bot_latest_signals(
+    telegram_id: str,
+    limit: int = 8,
+    _: bool = Depends(verify_bot),
+    db: Session = Depends(get_db),
+):
+    """(2026-10-19) زر "آخر الإشارات" بالبوت — كان يستدعي /signals/latest بمفتاح البوت، والمسار يطلب توكن مستخدم،
+    فيرجع 401 دائماً ويعرض "لا توجد إشارات" للجميع. الآن: نفس دالة الموقع باسم المستخدم المرتبط، فيرى بالضبط ما يراه
+    بالداشبورد (كاملة للمشترك، أول N كاملة للتجربة والباقي مموّه بلا اتجاه)."""
+    from app.api.signals import get_latest_signals
+
+    user = _get_linked_user(telegram_id, db)
+    if not user:
+        return {"linked": False, "data": []}
+    res = await get_latest_signals(limit=max(1, min(limit, 20)), hours=12, user=user, db=db)
+    return {**res, "linked": True}
+
+
 @router.get("/user-stats")
 def bot_user_stats(
     telegram_id: str,
