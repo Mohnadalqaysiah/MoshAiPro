@@ -1325,7 +1325,8 @@ async def broadcast_new_signals(app: Application):
                         # بدل ما ينقطع عنهم البث بالكامل.
                         unlocked = full_access_of.get(tid, False)
                         if not unlocked:
-                            consume  = await _post("/api/v1/bot/consume-signal-notification", json={"telegram_id": tid})
+                            consume  = await _post("/api/v1/bot/consume-signal-notification",
+                                                   json={"telegram_id": tid, "signal_id": sig.get("id")})
                             unlocked = bool(consume.get("unlocked"))
 
                         msg = msg_full if unlocked else msg_masked
@@ -1730,7 +1731,8 @@ async def monitor_watchlists(app: Application):
                         # خلصت، تنبيه مموّه بدل قطع المراقبة الشخصية بالكامل عنهم.
                         unlocked = full_access
                         if not unlocked:
-                            consume  = await _post("/api/v1/bot/consume-signal-notification", json={"telegram_id": str(uid_)})
+                            consume  = await _post("/api/v1/bot/consume-signal-notification",
+                                                   json={"telegram_id": str(uid_), "signal_id": save_res.get("signal_id")})
                             unlocked = bool(consume.get("unlocked"))
 
                         if unlocked:

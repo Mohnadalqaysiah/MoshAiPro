@@ -42,8 +42,19 @@ def get_db() -> Generator[Session, None, None]:
 def init_db() -> None:
     """Initialize database - create all tables"""
     # Import all models so SQLAlchemy knows about them
-    from app.models import user, payment, market_config, affiliate, trade_journal, game_progress, telegram_broadcast, shadow_signal, signal_feature, strategy_backtest, deleted_account, review  # noqa: F401
-    Base.metadata.create_all(bind=engine)
+    from app.models import user, payment, market_config, affiliate, trade_journal, game_progress, telegram_broadcast, shadow_signal, signal_feature, strategy_backtest, deleted_account, review, signal_unlock  # noqa: F401
+    # (2026-10-19) قفل استشاري حول create_all: عاملا uvicorn يُنشئان الجداول الجديدة معاً فيتسابقان على CREATE TABLE
+    # (نفس سبب قفل 90210008 أدناه). الثاني ينتظر ثم يجدها موجودة.
+    if engine.dialect.name == "postgresql":
+        from sqlalchemy import text
+        with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as _lc:
+            _lc.execute(text("SELECT pg_advisory_lock(90210009)"))
+            try:
+                Base.metadata.create_all(bind=engine)
+            finally:
+                _lc.execute(text("SELECT pg_advisory_unlock(90210009)"))
+    else:
+        Base.metadata.create_all(bind=engine)
     # (2026-10-16) قيمة BREAKEVEN لنوع signalstatus القائم بـPostgres — create_all لا يعدّل نوع enum موجوداً.
     # ADD VALUE لا يعمل داخل معاملة بإصدارات قديمة ← اتصال autocommit. idempotent (IF NOT EXISTS).
     if engine.dialect.name == "postgresql":
