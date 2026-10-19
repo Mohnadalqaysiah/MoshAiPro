@@ -10,6 +10,7 @@ from typing import Optional
 from loguru import logger
 
 from app.database import get_db
+from app.services.telegram_reach import reachable as _reachable
 from app.models.user import User, PlanType, UserRole
 from app.models.signal import Signal, SignalStatus, SignalType
 from app.models.site_settings import SiteSettings
@@ -418,6 +419,7 @@ def bot_expiring(
         User.subscription_ends_at <= deadline,
         User.telegram_id != None,
         User.is_active == True,
+        _reachable(),
     ).all()
 
     trial_expired = db.query(User).filter(
@@ -426,6 +428,7 @@ def bot_expiring(
         User.trial_ends_at <= now,
         User.telegram_id != None,
         User.is_active == True,
+        _reachable(),
     ).all()
 
     result = []
@@ -972,10 +975,12 @@ async def bot_check_outcomes(
                 if sig.broadcast_sent:
                     if dkey not in _broadcast_fanout_done_this_cycle:
                         _broadcast_fanout_done_this_cycle.add(dkey)
+                        from app.services.telegram_reach import reachable
                         active_subs = db.query(User).filter(
                             User.telegram_id != None,
                             User.is_active == True,
                             User.plan != PlanType.BANNED,
+                            reachable(),   # (2026-10-19) لا إرسال لمن حظر البوت
                         ).all()
                         now_utc = datetime.now(timezone.utc)
                         for sub in active_subs:
@@ -1034,11 +1039,13 @@ def bot_all_watchlists(
     full_access بيوصل نفس هالمعلومة للبوت زي /active-subscribers). الاستبعاد
     الوحيد المتبقي هو تحقق البريد (is_verified) — هاد حاجز هوية حقيقي، مش
     علاقة بالاشتراك."""
+    from app.services.telegram_reach import reachable
     users = db.query(User).filter(
         User.telegram_id != None,
         User.notifications_enabled == True,
         User.is_active == True,
         User.plan != PlanType.BANNED,
+        reachable(),   # (2026-10-19) لا إرسال لمن حظر البوت
         User.is_verified == True,
     ).all()
     result = []
@@ -1563,8 +1570,22 @@ def bot_record_deliveries(
             error       = (str(d.get("error"))[:300] if d.get("error") else None),
         ))
         saved += 1
+    # (2026-10-19) من رد تيليجرام "محظور" يُستبعد من البث القادم؛ ومن وصله إرسال تُمسح علامته
+    from app.services.telegram_reach import apply_results
+    reach = apply_results(db, [(d.get("telegram_id"), bool(d.get("ok", True)), d.get("error")) for d in deliveries])
     db.commit()
-    return {"success": True, "saved": saved}
+    return {"success": True, "saved": saved, **reach}
+
+
+@router.post("/telegram-seen")
+def bot_telegram_seen(
+    telegram_id: str = Body(..., embed=True),
+    _: bool = Depends(verify_bot),
+    db: Session = Depends(get_db),
+):
+    """(2026-10-19) المستخدم تفاعل مع البوت (/start، زر، رسالة) ← فكّ الحظر، يرجع لقوائم الإرسال فوراً."""
+    from app.services.telegram_reach import mark_seen
+    return {"unblocked": mark_seen(db, telegram_id)}
 
 
 @router.post("/mark-result-broadcast/{signal_id}")
@@ -1600,10 +1621,12 @@ def bot_active_subscribers(
     اليومية المجانية — نفس مبدأ /signals/latest بالموقع، مش قطع الإشعارات
     نهائياً. full_access بيحدّد للبوت هل يرسل النسخة الكاملة دايماً بلا حاجة
     لاستهلاك أي حصة."""
+    from app.services.telegram_reach import reachable
     users = db.query(User).filter(
         User.telegram_id != None,
         User.is_active == True,
         User.plan != PlanType.BANNED,
+        reachable(),   # (2026-10-19) لا إرسال لمن حظر البوت — telegram_reach.py
     ).all()
 
     # (2026-10-12) تفضيلات كل مشترك مع القائمة نفسها — مصدر واحد للبث. قبلها

@@ -8,7 +8,7 @@ from datetime import datetime, timezone, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand, WebAppInfo, Poll
 import messages as M   # (2026-10-19) نصوص الرسائل الموحّدة (HTML) — راجع messages.py
 from telegram.ext import (
-    Application, CommandHandler, CallbackQueryHandler, ContextTypes, PollAnswerHandler,
+    Application, CommandHandler, CallbackQueryHandler, ContextTypes, PollAnswerHandler, TypeHandler,
 )
 from loguru import logger
 
@@ -2097,6 +2097,26 @@ async def economic_news_alert(app: Application):
 
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
+# (2026-10-19) من حظر البوت يُستبعد من الإرسال (telegram_reach.py بالباكيند). أي تفاعل منه يعني أنه فكّ الحظر ←
+# نبلغ الباكيند فيرجع لقوائم الإرسال فوراً. مرة كل ساعة لكل مستخدم كحد أقصى (لا طلب لكل ضغطة زر).
+_seen_sent: dict = {}
+
+
+async def _mark_telegram_seen(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    u = update.effective_user
+    if not u:
+        return
+    now = datetime.now(timezone.utc)
+    last = _seen_sent.get(u.id)
+    if last and (now - last).total_seconds() < 3600:
+        return
+    _seen_sent[u.id] = now
+    try:
+        await _post("/api/v1/bot/telegram-seen", json={"telegram_id": str(u.id)})
+    except Exception as e:
+        logger.debug(f"telegram-seen {u.id}: {e}")
+
+
 def main():
     if not BOT_TOKEN:
         logger.error("❌ TELEGRAM_BOT_TOKEN غير محدد!")
@@ -2105,6 +2125,7 @@ def main():
     logger.info("🤖 Qaffel AI Bot v2 — بدء التشغيل…")
     app = Application.builder().token(BOT_TOKEN).build()
 
+    app.add_handler(TypeHandler(Update, _mark_telegram_seen), group=-1)   # قبل كل المعالجات، لا يوقفها
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("menu",  cmd_menu))
     app.add_handler(CommandHandler("help",  cmd_help))

@@ -1410,6 +1410,7 @@ export default function Admin() {
                   { label:'شهري',   value:stats.users.monthly, color:'purple' },
                   { label:'محظور',  value:stats.users.banned,  color:'red' },
                   { label:'مربوط بتلغرام', value:stats.users.telegram_linked, color:'indigo' },
+                  { label:'حظروا البوت', value:stats.users.telegram_blocked ?? 0, color:'red' },
                   { label:'أسواق نشطة', value:stats.markets.active, color:'green' },
                 ].map(s => (
                   <div key={s.label} className="bg-gray-900 border border-gray-800 rounded-xl p-3 text-center">

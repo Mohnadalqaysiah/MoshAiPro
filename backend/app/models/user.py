@@ -126,6 +126,10 @@ class User(Base):
     signal_notif_seen_today = Column(Integer, default=0)
     signal_notif_seen_date  = Column(DateTime(timezone=True), nullable=True)
 
+    # (2026-10-19) حظر البوت: تيليجرام رد "bot was blocked" ← يُستبعد من الإرسال الجماعي حتى يتفاعل أو يمر أسبوع
+    # (services/telegram_reach.py). None = يصله الإرسال.
+    telegram_blocked_at = Column(DateTime(timezone=True), nullable=True)
+
     # Affiliate
     affiliate_code    = Column(String(8), unique=True, nullable=True, index=True)
     referred_by_code  = Column(String(8), nullable=True, index=True)

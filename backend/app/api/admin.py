@@ -14,6 +14,7 @@ import uuid
 from app.services.email_service import send_email as _send_email_svc
 
 from app.database import get_db
+from app.services.telegram_reach import reachable as _reachable
 from app.models.user import User, UserRole, PlanType
 from app.models.payment import Payment, PaymentStatus, PaymentPlan
 from app.models.market_config import MarketConfig
@@ -95,6 +96,9 @@ def admin_stats(
     monthly_users = db.query(User).filter(non_admin, User.plan == PlanType.MONTHLY, sub_active).count()
     banned_users  = db.query(User).filter(non_admin, User.plan == PlanType.BANNED).count()
     telegram_linked_users = db.query(User).filter(non_admin, User.telegram_id.isnot(None)).count()
+    # (2026-10-19) من حظر البوت (آخر رد تيليجرام "محظور") — يُتابع أسبوعياً
+    telegram_blocked_users = db.query(User).filter(non_admin, User.telegram_id.isnot(None),
+                                                   User.telegram_blocked_at.isnot(None)).count()
     active_markets = db.query(MarketConfig).filter(MarketConfig.is_active == True).count()
 
     pending_payments = db.query(Payment).filter(
@@ -114,6 +118,7 @@ def admin_stats(
             "monthly": monthly_users,
             "banned":  banned_users,
             "telegram_linked": telegram_linked_users,
+            "telegram_blocked": telegram_blocked_users,
         },
         "payments": {
             "pending": pending_payments,
@@ -924,6 +929,7 @@ def get_expiring_users(
         User.subscription_ends_at <= deadline,
         User.telegram_id != None,
         User.is_active == True,
+        _reachable(),
     ).all()
 
     # تجربة منتهية
@@ -933,6 +939,7 @@ def get_expiring_users(
         User.trial_ends_at <= now,
         User.telegram_id != None,
         User.is_active == True,
+        _reachable(),
     ).all()
 
     result = []
@@ -1324,6 +1331,7 @@ def send_telegram_message(
             User.telegram_id != None,
             User.is_active == True,
             User.plan != PlanType.BANNED,
+            _reachable(),   # (2026-10-19) الإعلان للجميع يتخطى من حظر البوت؛ المحددون بالاسم يُرسل لهم دائماً
         ).all()
 
     chat_ids = [u.telegram_id for u in users if u.telegram_id]
@@ -1446,7 +1454,7 @@ async def send_telegram_photo(
         users = db.query(User).filter(User.id.in_(ids), User.telegram_id != None).all()   # noqa: E711
     else:
         users = db.query(User).filter(User.telegram_id != None, User.is_active == True,   # noqa: E711, E712
-                                      User.plan != PlanType.BANNED).all()
+                                      User.plan != PlanType.BANNED, _reachable()).all()
     chat_ids = [u.telegram_id for u in users if u.telegram_id]
     if not chat_ids:
         return {"message": "لا يوجد مستخدمون لديهم تيليجرام", "sent": 0, "total": 0}
@@ -2664,7 +2672,8 @@ def send_performance_report(
     if data.channel == "telegram":
         if not _get_bot_token(db):
             raise HTTPException(400, "TELEGRAM_BOT_TOKEN غير مضبوط")
-        tg_users = [u for u in users if u.telegram_id]
+        from app.services.telegram_reach import should_skip
+        tg_users = [u for u in users if u.telegram_id and not should_skip(u)]   # (2026-10-19) من حظر البوت
         if not tg_users:
             return {"message": "لا يوجد مستخدمون لديهم تيليجرام", "sent": 0}
 
@@ -2881,6 +2890,7 @@ def reengagement_send(
         User.telegram_id != None,  # noqa
         User.telegram_id != "",
         (User.subscription_ends_at < now) | (User.subscription_ends_at == None),  # noqa
+        _reachable(),   # (2026-10-19) لا إرسال لمن حظر البوت
     )
     if not data.include_trial:
         q = q.filter(User.plan.in_([PlanType.WEEKLY, PlanType.MONTHLY]))
