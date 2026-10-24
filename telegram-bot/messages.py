@@ -17,6 +17,32 @@ from typing import Optional
 
 RIYADH = timezone(timedelta(hours=3))
 DISCLAIMER = "<i>تحليل فني للمعلومات فقط — ليس نصيحة استثمارية.</i>"
+# (2026-10-24، طلب المالك) معرّف القناة العامة بكل الرسائل الرئيسية — مع زر "📢 قناة Qaffel" بـbot.py
+CHANNEL_HANDLE = "@QaffelPlatform"
+CHANNEL_LINE = f"📢 قناتنا: {CHANNEL_HANDLE}"
+
+
+class TeaserGate:
+    """(2026-10-24) سقف منشورات القناة: ~26 إشارة/يوم تُغرق القناة فيكتمها المتابعون. مرة واحدة لكل قرار، وحد يومي،
+    وفاصل أدنى بين منشورين. نقي (بلا شبكة) ليُختبر."""
+
+    def __init__(self, daily_max: int = 6, min_gap_min: int = 60):
+        self.daily_max, self.min_gap = daily_max, timedelta(minutes=min_gap_min)
+        self.day, self.count, self.last, self.seen = None, 0, None, set()
+
+    def allow(self, key, now: datetime) -> bool:
+        if self.daily_max <= 0 or key in self.seen:
+            return False
+        if self.day != now.date():
+            self.day, self.count, self.seen = now.date(), 0, set()
+        if self.count >= self.daily_max or (self.last and now - self.last < self.min_gap):
+            return False
+        return True
+
+    def mark(self, key, now: datetime):
+        self.seen.add(key)
+        self.count += 1
+        self.last = now
 
 
 def fmt_price(v) -> str:
@@ -119,7 +145,7 @@ def signal_full(s: dict, mname: str, tf_label: str, conf: float) -> str:
         lines.append(f"⚠️ {_e(str(s['trade_type_warning']))}")
     if s.get("news_context"):
         lines.append(f"📰 <i>{_e(str(s['news_context']))}</i>")
-    lines += ["", DISCLAIMER]
+    lines += ["", DISCLAIMER, CHANNEL_LINE]
     return "\n".join(lines)
 
 
@@ -136,6 +162,8 @@ def signal_masked(s: dict, mname: str, tf_label: str) -> str:
         "تفاصيل الإشارة الكاملة متاحة <b>للمشتركين</b>، وتشمل الاتجاه وسعر الدخول ووقف الخسارة والأهداف.",
         "",
         "✨ لا تفوّت الإشارة القادمة. فعّل اشتراكك واحصل على جميع التفاصيل <b>لحظة صدورها</b>.",
+        "",
+        CHANNEL_LINE,
     ])
 
 
@@ -180,6 +208,7 @@ def outcome_subscriber(o: dict, mname: str) -> str:
         lines.append(f"⏱ بعد {ago(o['created_at'])} من الإشارة")
     if tip:
         lines += ["", f"<i>{tip}</i>"]
+    lines.append(CHANNEL_LINE)
     return "\n".join(lines)
 
 
@@ -213,6 +242,8 @@ def outcome_expired(o: dict, mname: str) -> str:
             "🔓 مشتركو الخطط استلموا تفاصيل الإشارة كاملة <b>لحظة صدورها</b>.",
             "",
             "✨ جدّد اشتراكك لتصلك الإشارات القادمة <b>قبل</b> تحقق نتائجها.",
+            "",
+            CHANNEL_LINE,
         ]
         return "\n".join(lines)
     if st == "BREAKEVEN":
@@ -259,6 +290,7 @@ def stats_card(st: dict, market_names: Optional[dict] = None) -> str:
     wl = st.get("watchlist_filter") or []
     lines.append(f"<i>محسوبة على {len(wl)} رمز بقائمة مراقبتك</i>" if wl else "<i>محسوبة على كل الرموز منذ اشتراكك</i>")
     lines.append("<i>R = النتيجة كمضاعف للمخاطرة: +1R ربح بقدر ما خاطرت، −1R خسارة الوقف.</i>")
+    lines.append(CHANNEL_LINE)
     if st.get("referral_points"):
         lines.append(f"🎁 نقاط الإحالة: {st['referral_points']}")
     return "\n".join(lines)
