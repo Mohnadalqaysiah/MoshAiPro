@@ -318,6 +318,39 @@ def L(lang: str):
     return ME if lang == "en" else M
 
 
+def _t(lg: str, ar: str, en: str) -> str:
+    return en if lg == "en" else ar
+
+
+async def ensure_lang(user):
+    """(2026-10-24) أول تفاعل للمستخدم: لغته من حسابه (لا ننتظر بثاً يملأ الذاكرة). مرة لكل مستخدم بعمر البوت."""
+    if user is None or str(user.id) in _user_lang:
+        return
+    try:
+        res = await _get("/api/v1/bot/user-lang", {"telegram_id": str(user.id)})
+        if res.get("lang") in ("ar", "en"):
+            _user_lang[str(user.id)] = res["lang"]
+    except Exception:
+        pass
+
+
+CAT_EN = {"metals": "🥇 Metals", "crypto": "₿ Crypto", "forex": "💱 Forex", "commodities": "🛢 Commodities",
+          "indices": "📈 Indices", "stocks": "📈 US stocks", "gulf": "🕌 Gulf markets"}
+TF_EN = {"15m": "15 min", "1h": "1 hour", "4h": "4 hours", "1day": "Daily"}
+
+
+def mname(sym: str, lg: str) -> str:
+    return sym if lg == "en" else MARKET_NAMES.get(sym, sym)
+
+
+def tf_label(tf: str, lg: str) -> str:
+    return (TF_EN if lg == "en" else TF_LABELS).get(tf, tf)
+
+
+def cat_label(k: str, lg: str) -> str:
+    return CAT_EN.get(k, k) if lg == "en" else CATEGORIES.get(k, {}).get("label", k)
+
+
 _teasers = None   # TeaserGate — يُنشأ عند أول استخدام (messages مستورد كـM)
 
 
@@ -375,35 +408,35 @@ def kb_main(lang: str = "ar"):
     ])
 
 
-def kb_categories(action: str):
+def back_btn(lg: str = "ar", data: str = "m_back"):
+    return InlineKeyboardButton("🔙 Back" if lg == "en" else "🔙 رجوع", callback_data=data)
+
+
+def kb_categories(action: str, lg: str = "ar"):
     rows = []
-    items = list(CATEGORIES.items())
-    for i in range(0, len(items), 2):
-        row = [InlineKeyboardButton(v["label"], callback_data=f"cat_{action}_{k}")
-               for k, v in items[i:i+2]]
-        rows.append(row)
-    rows.append([InlineKeyboardButton("🔙 رجوع", callback_data="m_back")])
+    keys = list(CATEGORIES.keys())
+    for i in range(0, len(keys), 2):
+        rows.append([InlineKeyboardButton(cat_label(k, lg), callback_data=f"cat_{action}_{k}") for k in keys[i:i+2]])
+    rows.append([back_btn(lg)])
     return InlineKeyboardMarkup(rows)
 
 
-def kb_pairs(cat: str, action: str):
+def kb_pairs(cat: str, action: str, lg: str = "ar"):
     syms = CATEGORIES.get(cat, {}).get("symbols", [])
     rows = []
     for i in range(0, len(syms), 2):
-        row = [InlineKeyboardButton(MARKET_NAMES.get(m, m), callback_data=f"{action}_{m}")
-               for m in syms[i:i+2]]
-        rows.append(row)
-    rows.append([InlineKeyboardButton("🔙 رجوع", callback_data="m_analyze")])
+        rows.append([InlineKeyboardButton(mname(m, lg), callback_data=f"{action}_{m}") for m in syms[i:i+2]])
+    rows.append([back_btn(lg, "m_analyze")])
     return InlineKeyboardMarkup(rows)
 
 
-def kb_timeframe(symbol: str):
+def kb_timeframe(symbol: str, lg: str = "ar"):
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(TF_LABELS["15m"], callback_data=f"an_{symbol}_15m"),
-         InlineKeyboardButton(TF_LABELS["1h"],  callback_data=f"an_{symbol}_1h")],
-        [InlineKeyboardButton(TF_LABELS["4h"],  callback_data=f"an_{symbol}_4h"),
-         InlineKeyboardButton(TF_LABELS["1day"],callback_data=f"an_{symbol}_1day")],
-        [InlineKeyboardButton("🔙 رجوع", callback_data="m_analyze")],
+        [InlineKeyboardButton(tf_label("15m", lg), callback_data=f"an_{symbol}_15m"),
+         InlineKeyboardButton(tf_label("1h", lg),  callback_data=f"an_{symbol}_1h")],
+        [InlineKeyboardButton(tf_label("4h", lg),  callback_data=f"an_{symbol}_4h"),
+         InlineKeyboardButton(tf_label("1day", lg), callback_data=f"an_{symbol}_1day")],
+        [back_btn(lg, "m_analyze")],
     ])
 
 
@@ -439,26 +472,75 @@ def kb_watchlist(uid: int):
     return InlineKeyboardMarkup(rows)
 
 
-def kb_tf_select(back: str = "m_watchlist"):
+def kb_tf_select(back: str = "m_watchlist", lg: str = "ar"):
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(TF_LABELS["15m"], callback_data="wltf_15m"),
-         InlineKeyboardButton(TF_LABELS["1h"],  callback_data="wltf_1h")],
-        [InlineKeyboardButton(TF_LABELS["4h"],  callback_data="wltf_4h"),
-         InlineKeyboardButton(TF_LABELS["1day"],callback_data="wltf_1day")],
-        [InlineKeyboardButton("🔙 رجوع", callback_data=back)],
+        [InlineKeyboardButton(tf_label("15m", lg), callback_data="wltf_15m"),
+         InlineKeyboardButton(tf_label("1h", lg),  callback_data="wltf_1h")],
+        [InlineKeyboardButton(tf_label("4h", lg),  callback_data="wltf_4h"),
+         InlineKeyboardButton(tf_label("1day", lg), callback_data="wltf_1day")],
+        [back_btn(lg, back)],
     ])
 
 
-def kb_conf_select():
+def kb_conf_select(lg: str = "ar"):
     lvls = [50, 60, 65, 70, 75, 80]
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(f"{l}%", callback_data=f"wlconf_{l}") for l in lvls[:3]],
         [InlineKeyboardButton(f"{l}%", callback_data=f"wlconf_{l}") for l in lvls[3:]],
-        [InlineKeyboardButton("🔙 رجوع", callback_data="m_watchlist")],
+        [back_btn(lg, "m_watchlist")],
     ])
 
 
 # ─── Formatters ───────────────────────────────────────────────────────────────
+def fmt_analysis_en(data: dict, symbol: str, timeframe: str) -> str:
+    """(2026-10-24) نفس fmt_analysis بالإنجليزية. trade_type_label وtrade_type_warning ومرحلة Wyckoff عربية من المحرك ← لا تُعرض."""
+    if not data or data.get("error"):
+        return f"❌ Couldn't analyze {symbol}."
+    rec   = data.get("recommendation", "WATCH")
+    emoji = {"BUY": "🟢", "SELL": "🔴", "WATCH": "⚪", "WAIT": "⚪"}.get(rec, "⚪")
+    conf  = get_confidence(data)
+    lvls  = data.get("levels", {})
+    entry_min, entry_max = lvls.get("entry_zone_min"), lvls.get("entry_zone_max")
+    entry_v = lvls.get("entry") or (data.get("entry_zones") or [None])[0]
+    sl  = lvls.get("stop_loss") or data.get("stop_loss_zone")
+    tp1 = lvls.get("tp1") or (data.get("take_profit_zones") or [None])[0]
+    tp2 = lvls.get("tp2") or ((data.get("take_profit_zones") or [None, None])[1] if len(data.get("take_profit_zones") or []) > 1 else None)
+    rr  = lvls.get("risk_reward") or data.get("risk_reward_ratio")
+    mode = {"SWING": "🎯 Main trend with HTF\n", "SCALP": "⏱️ Quick trade — exit at TP1\n"}.get(data.get("trade_type", ""), "")
+    head = (mode + "\n") if rec in ("BUY", "SELL") and mode else ("⏳ *WAIT (NO TRADE)*\nNo clear setup right now.\n\n" if rec == "WAIT" else "")
+    msg = (f"🤖 *Qaffel AI — Analysis*\n━━━━━━━━━━━━━━━━━━━━━━\n"
+           f"📌 *{symbol}*  │  `{timeframe}`  │  `{_fmt_price(data.get('current_price', 0))}`\n\n" + head +
+           f"{emoji} *{rec}*   ·   confidence `{conf:.1f}%`\n\n")
+    if entry_min and entry_max:
+        msg += f"🎯 Entry:  `{_fmt_price(entry_min)} – {_fmt_price(entry_max)}`\n"
+    elif entry_v:
+        msg += f"🎯 Entry:  `{_fmt_price(entry_v)}`\n"
+    if sl:  msg += f"🛑 Stop:   `{_fmt_price(sl)}`\n"
+    if tp1: msg += f"✅ TP1:    `{_fmt_price(tp1)}`\n"
+    if tp2: msg += f"✅ TP2:    `{_fmt_price(tp2)}`\n"
+    if rr:  msg += f"⚖️ R/R:    `{float(rr):.2f}x`\n"
+    if rec in ("BUY", "SELL"):
+        msg += "💡 At TP1, consider moving your stop to entry to lock the trade\n"
+        _exp = datetime.now(timezone.utc) + timedelta(hours=_EXPIRY_HOURS.get(timeframe, 24))
+        msg += f"⏳ Valid until `{_exp:%H:%M}` UTC ({_exp:%d/%m})\n"
+    ob = data.get("order_blocks", {})
+    liq = data.get("liquidity_analysis") or data.get("liquidity", {})
+    if (ob.get("bullish_obs") or []) and isinstance(ob["bullish_obs"][0], dict):
+        o = ob["bullish_obs"][0]
+        msg += f"🟢 Support OB:     `{_fmt_price(o.get('low'))} – {_fmt_price(o.get('high'))}`\n"
+    if (ob.get("bearish_obs") or []) and isinstance(ob["bearish_obs"][0], dict):
+        o = ob["bearish_obs"][0]
+        msg += f"🔴 Resistance OB:  `{_fmt_price(o.get('low'))} – {_fmt_price(o.get('high'))}`\n"
+    if isinstance(liq, dict):
+        if liq.get("nearest_ssl"): msg += f"🧲 Liquidity below: `{_fmt_price(liq.get('nearest_ssl'))}`\n"
+        if liq.get("nearest_bsl"): msg += f"🧲 Liquidity above: `{_fmt_price(liq.get('nearest_bsl'))}`\n"
+    pdz = data.get("premium_discount", {})
+    zone = (pdz.get("current_zone") or pdz.get("zone")) if isinstance(pdz, dict) else None
+    if zone: msg += f"💹 Zone:           `{zone}`\n"
+    msg += "\n━━━━━━━━━━━━━━━━━━━━━━\n⚠️ _For information only — not investment advice._"
+    return msg
+
+
 def fmt_analysis(data: dict, symbol: str, timeframe: str) -> str:
     if not data or data.get("error"):
         return f"❌ تعذر تحليل {symbol}."
@@ -742,7 +824,19 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 logger.error(f"bot-verify error: {e}")
                 res, ok = {}, False
 
-        if ok:
+        if ok and (_user_lang.pop(str(user.id), None) or True) and (await ensure_lang(user) or True) \
+                and lang_for(user) == "en":
+            plan_en = {"trial": "Trial", "weekly": "Weekly", "monthly": "Monthly"}.get(res.get("plan", ""), res.get("plan", ""))
+            await update.message.reply_text(
+                f"✅ *Your account is linked!*\n\n"
+                f"Welcome *{res.get('user_name','')}* 👋\n"
+                f"Plan: *{plan_en}*   │   Analyses left: *{res.get('trial_analyses_left', '∞')}*\n\n"
+                f"🚨 Trading signals will arrive right here!\n"
+                f"Turn on *👁 Watchlist* for automatic alerts.",
+                parse_mode="Markdown",
+                reply_markup=kb_main("en"),
+            )
+        elif ok:
             plan_ar = {"trial":"تجريبي","weekly":"أسبوعي","monthly":"شهري"}.get(
                 res.get("plan",""), res.get("plan",""))
             left_an = res.get("trial_analyses_left", "∞")
@@ -768,6 +862,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         return
 
+    await ensure_lang(update.effective_user)
     _lg = lang_for(update.effective_user)
     if _lg == "en":
         await update.message.reply_text(
@@ -792,6 +887,7 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def cmd_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await ensure_lang(update.effective_user)
     _lg = lang_for(update.effective_user)
     await update.message.reply_text(
         "🤖 *Qaffel AI — Main menu*" if _lg == "en" else "🤖 *Qaffel AI — القائمة الرئيسية*",
@@ -804,19 +900,32 @@ async def cmd_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # أُضيف كأمر /help مستقل عشان يظهر بقائمة أوامر تيليجرام الأصلية (set_my_commands
 # بـmain()) بدل ما يكون الوصول الوحيد له عبر ضغطتين. تحسين واجهة بحت، لا علاقة
 # له بحلقة الرصد/البث المجمَّدة (DECISIONS.md 17/09) — ما يلمسها إطلاقاً.
+HELP_EN = (
+    "📚 *Help*\n\n"
+    "📊 *Quick analysis*\nChoose a category, then a pair and a timeframe.\n\n"
+    "👁 *Watchlist*\nPick the pairs you want monitored.\nThe bot analyzes them every 15 minutes automatically.\n\n"
+    "📡 *Signals*\nThe latest signals published.\n\n"
+    "📈 *My stats*\nYour win rate and results.\n\n"
+    "🎁 *Referral*\nYour personal link + commission details."
+)
+
+
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await ensure_lang(update.effective_user)
+    lg = lang_for(update.effective_user)
     await update.message.reply_text(
+        HELP_EN if lg == "en" else (
         "📚 *المساعدة*\n\n"
         "📊 *تحليل فوري*\nاختر الفئة ثم الزوج والإطار الزمني.\n\n"
         "👁 *المراقبة*\nاختر الأزواج التي تريد مراقبتها.\n"
         "البوت يحللها كل 15 دقيقة تلقائياً.\n\n"
         "📡 *الإشارات*\nآخر الإشارات المنشورة من الأدمن.\n\n"
         "📈 *إحصائياتي*\nعرض نسبة ربحك ومجموع نقاطك.\n\n"
-        "🎁 *الإحالة*\nرابطك الخاص + تفاصيل العمولة.",
+        "🎁 *الإحالة*\nرابطك الخاص + تفاصيل العمولة."),
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🌐 فتح المنصة", web_app=WebAppInfo(url=FRONTEND_URL))],
-            [InlineKeyboardButton("🔙 القائمة الرئيسية", callback_data="m_back")],
+            [InlineKeyboardButton(_t(lg, "🌐 فتح المنصة", "🌐 Open platform"), web_app=WebAppInfo(url=FRONTEND_URL))],
+            [InlineKeyboardButton(_t(lg, "🔙 القائمة الرئيسية", "🔙 Main menu"), callback_data="m_back")],
         ]),
     )
 
@@ -828,6 +937,8 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     d   = q.data
     uid = q.from_user.id
     tgid= str(uid)
+    await ensure_lang(q.from_user)
+    lg  = lang_for(q.from_user)
 
     # ── Ignore separator buttons
     if d == "noop":
@@ -845,8 +956,8 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ─────────────────────── ANALYZE ──────────────────────────────────────────
     if d == "m_analyze":
         await q.edit_message_text(
-            "📊 *تحليل فوري*\nاختر الفئة:",
-            parse_mode="Markdown", reply_markup=kb_categories("an"),
+            _t(lg, "📊 *تحليل فوري*\nاختر الفئة:", "📊 *Quick analysis*\nChoose a category:"),
+            parse_mode="Markdown", reply_markup=kb_categories("an", lg),
         )
         return
 
@@ -856,15 +967,18 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         r = await _post("/api/v1/bot/mute-symbol",
                         json={"telegram_id": tgid, "symbol": symbol, "all_symbols": sorted(_VALID_SYMBOLS)})
         if not r or not r.get("ok"):
-            text = ("اربط حسابك في كفيل أولاً لتتحكم بالإشارات التي تصلك 👇" if r and r.get("reason") == "not_linked"
-                    else "تعذّر التعديل الآن، جرّب بعد قليل.")
+            text = (_t(lg, "اربط حسابك في كفيل أولاً لتتحكم بالإشارات التي تصلك 👇", "Link your Qaffel account first to control which signals you get 👇")
+                    if r and r.get("reason") == "not_linked"
+                    else _t(lg, "تعذّر التعديل الآن، جرّب بعد قليل.", "Couldn't update right now, try again shortly."))
         elif r.get("all_muted"):
-            text = f"🔕 أوقفنا إشارات {symbol}، ولم يبقَ زوج آخر في قائمتك فأوقفنا الإشعارات كلها. فعّلها من الإعدادات متى أردت."
+            text = _t(lg, f"🔕 أوقفنا إشارات {symbol}، ولم يبقَ زوج آخر في قائمتك فأوقفنا الإشعارات كلها. فعّلها من الإعدادات متى أردت.",
+                      f"🔕 {symbol} signals muted. No other pair is left in your list, so all notifications are off. Turn them back on in settings anytime.")
         else:
-            text = f"🔕 لن تصلك إشارات {symbol} بعد الآن ({r.get('remaining', 0)} زوجاً في قائمتك).\nتقدر ترجعها أو تغيّر الفريمات بأي وقت من الإعدادات."
+            text = _t(lg, f"🔕 لن تصلك إشارات {symbol} بعد الآن ({r.get('remaining', 0)} زوجاً في قائمتك).\nتقدر ترجعها أو تغيّر الفريمات بأي وقت من الإعدادات.",
+                      f"🔕 You won't get {symbol} signals anymore ({r.get('remaining', 0)} pairs left in your list).\nYou can restore it or change timeframes anytime in settings.")
         await context.bot.send_message(
             chat_id=uid, text=text,
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⚙️ الإعدادات", url=SETTINGS_URL)]]),
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(_t(lg, "⚙️ الإعدادات", "⚙️ Settings"), url=SETTINGS_URL)]]),
         )
         return
 
@@ -872,8 +986,8 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         cat = d[7:]
         info = CATEGORIES.get(cat, {})
         await q.edit_message_text(
-            f"📊 *{info.get('label',cat)}* — اختر الزوج:",
-            parse_mode="Markdown", reply_markup=kb_pairs(cat, "sym"),
+            _t(lg, f"📊 *{info.get('label',cat)}* — اختر الزوج:", f"📊 *{cat_label(cat, 'en')}* — choose a pair:"),
+            parse_mode="Markdown", reply_markup=kb_pairs(cat, "sym", lg),
         )
         return
 
@@ -881,22 +995,23 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         symbol = d[4:]
         if not is_market_open(symbol):
             exchange = GULF_MARKETS.get(symbol.upper())
-            if exchange:
+            if lg == "en":
+                reopen_line = ("is closed outside its daily trading hours." if exchange
+                               else "is closed for the weekend.\nIt reopens on Monday.")
+            elif exchange:
                 reopen_line = f"السوق مغلق حالياً خارج ساعات التداول اليومية.\n{gulf_reopen_text(exchange)}."
             else:
                 reopen_line = "مغلق خلال عطلة نهاية الأسبوع.\nيفتح مجدداً يوم الاثنين."
             await q.edit_message_text(
-                f"🔴 *السوق مغلق*\n\n"
-                f"{MARKET_NAMES.get(symbol,symbol)} {reopen_line}",
+                _t(lg, "🔴 *السوق مغلق*", "🔴 *Market closed*") + "\n\n"
+                f"{mname(symbol, lg)} {reopen_line}",
                 parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔙 رجوع", callback_data="m_analyze")]
-                ]),
+                reply_markup=InlineKeyboardMarkup([[back_btn(lg, "m_analyze")]]),
             )
             return
         await q.edit_message_text(
-            f"⏱ *{MARKET_NAMES.get(symbol,symbol)}* — اختر الإطار الزمني:",
-            parse_mode="Markdown", reply_markup=kb_timeframe(symbol),
+            _t(lg, f"⏱ *{mname(symbol, lg)}* — اختر الإطار الزمني:", f"⏱ *{symbol}* — choose a timeframe:"),
+            parse_mode="Markdown", reply_markup=kb_timeframe(symbol, lg),
         )
         return
 
@@ -909,29 +1024,28 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         status = await _get("/api/v1/bot/user-status", {"telegram_id": tgid})
         if not status.get("linked"):
             await q.edit_message_text(
-                "🔗 *ربط الحساب مطلوب*\n\n"
-                "1️⃣ افتح المنصة وسجّل دخول\n"
-                "2️⃣ اضغط «ربط تيليجرام»\n"
-                "3️⃣ افتح الرابط",
+                _t(lg, "🔗 *ربط الحساب مطلوب*\n\n1️⃣ افتح المنصة وسجّل دخول\n2️⃣ اضغط «ربط تيليجرام»\n3️⃣ افتح الرابط",
+                   "🔗 *Account link required*\n\n1️⃣ Open the platform and log in\n2️⃣ Tap «Link Telegram»\n3️⃣ Open the link"),
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🌐 فتح المنصة", web_app=WebAppInfo(url=FRONTEND_URL))],
-                    [InlineKeyboardButton("🔙 رجوع", callback_data="m_back")],
+                    [InlineKeyboardButton(_t(lg, "🌐 فتح المنصة", "🌐 Open platform"), web_app=WebAppInfo(url=FRONTEND_URL))],
+                    [back_btn(lg)],
                 ]),
             )
             return
         if not status.get("allowed"):
             await q.edit_message_text(
-                f"⛔ *{status.get('reason','الاشتراك منتهي')}*\n\nجدد اشتراكك للمتابعة.",
+                (f"⛔ *{status.get('reason','الاشتراك منتهي')}*\n\nجدد اشتراكك للمتابعة." if lg != "en"
+                 else "⛔ *Your plan doesn't allow this right now*\n\nRenew your subscription to continue."),
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("💳 تجديد الاشتراك", url=f"{FRONTEND_URL}/pricing")],
-                    [InlineKeyboardButton("🔙 رجوع", callback_data="m_back")],
+                    [InlineKeyboardButton(_t(lg, "💳 تجديد الاشتراك", "💳 Renew subscription"), url=f"{FRONTEND_URL}/pricing")],
+                    [back_btn(lg)],
                 ]),
             )
             return
 
-        await q.edit_message_text(f"⏳ جاري تحليل {MARKET_NAMES.get(symbol,symbol)}…")
+        await q.edit_message_text(_t(lg, f"⏳ جاري تحليل {mname(symbol, lg)}…", f"⏳ Analyzing {symbol}…"))
 
         try:
             async with aiohttp.ClientSession() as s:
@@ -949,33 +1063,33 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if data.get("_error"):
             await q.edit_message_text(
                 f"⚠️ {data['_error']}",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 رجوع", callback_data="m_back")]]),
+                reply_markup=InlineKeyboardMarkup([[back_btn(lg)]]),
             )
             return
 
-        msg = fmt_analysis(data, symbol, tf)
+        msg = fmt_analysis_en(data, symbol, tf) if lg == "en" else fmt_analysis(data, symbol, tf)
         await q.edit_message_text(
             msg, parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔄 تحديث",    callback_data=f"an_{symbol}_{tf}"),
-                 InlineKeyboardButton("📊 سوق آخر", callback_data="m_analyze")],
-                [InlineKeyboardButton("🏠 الرئيسية", callback_data="m_back")],
+                [InlineKeyboardButton(_t(lg, "🔄 تحديث", "🔄 Refresh"), callback_data=f"an_{symbol}_{tf}"),
+                 InlineKeyboardButton(_t(lg, "📊 سوق آخر", "📊 Another market"), callback_data="m_analyze")],
+                [InlineKeyboardButton(_t(lg, "🏠 الرئيسية", "🏠 Home"), callback_data="m_back")],
             ]),
         )
         return
 
     # ─────────────────────── SIGNALS ──────────────────────────────────────────
     if d == "m_signals":
-        await q.edit_message_text("⏳ جاري جلب الإشارات…")
+        await q.edit_message_text(_t(lg, "⏳ جاري جلب الإشارات…", "⏳ Fetching signals…"))
         # (2026-10-19) كان /signals/latest بمفتاح البوت ← 401 دائماً ← "لا توجد إشارات" للجميع
         res  = await _get("/api/v1/bot/latest-signals", {"telegram_id": tgid, "limit": 8})
         if not res.get("linked"):
             await q.edit_message_text(
-                "🔗 *ربط الحساب مطلوب لعرض الإشارات.*",
+                _t(lg, "🔗 *ربط الحساب مطلوب لعرض الإشارات.*", "🔗 *Link your account to see signals.*"),
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🌐 فتح المنصة", web_app=WebAppInfo(url=FRONTEND_URL))],
-                    [InlineKeyboardButton("🔙 رجوع",       callback_data="m_back")],
+                    [InlineKeyboardButton(_t(lg, "🌐 فتح المنصة", "🌐 Open platform"), web_app=WebAppInfo(url=FRONTEND_URL))],
+                    [back_btn(lg)],
                 ]),
             )
             return
@@ -988,45 +1102,44 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         STATUS_AR = {
             "ACTIVE":"نشطة", "TP1_HIT":"هدف 1 ✅", "TP2_HIT":"هدف 2 🏆",
             "SL_HIT":"وقف ❌", "PENDING":"معلقة", "EXPIRED":"منتهية", "BREAKEVEN":"تأمين ⚖️",
+        } if lg != "en" else {
+            "ACTIVE":"active", "TP1_HIT":"TP1 ✅", "TP2_HIT":"TP2 🏆",
+            "SL_HIT":"stop ❌", "PENDING":"pending", "EXPIRED":"expired", "BREAKEVEN":"breakeven ⚖️",
         }
 
         if not sigs:
-            msg = (
-                "📡 *آخر الإشارات*\n"
-                "━━━━━━━━━━━━━━━━━━━━━━\n"
-                "_لا توجد إشارات حتى الآن._\n\n"
-                "حلّل سوقاً من قسم ⚡ تحليل فوري."
-            )
+            msg = _t(lg, "📡 *آخر الإشارات*\n━━━━━━━━━━━━━━━━━━━━━━\n_لا توجد إشارات حتى الآن._\n\nحلّل سوقاً من قسم ⚡ تحليل فوري.",
+                     "📡 *Latest signals*\n━━━━━━━━━━━━━━━━━━━━━━\n_No signals yet._\n\nAnalyze a market from ⚡ Quick analysis.")
         else:
             active_count = sum(1 for s in sigs if s.get("status") == "ACTIVE")
             msg = (
-                f"📡 *آخر الإشارات*\n"
+                _t(lg, "📡 *آخر الإشارات*", "📡 *Latest signals*") + "\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"🔵 نشطة: *{active_count}*  │  إجمالي: *{len(sigs)}*\n"
+                + _t(lg, f"🔵 نشطة: *{active_count}*  │  إجمالي: *{len(sigs)}*", f"🔵 Active: *{active_count}*  │  Total: *{len(sigs)}*") + "\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━\n"
             )
             for s in sigs:
                 if s.get("locked"):   # (2026-10-19) مموّهة: بلا اتجاه ولا ثقة ولا مستويات
-                    mname = MARKET_NAMES.get(s.get("market", ""), s.get("market", ""))
-                    msg += f"🔒 *{mname}*  إشارة — تفاصيلها لمشتركي الخطط\n─────────────────────\n"
+                    _mn = mname(s.get("market", ""), lg)
+                    msg += _t(lg, f"🔒 *{_mn}*  إشارة — تفاصيلها لمشتركي الخطط", f"🔒 *{_mn}*  signal — details for subscribers") + "\n─────────────────────\n"
                     continue
                 stype  = s.get("signal_type", "BUY")
                 status = s.get("status", "ACTIVE")
                 conf   = get_confidence(s)
-                mname  = MARKET_NAMES.get(s.get("market",""), s.get("market",""))
+                _mn    = mname(s.get("market", ""), lg)
                 entry  = _fmt_price(s.get("entry_price"))
                 tp1    = _fmt_price(s.get("take_profit_1"))
                 sl_p   = _fmt_price(s.get("stop_loss"))
                 rr     = s.get("risk_reward_ratio")
 
                 dir_emoji   = "▲" if stype == "BUY" else "▼"
-                dir_ar      = "شراء" if stype == "BUY" else "بيع"
+                dir_ar      = (("BUY" if stype == "BUY" else "SELL") if lg == "en" else ("شراء" if stype == "BUY" else "بيع"))
                 status_icon = STATUS_ICONS.get(status, "○")
                 status_ar   = STATUS_AR.get(status, status)
                 conf_bar    = "█" * int(conf / 20) + "░" * (5 - int(conf / 20))
 
                 msg += (
-                    f"{dir_emoji} *{mname}*  `{dir_ar}`  {status_icon} _{status_ar}_\n"
+                    f"{dir_emoji} *{_mn}*  `{dir_ar}`  {status_icon} _{status_ar}_\n"
                     f"  🎯 `{entry}`  🛑 `{sl_p}`  ✅ `{tp1}`"
                 )
                 if rr:
@@ -1037,10 +1150,10 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.edit_message_text(
             msg, parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔄 تحديث",        callback_data="m_signals"),
-                 InlineKeyboardButton("⚡ تحليل فوري",   callback_data="m_analyze")],
-                [InlineKeyboardButton("🌐 الداشبورد",    web_app=WebAppInfo(url=FRONTEND_URL)),
-                 InlineKeyboardButton("🔙 رجوع",         callback_data="m_back")],
+                [InlineKeyboardButton(_t(lg, "🔄 تحديث", "🔄 Refresh"), callback_data="m_signals"),
+                 InlineKeyboardButton(_t(lg, "⚡ تحليل فوري", "⚡ Quick analysis"), callback_data="m_analyze")],
+                [InlineKeyboardButton(_t(lg, "🌐 الداشبورد", "🌐 Dashboard"), web_app=WebAppInfo(url=FRONTEND_URL)),
+                 back_btn(lg)],
             ]),
         )
         return
@@ -1059,7 +1172,8 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         filled = min(count, 10)
         bar = "🟦" * filled + "⬜" * (10 - filled)
 
-        notif_line = "🔔 الإشعارات مفعّلة" if notif else "🔕 الإشعارات موقفة"
+        notif_line = _t(lg, "🔔 الإشعارات مفعّلة" if notif else "🔕 الإشعارات موقفة",
+                        "🔔 Notifications on" if notif else "🔕 Notifications off")
 
         # قائمة الأزواج النشطة مختصرة
         if wl:
@@ -1067,21 +1181,22 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if count > 8:
                 wl_preview += f"  …+{count-8}"
         else:
-            wl_preview = "_لم يتم اختيار أي زوج بعد_"
+            wl_preview = _t(lg, "_لم يتم اختيار أي زوج بعد_", "_No pairs selected yet_")
 
         await q.edit_message_text(
-            f"👁 *قائمة المراقبة*\n"
+            (_t(lg, "👁 *قائمة المراقبة*", "👁 *Watchlist*") + "\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"{bar}  *{count}/{total}* زوج\n\n"
-            f"⏱ الإطار: *{TF_LABELS.get(tf,tf)}*   🎯 الحد: *{conf}%*\n"
+            + _t(lg, f"{bar}  *{count}/{total}* زوج", f"{bar}  *{count}/{total}* pairs") + "\n\n"
+            + _t(lg, f"⏱ الإطار: *{TF_LABELS.get(tf,tf)}*   🎯 الحد: *{conf}%*", f"⏱ Timeframe: *{tf_label(tf, 'en')}*   🎯 Min: *{conf}%*") + "\n")
+            +
             f"{notif_line}\n\n"
-            f"الأزواج المختارة:\n{wl_preview}\n\n"
-            f"💡 لإدارة الأزواج والإعدادات بشكل أفضل افتح الداشبورد:",
+            + _t(lg, "الأزواج المختارة:", "Selected pairs:") + f"\n{wl_preview}\n\n"
+            + _t(lg, "💡 لإدارة الأزواج والإعدادات بشكل أفضل افتح الداشبورد:", "💡 Manage pairs and settings more easily from the dashboard:"),
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🌐 إدارة المراقبة من الداشبورد", web_app=WebAppInfo(url=f"{FRONTEND_URL}/dashboard"))],
-                [InlineKeyboardButton("🔔 تبديل الإشعارات", callback_data="wl_notif"),
-                 InlineKeyboardButton("🔙 رجوع",            callback_data="m_back")],
+                [InlineKeyboardButton(_t(lg, "🌐 إدارة المراقبة من الداشبورد", "🌐 Manage watchlist in the dashboard"), web_app=WebAppInfo(url=f"{FRONTEND_URL}/dashboard"))],
+                [InlineKeyboardButton(_t(lg, "🔔 تبديل الإشعارات", "🔔 Toggle notifications"), callback_data="wl_notif"),
+                 back_btn(lg)],
             ]),
         )
         return
@@ -1090,8 +1205,10 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await _load_wl_from_db(uid, tgid)
         _wl_notif[uid] = not _wl_notif.get(uid, True)
         await _save_wl_to_db(uid, tgid)
-        st = "مفعّل 🔔" if _wl_notif[uid] else "موقف 🔕"
-        await q.answer(f"الإشعارات: {st}")
+        st = _t(lg, "مفعّل 🔔" if _wl_notif[uid] else "موقف 🔕", "on 🔔" if _wl_notif[uid] else "off 🔕")
+        await q.answer(_t(lg, f"الإشعارات: {st}", f"Notifications: {st}"))
+        notif_line = _t(lg, "🔔 الإشعارات مفعّلة" if _wl_notif[uid] else "🔕 الإشعارات موقفة",
+                        "🔔 Notifications on" if _wl_notif[uid] else "🔕 Notifications off")
         # إعادة رسم شاشة المراقبة
         wl    = _wl_symbols.get(uid, set())
         tf    = _wl_tf.get(uid, "1h")
@@ -1101,21 +1218,22 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         total = sum(len(v["symbols"]) for v in CATEGORIES.values())
         filled = min(count, 10)
         bar = "🟦" * filled + "⬜" * (10 - filled)
-        wl_preview = "  ".join(f"`{s}`" for s in sorted(wl)[:8]) if wl else "_لم يتم اختيار أي زوج_"
+        wl_preview = "  ".join(f"`{s}`" for s in sorted(wl)[:8]) if wl else _t(lg, "_لم يتم اختيار أي زوج_", "_No pairs selected_")
         if count > 8: wl_preview += f"  …+{count-8}"
         await q.edit_message_text(
-            f"👁 *قائمة المراقبة*\n"
+            (_t(lg, "👁 *قائمة المراقبة*", "👁 *Watchlist*") + "\n"
             f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"{bar}  *{count}/{total}* زوج\n\n"
-            f"⏱ الإطار: *{TF_LABELS.get(tf,tf)}*   🎯 الحد: *{conf}%*\n"
-            f"{'🔔 الإشعارات مفعّلة' if notif else '🔕 الإشعارات موقفة'}\n\n"
-            f"الأزواج المختارة:\n{wl_preview}\n\n"
-            f"💡 لإدارة الأزواج والإعدادات بشكل أفضل افتح الداشبورد:",
+            + _t(lg, f"{bar}  *{count}/{total}* زوج", f"{bar}  *{count}/{total}* pairs") + "\n\n"
+            + _t(lg, f"⏱ الإطار: *{TF_LABELS.get(tf,tf)}*   🎯 الحد: *{conf}%*", f"⏱ Timeframe: *{tf_label(tf, 'en')}*   🎯 Min: *{conf}%*") + "\n")
+            +
+            f"{notif_line}\n\n"
+            + _t(lg, "الأزواج المختارة:", "Selected pairs:") + f"\n{wl_preview}\n\n"
+            + _t(lg, "💡 لإدارة الأزواج والإعدادات بشكل أفضل افتح الداشبورد:", "💡 Manage pairs and settings more easily from the dashboard:"),
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🌐 إدارة المراقبة من الداشبورد", web_app=WebAppInfo(url=f"{FRONTEND_URL}/dashboard"))],
-                [InlineKeyboardButton("🔔 تبديل الإشعارات", callback_data="wl_notif"),
-                 InlineKeyboardButton("🔙 رجوع",            callback_data="m_back")],
+                [InlineKeyboardButton(_t(lg, "🌐 إدارة المراقبة من الداشبورد", "🌐 Manage watchlist in the dashboard"), web_app=WebAppInfo(url=f"{FRONTEND_URL}/dashboard"))],
+                [InlineKeyboardButton(_t(lg, "🔔 تبديل الإشعارات", "🔔 Toggle notifications"), callback_data="wl_notif"),
+                 back_btn(lg)],
             ]),
         )
         return
@@ -1123,16 +1241,16 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # handlers قديمة للـ watchlist — احتياطي للتوافق مع أي رسائل قديمة
     if d.startswith("wl_t_") or d in ("wl_all","wl_none","wl_tf","wl_conf","wl_save") \
             or d.startswith("wltf_") or d.startswith("wlconf_"):
-        await q.answer("⚙️ أدر المراقبة من الداشبورد")
+        await q.answer(_t(lg, "⚙️ أدر المراقبة من الداشبورد", "⚙️ Manage your watchlist from the dashboard"))
         return
 
     # ─────────────────────── STATS ────────────────────────────────────────────
     if d == "m_stats":
-        await q.edit_message_text("⏳ جاري جلب إحصائياتك…")
+        await q.edit_message_text(_t(lg, "⏳ جاري جلب إحصائياتك…", "⏳ Fetching your stats…"))
         st = await _get("/api/v1/bot/user-stats", {"telegram_id": tgid})
         if not st.get("linked"):
             await q.edit_message_text(
-                "🔗 *ربط الحساب مطلوب لعرض الإحصائيات.*",
+                _t(lg, "🔗 *ربط الحساب مطلوب لعرض الإحصائيات.*", "🔗 *Link your account to see your stats.*"),
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton("🌐 فتح المنصة", web_app=WebAppInfo(url=FRONTEND_URL))],
@@ -1154,7 +1272,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 [InlineKeyboardButton("🔄 Refresh" if _lg == "en" else "🔄 تحديث", callback_data="m_stats"),
                  InlineKeyboardButton("🌐 Dashboard" if _lg == "en" else "🌐 الداشبورد", web_app=WebAppInfo(url=FRONTEND_URL))],
                 [ch_btn(_lg)],
-                [InlineKeyboardButton("🔙 رجوع",         callback_data="m_back")],
+                [back_btn(_lg)],
             ]),
         )
         return
@@ -1164,7 +1282,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         st = await _get("/api/v1/bot/user-stats", {"telegram_id": tgid})
         if not st.get("linked"):
             await q.edit_message_text(
-                "🔗 *ربط الحساب مطلوب للوصول لبرنامج الإحالة.*",
+                _t(lg, "🔗 *ربط الحساب مطلوب للوصول لبرنامج الإحالة.*", "🔗 *Link your account to access the referral program.*"),
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton("🌐 فتح المنصة", web_app=WebAppInfo(url=FRONTEND_URL))],
@@ -1187,42 +1305,54 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pts_bar    = "🟣" * (bar_filled // 2) + "⬜" * (10 - bar_filled // 2)
 
         # مستوى الإحالة
-        if count >= 25:
+        if lg == "en":
+            tier_line = ("🥇 *Gold tier* — 15% commission" if count >= 25 else
+                         "🥈 *Silver tier* — 5% commission → 15 referrals to gold" if count >= 10 else
+                         "🥉 *Bronze tier* — 5% commission")
+            text = (f"🎁 *Referral points*\n━━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"✨ *Your points:* `{ref_pts}`   👥 *Invited:* `{count}`\n{pts_bar}\n")
+            text += (f"🎉 You have *{free_analyses}* free analyses ready to redeem!\n" if free_analyses > 0
+                     else f"⚡ You need *{pts_to_next}* points for your next free analysis\n")
+            text += (f"\n{tier_line}\n━━━━━━━━━━━━━━━━━━━━━━\n💡 *How to earn points*\n"
+                     f"  • Friend signs up = *+10 points*\n  • Friend subscribes = *+50 points*\n"
+                     f"  • 20 points = one free analysis 🎯\n━━━━━━━━━━━━━━━━━━━━━━\n🔗 *Your link:*\n`{link}`")
+        elif count >= 25:
             tier_line = "🥇 *مستوى ذهبي* — عمولة 15%"
         elif count >= 10:
             tier_line = "🥈 *مستوى فضي* — عمولة 5% → 15 إحالة للذهب"
         else:
             tier_line = "🥉 *مستوى برونزي* — عمولة 5%"
 
-        text = (
-            f"🎁 *نقاط الإحالة*\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"✨ *نقاطك:* `{ref_pts}`   👥 *مدعوّون:* `{count}`\n"
-            f"{pts_bar}\n"
-        )
-        if free_analyses > 0:
-            text += f"🎉 لديك *{free_analyses}* تحليل مجاني جاهز للاستبدال!\n"
-        else:
-            text += f"⚡ تحتاج *{pts_to_next}* نقطة للتحليل المجاني التالي\n"
+        if lg != "en":
+            text = (
+                f"🎁 *نقاط الإحالة*\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"✨ *نقاطك:* `{ref_pts}`   👥 *مدعوّون:* `{count}`\n"
+                f"{pts_bar}\n"
+            )
+            if free_analyses > 0:
+                text += f"🎉 لديك *{free_analyses}* تحليل مجاني جاهز للاستبدال!\n"
+            else:
+                text += f"⚡ تحتاج *{pts_to_next}* نقطة للتحليل المجاني التالي\n"
 
-        text += (
-            f"\n{tier_line}\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"💡 *كيف تكسب النقاط؟*\n"
-            f"  • تسجيل صديق = *+10 نقطة*\n"
-            f"  • اشتراك صديق = *+50 نقطة*\n"
-            f"  • 20 نقطة = تحليل مجاني 🎯\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"🔗 *رابطك:*\n`{link}`"
-        )
+            text += (
+                f"\n{tier_line}\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"💡 *كيف تكسب النقاط؟*\n"
+                f"  • تسجيل صديق = *+10 نقطة*\n"
+                f"  • اشتراك صديق = *+50 نقطة*\n"
+                f"  • 20 نقطة = تحليل مجاني 🎯\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"🔗 *رابطك:*\n`{link}`"
+            )
 
         await q.edit_message_text(
             text,
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🌐 استبدل النقاط من الداشبورد", web_app=WebAppInfo(url=f"{FRONTEND_URL}/dashboard"))],
-                [InlineKeyboardButton("📊 تفاصيل البرنامج", web_app=WebAppInfo(url=f"{FRONTEND_URL}/referral")),
-                 InlineKeyboardButton("🔙 رجوع",            callback_data="m_back")],
+                [InlineKeyboardButton(_t(lg, "🌐 استبدل النقاط من الداشبورد", "🌐 Redeem points in the dashboard"), web_app=WebAppInfo(url=f"{FRONTEND_URL}/dashboard"))],
+                [InlineKeyboardButton(_t(lg, "📊 تفاصيل البرنامج", "📊 Program details"), web_app=WebAppInfo(url=f"{FRONTEND_URL}/referral")),
+                 back_btn(lg)],
             ]),
         )
         return
@@ -1234,17 +1364,21 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         conf = _wl_conf.get(uid, 65)
         notif= _wl_notif.get(uid, True)
         await q.edit_message_text(
-            f"⚙️ *الإعدادات*\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"🔔 الإشعارات:          *{'مفعّل' if notif else 'موقف'}*\n"
-            f"⏱ الإطار الزمني:      *{TF_LABELS.get(tf,tf)}*\n"
-            f"🎯 الحد الأدنى للثقة: *{conf}%*\n",
+            (f"⚙️ *الإعدادات*\n"
+             f"━━━━━━━━━━━━━━━━━━━━━━\n"
+             f"🔔 الإشعارات:          *{'مفعّل' if notif else 'موقف'}*\n"
+             f"⏱ الإطار الزمني:      *{TF_LABELS.get(tf,tf)}*\n"
+             f"🎯 الحد الأدنى للثقة: *{conf}%*\n") if lg != "en" else
+            (f"⚙️ *Settings*\n━━━━━━━━━━━━━━━━━━━━━━\n"
+             f"🔔 Notifications:   *{'on' if notif else 'off'}*\n"
+             f"⏱ Timeframe:       *{tf_label(tf, 'en')}*\n"
+             f"🎯 Min confidence: *{conf}%*\n"),
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔔 تبديل الإشعارات",    callback_data="cfg_notif")],
-                [InlineKeyboardButton("⏱ تغيير الإطار الزمني", callback_data="cfg_tf")],
-                [InlineKeyboardButton("🎯 تغيير الحد الأدنى",   callback_data="cfg_conf")],
-                [InlineKeyboardButton("🔙 رجوع",                callback_data="m_back")],
+                [InlineKeyboardButton(_t(lg, "🔔 تبديل الإشعارات", "🔔 Toggle notifications"), callback_data="cfg_notif")],
+                [InlineKeyboardButton(_t(lg, "⏱ تغيير الإطار الزمني", "⏱ Change timeframe"), callback_data="cfg_tf")],
+                [InlineKeyboardButton(_t(lg, "🎯 تغيير الحد الأدنى", "🎯 Change minimum"), callback_data="cfg_conf")],
+                [back_btn(lg)],
             ]),
         )
         return
@@ -1252,37 +1386,38 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if d == "cfg_notif":
         _wl_notif[uid] = not _wl_notif.get(uid, True)
         await _save_wl_to_db(uid, tgid)
-        await q.answer(f"الإشعارات: {'مفعّل 🔔' if _wl_notif[uid] else 'موقف 🔕'}")
+        await q.answer(_t(lg, f"الإشعارات: {'مفعّل 🔔' if _wl_notif[uid] else 'موقف 🔕'}", f"Notifications: {'on 🔔' if _wl_notif[uid] else 'off 🔕'}"))
         await on_button(update, context)  # re-render settings
         return
 
     if d == "cfg_tf":
-        await q.edit_message_text("⏱ *اختر الإطار الزمني الافتراضي:*",
+        await q.edit_message_text(_t(lg, "⏱ *اختر الإطار الزمني الافتراضي:*", "⏱ *Choose the default timeframe:*"),
                                    parse_mode="Markdown",
-                                   reply_markup=kb_tf_select(back="m_settings"))
+                                   reply_markup=kb_tf_select(back="m_settings", lg=lg))
         return
 
     if d == "cfg_conf":
         await q.edit_message_text(
-            "🎯 *اختر الحد الأدنى للثقة:*\n(أعلى = إشارات أقل لكن أقوى)",
-            parse_mode="Markdown", reply_markup=kb_conf_select(),
+            _t(lg, "🎯 *اختر الحد الأدنى للثقة:*\n(أعلى = إشارات أقل لكن أقوى)", "🎯 *Choose the minimum confidence:*\n(higher = fewer but stronger signals)"),
+            parse_mode="Markdown", reply_markup=kb_conf_select(lg),
         )
         return
 
     # ─────────────────────── HELP ─────────────────────────────────────────────
     if d == "m_help":
         await q.edit_message_text(
+            HELP_EN if lg == "en" else (
             "📚 *المساعدة*\n\n"
             "📊 *تحليل فوري*\nاختر الفئة ثم الزوج والإطار الزمني.\n\n"
             "👁 *المراقبة*\nاختر الأزواج التي تريد مراقبتها.\n"
             "البوت يحللها كل 15 دقيقة تلقائياً.\n\n"
             "📡 *الإشارات*\nآخر الإشارات المنشورة من الأدمن.\n\n"
             "📈 *إحصائياتي*\nعرض نسبة ربحك ومجموع نقاطك.\n\n"
-            "🎁 *الإحالة*\nرابطك الخاص + تفاصيل العمولة.",
+            "🎁 *الإحالة*\nرابطك الخاص + تفاصيل العمولة."),
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🌐 فتح المنصة", web_app=WebAppInfo(url=FRONTEND_URL))],
-                [InlineKeyboardButton("🔙 رجوع",       callback_data="m_back")],
+                [InlineKeyboardButton(_t(lg, "🌐 فتح المنصة", "🌐 Open platform"), web_app=WebAppInfo(url=FRONTEND_URL))],
+                [back_btn(lg)],
             ]),
         )
         return
@@ -1563,7 +1698,13 @@ async def outcome_checker(app: Application):
 # الإرسال فقط. اقتراح إدارة مخاطر لا أمر؛ النتيجة المقاسة لا تتغيّر.
 BREAKEVEN_CHECK_INTERVAL = 300   # ثانية
 
-def fmt_breakeven(a: dict) -> str:
+def fmt_breakeven(a: dict, lg: str = "ar") -> str:
+    if lg == "en":
+        side = "BUY 🟢" if a.get("signal_type") == "BUY" else "SELL 🔴"
+        return (f"🛡️ *Protect your trade — {a.get('market')}*\n"
+                f"{side} trade ({a.get('timeframe')}) reached a profit equal to its risk (+1R).\n\n"
+                f"💡 Consider moving your stop loss to entry `{a.get('entry')}` — you lose nothing if price reverses, "
+                f"and the trade stays open toward the target `{a.get('tp1')}`.\n\n_A risk-management suggestion; the decision is yours._")
     side = "شراء 🟢" if a.get("signal_type") == "BUY" else "بيع 🔴"
     return (
         f"🛡️ *حماية صفقة — {a.get('market')}*\n"
@@ -1583,7 +1724,7 @@ async def breakeven_alerts(app: Application):
                 try:
                     await app.bot.send_message(
                         chat_id=int(a["telegram_id"]),
-                        text=fmt_breakeven(a),
+                        text=fmt_breakeven(a, _user_lang.get(str(a["telegram_id"]), "ar")),
                         parse_mode="Markdown",
                     )
                     await asyncio.sleep(0.05)
@@ -1622,6 +1763,8 @@ async def daily_challenge(app: Application):
                         tid = s.get("telegram_id")
                         if not tid or s.get("notifications_enabled") is False:
                             continue
+                        if (s.get("lang") or "ar") == "en":   # (2026-10-24) أسئلة التحدّي عربية — لا نرسلها لمن اختار الإنجليزية
+                            continue
                         try:
                             msg = await app.bot.send_poll(
                                 chat_id=int(tid),
@@ -1647,6 +1790,19 @@ async def daily_challenge(app: Application):
 
 async def cmd_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """/settings — (2026-10-12) تخصيص الإشارات: الأزواج والفريمات وحد الثقة."""
+    await ensure_lang(update.effective_user)
+    if lang_for(update.effective_user) == "en":
+        await update.message.reply_text(
+            "⚙️ *Customize the signals you receive*\n\n"
+            "• Pick only the pairs you trade\n"
+            "• Choose timeframes: 15 min, 1 hour, 4 hours\n"
+            "• Set a minimum signal confidence\n"
+            "• Or pause notifications\n\n"
+            "You can also mute any pair straight from the 🔕 button under a signal.",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⚙️ Open settings", url=SETTINGS_URL)]]),
+        )
+        return
     await update.message.reply_text(
         "⚙️ *خصّص الإشارات التي تصلك*\n\n"
         "• اختر الأزواج التي تتداولها فقط\n"
@@ -1660,6 +1816,11 @@ async def cmd_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_challenge(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """/challenge — تحدّي اليوم عند الطلب (نفس سؤال الإرسال الصباحي)."""
+    await ensure_lang(update.effective_user)
+    if lang_for(update.effective_user) == "en":
+        await update.message.reply_text("🎯 The daily challenge is available in Arabic only for now.\n"
+                                        "Try the learning games on the platform instead 👇\n" + GAMES_URL)
+        return
     q = await _get("/api/v1/bot/daily-challenge")
     if not q or not q.get("options"):
         await update.message.reply_text("تعذّر جلب تحدّي اليوم، جرّب بعد قليل.")
@@ -1866,7 +2027,22 @@ async def monitor_watchlists(app: Application):
                                                    json={"telegram_id": str(uid_), "signal_id": save_res.get("signal_id")})
                             unlocked = bool(consume.get("unlocked"))
 
-                        if unlocked:
+                        _wlg = _user_lang.get(str(uid_), "ar")
+                        if _wlg == "en":
+                            _cl = (f"⚠️ *You have {concurrent_n} other open trade(s) on this symbol* ({symbol}) — watch your risk concentration.\n\n"
+                                   if concurrent_n else "")
+                            if unlocked:
+                                alert = (f"🚨 *Watchlist alert!*\n\n{emoji} *{rec}* — {symbol} ({tf})\n"
+                                         f"📊 Confidence: *{conf:.1f}%*\n\n{_cl}{fmt_analysis_en(data, symbol, tf)}")[:4000]
+                                kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔄 Refresh", callback_data=f"an_{symbol}_{tf}"),
+                                                            InlineKeyboardButton("🏠 Home", callback_data="m_back")]])
+                            else:
+                                alert = (f"🚨 *Watchlist alert!*\n\n{emoji} *{rec}* — {symbol} ({tf})\n"
+                                         f"📊 Confidence: *{conf:.1f}%*\n\n{_cl}"
+                                         f"🔒 You've used today's free quota — entry/stop/targets are locked\n"
+                                         f"💳 Subscribe to see full details")
+                                kb = InlineKeyboardMarkup([[InlineKeyboardButton("💳 Subscribe now", url=f"{FRONTEND_URL}/pricing")]])
+                        elif unlocked:
                             alert = (
                                 f"🚨 *تنبيه مراقبة!*\n\n"
                                 f"{emoji} *{rec_ar}* — {MARKET_NAMES.get(symbol,symbol)} ({tf})\n"
@@ -1927,7 +2103,12 @@ async def notify_expiry(app: Application):
                 name  = u.get("full_name","") or u.get("email","")
                 plan  = {"weekly":"الأسبوعية","monthly":"الشهرية","trial":"التجريبية"}.get(
                     str(u.get("plan","")), str(u.get("plan","")))
-                msg = (
+                _elg = _user_lang.get(str(tid), "ar")
+                msg = ((f"⏰ *Your subscription has ended!*\n\nHi {name} 👋\nYour plan has ended.\n\nRenew now to continue 📊"
+                        if days == 0 else
+                        f"⚠️ *Your subscription ends soon!*\n\nHi {name} 👋\n"
+                        f"Your plan ends in *{days} day{'s' if days != 1 else ''}*.\n\nRenew now 🚀")
+                       if _elg == "en" else None) or (
                     f"⏰ *انتهى اشتراكك!*\n\nمرحباً {name} 👋\nانتهت باقتك {plan}.\n\nجدد الآن للاستمرار 📊"
                     if days == 0 else
                     f"⚠️ *اشتراكك ينتهي قريباً!*\n\nمرحباً {name} 👋\n"
@@ -1937,7 +2118,7 @@ async def notify_expiry(app: Application):
                     await app.bot.send_message(
                         chat_id=int(tid), text=msg, parse_mode="Markdown",
                         reply_markup=InlineKeyboardMarkup([[
-                            InlineKeyboardButton("💳 تجديد الاشتراك", url=f"{FRONTEND_URL}/pricing")
+                            InlineKeyboardButton("💳 Renew subscription" if _elg == "en" else "💳 تجديد الاشتراك", url=f"{FRONTEND_URL}/pricing")
                         ]]),
                     )
                     notified_expiry.add(key)
@@ -1972,6 +2153,22 @@ _OPEN_MSG = """🌅 *افتتاح أسواق الفوركس والذهب*
 _بالتوفيق للجميع — تداولوا بحكمة وانضباط_ 💪✨"""
 
 
+_CLOSE_MSG_EN = """🔔 *Forex & gold markets closed*
+
+Forex, metals and indices markets are now closed for the weekend.
+
+We hope you had a good week 🌟
+*Thank you for your trust — see you next week* 🙏
+
+_Crypto markets remain open 24/7_ ₿"""
+
+_OPEN_MSG_EN = """🌅 *Forex & gold markets open*
+
+Forex, metals and indices markets are open for the new week 📈
+
+_Good luck everyone — trade wisely and with discipline_ 💪✨"""
+
+
 async def market_session_notifier(app: Application):
     """يراقب افتتاح/إغلاق السوق الأسبوعي ويرسل رسائل مناسبة لجميع المشتركين"""
     logger.info("🕐 بدء مراقبة جلسات السوق…")
@@ -2001,9 +2198,10 @@ async def market_session_notifier(app: Application):
                     if not tid:
                         continue
                     try:
+                        _m = (_OPEN_MSG_EN if current_open else _CLOSE_MSG_EN) if (s.get("lang") or "ar") == "en" else msg
                         await app.bot.send_message(
                             chat_id=int(tid),
-                            text=msg,
+                            text=_m,
                             parse_mode="Markdown",
                         )
                         sent += 1
@@ -2061,6 +2259,16 @@ async def session_pre_alert(app: Application):
                             f"• لا تدخل صفقة قبل أول 15 دقيقة\n\n"
                             f"_استخدم /menu → تحليل سريع لأي سوق_"
                         )
+                        msg_en = (
+                            f"⏰ *Session alert | {sess['name_en']}*\n"
+                            f"━━━━━━━━━━━━━━━━━━\n"
+                            f"The session opens in *{mins_left} min* 🔔\n\n"
+                            f"📋 *Get ready:*\n"
+                            f"• Review the HTF (4H) setup\n"
+                            f"• Mark the active OB and FVG zones\n"
+                            f"• Don't enter in the first 15 minutes\n\n"
+                            f"_Use /menu → Quick analysis for any market_"
+                        )
 
                         subs_data = await _get("/api/v1/bot/active-subscribers")
                         subs = subs_data.get("subscribers", [])
@@ -2071,7 +2279,7 @@ async def session_pre_alert(app: Application):
                                 continue
                             try:
                                 await app.bot.send_message(
-                                    chat_id=int(tid), text=msg, parse_mode="Markdown"
+                                    chat_id=int(tid), text=(msg_en if (s.get("lang") or "ar") == "en" else msg), parse_mode="Markdown"
                                 )
                                 sent += 1
                                 await asyncio.sleep(0.05)
@@ -2106,6 +2314,7 @@ async def daily_briefing(app: Application):
 
                 # اجلب تحليل سريع من الـ API لـ XAUUSD و BTCUSD
                 briefing_lines = []
+                briefing_en = []
                 for sym in ["XAUUSD", "BTCUSD", "EURUSD"]:
                     try:
                         res = await _post(
@@ -2114,6 +2323,7 @@ async def daily_briefing(app: Application):
                         d   = res.get("data", {})
                         if not d or d.get("error") or "recommendation" not in d:
                             briefing_lines.append(f"{MARKET_NAMES.get(sym, sym)}: ⚠️ تعذّر التحليل")
+                            briefing_en.append(f"{sym}: ⚠️ analysis unavailable")
                             continue
 
                         rec = d.get("recommendation", "WAIT")
@@ -2124,8 +2334,11 @@ async def daily_briefing(app: Application):
                         briefing_lines.append(
                             f"{mname}: {rec_ar} | ثقة `{conf:.0f}%` | `{_fmt_price(price)}`"
                         )
+                        _rec_en = {"BUY": "📈 BUY", "SELL": "📉 SELL", "WAIT": "⏳ WAIT"}.get(rec, rec)
+                        briefing_en.append(f"{sym}: {_rec_en} | confidence `{conf:.0f}%` | `{_fmt_price(price)}`")
                     except Exception:
                         briefing_lines.append(f"{MARKET_NAMES.get(sym, sym)}: ⚠️ تعذّر التحليل")
+                        briefing_en.append(f"{sym}: ⚠️ analysis unavailable")
 
                 dow_ar = ["الاثنين","الثلاثاء","الأربعاء","الخميس","الجمعة"][now.weekday()]
                 msg = (
@@ -2139,6 +2352,16 @@ async def daily_briefing(app: Application):
                     f"_لا تدخل صفقة دون تأكيد HTF + وجود OB أو FVG واضح_\n\n"
                     f"_استخدم /menu لتحليل سوق محدد 🎯_"
                 )
+                msg_en = (
+                    f"🌅 *Good morning — daily briefing*\n"
+                    f"━━━━━━━━━━━━━━━━━━━━\n"
+                    f"📅 {now.strftime('%A %d/%m/%Y')}\n\n"
+                    f"📊 *4H view of the main markets:*\n"
+                    + "\n".join(f"• {l}" for l in briefing_en) +
+                    f"\n\n💡 *Tip of the day:*\n"
+                    f"_Don't enter without HTF confirmation plus a clear OB or FVG_\n\n"
+                    f"_Use /menu to analyze a specific market 🎯_"
+                )
 
                 subs_data = await _get("/api/v1/bot/active-subscribers")
                 subs = subs_data.get("subscribers", [])
@@ -2149,7 +2372,7 @@ async def daily_briefing(app: Application):
                         continue
                     try:
                         await app.bot.send_message(
-                            chat_id=int(tid), text=msg, parse_mode="Markdown"
+                            chat_id=int(tid), text=(msg_en if (s.get("lang") or "ar") == "en" else msg), parse_mode="Markdown"
                         )
                         sent += 1
                         await asyncio.sleep(0.05)
@@ -2169,12 +2392,15 @@ async def daily_briefing(app: Application):
 _ECON_EVENTS = [
     # كل أول جمعة من الشهر 12:30 UTC — NFP
     {"type": "NFP",   "weekday": 4, "utc_hour": 12, "utc_min": 30,
+     "msg_en": "📊 *Warning: NFP — Non-Farm Payrolls*\nOut in one hour — one of the strongest movers for gold and the dollar.\n⚠️ *Don't open new trades now*\nWait 15 minutes after the release before any entry.",
      "msg_ar": "📊 *تحذير: NFP — وظائف غير الزراعية*\nالخبر بعد ساعة — من أقوى الأخبار تأثيراً على الذهب والدولار.\n⚠️ *لا تفتح صفقات جديدة الآن*\nانتظر 15 دقيقة بعد الإعلان قبل أي دخول."},
     # كل أول أربعاء من الشهر — FOMC Minutes أو Fed Rate
     {"type": "FOMC",  "weekday": 2, "utc_hour": 18, "utc_min": 0,
+     "msg_en": "🏦 *Warning: US Fed decision (FOMC)*\nThe decision is in one hour — it moves every market strongly.\n⚠️ *Close open trades or tighten your stop*\nVolatility will be very high.",
      "msg_ar": "🏦 *تحذير: قرار الفيدرالي الأمريكي (FOMC)*\nالقرار بعد ساعة — يؤثر بشكل كبير على جميع الأسواق.\n⚠️ *أغلق صفقاتك المفتوحة أو ضيّق الوقف*\nالتقلب سيكون عالياً جداً."},
     # منتصف كل شهر الثلاثاء 12:30 UTC — CPI
     {"type": "CPI",   "weekday": 1, "utc_hour": 12, "utc_min": 30,
+     "msg_en": "📈 *Warning: Consumer Price Index (CPI)*\nOut in one hour — a big mover for gold and currencies.\n⚠️ *Watch for stop hunts right before and after the release*",
      "msg_ar": "📈 *تحذير: مؤشر أسعار المستهلك (CPI)*\nالخبر بعد ساعة — يؤثر على الذهب والعملات تأثيراً كبيراً.\n⚠️ *احذر من الـ stop hunt قبل وبعد الخبر مباشرة*"},
 ]
 
@@ -2212,7 +2438,7 @@ async def economic_news_alert(app: Application):
                         try:
                             await app.bot.send_message(
                                 chat_id=int(tid),
-                                text=ev["msg_ar"],
+                                text=(ev["msg_en"] if (s.get("lang") or "ar") == "en" else ev["msg_ar"]),
                                 parse_mode="Markdown",
                             )
                             sent += 1
@@ -2262,22 +2488,31 @@ async def on_review_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
     uid, d = q.from_user.id, q.data
+    await ensure_lang(q.from_user)
+    lg = _rf.lang(uid) if _rf.active(uid) else lang_for(q.from_user)
+    _cancel = [InlineKeyboardButton("❌ Cancel" if lg == "en" else "❌ إلغاء", callback_data="rv_cancel")]
     if d == "m_review":
         st = await _get("/api/v1/bot/review-status", {"telegram_id": str(uid)})
         if not st.get("linked"):
-            await q.message.reply_text("🔗 اربط حسابك بالمنصة أولاً لإرسال رأيك.",
+            await q.message.reply_text(_t(lg, "🔗 اربط حسابك بالمنصة أولاً لإرسال رأيك.", "🔗 Link your platform account first to send a review."),
                                        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(
-                                           "🌐 فتح المنصة", web_app=WebAppInfo(url=FRONTEND_URL))]]))
+                                           _t(lg, "🌐 فتح المنصة", "🌐 Open platform"), web_app=WebAppInfo(url=FRONTEND_URL))]]))
             return
         if not st.get("eligible"):
-            why = ("إرسال الرأي متاح للمشتركين بعد 7 أيام من أول اشتراك مدفوع — حتى يكون رأيك عن تجربة حقيقية."
-                   if st.get("reason") == "no_paid" else f"يمكنك إرسال رأيك بعد {st.get('days_left')} يوم من اشتراكك.")
+            if lg == "en":
+                why = ("Reviews are open to subscribers 7 days after their first paid plan — so your review reflects real experience."
+                       if st.get("reason") == "no_paid" else f"You can send your review in {st.get('days_left')} day(s).")
+            else:
+                why = ("إرسال الرأي متاح للمشتركين بعد 7 أيام من أول اشتراك مدفوع — حتى يكون رأيك عن تجربة حقيقية."
+                       if st.get("reason") == "no_paid" else f"يمكنك إرسال رأيك بعد {st.get('days_left')} يوم من اشتراكك.")
             await q.message.reply_text(f"⏳ {why}")
             return
-        _rf.start(uid)
-        note = "\n<i>رأيك السابق سيُستبدل بالجديد بعد المراجعة.</i>" if st.get("existing") else ""
-        await q.message.reply_text(f"⭐ <b>كيف تقيّم تجربتك مع Qaffel؟</b>{note}", parse_mode="HTML",
-                                   reply_markup=_kb_rating())
+        _rf.start(uid, lg)
+        note = (_t(lg, "\n<i>رأيك السابق سيُستبدل بالجديد بعد المراجعة.</i>", "\n<i>Your previous review will be replaced after review.</i>")
+                if st.get("existing") else "")
+        await q.message.reply_text(_t(lg, "⭐ <b>كيف تقيّم تجربتك مع Qaffel؟</b>", "⭐ <b>How would you rate your experience with Qaffel?</b>") + note,
+                                   parse_mode="HTML", reply_markup=InlineKeyboardMarkup(
+                                       [[InlineKeyboardButton(f"{n}⭐", callback_data=f"rv_r_{n}") for n in range(1, 6)], _cancel]))
         return
     if d == "rv_cancel":
         await q.message.reply_text(_rf.cancel(uid))
@@ -2286,12 +2521,12 @@ async def on_review_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         txt = _rf.on_rating(uid, int(d.split("_")[-1]))
         if txt:
             await q.message.reply_text(txt, parse_mode="HTML", reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("⏭ تخطّي", callback_data="rv_skip")], _RV_CANCEL]))
+                InlineKeyboardButton(_t(lg, "⏭ تخطّي", "⏭ Skip"), callback_data="rv_skip")], _cancel]))
         return
     if d == "rv_skip":
         txt = _rf.on_skip(uid)
         if txt:
-            await q.message.reply_text(txt, reply_markup=InlineKeyboardMarkup([_RV_CANCEL]))
+            await q.message.reply_text(txt, reply_markup=InlineKeyboardMarkup([_cancel]))
         return
     if d in ("rv_pub_name", "rv_pub_anon"):
         payload = _rf.on_consent(uid, anonymous=(d == "rv_pub_anon"))
@@ -2299,9 +2534,10 @@ async def on_review_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         res = await _post("/api/v1/bot/reviews", json={"telegram_id": str(uid), **payload})
         if res.get("ok"):
-            await q.message.reply_text(RF.THANKS, parse_mode="HTML", reply_markup=InlineKeyboardMarkup([[ch_btn()]]))
+            await q.message.reply_text(RF.EN["THANKS"] if lg == "en" else RF.THANKS, parse_mode="HTML",
+                                       reply_markup=InlineKeyboardMarkup([[ch_btn(lg)]]))
         else:
-            await q.message.reply_text(f"⚠️ {res.get('error') or 'تعذّر الإرسال — حاول بعد قليل.'}")
+            await q.message.reply_text(f"⚠️ {res.get('error') or _t(lg, 'تعذّر الإرسال — حاول بعد قليل.', 'Could not send — try again shortly.')}")
 
 
 async def on_review_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2310,23 +2546,27 @@ async def on_review_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not msg or uid is None or not _rf.active(uid):
         return
     step = _rf.step(uid)
+    lg = _rf.lang(uid)
+    _cancel = [InlineKeyboardButton("❌ Cancel" if lg == "en" else "❌ إلغاء", callback_data="rv_cancel")]
     if step == "media" and (msg.photo or msg.video):
         kind = "photo" if msg.photo else "video"
         fid = msg.photo[-1].file_id if msg.photo else msg.video.file_id
         size = (msg.video.file_size or 0) if msg.video else 0
         ok, txt = _rf.on_media(uid, kind, fid, size)
         await msg.reply_text(txt, parse_mode="HTML",
-                             reply_markup=InlineKeyboardMarkup([_RV_CANCEL]) if ok else None)
+                             reply_markup=InlineKeyboardMarkup([_cancel]) if ok else None)
         return
     if step == "text" and msg.text:
         ok, txt = _rf.on_text(uid, msg.text)
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton("✅ انشره باسمي", callback_data="rv_pub_name"),
-                                    InlineKeyboardButton("🙈 بدون اسمي", callback_data="rv_pub_anon")],
-                                   _RV_CANCEL]) if ok else InlineKeyboardMarkup([_RV_CANCEL])
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton(_t(lg, "✅ انشره باسمي", "✅ Publish with my name"), callback_data="rv_pub_name"),
+                                    InlineKeyboardButton(_t(lg, "🙈 بدون اسمي", "🙈 Without my name"), callback_data="rv_pub_anon")],
+                                   _cancel]) if ok else InlineKeyboardMarkup([_cancel])
         await msg.reply_text(txt, parse_mode="HTML", reply_markup=kb)
         return
-    hint = {"rating": "اختر عدد النجوم من الأزرار.", "media": "أرسل صورة أو فيديو، أو اضغط تخطّي.",
-            "text": "اكتب رأيك نصاً.", "consent": "اختر طريقة النشر من الأزرار."}.get(step)
+    hint = ({"rating": "Pick the number of stars from the buttons.", "media": "Send a photo or video, or tap Skip.",
+             "text": "Write your review as text.", "consent": "Choose how to publish from the buttons."} if lg == "en" else
+            {"rating": "اختر عدد النجوم من الأزرار.", "media": "أرسل صورة أو فيديو، أو اضغط تخطّي.",
+             "text": "اكتب رأيك نصاً.", "consent": "اختر طريقة النشر من الأزرار."}).get(step)
     if hint:
         await msg.reply_text(hint)
 

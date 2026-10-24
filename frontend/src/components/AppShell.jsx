@@ -214,7 +214,7 @@ function SidebarContent({ isAr, onNavigate }) {
           >
             <span className="opacity-85">{l.icon}</span>
             {isAr ? l.ar : l.en}
-            {l.tag && <span className="ms-auto text-[10px] px-2 py-0.5 rounded-full bg-amber-400/15 text-amber-300 font-semibold">{l.tag}</span>}
+            {l.tag && <span className="ms-auto text-[10px] px-2 py-0.5 rounded-full bg-amber-400/15 text-amber-300 font-semibold">{isAr ? l.tag : 'New'}</span>}
           </Link>
         ))}
         {user?.role === 'admin' && (

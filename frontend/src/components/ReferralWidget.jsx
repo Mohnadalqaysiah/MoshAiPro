@@ -3,6 +3,7 @@
  * تُعرض في الـ Dashboard لتشجيع المستخدم على دعوة أصدقائه
  */
 import { useState, useEffect, useRef } from 'react'
+import { useLang } from '../contexts/LangContext'
 import axios from 'axios'
 import { Copy, CheckCircle, Gift, Users, Zap, ChevronRight, Sparkles } from 'lucide-react'
 
@@ -73,6 +74,7 @@ function CircleProgress({ pct, size = 80, stroke = 6, children }) {
 
 // ─── الـ Widget الرئيسي ───────────────────────────────────────────────────────
 export default function ReferralWidget() {
+  const isAr = (useLang()?.lang || 'ar') === 'ar'
   const [data,     setData]     = useState(null)
   const [loading,  setLoading]  = useState(true)
   const [copied,   setCopied]   = useState(false)
@@ -105,7 +107,7 @@ export default function ReferralWidget() {
       setRedeemMsg({ ok: true, text: res.data.message })
       await fetch()  // refresh
     } catch (e) {
-      setRedeemMsg({ ok: false, text: e.response?.data?.detail || 'حدث خطأ' })
+      setRedeemMsg({ ok: false, text: e.response?.data?.detail || (isAr ? 'حدث خطأ' : 'Something went wrong') })
     } finally {
       setRedeeming(false)
       setTimeout(() => setRedeemMsg(null), 3500)
@@ -151,9 +153,9 @@ export default function ReferralWidget() {
             )}
           </div>
           <div>
-            <h3 className="text-white font-semibold text-sm leading-tight">نقاط الإحالة</h3>
+            <h3 className="text-white font-semibold text-sm leading-tight">{isAr ? 'نقاط الإحالة' : 'Referral points'}</h3>
             <p className="text-violet-300/70 text-xs mt-0.5">
-              ادعُ أصدقاءك واكسب تحليلات مجانية
+              {isAr ? 'ادعُ أصدقاءك واكسب تحليلات مجانية' : 'Invite friends and earn free analyses'}
             </p>
           </div>
         </div>
@@ -164,7 +166,7 @@ export default function ReferralWidget() {
             <p className="text-xl font-bold text-white leading-none">
               <CountUp value={points} />
             </p>
-            <p className="text-xs text-violet-300/60 mt-0.5">نقطة</p>
+            <p className="text-xs text-violet-300/60 mt-0.5">{isAr ? 'نقطة' : 'points'}</p>
           </div>
           <ChevronRight
             size={16}
@@ -178,8 +180,8 @@ export default function ReferralWidget() {
         <div className="flex items-center justify-between mb-1.5">
           <span className="text-xs text-gray-400">
             {canRedeem
-              ? `🎉 لديك ${analyses_available} تحليل${analyses_available > 1 ? ' مجاني' : ' مجاني'} جاهز!`
-              : `${points_to_next} نقطة للتحليل المجاني التالي`}
+              ? (isAr ? `🎉 لديك ${analyses_available} تحليل مجاني جاهز!` : `🎉 You have ${analyses_available} free ${analyses_available > 1 ? 'analyses' : 'analysis'} ready!`)
+              : (isAr ? `${points_to_next} نقطة للتحليل المجاني التالي` : `${points_to_next} points to your next free analysis`)}
           </span>
           <span className="text-xs text-gray-500">{Math.round(progress_pct)}%</span>
         </div>
@@ -198,9 +200,9 @@ export default function ReferralWidget() {
           {/* الإحصائيات */}
           <div className="grid grid-cols-3 gap-3">
             {[
-              { icon: <Users size={14} />, label: 'مدعوّون', value: total_referrals, color: 'text-blue-400' },
-              { icon: <Zap size={14} />,   label: 'نقطة',    value: points,           color: 'text-violet-400' },
-              { icon: <Gift size={14} />,  label: 'تحليلات', value: analyses_available, color: 'text-green-400' },
+              { icon: <Users size={14} />, label: isAr ? 'مدعوّون' : 'Invited', value: total_referrals, color: 'text-blue-400' },
+              { icon: <Zap size={14} />,   label: isAr ? 'نقطة' : 'Points',    value: points,           color: 'text-violet-400' },
+              { icon: <Gift size={14} />,  label: isAr ? 'تحليلات' : 'Analyses', value: analyses_available, color: 'text-green-400' },
             ].map((s, i) => (
               <div key={i} className="bg-gray-800/50 rounded-xl p-3 text-center border border-gray-700/40">
                 <div className={`flex justify-center mb-1 ${s.color}`}>{s.icon}</div>
@@ -217,23 +219,23 @@ export default function ReferralWidget() {
             </CircleProgress>
             <div className="flex-1 space-y-2">
               <div className="flex justify-between text-xs">
-                <span className="text-gray-400">عند التسجيل</span>
-                <span className="text-violet-300 font-semibold">+{points_per_register} نقطة</span>
+                <span className="text-gray-400">{isAr ? 'عند التسجيل' : 'On sign-up'}</span>
+                <span className="text-violet-300 font-semibold">+{points_per_register} {isAr ? 'نقطة' : 'pts'}</span>
               </div>
               <div className="flex justify-between text-xs">
-                <span className="text-gray-400">عند الاشتراك</span>
-                <span className="text-yellow-300 font-semibold">+{points_per_subscribe} نقطة</span>
+                <span className="text-gray-400">{isAr ? 'عند الاشتراك' : 'On subscription'}</span>
+                <span className="text-yellow-300 font-semibold">+{points_per_subscribe} {isAr ? 'نقطة' : 'pts'}</span>
               </div>
               <div className="flex justify-between text-xs">
-                <span className="text-gray-400">كل تحليل مجاني</span>
-                <span className="text-green-300 font-semibold">{points_per_analysis} نقطة</span>
+                <span className="text-gray-400">{isAr ? 'كل تحليل مجاني' : 'Each free analysis'}</span>
+                <span className="text-green-300 font-semibold">{points_per_analysis} {isAr ? 'نقطة' : 'pts'}</span>
               </div>
             </div>
           </div>
 
           {/* رابط الإحالة */}
           <div>
-            <p className="text-xs text-gray-400 mb-2">رابط الإحالة الخاص بك</p>
+            <p className="text-xs text-gray-400 mb-2">{isAr ? 'رابط الإحالة الخاص بك' : 'Your referral link'}</p>
             <div className="flex items-center gap-2 bg-gray-800/70 border border-gray-700/50 rounded-xl px-3 py-2.5">
               <span className="flex-1 text-xs text-gray-300 font-mono truncate">{referral_link}</span>
               <button
@@ -241,11 +243,11 @@ export default function ReferralWidget() {
                 className="flex-shrink-0 flex items-center gap-1 text-xs px-3 py-1.5 rounded-lg bg-violet-600/30 hover:bg-violet-600/50 text-violet-300 hover:text-white border border-violet-600/30 transition-all"
               >
                 {copied
-                  ? <><CheckCircle size={12} className="text-green-400" /> تم!</>
-                  : <><Copy size={12} /> نسخ</>}
+                  ? <><CheckCircle size={12} className="text-green-400" /> {isAr ? 'تم!' : 'Done!'}</>
+                  : <><Copy size={12} /> {isAr ? 'نسخ' : 'Copy'}</>}
               </button>
             </div>
-            <p className="text-xs text-gray-400 mt-1.5">كود الإحالة: <span className="text-gray-400 font-mono">{referral_code}</span></p>
+            <p className="text-xs text-gray-400 mt-1.5">{isAr ? 'كود الإحالة:' : 'Referral code:'} <span className="text-gray-400 font-mono">{referral_code}</span></p>
           </div>
 
           {/* زر الاستبدال */}
@@ -270,8 +272,8 @@ export default function ReferralWidget() {
               <Gift size={15} />
             )}
             {canRedeem
-              ? `استبدل ${points_per_analysis} نقطة بتحليل مجاني`
-              : `تحتاج ${points_per_analysis} نقطة للاستبدال`}
+              ? (isAr ? `استبدل ${points_per_analysis} نقطة بتحليل مجاني` : `Redeem ${points_per_analysis} points for a free analysis`)
+              : (isAr ? `تحتاج ${points_per_analysis} نقطة للاستبدال` : `You need ${points_per_analysis} points to redeem`)}
           </button>
 
         </div>

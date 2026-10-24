@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useLang } from '../contexts/LangContext'
 import { Bell, X, CheckCircle, Share } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { isPushSupported, getExistingSubscription, subscribeToPush } from '../utils/webPush'
@@ -14,6 +15,7 @@ import { isPushSupported, getExistingSubscription, subscribeToPush } from '../ut
 // نميّز هاي الحالة تحديداً ونوجّه للحل (نفس خطوات PWAInstallBanner.jsx)
 // بدل الاختفاء الصامت.
 export default function PushNotificationBanner() {
+  const isAr = (useLang()?.lang || 'ar') === 'ar'
   const { user } = useAuth()
   const [dismissed, setDismissed] = useState(false)
   const [subscribed, setSubscribed] = useState(null)   // null = جاري الفحص
@@ -58,16 +60,16 @@ export default function PushNotificationBanner() {
   return (
     <div
       className="bg-indigo-900/80 border-b-2 border-indigo-500 px-4 py-3 flex items-center justify-between gap-3"
-      dir="rtl"
+      dir={isAr ? 'rtl' : 'ltr'}
     >
       <div className="flex items-center gap-2 text-xs min-w-0">
         {needsIOSInstall ? <Share size={13} className="text-indigo-400 flex-shrink-0" /> : <Bell size={13} className="text-indigo-400 flex-shrink-0" />}
         <span className="text-indigo-200">
           {done
-            ? 'تم تفعيل إشعارات المتصفح ✅'
+            ? (isAr ? 'تم تفعيل إشعارات المتصفح ✅' : 'Browser notifications enabled ✅')
             : needsIOSInstall
-            ? 'إشعارات الآيفون تحتاج تثبيت التطبيق أولاً: زر المشاركة ← إضافة إلى الشاشة الرئيسية'
-            : 'فعّل إشعارات المتصفح لتصلك الإشارات حتى بدون تيليجرام'}
+            ? (isAr ? 'إشعارات الآيفون تحتاج تثبيت التطبيق أولاً: زر المشاركة ← إضافة إلى الشاشة الرئيسية' : 'iPhone notifications need the app installed first: Share → Add to Home Screen')
+            : (isAr ? 'فعّل إشعارات المتصفح لتصلك الإشارات حتى بدون تيليجرام' : 'Enable browser notifications to get signals even without Telegram')}
         </span>
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">
@@ -77,11 +79,11 @@ export default function PushNotificationBanner() {
             disabled={busy}
             className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-500 active:scale-95 disabled:opacity-60 text-white text-xs px-3 py-1.5 rounded-lg font-semibold transition-all"
           >
-            {busy ? '...' : (<><Bell size={11} /> تفعيل</>)}
+            {busy ? '...' : (<><Bell size={11} /> {isAr ? 'تفعيل' : 'Enable'}</>)}
           </button>
         )}
         {done && <CheckCircle size={16} className="text-green-400" />}
-        <button onClick={() => setDismissed(true)} title="إخفاء مؤقتاً" className="text-indigo-600 hover:text-indigo-300 transition-colors p-1">
+        <button onClick={() => setDismissed(true)} title={isAr ? 'إخفاء مؤقتاً' : 'Hide for now'} className="text-indigo-600 hover:text-indigo-300 transition-colors p-1">
           <X size={13} />
         </button>
       </div>

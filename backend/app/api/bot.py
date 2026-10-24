@@ -1720,6 +1720,13 @@ async def bot_latest_signals(
     return {**res, "linked": True}
 
 
+@router.get("/user-lang")
+def bot_user_lang(telegram_id: str, _: bool = Depends(verify_bot), db: Session = Depends(get_db)):
+    """(2026-10-24) لغة حساب المستخدم المرتبط — البوت يسألها عند أول تفاعل (ensure_lang) بدل انتظار بث يملأ ذاكرته."""
+    user = _get_linked_user(telegram_id, db)
+    return {"lang": (user.language or "ar")} if user else {}
+
+
 @router.get("/review-status")
 def bot_review_status(
     telegram_id: str,

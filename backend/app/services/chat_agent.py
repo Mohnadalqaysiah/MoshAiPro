@@ -950,8 +950,117 @@ class TradingChatAgent:
 
     # ─── Fallback (no Gemini) ────────────────────────────────────────────────
 
-    def _build_direct_response(self, analysis: dict, symbol: str, timeframe: str, is_chart: bool = False) -> dict:
+    def _build_direct_response_en(self, analysis: dict, symbol: str, timeframe: str, is_chart: bool = False) -> dict:
+        """(2026-10-24، طلب المالك) نفس الرد المباشر بالإنجليزية لمن واجهته إنجليزية — نفس الأرقام والبنية.
+        عوامل التأكيد (confluence.factors) وملخص Gemini يولّدهما المحرك بالعربية فلا يُعرضان هنا (سطر مختلط يبدو معطوباً)."""
+        if not analysis or analysis.get("error") or not analysis.get("current_price"):
+            err_detail = analysis.get("error", "") if analysis else ""
+            return {"action": "text", "message": (
+                f"⚠️ Couldn't fetch {symbol} data right now.\n\n"
+                f"Likely reason: the market is closed or a temporary data-source issue.\n"
+                f"{'Details: ' + err_detail if err_detail else ''}\n\n"
+                f"Try again in a moment, or try another timeframe.").strip()}
+        rec = analysis.get("recommendation", "WAIT")
+        conf = analysis.get("ai_confidence_score", 0)
+        price = analysis.get("current_price", 0)
+        entry = analysis.get("entry_zones", [])
+        sl = analysis.get("stop_loss_zone", 0)
+        tps = analysis.get("take_profit_zones", [])
+        rr = analysis.get("risk_reward_ratio", 0)
+        structure = analysis.get("market_structure", {})
+        pd_z = analysis.get("premium_discount", {})
+        kz = analysis.get("kill_zone", {})
+        ob = analysis.get("order_blocks", {})
+        fvg_d = analysis.get("fvg", {})
+        liq = analysis.get("liquidity", {})
+
+        rec_emoji = {"BUY": "📈", "SELL": "📉", "WAIT": "⏳", "WATCH": "👁️"}.get(rec, "⏳")
+        rec_en = {"BUY": "BUY", "SELL": "SELL", "WAIT": "WAIT", "WATCH": "WATCH"}.get(rec, rec)
+        intro = random.choice({
+            "BUY": [f"{symbol} is leaning bullish 📈", f"Buyers are in control on {symbol} 🟢"],
+            "SELL": [f"{symbol} is leaning bearish 📉", f"Sellers are in control on {symbol} 🔴"],
+        }.get(rec, [f"{symbol} isn't clear yet — I'd wait ⏳", f"No clean setup on {symbol} right now — patience ⏳"]))
+        closed_note = "\n⛔ **Market is closed** — this analysis is for reference only.\n" if not analysis.get("market_open", True) else ""
+
+        def _p(v, decimals=2):
+            if v is None:
+                return "?"
+            if isinstance(v, dict):
+                lo, hi = v.get("low") or v.get("Low"), v.get("high") or v.get("High")
+                if lo is not None and hi is not None:
+                    return f"{float(lo):.{decimals}f} – {float(hi):.{decimals}f}"
+                mid = v.get("mid") or v.get("price")
+                return f"{float(mid):.{decimals}f}" if mid is not None else "?"
+            try:
+                return f"{float(v):.{decimals}f}"
+            except Exception:
+                return str(v)
+
+        lines = [
+            intro, "",
+            f"📊 **{symbol} | {timeframe}**",
+            closed_note,
+            f"💰 Price: **{float(price):.2f}**",
+            f"{rec_emoji} **{rec_en}** | Confidence: **{conf:.1f}%**",
+            f"🏗️ {structure.get('trend', '?')} ({structure.get('structure', '?')})",
+            f"📍 Zone: {pd_z.get('zone', '?')} ({pd_z.get('pct', 0):.1f}%)",
+            f"⏰ {kz.get('active_session', '?')} {'🎯 Optimal Kill Zone' if kz.get('is_optimal_time') else ''}",
+            "",
+        ]
+        bull_obs, bear_obs = ob.get("bullish_obs", []), ob.get("bearish_obs", [])
+        levels = []
+        if bull_obs:
+            levels.append(f"🟢 Support OB: **{_p(bull_obs[0])}**")
+        if bear_obs:
+            levels.append(f"🔴 Resistance OB: **{_p(bear_obs[0])}**")
+        for key, label in (("bullish_fvgs", "Bullish FVG"), ("bearish_fvgs", "Bearish FVG")):
+            arr = fvg_d.get(key, [])
+            if arr and isinstance(arr[0], dict):
+                lo, hi = arr[0].get("low") or arr[0].get("bottom"), arr[0].get("high") or arr[0].get("top")
+                if lo and hi:
+                    levels.append(f"💠 {label}: **{float(lo):.2f} – {float(hi):.2f}**")
+        if liq.get("nearest_ssl"):
+            levels.append(f"🧲 Liquidity below (SSL): **{_p(liq.get('nearest_ssl'))}**")
+        if liq.get("nearest_bsl"):
+            levels.append(f"🧲 Liquidity above (BSL): **{_p(liq.get('nearest_bsl'))}**")
+        if pd_z.get("ote_level"):
+            levels.append(f"📐 OTE (61.8%): **{_p(pd_z.get('ote_level'))}**")
+        if pd_z.get("equilibrium"):
+            levels.append(f"⚖️ Equilibrium: **{_p(pd_z.get('equilibrium'))}**")
+        if levels:
+            lines += ["**Key levels:**", *levels, ""]
+        if rec in ("BUY", "SELL") and entry:
+            lines += [
+                "**Trade levels:**",
+                f"🎯 Entry: **{entry[0]}**",
+                f"🛑 Stop loss: **{sl}**" if sl else "",
+                f"✅ TP1: **{tps[0]}**" if len(tps) > 0 else "",
+                f"✅ TP2: **{tps[1]}**" if len(tps) > 1 else "",
+                f"✅ TP3: **{tps[2]}**" if len(tps) > 2 else "",
+                f"📐 R/R: **1:{rr:.1f}**" if rr else "",
+                "",
+            ]
+        elif rec == "WAIT":
+            trend = (structure.get("trend") or "").upper()
+            watch = ""
+            if bull_obs and trend in ("BULLISH", "UP"):
+                watch = f"Wait for price to reach the OB at **{_p(bull_obs[0])}** before buying"
+            elif bear_obs and trend in ("BEARISH", "DOWN"):
+                watch = f"Wait for price to reach the OB at **{_p(bear_obs[0])}** before selling"
+            elif pd_z.get("equilibrium"):
+                watch = f"Wait for direction to clear around Equilibrium **{_p(pd_z.get('equilibrium'))}**"
+            if watch:
+                lines += ["**What are we waiting for?**", f"⏳ {watch}", ""]
+        lines.append("⚠️ For information only — risk management is your responsibility.")
+        return {"action": "chart" if is_chart else "analyze",
+                "message": "\n".join(l for l in lines if l is not None),
+                "symbol": symbol, "timeframe": timeframe}
+
+    def _build_direct_response(self, analysis: dict, symbol: str, timeframe: str, is_chart: bool = False,
+                               lang: str = "ar") -> dict:
         """بناء رد مباشر بأرقام حقيقية - يعمل حتى بدون Gemini"""
+        if lang == "en":
+            return self._build_direct_response_en(analysis, symbol, timeframe, is_chart)
         if not analysis or analysis.get("error") or not analysis.get("current_price"):
             err_detail = analysis.get("error", "") if analysis else ""
             return {
@@ -1260,6 +1369,13 @@ class TradingChatAgent:
         if not intent["symbol_explicit"] and not intent["is_chart"]:
             platform_msg = self._platform_answer(user_message)
             if platform_msg:
+                # (2026-10-24) أجوبة المنصة مكتوبة بالعربية — للإنجليزية تُترجم بنفس الحقائق (Groq)، وإلا تبقى كما هي
+                if lang == "en" and self.groq_enabled:
+                    tr = await self._call_groq(
+                        [{"role": "user", "content": user_message}],
+                        "Answer the user using ONLY this information, translated to English. Keep every number, "
+                        "price and name exactly:\n" + platform_msg, "en")
+                    platform_msg = tr.strip() if tr else platform_msg
                 history.append({"role": "assistant", "content": platform_msg})
                 return {"action": "text", "message": platform_msg}
 
@@ -1339,7 +1455,7 @@ class TradingChatAgent:
 
         # ── التحليل والإشارة: المحرك المحلي دائماً ──────────────────────────
         # Groq وGemini لا يُستخدمان هنا — الـ format مضمون ومنسق
-        reply = self._build_direct_response(analysis, symbol, timeframe, intent["is_chart"])
+        reply = self._build_direct_response(analysis, symbol, timeframe, intent["is_chart"], lang=lang)
         if analysis: reply["data"] = analysis
         if candles:
             reply["candles"] = candles

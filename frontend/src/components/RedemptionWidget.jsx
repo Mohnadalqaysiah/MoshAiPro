@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useLang } from '../contexts/LangContext'
 import axios from 'axios'
 import { Gift, ChevronDown, ChevronUp, Star, Zap, Calendar, CheckCircle, AlertTriangle } from 'lucide-react'
 
@@ -11,6 +12,7 @@ const TYPE_COLOR = {
 }
 
 export default function RedemptionWidget() {
+  const isAr = (useLang()?.lang || 'ar') === 'ar'
   const [open, setOpen]     = useState(false)
   const [data, setData]     = useState(null)
   const [loading, setLoading] = useState(false)
@@ -34,7 +36,7 @@ export default function RedemptionWidget() {
       setMsg({ type:'ok', text: r.data.message })
       await load()
     } catch (e) {
-      setMsg({ type:'err', text: e.response?.data?.detail || 'خطأ في الاستبدال' })
+      setMsg({ type:'err', text: e.response?.data?.detail || (isAr ? 'خطأ في الاستبدال' : 'Redemption failed') })
     } finally { setRedeeming(null) }
   }
 
@@ -51,14 +53,14 @@ export default function RedemptionWidget() {
             <Gift size={15} className="text-yellow-400"/>
           </div>
           <div className="text-right">
-            <p className="text-sm font-semibold text-white">استبدال النقاط</p>
-            <p className="text-xs text-gray-400">{points > 0 ? `لديك ${points} نقطة` : 'اجمع نقاطاً واستبدلها بمكافآت'}</p>
+            <p className="text-sm font-semibold text-white">{isAr ? 'استبدال النقاط' : 'Redeem points'}</p>
+            <p className="text-xs text-gray-400">{points > 0 ? (isAr ? `لديك ${points} نقطة` : `You have ${points} points`) : (isAr ? 'اجمع نقاطاً واستبدلها بمكافآت' : 'Collect points and redeem them for rewards')}</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
           {points > 0 && (
             <span className="bg-yellow-500/20 text-yellow-400 text-xs font-bold px-2.5 py-1 rounded-full border border-yellow-500/30">
-              {points} نقطة
+              {points} {isAr ? 'نقطة' : 'pts'}
             </span>
           )}
           {open ? <ChevronUp size={16} className="text-gray-400"/> : <ChevronDown size={16} className="text-gray-400"/>}
@@ -71,8 +73,8 @@ export default function RedemptionWidget() {
           {data && (
             <div className="pt-4">
               <div className="flex justify-between items-center mb-1.5">
-                <span className="text-xs text-gray-400">رصيد النقاط</span>
-                <span className="text-sm font-bold text-yellow-400">{points} نقطة</span>
+                <span className="text-xs text-gray-400">{isAr ? 'رصيد النقاط' : 'Points balance'}</span>
+                <span className="text-sm font-bold text-yellow-400">{points} {isAr ? 'نقطة' : 'pts'}</span>
               </div>
               {/* Progress to first redeemable tier */}
               {(() => {
@@ -84,7 +86,7 @@ export default function RedemptionWidget() {
                     <div className="w-full bg-gray-800 rounded-full h-1.5 mb-1">
                       <div className="bg-yellow-500 h-1.5 rounded-full transition-all" style={{width:`${pct}%`}}/>
                     </div>
-                    <p className="text-xs text-gray-500">تحتاج {nextTier.points_needed} نقطة للمستوى التالي</p>
+                    <p className="text-xs text-gray-500">{isAr ? `تحتاج ${nextTier.points_needed} نقطة للمستوى التالي` : `${nextTier.points_needed} points to the next tier`}</p>
                   </div>
                 )
               })()}
@@ -98,7 +100,7 @@ export default function RedemptionWidget() {
           )}
 
           {/* Tiers Grid */}
-          {loading && <p className="text-xs text-gray-500 text-center py-4">جاري التحميل...</p>}
+          {loading && <p className="text-xs text-gray-500 text-center py-4">{isAr ? 'جاري التحميل...' : 'Loading...'}</p>}
           {data && (
             <div className="grid grid-cols-1 gap-2">
               {data.tiers.map(tier => (
@@ -117,7 +119,7 @@ export default function RedemptionWidget() {
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="text-xs font-semibold text-gray-300">
-                      {tier.points} <span className="text-gray-500 font-normal">نقطة</span>
+                      {tier.points} <span className="text-gray-500 font-normal">{isAr ? 'نقطة' : 'pts'}</span>
                     </span>
                     <button
                       disabled={!tier.can_redeem || redeeming === tier.id}
@@ -127,7 +129,7 @@ export default function RedemptionWidget() {
                           ? 'bg-yellow-600 hover:bg-yellow-500 text-white'
                           : 'bg-gray-800 text-gray-400 cursor-not-allowed'
                       }`}>
-                      {redeeming === tier.id ? '...' : tier.can_redeem ? 'استبدل' : `ناقص ${tier.points_needed}`}
+                      {redeeming === tier.id ? '...' : tier.can_redeem ? (isAr ? 'استبدل' : 'Redeem') : (isAr ? `ناقص ${tier.points_needed}` : `${tier.points_needed} short`)}
                     </button>
                   </div>
                 </div>
@@ -136,7 +138,7 @@ export default function RedemptionWidget() {
           )}
 
           <p className="text-xs text-gray-400 text-center pt-1">
-            اجمع نقاطاً بدعوة أصدقاء للمنصة
+            {isAr ? 'اجمع نقاطاً بدعوة أصدقاء للمنصة' : 'Earn points by inviting friends to the platform'}
           </p>
         </div>
       )}
