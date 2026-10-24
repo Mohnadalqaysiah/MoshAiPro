@@ -98,6 +98,8 @@ class Signal(Base):
     exit_executed = Column(DateTime(timezone=True), nullable=True)
     
     # Metadata
+    # (2026-10-24) صفقة مرّت بتخفيف فلتر (services/relax_policy.py) — "SELL_IN_DISCOUNT" أو None. للقياس الأسبوعي وقاعدة الرجوع.
+    relaxed_rule = Column(String(40), nullable=True)
     signal_hash = Column(String, unique=True, index=True)
     notes = Column(String, nullable=True)
     

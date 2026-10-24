@@ -2171,14 +2171,9 @@ class MoshAIEngineV5:
         # Same treatment as HTF above: trading a BUY into a Premium zone (or a
         # SELL into Discount) is a direct hard reject now, not a confidence
         # penalty that a high delta could shrug off.
-        if resolved == "BUY" and zone_bias == "SELL":
-            analysis["zone_conflict_warning"] = "BUY_IN_PREMIUM_ZONE"
-            analysis["recommendation"] = resolved
-            return self._hard_reject(analysis, "ZONE_CONFLICT_BUY_IN_PREMIUM")
-        elif resolved == "SELL" and zone_bias == "BUY":
-            analysis["zone_conflict_warning"] = "SELL_IN_DISCOUNT_ZONE"
-            analysis["recommendation"] = resolved
-            return self._hard_reject(analysis, "ZONE_CONFLICT_SELL_IN_DISCOUNT")
+        _zone_rejected = self._zone_veto(analysis, resolved, zone_bias, symbol, timeframe)
+        if _zone_rejected is not None:
+            return _zone_rejected
 
         # ── 8. Primary OB selection — overlap resolved, never rejected ──────────
         current_p = float(analysis.get("current_price") or 0) or float(confluence.get("entry", 0) or 0)
@@ -2805,7 +2800,9 @@ class MoshAIEngineV5:
         # DISCOUNT = buyers control → only BUY
         if "PREMIUM" in pd_raw and rec == "BUY":
             return _block("PREMIUM_ZONE_FORBIDS_BUY")
-        if "DISCOUNT" in pd_raw and rec == "SELL":
+        # (2026-10-24) الموسوم بالتخفيف الجزئي (relax_policy.py) فقط يتجاوز فحص المنطقة هنا وبـRule 6/7
+        relaxed_sid = analysis.get("relaxed_rule") == "SELL_IN_DISCOUNT"
+        if "DISCOUNT" in pd_raw and rec == "SELL" and not relaxed_sid:
             return _block("DISCOUNT_ZONE_FORBIDS_SELL")
 
         # ── Rule 3: Entry / TP / SL Structural Validity ───────────────────────
@@ -2897,7 +2894,7 @@ class MoshAIEngineV5:
 
             if rec == "BUY" and "PREMIUM" in pd_raw:
                 return _block("XAUUSD_BUY_IN_PREMIUM_ZONE")
-            if rec == "SELL" and "DISCOUNT" in pd_raw:
+            if rec == "SELL" and "DISCOUNT" in pd_raw and not relaxed_sid:
                 return _block("XAUUSD_SELL_IN_DISCOUNT_ZONE")
 
             min_xau_rr = 1.3
@@ -2920,7 +2917,7 @@ class MoshAIEngineV5:
             # Zone vs direction coherence (final cross-check)
             if rec == "BUY" and "PREMIUM" in pd_raw:
                 return _block("FINAL_BUY_IN_PREMIUM_ZONE")
-            if rec == "SELL" and "DISCOUNT" in pd_raw:
+            if rec == "SELL" and "DISCOUNT" in pd_raw and not relaxed_sid:
                 return _block("FINAL_SELL_IN_DISCOUNT_ZONE")
 
         logger.info(
@@ -3727,6 +3724,26 @@ class MoshAIEngineV5:
         new_tp1     = float(levels.get("tp1") or tp1)
         new_rr      = round(abs(new_tp1 - entry) / new_sl_dist, 2) if new_sl_dist > 0 else 0
         return analysis, levels, new_rr
+
+    def _zone_veto(self, analysis: dict, resolved: str, zone_bias, symbol: str, timeframe: str):
+        """الخطوة 7 بـ_decision_finalizer (فُصلت 2026-10-24 لتُختبر وحدها، بلا تغيير سلوك): شراء في علاوة أو بيع في خصم
+        ← رفض صريح. يُرجع التحليل المرفوض، أو None إن لا رفض.
+        (2026-10-24، قرار المالك) بيع في خصم على 15m/1h لا يُرفض (relax_policy.py): 121 فرصة ظل +0.53R، و4h خاسر.
+        الموسوم يتجاوز فحوص المنطقة اللاحقة الثلاثة (Rule 2/6/7 بـ_output_safety_gate) وحدها؛ بقية فحوص المحرك نافذة."""
+        if resolved == "BUY" and zone_bias == "SELL":
+            analysis["zone_conflict_warning"] = "BUY_IN_PREMIUM_ZONE"
+            analysis["recommendation"] = resolved
+            return self._hard_reject(analysis, "ZONE_CONFLICT_BUY_IN_PREMIUM")
+        if resolved == "SELL" and zone_bias == "BUY":
+            analysis["zone_conflict_warning"] = "SELL_IN_DISCOUNT_ZONE"   # يبقى: عقوبة ثقة −8 (CounterZone) كما كانت
+            from app.services.relax_policy import allows_sell_in_discount, RELAX_TAG
+            if allows_sell_in_discount(timeframe):
+                analysis["relaxed_rule"] = RELAX_TAG
+                logger.info(f"RELAXED SELL_IN_DISCOUNT → يكمل الفحوص [{symbol}/{timeframe}] (relax_policy.py)")
+                return None
+            analysis["recommendation"] = resolved
+            return self._hard_reject(analysis, "ZONE_CONFLICT_SELL_IN_DISCOUNT")
+        return None
 
     def _hard_reject(self, analysis: dict, reason: str) -> dict:
         rec = analysis.get("recommendation", "?")

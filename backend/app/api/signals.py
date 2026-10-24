@@ -20,6 +20,7 @@ from app.services.auth_service import get_current_user, check_subscription, dedu
 from app.api.bot import _check_loss_streak_breaker, _has_active_signal, _extract_str
 from app.services.decision_grouping import verified_unique_decisions, decision_key
 from app.services.quality_report import OUTCOME_FIX_DATE, _r_multiple
+from app.services.relax_policy import should_drop as should_drop_relaxed
 
 
 def _r_stats(decisions: list, raw_rows: list) -> dict:
@@ -231,8 +232,12 @@ async def analyze_market(
                         f"⛔ Signal save blocked by loss-streak breaker: "
                         f"{symbol}/{timeframe} {rec} — {loss_streak_reason}"
                     )
+                elif not existing and not active_dup and should_drop_relaxed(db, analysis, symbol):
+                    # (2026-10-24) صفقة مخفَّفة وللمنصة صفقة نشطة بعكسها — يرى المستخدم تحليله لكنها لا تُحفظ ولا تُبث
+                    logger.info(f"🔕 RELAXED_CONFLICT {symbol}/{timeframe} {rec} — صفقة معاكسة نشطة، لا حفظ")
                 elif not existing and not active_dup:
                     new_sig = Signal(
+                        relaxed_rule      = analysis.get("relaxed_rule"),
                         user_id           = user.id,
                         market            = symbol,
                         timeframe         = timeframe,

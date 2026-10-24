@@ -78,6 +78,24 @@ def test_reports_render_without_errors():
     assert "لا صفقات بهدف ≥ 8R بعد 14/10" in out            # الوحيدة ≥8R قبل 14/10
 
 
+def test_rollback_rule():
+    assert D.rollback_verdict([("W44", 3.0), ("W45", -1.0), ("W46", -0.5)], 20, 0.1).startswith("🔴")   # أسبوعان متتاليان
+    assert D.rollback_verdict([("W44", -1.0), ("W45", 2.0), ("W46", -0.5)], 20, 0.1).startswith("⏳")   # غير متتاليين
+    assert D.rollback_verdict([("W44", 1.0)], 35, -0.05).startswith("🔴")                              # متوسط سالب بعد 30
+    assert D.rollback_verdict([("W44", 1.0)], 35, 0.2).startswith("🟢")
+
+
+def test_live_report_excludes_current_week_from_rule():
+    now = T0 + timedelta(days=14)
+    decs = [{"created_at": T0, "r": 1.0}, {"created_at": T0 + timedelta(days=7), "r": -1.0},
+            {"created_at": now, "r": -1.0}]                       # الأسبوع الجاري سالب لكنه غير مكتمل
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        D.report_live(decs, now)
+    out = buf.getvalue()
+    assert "(جارٍ)" in out and "⏳ استمر" in out
+
+
 if __name__ == "__main__":
     n = 0
     for name, fn in list(globals().items()):

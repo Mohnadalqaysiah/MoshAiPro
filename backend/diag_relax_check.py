@@ -153,6 +153,38 @@ def report_tp2(decided):
         print(f"\n  ⚠️ {len(after)} صفقة فقط بعد 14/10 — ما زالت تصدر لكن بقلة")
 
 
+def rollback_verdict(weekly, n, avg):
+    """قاعدة الرجوع المسجّلة 24/10 قبل أي نتيجة حية: أسبوعان متتاليان خاسران (مكتملان)، أو متوسط < 0R بعد 30 صفقة."""
+    losing_run = 0
+    for _, tot in weekly:
+        losing_run = losing_run + 1 if tot < 0 else 0
+        if losing_run >= 2:
+            return "🔴 أعِد الفلتر — أسبوعان متتاليان خاسران"
+    if n >= 30 and avg < 0:
+        return f"🔴 أعِد الفلتر — متوسط {avg:+.2f}R بعد {n} صفقة"
+    if n < 30:
+        return f"⏳ استمر — {n}/30 صفقة، لا أسبوعين خاسرين متتاليين"
+    return f"🟢 استمر — {n} صفقة، متوسط {avg:+.2f}R"
+
+
+def report_live(decs, now):
+    """الصفقات الحية التي مرّت بالتخفيف (signals.relaxed_rule) — أسبوعياً، مع قاعدة الرجوع."""
+    print("═" * 92 + "\nالصفقات الحية المخفَّفة (بيع في خصم، 15m/1h) منذ 24/10 — قاعدة الرجوع\n" + "═" * 92)
+    if not decs:
+        print("  لا صفقات مخفَّفة محسومة بعد")
+        return
+    rs = [d["r"] for d in decs]
+    print(_fmt("الإجمالي", stats(rs), w=16))
+    cur = _week(now)
+    by_week = breakdown([type("D", (), {"r_multiple": d["r"], "created_at": d["created_at"]}) for d in decs],
+                        lambda x: _week(x.created_at))
+    for k, st_ in sorted(by_week):
+        print(_fmt(k + (" (جارٍ)" if k == cur else ""), st_, w=16))
+    done = [(k, st_["tot"]) for k, st_ in sorted(by_week) if k != cur]
+    st_all = stats(rs)
+    print(f"\n  {rollback_verdict(done, st_all['n'], st_all['avg'])}")
+
+
 def main():
     from app.database import SessionLocal
     from app.models.market_config import MarketConfig
@@ -182,6 +214,10 @@ def main():
 
     decs = [d for d in closed_decisions(db, since) if d["status"] != "BREAKEVEN"]
     report_tp2(decs)
+    print()
+    from app.services.relax_policy import RELAX_START, RELAX_TAG
+    relaxed_ids = {i for (i,) in db.query(Signal.id).filter(Signal.relaxed_rule == RELAX_TAG).all()}
+    report_live([d for d in decs if d["id"] in relaxed_ids and d["created_at"] >= RELAX_START], now)
     print("\n⚠️ للقراءة فقط — لا يغيّر فلتراً ولا إعداداً. القرار للمالك.")
     db.close()
 

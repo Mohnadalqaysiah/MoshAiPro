@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     # HTF_DIRECTION_CONFLICT تبقى نافذة. أعِده true للرجوع الفوري لسلوك
     # 18/08 بدون إعادة بناء (إعادة تشغيل الحاوية تكفي).
     XAUUSD_REQUIRE_HTF_ALIGNMENT: bool = False
+
+    # (2026-10-24، قرار المالك) تخفيف جزئي لفلتر "بيع في منطقة خصم" على هذه الأطر فقط (services/relax_policy.py).
+    # الرجوع الفوري بلا إعادة بناء: اتركه فارغاً بـ.env.prod (RELAX_SELL_IN_DISCOUNT_TFS=) ثم أعد إنشاء الحاوية.
+    RELAX_SELL_IN_DISCOUNT_TFS: str = "15m,1h"
     
     # ----- Security -----
     SECRET_KEY: str

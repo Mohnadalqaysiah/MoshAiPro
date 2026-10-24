@@ -11,6 +11,7 @@ from loguru import logger
 
 from app.database import get_db
 from app.services.telegram_reach import reachable as _reachable
+from app.services.relax_policy import should_drop as should_drop_relaxed
 from app.models.user import User, PlanType, UserRole
 from app.models.signal import Signal, SignalStatus, SignalType
 from app.models.site_settings import SiteSettings
@@ -274,8 +275,12 @@ async def bot_analyze(
                                           tp2=tp2, confidence=conf, rr=rr, expires_at=expires_at,
                                           user_id=signal_user_id)
                     market_fingerprint.schedule(analysis, symbol, timeframe, rec, shadow_id=_shid)
+                elif should_drop_relaxed(db, analysis, symbol):
+                    # (2026-10-24) صفقة مخفَّفة وللمنصة صفقة نشطة بعكسها على نفس الرمز — لا إشارتان متضادتان
+                    logger.info(f"🔕 RELAXED_CONFLICT {symbol}/{timeframe} {rec} — صفقة معاكسة نشطة، لا حفظ")
                 elif not existing:
                     new_signal = Signal(
+                        relaxed_rule       = analysis.get("relaxed_rule"),
                         user_id            = signal_user_id,
                         market             = symbol,
                         timeframe          = timeframe,
@@ -1803,6 +1808,7 @@ def bot_save_alert_signal(
     wyckoff_phase: Optional[str] = None,      # (2026-10-16) سياق ICT — كان يُحفظ بمسار الماسح فقط
     premium_discount: Optional[str] = None,
     killzone: Optional[str] = None,
+    relaxed_rule: Optional[str] = None,       # (2026-10-24) من analysis["relaxed_rule"] — relax_policy.py
     _: bool = Depends(verify_bot),
     db: Session = Depends(get_db),
 ):
@@ -1831,6 +1837,10 @@ def bot_save_alert_signal(
 
     if _user_has_active_signal(db, user.id, symbol, timeframe):
         return {"saved": False, "reason": "duplicate active position, waiting for resolution"}
+
+    # (2026-10-24) صفقة مخفَّفة تتعارض مع صفقة منصة نشطة بعكسها — لا تنبيه متضاد
+    if should_drop_relaxed(db, {"relaxed_rule": relaxed_rule, "recommendation": signal_type}, symbol):
+        return {"saved": False, "reason": "relaxed_conflict"}
 
     if _user_already_has_trade(db, user, symbol, ST(signal_type), entry, sl, tp1):
         return {"saved": False, "reason": "same open trade already delivered to this user"}
@@ -1862,6 +1872,7 @@ def bot_save_alert_signal(
         return {"saved": False, "reason": "duplicate", "signal_id": existing.id}
 
     sig = Signal(
+        relaxed_rule      = relaxed_rule if relaxed_rule == "SELL_IN_DISCOUNT" else None,
         user_id           = user.id,
         market            = symbol,
         timeframe         = timeframe,
