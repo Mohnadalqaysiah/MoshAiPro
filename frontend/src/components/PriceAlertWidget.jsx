@@ -3,6 +3,7 @@
  * إنشاء تنبيه عند وصول السعر لمستوى معين، وإرسال إشعار عبر تلغرام
  */
 import { useState, useEffect } from 'react'
+import { useLang } from '../contexts/LangContext'
 import axios from 'axios'
 import { Bell, BellOff, Plus, Trash2, ChevronRight, TrendingUp, TrendingDown, CheckCircle } from 'lucide-react'
 
@@ -18,8 +19,14 @@ const SYMBOL_LABELS = {
   EURUSD: 'EUR/USD', GBPUSD: 'GBP/USD', USDJPY: 'USD/JPY', USDCHF: 'USD/CHF',
   NAS100: '📈 ناسداك', US30: '📈 داو', USOIL: '🛢 نفط',
 }
+const SYMBOL_LABELS_EN = {
+  XAUUSD: '🥇 Gold', XAGUSD: '🥈 Silver', BTCUSD: '₿ Bitcoin', ETHUSD: 'Ξ Ethereum',
+  EURUSD: 'EUR/USD', GBPUSD: 'GBP/USD', USDJPY: 'USD/JPY', USDCHF: 'USD/CHF',
+  NAS100: '📈 Nasdaq', US30: '📈 Dow', USOIL: '🛢 Oil',
+}
 
 export default function PriceAlertWidget() {
+  const isAr = (useLang()?.lang || 'ar') === 'ar'
   const [alerts,   setAlerts]   = useState([])
   const [loading,  setLoading]  = useState(true)
   const [expanded, setExpanded] = useState(false)
@@ -57,7 +64,7 @@ export default function PriceAlertWidget() {
       setForm({ symbol: 'XAUUSD', target_price: '', direction: 'above', note: '' })
       await load()
     } catch (err) {
-      setError(err.response?.data?.detail || 'حدث خطأ')
+      setError(err.response?.data?.detail || (isAr ? 'حدث خطأ' : 'Something went wrong'))
     } finally {
       setSaving(false)
     }
@@ -90,13 +97,13 @@ export default function PriceAlertWidget() {
             <Bell size={16} className="text-amber-400" />
           </div>
           <div>
-            <h3 className="text-white font-semibold text-sm">تنبيهات السعر</h3>
-            <p className="text-amber-300/60 text-xs mt-0.5">إشعار فوري عند وصول السعر</p>
+            <h3 className="text-white font-semibold text-sm">{isAr ? 'تنبيهات السعر' : 'Price alerts'}</h3>
+            <p className="text-amber-300/60 text-xs mt-0.5">{isAr ? 'إشعار فوري عند وصول السعر' : 'Instant notice when price is reached'}</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
           <span className="text-sm font-bold text-white">{active.length}</span>
-          <span className="text-xs text-gray-500">نشط</span>
+          <span className="text-xs text-gray-500">{isAr ? 'نشط' : 'active'}</span>
           <ChevronRight
             size={16}
             className={`text-gray-500 transition-transform duration-200 ${expanded ? 'rotate-90' : '-rotate-90'}`}
@@ -118,9 +125,9 @@ export default function PriceAlertWidget() {
                       ? <TrendingUp size={14} className="text-green-400" />
                       : <TrendingDown size={14} className="text-red-400" />}
                     <div>
-                      <span className="text-white text-xs font-semibold">{SYMBOL_LABELS[a.symbol] || a.symbol}</span>
+                      <span className="text-white text-xs font-semibold">{(isAr ? SYMBOL_LABELS : SYMBOL_LABELS_EN)[a.symbol] || a.symbol}</span>
                       <span className="text-gray-400 text-xs mx-2">
-                        {a.direction === 'above' ? 'فوق' : 'تحت'} {a.target_price.toLocaleString()}
+                        {a.direction === 'above' ? (isAr ? 'فوق' : 'above') : (isAr ? 'تحت' : 'below')} {a.target_price.toLocaleString()}
                       </span>
                       {a.note && <span className="text-gray-500 text-xs">— {a.note}</span>}
                     </div>
@@ -137,7 +144,7 @@ export default function PriceAlertWidget() {
           )}
 
           {active.length === 0 && !showForm && (
-            <p className="text-center text-gray-500 text-sm py-2">لا توجد تنبيهات نشطة</p>
+            <p className="text-center text-gray-500 text-sm py-2">{isAr ? 'لا توجد تنبيهات نشطة' : 'No active alerts'}</p>
           )}
 
           {/* نموذج الإضافة */}
@@ -145,46 +152,46 @@ export default function PriceAlertWidget() {
             <form onSubmit={submit} className="space-y-3 bg-gray-800/40 rounded-xl p-3 border border-gray-700/40">
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">الرمز</label>
+                  <label className="text-xs text-gray-400 mb-1 block">{isAr ? 'الرمز' : 'Symbol'}</label>
                   <select
                     value={form.symbol}
                     onChange={e => setForm(f => ({ ...f, symbol: e.target.value }))}
                     className="w-full bg-gray-700/60 border border-gray-600/50 rounded-lg px-2 py-2 text-white text-xs"
                   >
                     {SYMBOLS.map(s => (
-                      <option key={s} value={s}>{SYMBOL_LABELS[s] || s}</option>
+                      <option key={s} value={s}>{(isAr ? SYMBOL_LABELS : SYMBOL_LABELS_EN)[s] || s}</option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1 block">الاتجاه</label>
+                  <label className="text-xs text-gray-400 mb-1 block">{isAr ? 'الاتجاه' : 'Direction'}</label>
                   <select
                     value={form.direction}
                     onChange={e => setForm(f => ({ ...f, direction: e.target.value }))}
                     className="w-full bg-gray-700/60 border border-gray-600/50 rounded-lg px-2 py-2 text-white text-xs"
                   >
-                    <option value="above">📈 يرتفع فوق</option>
-                    <option value="below">📉 ينخفض تحت</option>
+                    <option value="above">{isAr ? '📈 يرتفع فوق' : '📈 Rises above'}</option>
+                    <option value="below">{isAr ? '📉 ينخفض تحت' : '📉 Falls below'}</option>
                   </select>
                 </div>
               </div>
               <div>
-                <label className="text-xs text-gray-400 mb-1 block">السعر المستهدف</label>
+                <label className="text-xs text-gray-400 mb-1 block">{isAr ? 'السعر المستهدف' : 'Target price'}</label>
                 <input
                   type="number"
                   step="any"
                   required
-                  placeholder="مثال: 3400"
+                  placeholder={isAr ? 'مثال: 3400' : 'e.g. 3400'}
                   value={form.target_price}
                   onChange={e => setForm(f => ({ ...f, target_price: e.target.value }))}
                   className="w-full bg-gray-700/60 border border-gray-600/50 rounded-lg px-3 py-2 text-white text-xs placeholder-gray-500"
                 />
               </div>
               <div>
-                <label className="text-xs text-gray-400 mb-1 block">ملاحظة (اختياري)</label>
+                <label className="text-xs text-gray-400 mb-1 block">{isAr ? 'ملاحظة (اختياري)' : 'Note (optional)'}</label>
                 <input
                   type="text"
-                  placeholder="مثال: مستوى مقاومة مهم"
+                  placeholder={isAr ? 'مثال: مستوى مقاومة مهم' : 'e.g. key resistance level'}
                   value={form.note}
                   onChange={e => setForm(f => ({ ...f, note: e.target.value }))}
                   className="w-full bg-gray-700/60 border border-gray-600/50 rounded-lg px-3 py-2 text-white text-xs placeholder-gray-500"
@@ -199,14 +206,14 @@ export default function PriceAlertWidget() {
                   disabled={saving}
                   className="flex-1 py-2 rounded-lg bg-amber-600/30 hover:bg-amber-600/50 text-amber-300 border border-amber-600/30 text-xs font-semibold transition-all"
                 >
-                  {saving ? '...' : 'حفظ التنبيه'}
+                  {saving ? '...' : (isAr ? 'حفظ التنبيه' : 'Save alert')}
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowForm(false)}
                   className="px-4 py-2 rounded-lg bg-gray-700/40 text-gray-400 text-xs border border-gray-600/30"
                 >
-                  إلغاء
+                  {isAr ? 'إلغاء' : 'Cancel'}
                 </button>
               </div>
             </form>
@@ -215,18 +222,18 @@ export default function PriceAlertWidget() {
               onClick={() => setShowForm(true)}
               className="w-full py-2.5 rounded-xl border border-dashed border-amber-600/30 text-amber-400/70 hover:text-amber-300 hover:border-amber-500/50 text-xs flex items-center justify-center gap-2 transition-all"
             >
-              <Plus size={13} /> إضافة تنبيه جديد
+              <Plus size={13} /> {isAr ? 'إضافة تنبيه جديد' : 'Add new alert'}
             </button>
           )}
 
           {/* آخر التنبيهات المُفعَّلة */}
           {triggered.length > 0 && (
             <div className="space-y-1.5">
-              <p className="text-xs text-gray-500">آخر التنبيهات المُفعَّلة</p>
+              <p className="text-xs text-gray-500">{isAr ? 'آخر التنبيهات المُفعَّلة' : 'Recently triggered alerts'}</p>
               {triggered.slice(0, 3).map(a => (
                 <div key={a.id} className="flex items-center gap-2 text-xs text-gray-500 bg-gray-800/30 rounded-lg px-3 py-2">
                   <CheckCircle size={12} className="text-green-500/70 flex-shrink-0" />
-                  <span>{SYMBOL_LABELS[a.symbol] || a.symbol}</span>
+                  <span>{(isAr ? SYMBOL_LABELS : SYMBOL_LABELS_EN)[a.symbol] || a.symbol}</span>
                   <span>@</span>
                   <span>{a.target_price.toLocaleString()}</span>
                 </div>

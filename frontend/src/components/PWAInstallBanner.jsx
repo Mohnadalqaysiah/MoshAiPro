@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
+import { useLang } from '../contexts/LangContext'
 import { Download, Share, X, Plus, Square } from 'lucide-react'
 
 export default function PWAInstallBanner() {
+  const isAr = (useLang()?.lang || 'ar') === 'ar'
   const [show, setShow]     = useState(false)
   const [platform, setPlatform] = useState(null) // 'android' | 'ios'
   const [deferredPrompt, setDeferredPrompt] = useState(null)
@@ -56,12 +58,12 @@ export default function PWAInstallBanner() {
   // ── iOS step-by-step guide ──────────────────────────────────────────────
   if (platform === 'ios') {
     const steps = [
-      { icon: <Share size={20} className="text-blue-400" />, text: 'اضغط زر المشاركة في أسفل Safari' },
-      { icon: <Plus size={20} className="text-green-400" />, text: 'اختر "إضافة إلى الشاشة الرئيسية"' },
-      { icon: <Square size={20} className="text-purple-400" />, text: 'اضغط "إضافة" لتثبيت التطبيق' },
+      { icon: <Share size={20} className="text-blue-400" />, text: isAr ? 'اضغط زر المشاركة في أسفل Safari' : 'Tap the Share button at the bottom of Safari' },
+      { icon: <Plus size={20} className="text-green-400" />, text: isAr ? 'اختر "إضافة إلى الشاشة الرئيسية"' : 'Choose "Add to Home Screen"' },
+      { icon: <Square size={20} className="text-purple-400" />, text: isAr ? 'اضغط "إضافة" لتثبيت التطبيق' : 'Tap "Add" to install the app' },
     ]
     return (
-      <div className="fixed bottom-0 inset-x-0 z-50 p-3 pb-safe" dir="rtl">
+      <div className="fixed bottom-0 inset-x-0 z-50 p-3 pb-safe" dir={isAr ? 'rtl' : 'ltr'}>
         <div className="bg-gray-900 border border-indigo-500/40 rounded-2xl shadow-2xl overflow-hidden"
           style={{ boxShadow: '0 -4px 40px rgba(99,102,241,0.15)' }}>
           {/* Header */}
@@ -71,8 +73,8 @@ export default function PWAInstallBanner() {
                 <Download size={16} className="text-blue-400" />
               </div>
               <div>
-                <p className="text-white font-bold text-sm">ثبّت التطبيق على iPhone</p>
-                <p className="text-gray-400 text-xs">استمتع بتجربة تطبيق أصلي — مجاناً</p>
+                <p className="text-white font-bold text-sm">{isAr ? 'ثبّت التطبيق على iPhone' : 'Install the app on iPhone'}</p>
+                <p className="text-gray-400 text-xs">{isAr ? 'استمتع بتجربة تطبيق أصلي — مجاناً' : 'Enjoy a native app experience — free'}</p>
               </div>
             </div>
             <button onClick={dismiss} className="text-gray-500 hover:text-white p-1">
@@ -106,7 +108,7 @@ export default function PWAInstallBanner() {
                 onClick={() => setStep(s => s - 1)}
                 className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-xl text-sm"
               >
-                السابق
+                {isAr ? 'السابق' : 'Back'}
               </button>
             )}
             {step < steps.length - 1 ? (
@@ -114,14 +116,14 @@ export default function PWAInstallBanner() {
                 onClick={() => setStep(s => s + 1)}
                 className="flex-1 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-semibold"
               >
-                التالي
+                {isAr ? 'التالي' : 'Next'}
               </button>
             ) : (
               <button
                 onClick={dismiss}
                 className="flex-1 py-2 bg-green-600 hover:bg-green-500 text-white rounded-xl text-sm font-semibold"
               >
-                تم التثبيت ✓
+                {isAr ? 'تم التثبيت ✓' : 'Installed ✓'}
               </button>
             )}
           </div>
@@ -132,21 +134,21 @@ export default function PWAInstallBanner() {
 
   // ── Android / Chrome one-tap install ───────────────────────────────────
   return (
-    <div className="fixed bottom-0 inset-x-0 z-50 p-3 pb-safe" dir="rtl">
+    <div className="fixed bottom-0 inset-x-0 z-50 p-3 pb-safe" dir={isAr ? 'rtl' : 'ltr'}>
       <div className="bg-gray-900 border border-blue-500/40 rounded-2xl shadow-2xl flex items-center gap-3 px-4 py-3"
         style={{ boxShadow: '0 -4px 40px rgba(59,130,246,0.15)' }}>
         <div className="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center flex-shrink-0">
           <Download size={18} className="text-blue-400" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-white font-bold text-sm">ثبّت التطبيق</p>
-          <p className="text-gray-400 text-xs truncate">استخدمه بدون متصفح — يعمل أوفلاين</p>
+          <p className="text-white font-bold text-sm">{isAr ? 'ثبّت التطبيق' : 'Install the app'}</p>
+          <p className="text-gray-400 text-xs truncate">{isAr ? 'استخدمه بدون متصفح — يعمل أوفلاين' : 'Use it without a browser — works offline'}</p>
         </div>
         <button
           onClick={installAndroid}
           className="flex-shrink-0 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all"
         >
-          تثبيت
+          {isAr ? 'تثبيت' : 'Install'}
         </button>
         <button onClick={dismiss} className="text-gray-500 hover:text-white p-1 flex-shrink-0">
           <X size={16} />

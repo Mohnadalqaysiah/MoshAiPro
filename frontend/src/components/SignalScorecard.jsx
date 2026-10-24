@@ -3,6 +3,7 @@
  * نسبة الفوز لكل رمز + إجمالي المنصة
  */
 import { useState, useEffect } from 'react'
+import { useLang } from '../contexts/LangContext'
 import axios from 'axios'
 import { BarChart2, ChevronRight, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 
@@ -24,6 +25,7 @@ function WinBar({ pct }) {
 }
 
 export default function SignalScorecard() {
+  const isAr = (useLang()?.lang || 'ar') === 'ar'
   const [data,     setData]     = useState(null)
   const [loading,  setLoading]  = useState(true)
   const [expanded, setExpanded] = useState(false)
@@ -58,9 +60,9 @@ export default function SignalScorecard() {
             <BarChart2 size={16} className="text-blue-400" />
           </div>
           <div>
-            <h3 className="text-white font-semibold text-sm">أداء الإشارات</h3>
+            <h3 className="text-white font-semibold text-sm">{isAr ? 'أداء الإشارات' : 'Signal performance'}</h3>
             <p className="text-blue-300/60 text-xs mt-0.5">
-              {overall.total || 0} إشارة · {overall.wins || 0} فوز · {overall.losses || 0} خسارة
+              {isAr ? `${overall.total || 0} إشارة · ${overall.wins || 0} فوز · ${overall.losses || 0} خسارة` : `${overall.total || 0} signals · ${overall.wins || 0} wins · ${overall.losses || 0} losses`}
             </p>
           </div>
         </div>
@@ -69,7 +71,7 @@ export default function SignalScorecard() {
             <p className={`text-xl font-bold leading-none ${overallColor}`}>
               {wr != null ? `${wr}%` : '—'}
             </p>
-            <p className="text-xs text-gray-500 mt-0.5">نسبة الفوز</p>
+            <p className="text-xs text-gray-500 mt-0.5">{isAr ? 'نسبة الفوز' : 'Win rate'}</p>
           </div>
           <ChevronRight
             size={16}
@@ -92,9 +94,9 @@ export default function SignalScorecard() {
           {/* بطاقات الإحصاء العامة */}
           <div className="grid grid-cols-3 gap-3">
             {[
-              { label: 'إجمالي',  value: overall.total   || 0, color: 'text-white' },
-              { label: 'فوز',     value: overall.wins    || 0, color: 'text-green-400' },
-              { label: 'خسارة',   value: overall.losses  || 0, color: 'text-red-400' },
+              { label: isAr ? 'إجمالي' : 'Total',  value: overall.total   || 0, color: 'text-white' },
+              { label: isAr ? 'فوز' : 'Wins',     value: overall.wins    || 0, color: 'text-green-400' },
+              { label: isAr ? 'خسارة' : 'Losses',   value: overall.losses  || 0, color: 'text-red-400' },
             ].map((s, i) => (
               <div key={i} className="bg-gray-800/50 rounded-xl p-3 text-center border border-gray-700/40">
                 <p className={`text-lg font-bold leading-none ${s.color}`}>{s.value}</p>
@@ -106,13 +108,13 @@ export default function SignalScorecard() {
           {/* جدول الأداء لكل رمز */}
           {scorecard.length > 0 ? (
             <div className="space-y-2">
-              <p className="text-xs text-gray-500 mb-2">أداء كل رمز</p>
+              <p className="text-xs text-gray-500 mb-2">{isAr ? 'أداء كل رمز' : 'Per symbol'}</p>
               {scorecard.map((row) => (
                 <div key={row.market} className="flex items-center gap-3 bg-gray-800/40 rounded-xl px-3 py-2.5 border border-gray-700/30">
                   <span className="text-white text-xs font-mono font-semibold w-16">{row.market}</span>
                   {row.win_rate != null
                     ? <WinBar pct={row.win_rate} />
-                    : <span className="text-xs text-gray-400 flex-1">لا توجد نتائج بعد</span>}
+                    : <span className="text-xs text-gray-400 flex-1">{isAr ? 'لا توجد نتائج بعد' : 'No results yet'}</span>}
                   <div className="flex items-center gap-1 text-xs w-16 justify-end">
                     <span className="text-green-400">{row.wins}W</span>
                     <span className="text-gray-400">/</span>
@@ -122,7 +124,7 @@ export default function SignalScorecard() {
               ))}
             </div>
           ) : (
-            <p className="text-center text-gray-500 text-sm py-2">لا توجد إشارات مكتملة بعد</p>
+            <p className="text-center text-gray-500 text-sm py-2">{isAr ? 'لا توجد إشارات مكتملة بعد' : 'No completed signals yet'}</p>
           )}
 
           <p className="text-center text-gray-400 text-xs">

@@ -189,7 +189,7 @@ export default function Dashboard() {
         setLimitReached(true)
         setError(e.response.data.detail)
       } else {
-        setError(`فشل تحليل ${symbol}: ${e.response?.data?.detail || e.message}`)
+        setError(isAr ? `فشل تحليل ${symbol}: ${e.response?.data?.detail || e.message}` : `Analysis of ${symbol} failed: ${e.response?.data?.detail || e.message}`)
       }
     } finally {
       setAnalyzing(null)
@@ -238,7 +238,7 @@ export default function Dashboard() {
   }
 
   const unlinkTelegram = async () => {
-    if (!window.confirm('متأكد إنك بدك تفك ربط Telegram؟ رح توقف تنبيهات وإشارات البوت لحد ما تربط من جديد.')) return
+    if (!window.confirm(isAr ? 'متأكد إنك بدك تفك ربط Telegram؟ رح توقف تنبيهات وإشارات البوت لحد ما تربط من جديد.' : 'Unlink Telegram? Bot alerts and signals will stop until you link again.')) return
     setUnlinking(true)
     try {
       await axios.post(`${API}/api/v1/auth/unlink-telegram`)
@@ -285,7 +285,7 @@ export default function Dashboard() {
 
     const recColor = rec === 'BUY' ? 'text-green-400' : rec === 'SELL' ? 'text-red-400' : 'text-yellow-400'
     const recBg    = rec === 'BUY' ? 'bg-green-500/10 border-green-600/40' : rec === 'SELL' ? 'bg-red-500/10 border-red-600/40' : 'bg-yellow-500/10 border-yellow-600/40'
-    const recLabel = rec === 'BUY' ? '🟢 شراء' : rec === 'SELL' ? '🔴 بيع' : '👁 مراقبة'
+    const recLabel = rec === 'BUY' ? (isAr ? '🟢 شراء' : '🟢 BUY') : rec === 'SELL' ? (isAr ? '🔴 بيع' : '🔴 SELL') : (isAr ? '👁 مراقبة' : '👁 WATCH')
 
     // ── Position Size Calculator logic ──────────────────────────────────
     const getPipValue = (s) => {
@@ -360,7 +360,7 @@ export default function Dashboard() {
           <div className="px-5 py-4 space-y-4">
             {/* Confidence */}
             <div className="flex items-center justify-between">
-              <span className="text-gray-400 text-sm">نسبة الثقة</span>
+              <span className="text-gray-400 text-sm">{isAr ? 'نسبة الثقة' : 'Confidence'}</span>
               <div className="flex items-center gap-2">
                 <div className="w-24 h-2 bg-gray-700 rounded-full overflow-hidden">
                   <div
@@ -374,7 +374,7 @@ export default function Dashboard() {
 
             {result.expires_at && (rec === 'BUY' || rec === 'SELL') && (
               <div className="flex items-center justify-between text-sm -mt-2">
-                <span className="text-gray-400">صلاحية الإشارة</span>
+                <span className="text-gray-400">{isAr ? 'صلاحية الإشارة' : 'Valid for'}</span>
                 <ExpiryCountdown expiresAt={result.expires_at} className="font-semibold" />
               </div>
             )}
@@ -382,11 +382,11 @@ export default function Dashboard() {
             {/* Levels grid */}
             <div className="grid grid-cols-2 gap-2">
               {[
-                { label: 'السعر الحالي', val: fmt(price, 4), color: 'text-blue-300' },
-                { label: 'سعر الدخول',  val: fmt(entry, 5), color: 'text-white' },
-                { label: 'وقف الخسارة', val: fmt(sl, 5),    color: 'text-red-400' },
-                { label: 'الهدف الأول', val: fmt(tp1, 5),   color: 'text-green-400' },
-                { label: 'الهدف الثاني',val: fmt(tp2, 5),   color: 'text-green-300' },
+                { label: isAr ? 'السعر الحالي' : 'Current price', val: fmt(price, 4), color: 'text-blue-300' },
+                { label: isAr ? 'سعر الدخول' : 'Entry',  val: fmt(entry, 5), color: 'text-white' },
+                { label: isAr ? 'وقف الخسارة' : 'Stop loss', val: fmt(sl, 5),    color: 'text-red-400' },
+                { label: isAr ? 'الهدف الأول' : 'TP1', val: fmt(tp1, 5),   color: 'text-green-400' },
+                { label: isAr ? 'الهدف الثاني' : 'TP2', val: fmt(tp2, 5),   color: 'text-green-300' },
                 { label: 'R/R',          val: rr ? `1:${typeof rr === 'number' ? rr.toFixed(1) : rr}` : '—', color: 'text-yellow-400' },
               ].map(({ label, val, color }) => (
                 <div key={label} className="bg-gray-800 rounded-xl px-3 py-2.5">
@@ -447,7 +447,7 @@ export default function Dashboard() {
                 <div className="px-4 py-3 space-y-3 bg-gray-800/30" dir="rtl">
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="text-xs text-gray-500 block mb-1">الرصيد ($)</label>
+                      <label className="text-xs text-gray-500 block mb-1">{isAr ? 'الرصيد ($)' : 'Balance ($)'}</label>
                       <input
                         type="number"
                         value={calcBalance}
@@ -457,7 +457,7 @@ export default function Dashboard() {
                       />
                     </div>
                     <div>
-                      <label className="text-xs text-gray-500 block mb-1">المخاطرة (%)</label>
+                      <label className="text-xs text-gray-500 block mb-1">{isAr ? 'المخاطرة (%)' : 'Risk (%)'}</label>
                       <input
                         type="number"
                         value={calcRisk}
@@ -473,24 +473,24 @@ export default function Dashboard() {
                   {calcLot !== null ? (
                     <div className="grid grid-cols-3 gap-2">
                       <div className="bg-purple-900/20 border border-purple-700/30 rounded-lg px-2 py-2 text-center">
-                        <p className="text-[10px] text-purple-400 mb-0.5">حجم اللوت</p>
+                        <p className="text-[10px] text-purple-400 mb-0.5">{isAr ? 'حجم اللوت' : 'Lot size'}</p>
                         <p className="text-white font-bold text-sm font-mono">{calcLot.toFixed(2)}</p>
                       </div>
                       <div className="bg-red-900/20 border border-red-700/30 rounded-lg px-2 py-2 text-center">
-                        <p className="text-[10px] text-red-400 mb-0.5">الخسارة</p>
+                        <p className="text-[10px] text-red-400 mb-0.5">{isAr ? 'الخسارة' : 'Loss'}</p>
                         <p className="text-white font-bold text-sm font-mono">${calcRiskUSD?.toFixed(0)}</p>
                       </div>
                       {calcProfitUSD != null && (
                         <div className="bg-green-900/20 border border-green-700/30 rounded-lg px-2 py-2 text-center">
-                          <p className="text-[10px] text-green-400 mb-0.5">الربح (TP1)</p>
+                          <p className="text-[10px] text-green-400 mb-0.5">{isAr ? 'الربح (TP1)' : 'Profit (TP1)'}</p>
                           <p className="text-white font-bold text-sm font-mono">${calcProfitUSD.toFixed(0)}</p>
                         </div>
                       )}
                     </div>
                   ) : (
-                    <p className="text-xs text-gray-500 text-center py-1">أدخل الرصيد والمخاطرة لحساب اللوت</p>
+                    <p className="text-xs text-gray-500 text-center py-1">{isAr ? 'أدخل الرصيد والمخاطرة لحساب اللوت' : 'Enter balance and risk to calculate the lot'}</p>
                   )}
-                  <p className="text-[10px] text-gray-400 text-center">* تقديري — يختلف حسب الوسيط والرافعة المالية</p>
+                  <p className="text-[10px] text-gray-400 text-center">{isAr ? '* تقديري — يختلف حسب الوسيط والرافعة المالية' : '* Estimate — varies by broker and leverage'}</p>
                 </div>
               )}
             </div>
@@ -544,16 +544,16 @@ export default function Dashboard() {
     cats[c].push(m)
   })
   const catMeta = {
-    forex:   { label: 'فوركس',    color: 'from-blue-600/20 to-blue-700/10 border-blue-700/40 hover:border-blue-500/60 text-blue-300', ring: 'ring-blue-500/40' },
-    metals:  { label: 'معادن',    color: 'from-yellow-600/20 to-yellow-700/10 border-yellow-700/40 hover:border-yellow-500/60 text-yellow-300', ring: 'ring-yellow-500/40' },
-    crypto:  { label: 'كريبتو',   color: 'from-purple-600/20 to-purple-700/10 border-purple-700/40 hover:border-purple-500/60 text-purple-300', ring: 'ring-purple-500/40' },
-    indices: { label: 'مؤشرات',   color: 'from-green-600/20 to-green-700/10 border-green-700/40 hover:border-green-500/60 text-green-300', ring: 'ring-green-500/40' },
-    energy:  { label: 'طاقة',     color: 'from-orange-600/20 to-orange-700/10 border-orange-700/40 hover:border-orange-500/60 text-orange-300', ring: 'ring-orange-500/40' },
-    gulf:    { label: '🕌 أسواق خليجية', color: 'from-emerald-600/20 to-emerald-700/10 border-emerald-700/40 hover:border-emerald-500/60 text-emerald-300', ring: 'ring-emerald-500/40' },
+    forex:   { label: isAr ? 'فوركس' : 'Forex',    color: 'from-blue-600/20 to-blue-700/10 border-blue-700/40 hover:border-blue-500/60 text-blue-300', ring: 'ring-blue-500/40' },
+    metals:  { label: isAr ? 'معادن' : 'Metals',    color: 'from-yellow-600/20 to-yellow-700/10 border-yellow-700/40 hover:border-yellow-500/60 text-yellow-300', ring: 'ring-yellow-500/40' },
+    crypto:  { label: isAr ? 'كريبتو' : 'Crypto',   color: 'from-purple-600/20 to-purple-700/10 border-purple-700/40 hover:border-purple-500/60 text-purple-300', ring: 'ring-purple-500/40' },
+    indices: { label: isAr ? 'مؤشرات' : 'Indices',   color: 'from-green-600/20 to-green-700/10 border-green-700/40 hover:border-green-500/60 text-green-300', ring: 'ring-green-500/40' },
+    energy:  { label: isAr ? 'طاقة' : 'Energy',     color: 'from-orange-600/20 to-orange-700/10 border-orange-700/40 hover:border-orange-500/60 text-orange-300', ring: 'ring-orange-500/40' },
+    gulf:    { label: isAr ? '🕌 أسواق خليجية' : '🕌 Gulf markets', color: 'from-emerald-600/20 to-emerald-700/10 border-emerald-700/40 hover:border-emerald-500/60 text-emerald-300', ring: 'ring-emerald-500/40' },
     // الفئتان الفعليتان بـmarket_configs اللي كانتا تسقطان على "أخرى" (فتظهر مرتين)
-    commodity: { label: 'سلع ومؤشرات', color: 'from-yellow-600/20 to-yellow-700/10 border-yellow-700/40 hover:border-yellow-500/60 text-yellow-300', ring: 'ring-yellow-500/40' },
-    stock:   { label: 'أسهم أمريكية', color: 'from-sky-600/20 to-sky-700/10 border-sky-700/40 hover:border-sky-500/60 text-sky-300', ring: 'ring-sky-500/40' },
-    other:   { label: 'أخرى',     color: 'from-gray-600/20 to-gray-700/10 border-gray-700/40 hover:border-gray-500/60 text-gray-300', ring: 'ring-gray-500/40' },
+    commodity: { label: isAr ? 'سلع ومؤشرات' : 'Commodities & indices', color: 'from-yellow-600/20 to-yellow-700/10 border-yellow-700/40 hover:border-yellow-500/60 text-yellow-300', ring: 'ring-yellow-500/40' },
+    stock:   { label: isAr ? 'أسهم أمريكية' : 'US stocks', color: 'from-sky-600/20 to-sky-700/10 border-sky-700/40 hover:border-sky-500/60 text-sky-300', ring: 'ring-sky-500/40' },
+    other:   { label: isAr ? 'أخرى' : 'Other',     color: 'from-gray-600/20 to-gray-700/10 border-gray-700/40 hover:border-gray-500/60 text-gray-300', ring: 'ring-gray-500/40' },
   }
   const catKeys   = Object.keys(cats)
   const activeCat = catKeys.includes(quickCat) ? quickCat : (catKeys[0] || '')
@@ -597,7 +597,7 @@ export default function Dashboard() {
           </div>
           {limitReached && (
             <Link to="/pricing" className="flex-shrink-0 bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded-lg text-xs font-semibold">
-              اشترك الآن
+              {isAr ? 'اشترك الآن' : 'Subscribe now'}
             </Link>
           )}
         </div>
@@ -646,11 +646,11 @@ export default function Dashboard() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <h3 className="text-white font-bold text-sm">اربط حسابك مع Telegram</h3>
-                    <span className="text-[10px] bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 px-2 py-0.5 rounded-full font-bold">مهم</span>
+                    <h3 className="text-white font-bold text-sm">{isAr ? 'اربط حسابك مع Telegram' : 'Link your account with Telegram'}</h3>
+                    <span className="text-[10px] bg-yellow-500/20 text-yellow-300 border border-yellow-500/30 px-2 py-0.5 rounded-full font-bold">{isAr ? 'مهم' : 'Important'}</span>
                   </div>
                   <p className="text-indigo-300/80 text-xs leading-relaxed mb-3">
-                    استقبل إشارات التداول، تنبيهات الجلسات، والأخبار الاقتصادية مباشرة على هاتفك عبر @{tgBot}
+                    {isAr ? `استقبل إشارات التداول، تنبيهات الجلسات، والأخبار الاقتصادية مباشرة على هاتفك عبر @${tgBot}` : `Get trading signals, session alerts and economic news straight to your phone via @${tgBot}`}
                   </p>
                   <div className="flex items-center gap-2 flex-wrap">
                     <button
@@ -659,7 +659,7 @@ export default function Dashboard() {
                       className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 active:scale-95 disabled:opacity-60 text-white px-5 py-2 rounded-xl font-semibold text-sm transition-all"
                     >
                       {tgLoading ? <RefreshCw size={14} className="animate-spin" /> : <ExternalLink size={14} />}
-                      {tgLoading ? 'جاري...' : `ربط مع @${tgBot}`}
+                      {tgLoading ? (isAr ? 'جاري...' : 'Loading...') : (isAr ? `ربط مع @${tgBot}` : `Link with @${tgBot}`)}
                     </button>
                     <button
                       onClick={copyTgLink}
@@ -667,7 +667,7 @@ export default function Dashboard() {
                       className="flex items-center gap-1.5 text-indigo-400 hover:text-white border border-indigo-700/60 hover:border-indigo-400 px-3 py-2 rounded-xl text-sm transition-all"
                     >
                       {tgCopied ? <CheckCircle size={13} className="text-green-400" /> : <Copy size={13} />}
-                      {tgCopied ? 'تم النسخ' : 'نسخ الرابط'}
+                      {tgCopied ? (isAr ? 'تم النسخ' : 'Copied') : (isAr ? 'نسخ الرابط' : 'Copy link')}
                     </button>
                     <button
                       onClick={() => setActiveTab('account')}
@@ -752,7 +752,7 @@ export default function Dashboard() {
                 {isAr ? 'كل الأزواج' : 'All pairs'}
                 <span className="text-xs text-gray-500 font-normal">({catItems.length})</span>
               </h2>
-              <span className="text-xs text-gray-500 hidden sm:block">كليك = كاش · شيفت+كليك = تحديث · كليك يمين = Confluence</span>
+              <span className="text-xs text-gray-500 hidden sm:block">{isAr ? 'كليك = كاش · شيفت+كليك = تحديث · كليك يمين = Confluence' : 'Click = cached · Shift+click = refresh · Right-click = Confluence'}</span>
             </div>
             <div className="p-4">
               <div className="flex flex-wrap gap-1.5 mb-3">
@@ -866,7 +866,7 @@ export default function Dashboard() {
                         <div className="absolute top-3 start-3 flex gap-1.5">
                           <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full bg-black/40 border backdrop-blur ${recCls}`}>{recLabel}</span>
                           {sig.timeframe && <span className="text-[11px] px-2 py-1 rounded-full bg-black/40 border border-white/15 text-gray-200">{sig.timeframe}</span>}
-                          {sig.from_cache && <span className="text-[11px] px-2 py-1 rounded-full bg-black/40 border border-white/15 text-gray-300">كاش</span>}
+                          {sig.from_cache && <span className="text-[11px] px-2 py-1 rounded-full bg-black/40 border border-white/15 text-gray-300">{isAr ? 'كاش' : 'cached'}</span>}
                         </div>
                         <div className={`absolute -bottom-5 start-4 w-12 h-12 rounded-2xl grid place-items-center font-extrabold text-[11px] border-[3px] border-gray-800 ${isMetal ? 'bg-gradient-to-br from-amber-300 to-amber-600 text-amber-950' : 'bg-gradient-to-br from-[var(--q-acc3)] to-[var(--q-acc2)] text-white'}`}>
                           {market.slice(0, 3)}
@@ -1013,7 +1013,7 @@ export default function Dashboard() {
                   const isBuy  = rec === 'BUY'
                   const isSell = rec === 'SELL'
                   const accentBg  = locked ? 'bg-amber-500' : isBuy ? 'bg-green-500' : isSell ? 'bg-red-500' : 'bg-gray-500'
-                  const recLabel  = locked ? '🔒 إشارة' : isBuy ? '▲ شراء' : isSell ? '▼ بيع' : '◈ مراقبة'
+                  const recLabel  = locked ? (isAr ? '🔒 إشارة' : '🔒 Signal') : isBuy ? (isAr ? '▲ شراء' : '▲ BUY') : isSell ? (isAr ? '▼ بيع' : '▼ SELL') : (isAr ? '◈ مراقبة' : '◈ WATCH')
                   const recBadge  = locked
                     ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
                     : isBuy
@@ -1034,7 +1034,7 @@ export default function Dashboard() {
                           <div className="flex items-center gap-2.5">
                             <span className="text-white font-bold text-sm tracking-wide">{market}</span>
                             <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${recBadge}`}>{recLabel}</span>
-                            {sig.from_cache && <span className="text-xs text-gray-400 bg-gray-700/50 px-1.5 py-0.5 rounded">كاش</span>}
+                            {sig.from_cache && <span className="text-xs text-gray-400 bg-gray-700/50 px-1.5 py-0.5 rounded">{isAr ? 'كاش' : 'cached'}</span>}
                           </div>
                           <div className="flex items-center gap-3">
                             {rr != null && (
@@ -1052,14 +1052,14 @@ export default function Dashboard() {
                         {locked ? (
                           <div className="flex items-center gap-2 mt-2 text-xs">
                             <Lock size={12} className="text-yellow-500 flex-shrink-0" />
-                            <span className="text-gray-500">الاتجاه والدخول والوقف والأهداف للمشتركين — </span>
-                            <span className="text-yellow-400 font-semibold hover:underline">اشترك لرؤية التفاصيل الكاملة</span>
+                            <span className="text-gray-500">{isAr ? 'الاتجاه والدخول والوقف والأهداف للمشتركين — ' : 'Direction, entry, stop and targets are for subscribers — '}</span>
+                            <span className="text-yellow-400 font-semibold hover:underline">{isAr ? 'اشترك لرؤية التفاصيل الكاملة' : 'Subscribe to see full details'}</span>
                           </div>
                         ) : (entryMin || entryExact || sl || tp1) && (
                           <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
                             {(entryMin || entryExact) && (
                               <span className="text-xs">
-                                <span className="text-gray-500">دخول </span>
+                                <span className="text-gray-500">{isAr ? 'دخول ' : 'Entry '}</span>
                                 <span className="text-white font-mono">{entryMin && entryMax ? `${fmt(entryMin)}–${fmt(entryMax)}` : fmt(entryExact)}</span>
                               </span>
                             )}
@@ -1067,7 +1067,7 @@ export default function Dashboard() {
                             {tp1 != null && <span className="text-xs"><span className="text-gray-500">TP1 </span><span className="text-green-400 font-mono">{fmt(tp1)}</span></span>}
                             {tp2 != null && <span className="text-xs"><span className="text-gray-500">TP2 </span><span className="text-green-300 font-mono">{fmt(tp2)}</span></span>}
                             {livePrice != null && (
-                              <span className="text-xs"><span className="text-gray-500">السعر </span><span className="text-blue-300 font-mono">{fmt(livePrice, market === 'BTCUSD' ? 2 : 4)}</span></span>
+                              <span className="text-xs"><span className="text-gray-500">{isAr ? 'السعر ' : 'Price '}</span><span className="text-blue-300 font-mono">{fmt(livePrice, market === 'BTCUSD' ? 2 : 4)}</span></span>
                             )}
                           </div>
                         )}
@@ -1152,14 +1152,14 @@ export default function Dashboard() {
 
           {/* Telegram Linking Card — not linked yet */}
           {showTgCard && (
-            <div className="bg-indigo-950/60 border border-indigo-500/70 rounded-xl p-5" dir="rtl">
+            <div className="bg-indigo-950/60 border border-indigo-500/70 rounded-xl p-5" dir={isAr ? 'rtl' : 'ltr'}>
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-indigo-600/40 flex items-center justify-center flex-shrink-0">
                   <Send size={18} className="text-indigo-300" />
                 </div>
                 <div>
-                  <h3 className="text-white font-semibold">اربط حسابك مع Telegram</h3>
-                  <p className="text-indigo-300 text-sm mt-0.5">استقبل الإشارات والتنبيهات مباشرة على هاتفك عبر @{tgBot}</p>
+                  <h3 className="text-white font-semibold">{isAr ? 'اربط حسابك مع Telegram' : 'Link your account with Telegram'}</h3>
+                  <p className="text-indigo-300 text-sm mt-0.5">{isAr ? `استقبل الإشارات والتنبيهات مباشرة على هاتفك عبر @${tgBot}` : `Get signals and alerts straight to your phone via @${tgBot}`}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3 mt-4 flex-wrap">
@@ -1169,7 +1169,7 @@ export default function Dashboard() {
                   className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 active:scale-95 disabled:opacity-60 text-white px-5 py-2.5 rounded-lg font-semibold text-sm transition-all"
                 >
                   {tgLoading ? <RefreshCw size={15} className="animate-spin" /> : <ExternalLink size={15} />}
-                  {tgLoading ? 'جاري التحميل...' : `ربط مع @${tgBot}`}
+                  {tgLoading ? (isAr ? 'جاري التحميل...' : 'Loading...') : (isAr ? `ربط مع @${tgBot}` : `Link with @${tgBot}`)}
                 </button>
                 <button
                   onClick={copyTgLink}
@@ -1177,7 +1177,7 @@ export default function Dashboard() {
                   className="flex items-center gap-1.5 text-indigo-400 hover:text-white border border-indigo-700 hover:border-indigo-400 px-3 py-2.5 rounded-lg text-sm transition-all"
                 >
                   {tgCopied ? <CheckCircle size={14} className="text-green-400" /> : <Copy size={14} />}
-                  {tgCopied ? 'تم النسخ' : 'نسخ الرابط'}
+                  {tgCopied ? (isAr ? 'تم النسخ' : 'Copied') : (isAr ? 'نسخ الرابط' : 'Copy link')}
                 </button>
               </div>
             </div>
@@ -1185,7 +1185,7 @@ export default function Dashboard() {
 
           {/* Re-link Telegram Card — already linked */}
           {showRelinkCard && (
-            <div className="bg-gray-900 border border-gray-700 rounded-xl p-4" dir="rtl">
+            <div className="bg-gray-900 border border-gray-700 rounded-xl p-4" dir={isAr ? 'rtl' : 'ltr'}>
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-full bg-green-900/40 flex items-center justify-center flex-shrink-0">
@@ -1193,9 +1193,9 @@ export default function Dashboard() {
                   </div>
                   <div>
                     <p className="text-sm text-white font-medium">
-                      Telegram مربوط{user.telegram_username ? ` — @${user.telegram_username}` : ''}
+                      {isAr ? 'Telegram مربوط' : 'Telegram linked'}{user.telegram_username ? ` — @${user.telegram_username}` : ''}
                     </p>
-                    <p className="text-xs text-gray-400 mt-0.5">إذا تغيّر البوت أو انقطع الربط، أعد التفعيل</p>
+                    <p className="text-xs text-gray-400 mt-0.5">{isAr ? 'إذا تغيّر البوت أو انقطع الربط، أعد التفعيل' : 'If the bot changed or the link broke, re-link'}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1205,7 +1205,7 @@ export default function Dashboard() {
                     className="flex items-center gap-2 text-xs bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition"
                   >
                     {relinking ? <RefreshCw size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-                    إعادة ربط @{tgBot}
+                    {isAr ? `إعادة ربط @${tgBot}` : `Re-link @${tgBot}`}
                   </button>
                   <button
                     onClick={unlinkTelegram}
@@ -1213,7 +1213,7 @@ export default function Dashboard() {
                     className="flex items-center gap-2 text-xs bg-red-950/60 hover:bg-red-900/60 border border-red-800/60 disabled:opacity-50 text-red-300 px-4 py-2 rounded-lg transition"
                   >
                     {unlinking ? <RefreshCw size={13} className="animate-spin" /> : <X size={13} />}
-                    فك الربط
+                    {isAr ? 'فك الربط' : 'Unlink'}
                   </button>
                 </div>
               </div>

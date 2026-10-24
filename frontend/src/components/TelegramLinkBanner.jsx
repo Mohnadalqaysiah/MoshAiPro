@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useLang } from '../contexts/LangContext'
 import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
 import { Send, X, Copy, CheckCircle, ExternalLink } from 'lucide-react'
@@ -7,6 +8,7 @@ const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const DISMISS_KEY = 'mosh_tg_dismissed'
 
 export default function TelegramLinkBanner() {
+  const isAr = (useLang()?.lang || 'ar') === 'ar'
   const { user } = useAuth()
   const [link, setLink]           = useState('')
   const [botName, setBotName]     = useState('Qaffelbot')
@@ -40,13 +42,13 @@ export default function TelegramLinkBanner() {
   return (
     <div
       className="bg-indigo-900/80 border-b-2 border-indigo-500 px-4 py-3 flex items-center justify-between gap-3"
-      dir="rtl"
+      dir={isAr ? 'rtl' : 'ltr'}
     >
       {/* نص */}
       <div className="flex items-center gap-2 text-xs min-w-0">
         <Send size={13} className="text-indigo-400 flex-shrink-0" />
         <span className="text-indigo-200">
-          اربط حسابك بـ Telegram لتلقي إشارات وتنبيهات مباشرة
+          {isAr ? 'اربط حسابك بـ Telegram لتلقي إشارات وتنبيهات مباشرة' : 'Link your account with Telegram to get signals and alerts instantly'}
         </span>
       </div>
 
@@ -61,11 +63,11 @@ export default function TelegramLinkBanner() {
               className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white text-xs px-3 py-1.5 rounded-lg font-semibold transition-all"
             >
               <ExternalLink size={11} />
-              ربط مع @{botName}
+              {isAr ? 'ربط مع' : 'Link with'} @{botName}
             </a>
             <button
               onClick={copyLink}
-              title="نسخ الرابط"
+              title={isAr ? 'نسخ الرابط' : 'Copy link'}
               className="text-indigo-400 hover:text-white transition-colors p-1"
             >
               {copied
@@ -75,12 +77,12 @@ export default function TelegramLinkBanner() {
             </button>
           </>
         ) : (
-          <span className="text-indigo-500 text-xs animate-pulse">⏳ جاري التحميل...</span>
+          <span className="text-indigo-500 text-xs animate-pulse">⏳ {isAr ? 'جاري التحميل...' : 'Loading...'}</span>
         )}
 
         <button
           onClick={() => setDismissed(true)}
-          title="إخفاء مؤقتاً"
+          title={isAr ? 'إخفاء مؤقتاً' : 'Hide for now'}
           className="text-indigo-600 hover:text-indigo-300 transition-colors p-1"
         >
           <X size={13} />

@@ -116,7 +116,7 @@ export default function Signals() {
 
   // active sweep details (whichever direction was detected)
   const activeSweep = hasBull ? sweep.ssl_sweep : hasBear ? sweep.bsl_sweep : (sweep.ssl_sweep || sweep.bsl_sweep)
-  const sweepTypeLabel = hasBull ? 'SSL (Stop Hunt تحت السعر)' : hasBear ? 'BSL (Stop Hunt فوق السعر)' : sweep.ssl_sweep ? 'SSL' : 'BSL'
+  const sweepTypeLabel = hasBull ? (isAr ? 'SSL (Stop Hunt تحت السعر)' : 'SSL (stop hunt below price)') : hasBear ? (isAr ? 'BSL (Stop Hunt فوق السعر)' : 'BSL (stop hunt above price)') : sweep.ssl_sweep ? 'SSL' : 'BSL'
 
   // ── Order Blocks ──────────────────────────────────────────────────────────
   const obs        = result?.order_blocks || {}
@@ -280,7 +280,7 @@ export default function Signals() {
                       </div>
                     )}
                     {!nearestBSL && !nearestSSL && !nearestBull && !nearestBear && (
-                      <p className="text-gray-400 text-xs">— لا توجد مناطق محددة حالياً —</p>
+                      <p className="text-gray-400 text-xs">{isAr ? '— لا توجد مناطق محددة حالياً —' : '— No zones identified right now —'}</p>
                     )}
                   </div>
                 </>
@@ -302,7 +302,7 @@ export default function Signals() {
                     )}
                     {!result.levels?.entry && result.entry_zones?.map((e, i) => (
                       <div key={i} className="flex justify-between">
-                        <span className="text-gray-400">منطقة دخول {i + 1}</span>
+                        <span className="text-gray-400">{isAr ? 'منطقة دخول' : 'Entry zone'} {i + 1}</span>
                         <span className="text-white font-mono">{e}</span>
                       </div>
                     ))}
@@ -336,7 +336,7 @@ export default function Signals() {
                     )}
                     {!result.levels?.tp1 && result.take_profit_zones?.map((tp, i) => (
                       <div key={i} className="flex justify-between">
-                        <span className="text-gray-400">هدف {i + 1}</span>
+                        <span className="text-gray-400">{isAr ? 'هدف' : 'Target'} {i + 1}</span>
                         <span className="text-green-400 font-mono">{tp}</span>
                       </div>
                     ))}
@@ -440,7 +440,7 @@ export default function Signals() {
                     <div className="flex justify-between">
                       <span className="text-gray-400">{tx.sweepRejection}</span>
                       <span className={activeSweep.rejection_confirmed ? 'text-green-400' : 'text-red-400'}>
-                        {activeSweep.rejection_confirmed ? '✅ نعم' : '❌ لا'}
+                        {activeSweep.rejection_confirmed ? (isAr ? '✅ نعم' : '✅ Yes') : (isAr ? '❌ لا' : '❌ No')}
                       </span>
                     </div>
                     <div className="flex justify-between">
@@ -453,13 +453,13 @@ export default function Signals() {
                 {/* BSL sweep info (no rejection) */}
                 {!hasBull && !hasBear && sweep.bsl_sweep && (
                   <div className="flex justify-between">
-                    <span className="text-gray-400">BSL Sweep (بدون رفض)</span>
+                    <span className="text-gray-400">{isAr ? 'BSL Sweep (بدون رفض)' : 'BSL sweep (no rejection)'}</span>
                     <span className="text-orange-400 font-mono">{fmtPrice(sweep.bsl_sweep.level, symbol)}</span>
                   </div>
                 )}
                 {!hasBull && !hasBear && sweep.ssl_sweep && !sweep.bsl_sweep && (
                   <div className="flex justify-between">
-                    <span className="text-gray-400">SSL Sweep (بدون رفض)</span>
+                    <span className="text-gray-400">{isAr ? 'SSL Sweep (بدون رفض)' : 'SSL sweep (no rejection)'}</span>
                     <span className="text-orange-400 font-mono">{fmtPrice(sweep.ssl_sweep.level, symbol)}</span>
                   </div>
                 )}
@@ -478,7 +478,7 @@ export default function Signals() {
                     </span>
                   </div>
                 ) : (
-                  <p className="text-gray-400 text-xs">— لا يوجد OB صاعد قريب</p>
+                  <p className="text-gray-400 text-xs">{isAr ? '— لا يوجد OB صاعد قريب' : '— No nearby bullish OB'}</p>
                 )}
                 {nearestBear ? (
                   <div className="flex justify-between items-center">
@@ -490,15 +490,15 @@ export default function Signals() {
                     </span>
                   </div>
                 ) : (
-                  <p className="text-gray-400 text-xs">— لا يوجد OB هابط قريب</p>
+                  <p className="text-gray-400 text-xs">{isAr ? '— لا يوجد OB هابط قريب' : '— No nearby bearish OB'}</p>
                 )}
 
                 {/* OB in zone indicator */}
                 {obs.in_bullish_ob && (
-                  <p className="text-green-400 text-xs mt-1">⚡ السعر داخل Order Block صاعد</p>
+                  <p className="text-green-400 text-xs mt-1">{isAr ? '⚡ السعر داخل Order Block صاعد' : '⚡ Price is inside a bullish Order Block'}</p>
                 )}
                 {obs.in_bearish_ob && (
-                  <p className="text-red-400 text-xs mt-1">⚡ السعر داخل Order Block هابط</p>
+                  <p className="text-red-400 text-xs mt-1">{isAr ? '⚡ السعر داخل Order Block هابط' : '⚡ Price is inside a bearish Order Block'}</p>
                 )}
               </div>
             </div>
