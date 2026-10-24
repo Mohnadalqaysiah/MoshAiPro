@@ -170,7 +170,7 @@ export default function PerformanceSection() {
         >
           <span>
             {watchlist_filter?.length > 0
-              ? `${tx.yourSymbols} (${watchlist_filter.join('، ')})`
+              ? `${tx.yourSymbols} (${watchlist_filter.join(isAr ? '، ' : ', ')})`
               : tx.allSymbols}
           </span>
           <Settings2 size={12} />

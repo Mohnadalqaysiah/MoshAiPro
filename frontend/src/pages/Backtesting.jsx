@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useLang } from '../contexts/LangContext'
 import axios from 'axios'
 import { BarChart2, TrendingUp, RefreshCw, Filter, Clock } from 'lucide-react'
 
@@ -9,6 +10,7 @@ const TFS      = ['','1h','4h','15m','30m','1d']
 const DAYS_OPT = [30, 60, 90, 180, 365]
 
 function WinRateBadge({ wr, sufficient = true, total, minSample }) {
+  const isAr = (useLang()?.lang || 'ar') === 'ar'
   if (wr == null) return <span className="text-gray-500 text-xs">—</span>
   // (2026-09-04) عينة صغيرة (مثلاً إشارة وحدة = 100%) توحي بموثوقية وهمية
   // لو ظهرت بشارة خضراء واثقة — نفس منطق sufficient_data بصفحة الأداء.
@@ -16,9 +18,9 @@ function WinRateBadge({ wr, sufficient = true, total, minSample }) {
     return (
       <span
         className="text-xs font-medium px-2 py-0.5 rounded-lg border bg-gray-800 text-gray-400 border-gray-700"
-        title={`عينة صغيرة جداً (${total} من ${minSample} على الأقل) — النسبة مو موثوقة بعد`}
+        title={isAr ? `عينة صغيرة جداً (${total} من ${minSample} على الأقل) — النسبة مو موثوقة بعد` : `Very small sample (${total} of at least ${minSample}) — the rate is not reliable yet`}
       >
-        عينة صغيرة ({total})
+        {isAr ? 'عينة صغيرة' : 'Small sample'} ({total})
       </span>
     )
   }
@@ -38,6 +40,7 @@ function MiniBar({ value, max, color = 'bg-blue-500' }) {
 }
 
 export default function Backtesting() {
+  const isAr = (useLang()?.lang || 'ar') === 'ar'
   const [symbol, setSymbol]   = useState('')
   const [tf, setTf]           = useState('')
   const [days, setDays]       = useState(90)
@@ -55,7 +58,7 @@ export default function Backtesting() {
       const r = await axios.get(`${API}/api/v1/signals/backtest?${params}`)
       setData(r.data)
     } catch (e) {
-      setError(e.response?.data?.detail || 'خطأ في تحميل البيانات')
+      setError(e.response?.data?.detail || (isAr ? 'خطأ في تحميل البيانات' : 'Error loading data'))
     } finally { setLoading(false) }
   }
 
@@ -72,36 +75,36 @@ export default function Backtesting() {
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <BarChart2 size={22} className="text-purple-400"/> Backtesting Lite
           </h1>
-          <p className="text-sm text-gray-400 mt-1">أداء الإشارات التاريخية — بيانات حقيقية من قاعدة البيانات</p>
+          <p className="text-sm text-gray-400 mt-1">{isAr ? 'أداء الإشارات التاريخية — بيانات حقيقية من قاعدة البيانات' : 'Historical signal performance — real data from the database'}</p>
         </div>
 
         {/* Filters */}
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4 mb-6">
           <div className="flex flex-wrap gap-3 items-end">
             <div>
-              <label className="block text-xs text-gray-400 mb-1.5">الرمز</label>
+              <label className="block text-xs text-gray-400 mb-1.5">{isAr ? 'الرمز' : 'Symbol'}</label>
               <select value={symbol} onChange={e => setSymbol(e.target.value)}
                 className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-purple-500">
-                {SYMBOLS.map(s => <option key={s} value={s}>{s || 'جميع الرموز'}</option>)}
+                {SYMBOLS.map(s => <option key={s} value={s}>{s || (isAr ? 'جميع الرموز' : 'All symbols')}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-xs text-gray-400 mb-1.5">الإطار الزمني</label>
+              <label className="block text-xs text-gray-400 mb-1.5">{isAr ? 'الإطار الزمني' : 'Timeframe'}</label>
               <select value={tf} onChange={e => setTf(e.target.value)}
                 className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-purple-500">
-                {TFS.map(t => <option key={t} value={t}>{t || 'جميع الإطارات'}</option>)}
+                {TFS.map(t => <option key={t} value={t}>{t || (isAr ? 'جميع الإطارات' : 'All timeframes')}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-xs text-gray-400 mb-1.5">المدة</label>
+              <label className="block text-xs text-gray-400 mb-1.5">{isAr ? 'المدة' : 'Period'}</label>
               <select value={days} onChange={e => setDays(Number(e.target.value))}
                 className="bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:ring-1 focus:ring-purple-500">
-                {DAYS_OPT.map(d => <option key={d} value={d}>{d} يوم</option>)}
+                {DAYS_OPT.map(d => <option key={d} value={d}>{d} {isAr ? 'يوم' : 'days'}</option>)}
               </select>
             </div>
             <button onClick={load} disabled={loading}
               className="flex items-center gap-2 bg-purple-700 hover:bg-purple-600 disabled:opacity-50 text-white px-5 py-2 rounded-xl text-sm transition">
-              <Filter size={14}/> تطبيق
+              <Filter size={14}/> {isAr ? 'تطبيق' : 'Apply'}
             </button>
           </div>
         </div>
@@ -121,10 +124,10 @@ export default function Backtesting() {
             {/* Overall Stats */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
               {[
-                { label:'إجمالي الإشارات', value: data.overall.total,    color:'text-white' },
-                { label:'نسبة النجاح',      value: !data.overall.sufficient_sample ? `عينة صغيرة (${data.overall.total})` : (data.overall.win_rate != null ? `${data.overall.win_rate}%` : '—'), color: !data.overall.sufficient_sample ? 'text-gray-400' : (data.overall.win_rate >= 65?'text-green-400':data.overall.win_rate>=50?'text-yellow-400':'text-red-400') },
-                { label:'فوز / خسارة',      value: `${data.overall.wins} / ${data.overall.losses}`, color:'text-gray-300' },
-                { label:'متوسط R/R',         value: data.overall.avg_rr ? `${data.overall.avg_rr}×` : '—', color:'text-blue-400' },
+                { label: isAr ? 'إجمالي الإشارات' : 'Total signals', value: data.overall.total,    color:'text-white' },
+                { label: isAr ? 'نسبة النجاح' : 'Win rate',      value: !data.overall.sufficient_sample ? (isAr ? `عينة صغيرة (${data.overall.total})` : `Small sample (${data.overall.total})`) : (data.overall.win_rate != null ? `${data.overall.win_rate}%` : '—'), color: !data.overall.sufficient_sample ? 'text-gray-400' : (data.overall.win_rate >= 65?'text-green-400':data.overall.win_rate>=50?'text-yellow-400':'text-red-400') },
+                { label: isAr ? 'فوز / خسارة' : 'Wins / losses',      value: `${data.overall.wins} / ${data.overall.losses}`, color:'text-gray-300' },
+                { label: isAr ? 'متوسط R/R' : 'Avg R/R',         value: data.overall.avg_rr ? `${data.overall.avg_rr}×` : '—', color:'text-blue-400' },
               ].map(s => (
                 <div key={s.label} className="bg-gray-900 border border-gray-800 rounded-2xl p-4 text-center">
                   <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
@@ -137,7 +140,7 @@ export default function Backtesting() {
             {data.by_symbol.length > 0 && (
               <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 mb-6">
                 <h2 className="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
-                  <TrendingUp size={15} className="text-purple-400"/> الأداء حسب الرمز
+                  <TrendingUp size={15} className="text-purple-400"/> {isAr ? 'الأداء حسب الرمز' : 'Performance by symbol'}
                 </h2>
                 <div className="space-y-4">
                   {data.by_symbol.map(row => (
@@ -145,7 +148,7 @@ export default function Backtesting() {
                       <div className="flex items-center justify-between mb-1.5">
                         <div className="flex items-center gap-3">
                           <span className="font-bold text-white text-sm w-20">{row.symbol}</span>
-                          <span className="text-xs text-gray-500">{row.total} إشارة</span>
+                          <span className="text-xs text-gray-500">{row.total} {isAr ? 'إشارة' : 'signals'}</span>
                         </div>
                         <div className="flex items-center gap-3">
                           <span className="text-xs text-gray-400">{row.wins}✓ {row.losses}✗</span>
@@ -180,13 +183,13 @@ export default function Backtesting() {
             {data.by_timeframe.length > 0 && (
               <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
                 <h2 className="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
-                  <Clock size={15} className="text-blue-400"/> الأداء حسب الإطار الزمني
+                  <Clock size={15} className="text-blue-400"/> {isAr ? 'الأداء حسب الإطار الزمني' : 'Performance by timeframe'}
                 </h2>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   {data.by_timeframe.map(row => (
                     <div key={row.timeframe} className="bg-gray-800/50 rounded-xl p-3 text-center">
                       <p className="text-lg font-bold text-white font-mono">{row.timeframe}</p>
-                      <p className="text-xs text-gray-500 my-1">{row.wins + row.losses} إشارة</p>
+                      <p className="text-xs text-gray-500 my-1">{row.wins + row.losses} {isAr ? 'إشارة' : 'signals'}</p>
                       <WinRateBadge wr={row.win_rate} sufficient={row.sufficient_sample} total={row.wins + row.losses} minSample={data.min_sample}/>
                       <p className="text-xs text-gray-400 mt-1">{row.wins}✓ {row.losses}✗</p>
                     </div>
@@ -198,8 +201,8 @@ export default function Backtesting() {
             {data.overall.total === 0 && (
               <div className="text-center py-12 text-gray-500">
                 <BarChart2 size={32} className="mx-auto mb-3 opacity-30"/>
-                <p>لا توجد إشارات مغلقة في هذه الفترة</p>
-                <p className="text-xs mt-1">جرّب تغيير الفلاتر أو توسيع المدة الزمنية</p>
+                <p>{isAr ? 'لا توجد إشارات مغلقة في هذه الفترة' : 'No closed signals in this period'}</p>
+                <p className="text-xs mt-1">{isAr ? 'جرّب تغيير الفلاتر أو توسيع المدة الزمنية' : 'Try changing the filters or widening the period'}</p>
               </div>
             )}
           </>

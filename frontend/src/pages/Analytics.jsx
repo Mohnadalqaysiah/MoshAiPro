@@ -154,7 +154,7 @@ export default function Analytics() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {[
               { name: 'Backend API', status: true },
-              { name: 'قاعدة البيانات', status: true },
+              { name: isAr ? 'قاعدة البيانات' : 'Database', status: true },
               { name: 'TwelveData', status: true },
               { name: 'Telegram Bot', status: true },
             ].map(service => (

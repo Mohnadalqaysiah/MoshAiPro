@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
+import { useLang } from '../contexts/LangContext'
 import { Link } from 'react-router-dom'
 import { X, ChevronRight, ChevronLeft, Sparkles, Layers, SlidersHorizontal, ShieldCheck, Bot, FolderOpen } from 'lucide-react'
 
 const STORAGE_KEY = 'strategy_tour_done_v1'
 
-const STEPS = [
+const STEPS_AR = [
   {
     icon: <Sparkles size={28} className="text-amber-400" />,
     title: 'أهلاً بك في Strategy Builder 🎯',
@@ -37,7 +38,42 @@ const STEPS = [
   },
 ]
 
+const STEPS_EN = [
+  {
+    icon: <Sparkles size={28} className="text-amber-400" />,
+    title: 'Welcome to Strategy Builder 🎯',
+    desc: 'Build your own strategy from real ICT/SMC conditions and technical indicators — no code. A quick 6-step tour.',
+  },
+  {
+    icon: <Layers size={28} className="text-purple-400" />,
+    title: 'Library and canvas',
+    desc: 'Pick conditions from the library (search or browse categories) and add them to groups in the middle of the screen. Each group has its own AND / OR / X of Y logic.',
+  },
+  {
+    icon: <SlidersHorizontal size={28} className="text-blue-400" />,
+    title: 'Logic and score',
+    desc: 'Each condition has a weight that counts toward the score only when it is actually met. Note: an alert needs both — every group logic is complete (all / at least one / X of Y) AND the score reaches your minimum. You may see a score above your threshold with no alert because a group is incomplete.',
+  },
+  {
+    icon: <ShieldCheck size={28} className="text-teal-400" />,
+    title: 'Every library condition is live',
+    desc: 'The library is deliberately limited to conditions wired to the real analysis engine — anything you add is genuinely evaluated by live monitoring. No decorative conditions.',
+  },
+  {
+    icon: <Bot size={28} className="text-green-400" />,
+    title: 'Live monitoring and Telegram',
+    desc: 'Once activated, the server checks your strategy every 5 minutes and sends you a real Telegram alert when the conditions are met.',
+  },
+  {
+    icon: <FolderOpen size={28} className="text-gold" />,
+    title: 'Ready? 🚀',
+    desc: 'Saving, activation and live monitoring are for subscribers. Try building now for free, and subscribe whenever you decide to activate it.',
+  },
+]
+
 export default function StrategyBuilderTour({ isPaid, forceOpen, onForceClose }) {
+  const isAr = (useLang()?.lang || 'ar') === 'ar'
+  const STEPS = isAr ? STEPS_AR : STEPS_EN
   const [visible, setVisible] = useState(false)
   const [step, setStep] = useState(0)
 
@@ -76,7 +112,7 @@ export default function StrategyBuilderTour({ isPaid, forceOpen, onForceClose })
       <div className="fixed inset-0 z-[9998] bg-black/60 backdrop-blur-sm" onClick={dismiss} />
       <div
         className="fixed z-[9999] bottom-6 left-1/2 -translate-x-1/2 w-full max-w-sm px-4"
-        dir="rtl"
+        dir={isAr ? 'rtl' : 'ltr'}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="bg-[#0f1724] border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
@@ -104,7 +140,7 @@ export default function StrategyBuilderTour({ isPaid, forceOpen, onForceClose })
             <p className="text-gray-400 text-sm leading-relaxed">{data.desc}</p>
             {isLast && !isPaid && (
               <Link to="/pricing" onClick={dismiss} className="block text-center text-xs font-semibold text-amber-400 hover:text-amber-300 border border-amber-500/40 rounded-lg py-2 mt-1">
-                عرض باقات الاشتراك
+                {isAr ? 'عرض باقات الاشتراك' : 'View subscription plans'}
               </Link>
             )}
           </div>
@@ -120,9 +156,9 @@ export default function StrategyBuilderTour({ isPaid, forceOpen, onForceClose })
           <div className="flex items-center justify-between px-5 py-3 border-t border-white/6">
             <button onClick={prev} disabled={step === 0}
               className="flex items-center gap-1 text-sm text-gray-500 hover:text-white disabled:opacity-30 transition-colors">
-              <ChevronRight size={16} /> السابق
+              <ChevronRight size={16} /> {isAr ? 'السابق' : 'Back'}
             </button>
-            <button onClick={dismiss} className="text-xs text-gray-400 hover:text-gray-400 transition-colors">تخطي</button>
+            <button onClick={dismiss} className="text-xs text-gray-400 hover:text-gray-400 transition-colors">{isAr ? 'تخطي' : 'Skip'}</button>
             <button onClick={next}
               className={`flex items-center gap-1.5 text-sm font-semibold px-4 py-1.5 rounded-lg transition-all ${
                 isLast
@@ -130,7 +166,7 @@ export default function StrategyBuilderTour({ isPaid, forceOpen, onForceClose })
                   : 'bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 text-white'
               }`}
             >
-              {isLast ? 'ابدأ البناء 🚀' : 'التالي'}
+              {isLast ? (isAr ? 'ابدأ البناء 🚀' : 'Start building 🚀') : (isAr ? 'التالي' : 'Next')}
               {!isLast && <ChevronLeft size={16} />}
             </button>
           </div>
