@@ -1292,7 +1292,7 @@ def _format_broadcast(title: Optional[str], message: str) -> str:
     lines = []
     if title:
         lines += [f"<b>📢 {fmt(title)}</b>", ""]
-    lines += [fmt(message), "", "<i>— Qaffel AI</i>"]
+    lines += [fmt(message), "", "<i>— Qaffel AI</i>", "📢 @QaffelPlatform"]   # (2026-10-24) معرّف القناة العامة
     return "\n".join(lines)
 
 
@@ -2456,6 +2456,7 @@ def _build_performance_report(signals: list, days: int, db: Session) -> tuple[st
         "",
         f"<i>{len(closed)} قراراً فريداً وصلت لـ {total_rows:,} مستلماً  ·  R = النتيجة كمضاعف للمخاطرة</i>",
         "<i>تحليل فني للمعلومات فقط — ليس نصيحة استثمارية.</i>",
+        "📢 @QaffelPlatform",
     ]
     tg_text = "\n".join(tg_lines)
 
@@ -2678,7 +2679,8 @@ def send_performance_report(
             return {"message": "لا يوجد مستخدمون لديهم تيليجرام", "sent": 0}
 
         _front = (getattr(_settings, "FRONTEND_URL", None) or "https://qaffel.com").rstrip("/")
-        _kb = {"inline_keyboard": [[{"text": "📊 التفاصيل في حسابي", "url": f"{_front}/dashboard?tab=performance"}]]}
+        _kb = {"inline_keyboard": [[{"text": "📊 التفاصيل في حسابي", "url": f"{_front}/dashboard?tab=performance"}],
+                                   [{"text": "📢 قناة Qaffel", "url": "https://t.me/QaffelPlatform"}]]}
 
         def _tg_broadcast():
             import time as _t

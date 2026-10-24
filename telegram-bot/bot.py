@@ -17,6 +17,11 @@ API_URL      = os.getenv("API_URL",             "http://backend:8000")
 BOT_TOKEN    = os.getenv("TELEGRAM_BOT_TOKEN",  "")
 FRONTEND_URL = os.getenv("FRONTEND_URL",        "https://qaffel.com")
 BOT_SECRET   = os.getenv("BOT_SECRET",          "mosh-bot-secret-2026")
+# (2026-10-24) القناة العامة: زر بكل رسالة رئيسية، والبوت (مشرف فيها) ينشر الإشارات المموّهة بسقف يومي
+CHANNEL_URL  = os.getenv("TELEGRAM_CHANNEL_URL", "https://t.me/QaffelPlatform")
+CHANNEL_ID   = os.getenv("TELEGRAM_CHANNEL_ID",  "@QaffelPlatform")
+CHANNEL_TEASER_DAILY_MAX = int(os.getenv("CHANNEL_TEASER_DAILY_MAX", "6"))     # 0 = إيقاف النشر بالقناة
+CHANNEL_TEASER_MIN_GAP   = int(os.getenv("CHANNEL_TEASER_MIN_GAP_MIN", "60"))
 BOT_HEADERS  = {"X-Bot-Secret": BOT_SECRET}
 SETTINGS_URL = f"{FRONTEND_URL}/profile#watchlist"   # صفحة تخصيص الأزواج والفريمات
 
@@ -288,6 +293,39 @@ async def _save_wl_to_db(uid: int, telegram_id: str):
 
 
 # ─── Keyboards ────────────────────────────────────────────────────────────────
+def ch_btn():
+    return InlineKeyboardButton("📢 قناة Qaffel", url=CHANNEL_URL)
+
+
+_teasers = None   # TeaserGate — يُنشأ عند أول استخدام (messages مستورد كـM)
+
+
+async def post_channel_teaser(app, sig: dict, text: str):
+    """(2026-10-24) ينشر الإشارة المموّهة بالقناة العامة — مرة لكل قرار، بسقف يومي وفاصل أدنى."""
+    global _teasers
+    if not CHANNEL_ID:
+        return
+    if _teasers is None:
+        _teasers = M.TeaserGate(CHANNEL_TEASER_DAILY_MAX, CHANNEL_TEASER_MIN_GAP)
+    key = (sig.get("market"), sig.get("timeframe"), sig.get("signal_type"), round(float(sig.get("entry_price") or 0), 5))
+    now = datetime.now(timezone.utc)
+    if not _teasers.allow(key, now):
+        return
+    try:
+        bot_url = f"https://t.me/{app.bot.username}" if getattr(app.bot, "username", None) else FRONTEND_URL
+        await app.bot.send_message(
+            chat_id=CHANNEL_ID, text=text.replace("\n\n" + M.CHANNEL_LINE, ""), parse_mode="HTML",   # لا "تابع قناتنا" داخل القناة
+            reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("💳 الاشتراك", url=f"{FRONTEND_URL}/pricing"),
+                InlineKeyboardButton("🤖 جرّب البوت", url=bot_url),
+            ]]),
+        )
+        _teasers.mark(key, now)
+        logger.info(f"📢 قناة: إشارة مموّهة {key[0]}/{key[1]} ({_teasers.count}/{_teasers.daily_max} اليوم)")
+    except Exception as e:
+        logger.warning(f"channel teaser {key}: {e}")
+
+
 def kb_main():
     return InlineKeyboardMarkup([
         # ── تحليل وإشارات ──
@@ -301,6 +339,7 @@ def kb_main():
          InlineKeyboardButton("❓ المساعدة",      callback_data="m_help")],
         # ── داشبورد ──
         [InlineKeyboardButton("🌐 فتح الداشبورد", web_app=WebAppInfo(url=FRONTEND_URL))],
+        [ch_btn()],
     ])
 
 
@@ -1066,6 +1105,7 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("🔄 تحديث",        callback_data="m_stats"),
                  InlineKeyboardButton("🌐 الداشبورد",    web_app=WebAppInfo(url=FRONTEND_URL))],
+                [ch_btn()],
                 [InlineKeyboardButton("🔙 رجوع",         callback_data="m_back")],
             ]),
         )
@@ -1287,10 +1327,13 @@ async def broadcast_new_signals(app: Application):
                             InlineKeyboardButton(f"🔕 أوقف إشارات {sig['market']}", callback_data=f"mute_{sig['market']}"),
                             InlineKeyboardButton("⚙️ تخصيص", url=SETTINGS_URL),
                         ],
+                        [ch_btn()],
                     ])
                     kb_masked  = InlineKeyboardMarkup([[
                         InlineKeyboardButton("💳 فعّل اشتراكك", url=f"{FRONTEND_URL}/pricing"),
+                        ch_btn(),
                     ]])
+                    await post_channel_teaser(app, sig, msg_masked)
                     # (2026-08-31) إشارات المراقبة الشخصية (monitor_watchlists)
                     # محفوظة بـuser_id صاحبها، وهو أصلاً استلم تنبيه شخصي عنها
                     # لحاله. نستثنيه هون عشان ما توصله نفس الفرصة مرتين —
@@ -1395,13 +1438,15 @@ async def outcome_checker(app: Application):
                     _mname = MARKET_NAMES.get(o.get("market", ""), o.get("market", ""))
                     if o.get("audience") == "expired":
                         _txt = M.outcome_expired(o, _mname)
-                        _kb = InlineKeyboardMarkup([[InlineKeyboardButton("💳 جدّد اشتراكك", url=f"{FRONTEND_URL}/pricing")]])                             if o.get("status") in ("TP1_HIT", "TP2_HIT") else None
+                        _kb = InlineKeyboardMarkup([[InlineKeyboardButton("💳 جدّد اشتراكك", url=f"{FRONTEND_URL}/pricing"), ch_btn()]]) \
+                            if o.get("status") in ("TP1_HIT", "TP2_HIT") else InlineKeyboardMarkup([[ch_btn()]])
                     else:
                         _txt = M.outcome_subscriber(o, _mname)
                         _kb = InlineKeyboardMarkup([
                             [InlineKeyboardButton("📱 عرض في حسابي", url=f"{FRONTEND_URL}/dashboard?signal={o.get('signal_id')}")],
                             [InlineKeyboardButton("📈 إحصائياتي", callback_data="m_stats"),
                              InlineKeyboardButton("📡 الإشارات",  callback_data="m_signals")],
+                            [ch_btn()],
                         ])
                     await app.bot.send_message(
                         chat_id=int(o["telegram_id"]),

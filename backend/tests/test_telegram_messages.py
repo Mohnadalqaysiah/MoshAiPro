@@ -111,6 +111,31 @@ def test_stats_card():
     assert "+2.5R" in t and "▰" in t and "الذهب شراء" in t and "أ&lt;ب&gt;" in t and _balanced(t)
 
 
+def test_channel_line_in_main_messages():
+    """(2026-10-24) معرّف القناة العامة بكل الرسائل الرئيسية — والخاسرة للمنتهي اشتراكه تبقى مختصرة (الزر يكفي)."""
+    o = {"status": "TP1_HIT", "signal_type": "SELL", "entry": 2400, "sl": 2410, "tp1": 2385, "tp2": 2370, "pnl_pct": 0.6}
+    for t in (M.signal_full(SIG, "الذهب", "4 ساعات", 78), M.signal_masked(SIG, "الذهب", "4 ساعات"),
+              M.outcome_subscriber(o, "الذهب"), M.outcome_expired(o, "الذهب"),
+              M.stats_card({"full_name": "x", "total_signals": 0})):
+        assert "@QaffelPlatform" in t and _balanced(t)
+    assert "@QaffelPlatform" not in M.outcome_expired({**o, "status": "SL_HIT"}, "الذهب")
+
+
+def test_teaser_gate_caps_channel_posts():
+    from datetime import datetime, timedelta, timezone
+    g = M.TeaserGate(daily_max=2, min_gap_min=60)
+    t = datetime(2026, 10, 26, 8, 0, tzinfo=timezone.utc)
+    assert g.allow("A", t)
+    g.mark("A", t)
+    assert not g.allow("A", t + timedelta(hours=3))                 # نفس القرار مرة واحدة
+    assert not g.allow("B", t + timedelta(minutes=30))              # فاصل ساعة
+    assert g.allow("B", t + timedelta(minutes=61))
+    g.mark("B", t + timedelta(minutes=61))
+    assert not g.allow("C", t + timedelta(hours=5))                 # الحد اليومي 2
+    assert g.allow("C", t + timedelta(days=1))                      # يوم جديد
+    assert not M.TeaserGate(daily_max=0).allow("X", t)              # 0 = النشر بالقناة متوقف
+
+
 def test_expired_wants_result():
     from app.api.bot import _expired_wants_result as f
     u = lambda **k: SimpleNamespace(**{"notifications_enabled": True, "notify_watchlist": None, **k})  # noqa: E731
