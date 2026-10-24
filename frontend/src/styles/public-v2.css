@@ -131,6 +131,10 @@
 .qpub .qp-btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:52px;padding:0 26px;border-radius:14px;
   font-weight:700;font-size:16px;transition:transform .25s ease,box-shadow .25s ease,border-color .25s;cursor:pointer}
 .qpub .qp-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+/* (2026-10-24) زر ثانوي — فلاتر سجل الأداء وأزرار التحقق */
+.qpub .qp-btn-ghost{display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:12px;border:1px solid rgba(148,163,184,.3);background:transparent;color:#cbd5e1;cursor:pointer;transition:border-color .2s,color .2s}
+.qpub .qp-btn-ghost:hover{border-color:rgba(148,163,184,.6);color:#fff}
+.qpub .qp-btn-ghost:disabled{opacity:.4;cursor:not-allowed}
 .qpub .qp-mint{background:var(--mint);color:var(--mint-ink);box-shadow:0 10px 40px -10px rgba(60,242,192,.6),inset 0 -2px 0 rgba(0,0,0,.18)}
 .qpub .qp-mint:not(:disabled):hover{transform:translateY(-2px);box-shadow:0 18px 50px -12px rgba(60,242,192,.75),inset 0 -2px 0 rgba(0,0,0,.18)}
 .qpub .qp-line{border:1px solid var(--line2);background:rgba(255,255,255,.03);color:var(--text)}

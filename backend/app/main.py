@@ -15,7 +15,7 @@ import shutil
 
 from app.config import get_settings
 from app.database import init_db, get_db
-from app.api import signals, markets, analytics, chat, auth, subscription, admin, bot, public_chat, analyses, affiliate, alerts, telegram_webhook, journal, strategies, support, games, reviews
+from app.api import signals, markets, analytics, chat, auth, subscription, admin, bot, public_chat, analyses, affiliate, alerts, telegram_webhook, journal, strategies, support, games, reviews, track_record
 from app.services.gemini_engine import gemini_engine
 from app.services.rate_limiter import twelvedata_client
 from app.models.site_settings import SiteSettings
@@ -384,6 +384,7 @@ app.include_router(strategies.router,  prefix="/api/v1/strategies",       tags=[
 app.include_router(support.router,     prefix="/api/v1/support",          tags=["Support"])
 app.include_router(games.router,       prefix="/api/v1/games",            tags=["Games"])
 app.include_router(reviews.router,     prefix="/api/v1",                  tags=["Reviews"])   # (17/10) /reviews + /public/reviews
+app.include_router(track_record.router, prefix="/api/v1",                 tags=["TrackRecord"])   # (24/10) سجل الأداء العام — مغلق حتى يُفتح من اللوحة
 
 
 # WebSocket endpoint for real-time updates

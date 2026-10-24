@@ -75,11 +75,12 @@ function TradeChart({ d, isAr }) {
   )
 }
 
-function ChartModal({ trade, onClose, isAr }) {
+// url اختياري: سجل الأداء العام يمرّر مساره (/public/track-record/{id}/chart) — نفس الشارت والمرجع
+export function ChartModal({ trade, onClose, isAr, url }) {
   const [d, setD] = useState(null)
   const [err, setErr] = useState(null)
   useEffect(() => {
-    axios.get(`${API}/api/v1/signals/${trade.id}/chart`).then((r) => setD(r.data))
+    axios.get(url || `${API}/api/v1/signals/${trade.id}/chart`).then((r) => setD(r.data))
       .catch((e) => setErr(e.response?.data?.detail || (isAr ? 'تعذّر تحميل الشارت' : 'Could not load chart')))
   }, [trade.id])
   const st = ST[trade.status] || {}

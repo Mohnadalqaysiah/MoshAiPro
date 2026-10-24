@@ -31,6 +31,7 @@ const Terms          = lazy(() => import('./pages/Terms'))
 const Privacy        = lazy(() => import('./pages/Privacy'))
 const Contact        = lazy(() => import('./pages/Contact'))
 const About          = lazy(() => import('./pages/About'))
+const TrackRecord    = lazy(() => import('./pages/TrackRecord'))   // (2026-10-24) سجل الأداء العام — مغلق حتى يُفتح من اللوحة
 const StrategyBuilderPage = lazy(() => import('./pages/StrategyBuilderPage'))
 const Vision         = lazy(() => import('./pages/Vision'))
 const SaudiLanding   = lazy(() => import('./pages/SaudiLanding'))
@@ -109,6 +110,7 @@ function AppRoutes() {
         <Route path="/privacy"           element={<Privacy />} />
         <Route path="/contact"           element={<Contact />} />
         <Route path="/about"             element={<About />} />
+        <Route path="/results"           element={<TrackRecord />} />
         <Route path="/strategy-builder"  element={<StrategyBuilderPage />} />
         <Route path="/vision"            element={<Vision />} />
         <Route path="/forgot-password"   element={<ForgotPassword />} />
