@@ -995,17 +995,17 @@ async def bot_check_outcomes(
                             elif sub.plan == PlanType.TRIAL:
                                 valid = not sub.trial_ends_at or sub.trial_ends_at > now_utc
                             if valid and sub.telegram_id:
-                                triggered.append({"telegram_id": sub.telegram_id, **payload})
+                                triggered.append({"telegram_id": sub.telegram_id, **payload, "lang": sub.language or "ar"})
                             elif sub.telegram_id and _expired_wants_result(sub, sig.market):
                                 # (2026-10-19، قرار المالك) المنتهي اشتراكه يستلم **كل** نتائج الإشارات العامة — الرابحة مفصّلة
                                 # والخاسرة مختصرة (telegram-bot/messages.outcome_expired) — لتشجيعه على الاشتراك بصورة صادقة.
                                 # لا يُخفى أي وقف. يحترم إيقاف الإشعارات وقائمة المراقبة.
-                                triggered.append({"telegram_id": sub.telegram_id, **payload, "audience": "expired"})
+                                triggered.append({"telegram_id": sub.telegram_id, **payload, "audience": "expired", "lang": sub.language or "ar"})
                 else:
                     # إشارة خاصة بمستخدم واحد
                     user = db.query(User).filter(User.id == sig.user_id).first()
                     if user and user.telegram_id:
-                        triggered.append({"telegram_id": user.telegram_id, **payload})
+                        triggered.append({"telegram_id": user.telegram_id, **payload, "lang": user.language or "ar"})
         except Exception as _e:
             logger.warning(f"check_outcomes signal {sig.id}: {_e}")
 
@@ -1646,6 +1646,7 @@ def bot_active_subscribers(
             "watchlist":             [s.upper() for s in (u.notify_watchlist or [])],
             "timeframes":            list(u.notify_timeframes or []),
             "min_confidence":        u.notify_min_confidence if u.notify_min_confidence is not None else 0,
+            "lang":                  u.language or "ar",   # (2026-10-24) رسائل البوت بلغة حساب المستخدم
         }
         for u in users
     ]
@@ -1819,6 +1820,7 @@ def bot_user_stats(
         "watchlist_filter":  stats["watchlist_filter"],
         # (2026-10-19) بطاقة البوت الجديدة بـR (telegram-bot/messages.stats_card)
         "plan":           str(user.plan.value if hasattr(user.plan, "value") else user.plan).lower(),
+        "lang":           user.language or "ar",
         "total_r":        stats["total_r"],
         "avg_r":          stats["avg_r"],
         "best_r":         stats["best_r"],

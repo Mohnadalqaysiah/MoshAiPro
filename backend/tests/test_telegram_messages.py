@@ -136,6 +136,33 @@ def test_teaser_gate_caps_channel_posts():
     assert not M.TeaserGate(daily_max=0).allow("X", t)              # 0 = النشر بالقناة متوقف
 
 
+def test_english_messages_have_no_arabic_and_same_rules():
+    """(2026-10-24) من اختار الإنجليزية بحسابه: نفس القواعد، بلا حرف عربي واحد."""
+    import re
+    import messages_en as ME
+    ar = re.compile(r"[؀-ۿ]")
+    o = {"market": "XAUUSD", "status": "TP2_HIT", "signal_type": "SELL", "entry": 2400, "sl": 2410, "tp1": 2385,
+         "tp2": 2370, "pnl_pct": 1.25, "created_at": "2026-10-19T08:00:00+00:00"}
+    st = {"full_name": "John", "plan": "monthly", "total_signals": 3, "wins": 2, "losses": 1, "win_rate": 67,
+          "total_r": 1.5, "avg_r": 0.5, "best_r": 2.0, "worst_r": -1.0,
+          "recent_trades": [{"market": "XAUUSD", "type": "BUY", "status": "TP1_HIT", "r": 1.0, "closed_at": "10/19"}]}
+    texts = [ME.signal_full(SIG, "XAUUSD", "4h", 78), ME.signal_masked(SIG, "XAUUSD", "4h"),
+             ME.outcome_subscriber(o, "XAUUSD"), ME.outcome_expired(o, "XAUUSD"),
+             ME.outcome_expired({**o, "status": "SL_HIT"}, "XAUUSD"), ME.outcome_expired({**o, "status": "BREAKEVEN"}, "XAUUSD"),
+             ME.stats_card(st), ME.stats_card({"total_signals": 0})]
+    for t in texts:
+        assert not ar.search(t), t
+        assert _balanced(t)
+    full, masked = texts[0], texts[1]
+    assert "SELL XAUUSD" in full and "+1.5R" in full and "+3.0R" in full
+    for word in ("SELL", "BUY", "2400", "2,400", "2410", "confidence"):
+        assert word not in masked, word
+    assert "TP2 hit" in texts[3] and "+3R" in texts[3] and "Renew" in texts[3]
+    assert texts[4].count("\n") <= 2 and "−1R" in texts[4]                     # الخاسرة مختصرة
+    assert "@QaffelPlatform" in full and "@QaffelPlatform" in masked
+    assert ME.ago("2026-10-19T08:00:00+00:00", __import__("datetime").datetime(2026, 10, 19, 16, 30, tzinfo=__import__("datetime").timezone.utc)) == "8 h 30 min"
+
+
 def test_expired_wants_result():
     from app.api.bot import _expired_wants_result as f
     u = lambda **k: SimpleNamespace(**{"notifications_enabled": True, "notify_watchlist": None, **k})  # noqa: E731

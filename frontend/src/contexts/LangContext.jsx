@@ -1,4 +1,7 @@
 import { createContext, useContext, useState } from 'react'
+import axios from 'axios'
+
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 const LangContext = createContext()
 
@@ -190,17 +193,28 @@ export const translations = {
 
 export function LangProvider({ children }) {
   const [lang, setLang] = useState(() => localStorage.getItem('qaffel_lang') || 'ar')
+  // (2026-10-24، طلب المالك) اللغة إعداد للحساب: تُحفظ بالخادم إن كان مسجّلاً (تُطبَّق من أي جهاز، ورسائل البوت بها)
+  const persist = (next) => {
+    localStorage.setItem('qaffel_lang', next)
+    if (localStorage.getItem('mosh_token')) axios.put(`${API}/api/v1/auth/language`, { language: next }).catch(() => {})
+  }
   const toggle = () => setLang(l => {
     const next = l === 'ar' ? 'en' : 'ar'
-    localStorage.setItem('qaffel_lang', next)
+    persist(next)
     return next
   })
+  // عند الدخول/تحميل الحساب: لغة الحساب هي المرجع (بلا إعادة حفظ)
+  const applyAccountLang = (next) => {
+    if (next !== 'ar' && next !== 'en') return
+    localStorage.setItem('qaffel_lang', next)
+    setLang(next)
+  }
   // يفرض لغة عرض مباشرة بدون لمس التفضيل المحفوظ — يُستخدم فقط لمزامنة
   // العرض مع رابط /en/* (مسارات SEO حقيقية)، لا يغيّر اختيار المستخدم الشخصي
   const setLangDirect = (next) => setLang(next)
   const t = translations[lang]
   return (
-    <LangContext.Provider value={{ lang, toggle, setLangDirect, t }}>
+    <LangContext.Provider value={{ lang, toggle, setLangDirect, applyAccountLang, t }}>
       {children}
     </LangContext.Provider>
   )

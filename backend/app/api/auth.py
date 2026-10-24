@@ -34,6 +34,7 @@ class RegisterIn(BaseModel):
     email: str
     password: str
     full_name: str = ""
+    language: Optional[str] = None   # (2026-10-24) لغة الواجهة وقت التسجيل ← لغة الحساب
 
 class LoginIn(BaseModel):
     email: str
@@ -88,6 +89,7 @@ class VerifyEmailIn(BaseModel):
 
 class GoogleLoginIn(BaseModel):
     id_token: str  # Firebase ID token من signInWithPopup بالفرونت-إند
+    language: Optional[str] = None   # (2026-10-24) لحساب جديد فقط
 
 class FeatureSurveyIn(BaseModel):
     selected_option: str
@@ -157,6 +159,7 @@ def _provision_trial_user(
     password_hash: Optional[str],
     is_verified: bool,
     auth_provider: str,
+    language: Optional[str] = None,
 ) -> User:
     """
     ينشئ حساب تجربة جديداً (خطة/نقاط/كود إحالة/تنبيه أدمن/إيميل ترحيب) —
@@ -190,6 +193,8 @@ def _provision_trial_user(
         trial_analyses_left = 0 if reused else _get_setting(db, "trial_analysis_limit", 10),
         trial_chat_left     = 0 if reused else _get_setting(db, "trial_chat_limit", 20),
         telegram_link_token = secrets.token_urlsafe(16),
+        # (2026-10-24) من سجّل من الواجهة الإنجليزية حسابه إنجليزي — وإلا قلبه تطبيق لغة الحساب للعربية بعد التسجيل
+        language            = language if language in ("ar", "en") else "ar",
         affiliate_code      = new_code,
         referred_by_code    = clean_ref if referrer else None,
         registration_ip     = registration_ip,
@@ -268,6 +273,7 @@ def register(
         password_hash=hash_password(data.password),
         is_verified=False,
         auth_provider="password",
+        language=data.language,
     )
 
     token = create_token(user.id, user.role)
@@ -322,6 +328,7 @@ def google_login(
             password_hash=None,
             is_verified=claims["email_verified"],
             auth_provider="google",
+            language=data.language,
         )
 
     token = create_token(user.id, user.role)
@@ -956,6 +963,21 @@ def get_preferences(user: User = Depends(get_current_user)):
         "account_balance":       float(user.account_balance or 10000.0),
         "risk_percent":          float(user.risk_percent or 1.5),
     }
+
+
+class LanguageIn(BaseModel):
+    language: str
+
+
+@router.put("/language")
+def update_language(data: LanguageIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """(2026-10-24، طلب المالك) لغة الحساب: زر اللغة بالموقع يحفظها هنا، وتُطبَّق عند الدخول من أي جهاز،
+    ورسائل البوت (الإشارات، النتائج، الإحصائيات) تصل بها."""
+    if data.language not in ("ar", "en"):
+        raise HTTPException(400, "language: ar | en")
+    user.language = data.language
+    db.commit()
+    return {"success": True, "language": user.language}
 
 
 @router.put("/preferences")

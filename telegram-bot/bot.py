@@ -8,6 +8,7 @@ from datetime import datetime, timezone, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand, WebAppInfo, Poll
 import messages as M   # (2026-10-19) نصوص الرسائل الموحّدة (HTML) — راجع messages.py
 import review_flow as RF   # (2026-10-24) إرسال رأي من البوت بنص وصورة/فيديو
+import messages_en as ME   # (2026-10-24) نفس الرسائل بالإنجليزية لمن اختار الإنجليزية بحسابه
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, ContextTypes, PollAnswerHandler, TypeHandler,
     MessageHandler, filters,
@@ -295,8 +296,26 @@ async def _save_wl_to_db(uid: int, telegram_id: str):
 
 
 # ─── Keyboards ────────────────────────────────────────────────────────────────
-def ch_btn():
-    return InlineKeyboardButton("📢 قناة Qaffel", url=CHANNEL_URL)
+def ch_btn(lang: str = "ar"):
+    return InlineKeyboardButton("📢 Qaffel channel" if lang == "en" else "📢 قناة Qaffel", url=CHANNEL_URL)
+
+
+# (2026-10-24) لغة كل مستخدم من حسابه (users.language) — تصل مع قوائم المشتركين والنتائج والإحصائيات وتُحفظ هنا للقوائم.
+# غير المرتبط: لغة تيليجرام نفسه (en* ← en).
+_user_lang: dict = {}
+
+
+def lang_for(user) -> str:
+    if user is None:
+        return "ar"
+    cached = _user_lang.get(str(user.id))
+    if cached in ("ar", "en"):
+        return cached
+    return "en" if (getattr(user, "language_code", "") or "").lower().startswith("en") else "ar"
+
+
+def L(lang: str):
+    return ME if lang == "en" else M
 
 
 _teasers = None   # TeaserGate — يُنشأ عند أول استخدام (messages مستورد كـM)
@@ -328,7 +347,18 @@ async def post_channel_teaser(app, sig: dict, text: str):
         logger.warning(f"channel teaser {key}: {e}")
 
 
-def kb_main():
+def kb_main(lang: str = "ar"):
+    if lang == "en":
+        return InlineKeyboardMarkup([
+            [InlineKeyboardButton("⚡ Quick analysis", callback_data="m_analyze"),
+             InlineKeyboardButton("📡 Latest signals", callback_data="m_signals")],
+            [InlineKeyboardButton("👁 Watchlist", callback_data="m_watchlist"),
+             InlineKeyboardButton("📊 My stats", callback_data="m_stats")],
+            [InlineKeyboardButton("🎁 Referral points", callback_data="m_referral"),
+             InlineKeyboardButton("❓ Help", callback_data="m_help")],
+            [InlineKeyboardButton("🌐 Open dashboard", web_app=WebAppInfo(url=FRONTEND_URL))],
+            [InlineKeyboardButton("⭐ Send a review", callback_data="m_review"), ch_btn("en")],
+        ])
     return InlineKeyboardMarkup([
         # ── تحليل وإشارات ──
         [InlineKeyboardButton("⚡ تحليل فوري",   callback_data="m_analyze"),
@@ -738,6 +768,18 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         return
 
+    _lg = lang_for(update.effective_user)
+    if _lg == "en":
+        await update.message.reply_text(
+            "🤖 *Qaffel AI*\n\n"
+            "Smart trading platform powered by ICT/SMC and AI\n\n"
+            "🔗 *To link your account:*\n"
+            "Open the platform → tap «Link Telegram» → open the link\n\n"
+            "Once linked, signals and alerts reach you here automatically 🚀",
+            parse_mode="Markdown",
+            reply_markup=kb_main("en"),
+        )
+        return
     await update.message.reply_text(
         "🤖 *Qaffel AI*\n\n"
         "منصة تداول ذكية بتقنية ICT/SMC والذكاء الاصطناعي\n\n"
@@ -750,10 +792,11 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def cmd_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    _lg = lang_for(update.effective_user)
     await update.message.reply_text(
-        "🤖 *Qaffel AI — القائمة الرئيسية*",
+        "🤖 *Qaffel AI — Main menu*" if _lg == "en" else "🤖 *Qaffel AI — القائمة الرئيسية*",
         parse_mode="Markdown",
-        reply_markup=kb_main(),
+        reply_markup=kb_main(_lg),
     )
 
 
@@ -792,9 +835,10 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ── Back to main menu
     if d in ("m_back", "m_main"):
+        _lg = lang_for(q.from_user)
         await q.edit_message_text(
-            "🤖 *Qaffel AI — القائمة الرئيسية*",
-            parse_mode="Markdown", reply_markup=kb_main(),
+            "🤖 *Qaffel AI — Main menu*" if _lg == "en" else "🤖 *Qaffel AI — القائمة الرئيسية*",
+            parse_mode="Markdown", reply_markup=kb_main(_lg),
         )
         return
 
@@ -1099,15 +1143,17 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # (2026-10-19) بطاقة موحّدة بـR (messages.stats_card) — "إجمالي النقاط" كان يجمع نقاطاً غير قابلة للجمع بين
         # الرموز (فارق المضاعف 1200 ضعف — DECISIONS.md) فيُظهر رقماً سالباً ضخماً بينما النتيجة بالمخاطرة موجبة.
-        text = M.stats_card(st, MARKET_NAMES)
+        _lg = st.get("lang") or "ar"
+        _user_lang[tgid] = _lg
+        text = ME.stats_card(st) if _lg == "en" else M.stats_card(st, MARKET_NAMES)
 
         await q.edit_message_text(
             text,
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔄 تحديث",        callback_data="m_stats"),
-                 InlineKeyboardButton("🌐 الداشبورد",    web_app=WebAppInfo(url=FRONTEND_URL))],
-                [ch_btn()],
+                [InlineKeyboardButton("🔄 Refresh" if _lg == "en" else "🔄 تحديث", callback_data="m_stats"),
+                 InlineKeyboardButton("🌐 Dashboard" if _lg == "en" else "🌐 الداشبورد", web_app=WebAppInfo(url=FRONTEND_URL))],
+                [ch_btn(_lg)],
                 [InlineKeyboardButton("🔙 رجوع",         callback_data="m_back")],
             ]),
         )
@@ -1266,6 +1312,8 @@ async def broadcast_new_signals(app: Application):
                 subs_data      = await _get("/api/v1/bot/active-subscribers")
                 subs_list      = subs_data.get("subscribers", [])
                 full_access_of = {str(s["telegram_id"]): bool(s.get("full_access")) for s in subs_list}
+                lang_of        = {str(s["telegram_id"]): (s.get("lang") or "ar") for s in subs_list}
+                _user_lang.update(lang_of)
                 muted          = {str(s["telegram_id"]) for s in subs_list if s.get("notifications_enabled") is False}
                 user_wl: dict[str, set] = {
                     str(s["telegram_id"]): set(s.get("watchlist") or [])
@@ -1336,6 +1384,20 @@ async def broadcast_new_signals(app: Application):
                         ch_btn(),
                     ]])
                     await post_channel_teaser(app, sig, msg_masked)
+                    # (2026-10-24) النسخة الإنجليزية لمن اختار الإنجليزية بحسابه — اسم السوق = الرمز
+                    msg_full_en   = ME.signal_full(sig, sig.get("market", ""), sig.get("timeframe", ""), get_confidence(sig))
+                    msg_masked_en = ME.signal_masked(sig, sig.get("market", ""), sig.get("timeframe", ""))
+                    kb_full_en = InlineKeyboardMarkup([
+                        [InlineKeyboardButton("📱 View in my account", url=f"{FRONTEND_URL}/dashboard?signal={sig['id']}")],
+                        [InlineKeyboardButton("📊 Analyze this pair", callback_data=f"sym_{sig['market']}"),
+                         InlineKeyboardButton("📡 All signals", callback_data="m_signals")],
+                        [InlineKeyboardButton(f"🔕 Mute {sig['market']}", callback_data=f"mute_{sig['market']}"),
+                         InlineKeyboardButton("⚙️ Customize", url=SETTINGS_URL)],
+                        [ch_btn("en")],
+                    ])
+                    kb_masked_en = InlineKeyboardMarkup([[
+                        InlineKeyboardButton("💳 Activate subscription", url=f"{FRONTEND_URL}/pricing"), ch_btn("en"),
+                    ]])
                     # (2026-08-31) إشارات المراقبة الشخصية (monitor_watchlists)
                     # محفوظة بـuser_id صاحبها، وهو أصلاً استلم تنبيه شخصي عنها
                     # لحاله. نستثنيه هون عشان ما توصله نفس الفرصة مرتين —
@@ -1374,8 +1436,12 @@ async def broadcast_new_signals(app: Application):
                                                    json={"telegram_id": tid, "signal_id": sig.get("id")})
                             unlocked = bool(consume.get("unlocked"))
 
-                        msg = msg_full if unlocked else msg_masked
-                        kb  = kb_full  if unlocked else kb_masked
+                        if lang_of.get(tid) == "en":
+                            msg = msg_full_en if unlocked else msg_masked_en
+                            kb  = kb_full_en  if unlocked else kb_masked_en
+                        else:
+                            msg = msg_full if unlocked else msg_masked
+                            kb  = kb_full  if unlocked else kb_masked
                         variant = "full" if unlocked else "masked"
                         try:
                             await app.bot.send_message(
@@ -1437,8 +1503,24 @@ async def outcome_checker(app: Application):
                 try:
                     # (2026-10-19) جمهوران: المشترك (نتيجة + زر للصفقة بحسابه)، والمنتهي اشتراكه (audience=expired —
                     # الرابحة مفصّلة مع دعوة للاشتراك، الخاسرة مختصرة؛ كل النتائج تصل ولا تُخفى خسارة).
-                    _mname = MARKET_NAMES.get(o.get("market", ""), o.get("market", ""))
-                    if o.get("audience") == "expired":
+                    _lg = o.get("lang") or "ar"
+                    if o.get("telegram_id"):
+                        _user_lang[str(o["telegram_id"])] = _lg
+                    _mname = o.get("market", "") if _lg == "en" else MARKET_NAMES.get(o.get("market", ""), o.get("market", ""))
+                    if _lg == "en":
+                        if o.get("audience") == "expired":
+                            _txt = ME.outcome_expired(o, _mname)
+                            _kb = InlineKeyboardMarkup([[InlineKeyboardButton("💳 Renew subscription", url=f"{FRONTEND_URL}/pricing"), ch_btn("en")]]) \
+                                if o.get("status") in ("TP1_HIT", "TP2_HIT") else InlineKeyboardMarkup([[ch_btn("en")]])
+                        else:
+                            _txt = ME.outcome_subscriber(o, _mname)
+                            _kb = InlineKeyboardMarkup([
+                                [InlineKeyboardButton("📱 View in my account", url=f"{FRONTEND_URL}/dashboard?signal={o.get('signal_id')}")],
+                                [InlineKeyboardButton("📈 My stats", callback_data="m_stats"),
+                                 InlineKeyboardButton("📡 Signals", callback_data="m_signals")],
+                                [ch_btn("en")],
+                            ])
+                    elif o.get("audience") == "expired":
                         _txt = M.outcome_expired(o, _mname)
                         _kb = InlineKeyboardMarkup([[InlineKeyboardButton("💳 جدّد اشتراكك", url=f"{FRONTEND_URL}/pricing"), ch_btn()]]) \
                             if o.get("status") in ("TP1_HIT", "TP2_HIT") else InlineKeyboardMarkup([[ch_btn()]])
