@@ -26,6 +26,7 @@ import MarketTicker from '../components/MarketTicker'
 import CustomizeTip from '../components/CustomizeTip'
 import TradingPreferencesPanel from '../components/TradingPreferencesPanel'
 import Sparkline from '../components/Sparkline'
+import MyTradesPanel from '../components/MyTradesPanel'
 
 const T = {
   ar: {
@@ -157,8 +158,9 @@ export default function Dashboard() {
 
   const fetchSignalHistory = async (limit = 20) => {
     try {
-      const res = await axios.get(`${API}/api/v1/signals/history?limit=${limit}`)
-      setSignalHistory(res.data.signals || [])
+      // (2026-10-24) "آخر نتائجك" من صفقاتي (ما وصل المستخدم) لا من تحليلاته وحده — نفس الحقول (id/market/type/status)
+      const res = await axios.get(`${API}/api/v1/signals/my-trades`, { params: { page_size: limit } })
+      setSignalHistory(res.data.items || [])
     } catch (e) {
       // no history yet
     }
@@ -1139,90 +1141,8 @@ export default function Dashboard() {
         <div className="space-y-6">
           <PerformanceSection />
 
-          {/* Signal History */}
-          <div className="bg-gray-800/60 border border-gray-700/80 rounded-2xl overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-700/60">
-              <h2 className="text-white font-semibold flex items-center gap-2">
-                <Activity size={16} className="text-purple-400" />
-                {/* (2026-10-10) كانت "سجل الصفقات المغلقة" وهي تعرض كل إشارات
-                    المشترك بما فيها المفتوحة — العنوان صار يطابق المحتوى */}
-                {isAr ? 'سجل إشاراتك' : 'Your Signals History'}
-                {signalHistory.length > 0 && <span className="text-xs text-gray-500 font-normal">({signalHistory.length})</span>}
-              </h2>
-            </div>
-
-            {signalHistory.length === 0 ? (
-              <p className="text-gray-500 text-center py-10 text-sm">{isAr ? 'لا يوجد سجل بعد.' : 'No history yet.'}</p>
-            ) : (
-              <div className="divide-y divide-gray-700/40">
-                {signalHistory.slice(0, historyLimit).map((s) => {
-                  const STATUS = {
-                    ACTIVE:  { label: 'نشطة',      icon: '🟢', bar: 'bg-green-500',  txt: 'text-green-400' },
-                    TP1_HIT: { label: 'هدف 1',     icon: '✅', bar: 'bg-blue-500',   txt: 'text-blue-400'  },
-                    TP2_HIT: { label: 'هدف 2',     icon: '🎯', bar: 'bg-purple-500', txt: 'text-purple-400'},
-                    SL_HIT:  { label: 'وقف خسارة', icon: '❌', bar: 'bg-red-500',    txt: 'text-red-400'   },
-                    EXPIRED: { label: 'منتهية',    icon: '⏰', bar: 'bg-gray-600',   txt: 'text-gray-500'  },
-                    BREAKEVEN: { label: 'تأمين',  icon: '⚖️', bar: 'bg-amber-500',  txt: 'text-amber-400' },
-                  }
-                  const st      = STATUS[s.status] || { label: s.status, icon: '•', bar: 'bg-gray-600', txt: 'text-gray-400' }
-                  const isBuy   = s.type === 'BUY'
-                  const isWin   = ['TP1_HIT', 'TP2_HIT'].includes(s.status)
-                  const isLoss  = s.status === 'SL_HIT'
-                  const createdAt = s.created_at
-                    ? new Date(s.created_at).toLocaleDateString('ar-EG', { month: 'short', day: 'numeric' })
-                    : '—'
-
-                  return (
-                    <div key={s.id} className="flex items-center gap-0 hover:bg-gray-700/20 transition-colors">
-                      <div className={`w-1 self-stretch flex-shrink-0 ${st.bar} opacity-60`} />
-                      <div className="flex-1 flex items-center justify-between gap-3 px-4 py-3 flex-wrap">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <span className="font-bold text-white text-sm">{s.market}</span>
-                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${isBuy ? 'bg-green-500/15 text-green-400' : 'bg-red-500/15 text-red-400'}`}>
-                            {isBuy ? '▲' : '▼'} {isBuy ? 'شراء' : 'بيع'}
-                          </span>
-                          <span className="text-xs text-gray-500">{createdAt}</span>
-                        </div>
-                        <div className="flex items-center gap-3 flex-wrap">
-                          {s.entry != null && (
-                            <span className="text-xs text-gray-500 font-mono">
-                              {typeof s.entry === 'number' ? s.entry.toFixed(4) : s.entry}
-                            </span>
-                          )}
-                          {s.confidence != null && (
-                            <span className="text-xs text-yellow-400 font-medium">{Math.round(s.confidence)}%</span>
-                          )}
-                          <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full ${
-                            isWin  ? 'bg-green-500/15 text-green-400 border border-green-500/30' :
-                            isLoss ? 'bg-red-500/15 text-red-400 border border-red-500/30' :
-                            s.status === 'ACTIVE' ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30' :
-                            'bg-gray-600/30 text-gray-400 border border-gray-600/40'
-                          }`}>
-                            {st.icon} {st.label}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-
-            {signalHistory.length > historyLimit && (
-              <button
-                onClick={loadMoreHistory}
-                className="w-full py-3 text-sm text-gray-400 hover:text-white hover:bg-gray-700/30 transition-colors flex items-center justify-center gap-2 border-t border-gray-700/60"
-              >
-                <ChevronDown size={15} />
-                {isAr ? `عرض المزيد (${signalHistory.length - historyLimit} متبقية)` : `Show more (${signalHistory.length - historyLimit} left)`}
-              </button>
-            )}
-            {historyLimit > 10 && signalHistory.length <= historyLimit && (
-              <p className="py-3 text-center text-xs text-gray-400 border-t border-gray-700/40">
-                {isAr ? `تم عرض جميع السجلات (${signalHistory.length})` : `All ${signalHistory.length} records shown`}
-              </p>
-            )}
-          </div>
+          {/* (2026-10-24) "صفقاتي" حلّت محل "سجل إشاراتك" — كانت تعرض تحليلات المستخدم وحده لا ما وصله من البوت */}
+          <MyTradesPanel isAr={isAr} />
         </div>
       )}
 
