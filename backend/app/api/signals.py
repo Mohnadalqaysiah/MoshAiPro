@@ -1015,6 +1015,104 @@ def signals_backtest(
 
 
 # ── Must be LAST — catches /{signal_id} after all static routes ──────────────
+# ─── صفقاتي (2026-10-24، طلب المالك) ─────────────────────────────────────────────────────────────
+# كانت "سجل إشاراتك" تعرض صفوف Signal.user_id فقط — أي تحليلات المستخدم وتنبيهات مراقبته — لا الإشارات التي وصلته من البوت،
+# فلم يفهمها المالك نفسه. صفقاتي = كل ما وصل المستخدم: صفوفه + ما سُلّم له بالبث (signal_deliveries ok)، قراراً واحداً لكل صفقة.
+_WIN = ("TP1_HIT", "TP2_HIT")
+_TRADE_FILTERS = {
+    "win": _WIN, "loss": ("SL_HIT",), "breakeven": ("BREAKEVEN",), "open": ("ACTIVE", "PENDING"), "expired": ("EXPIRED",),
+}
+
+
+def build_my_trades(rows: list, user_id: int, variants: dict) -> list:
+    """rows: صفوف Signal (صفوفه + المسلَّمة له). variants: {signal_id: "full"|"masked"} من سجل التسليم.
+    قرار واحد لكل صفقة (decision_key، الأقدم ممثّلاً)، والمفتوحة التي وصلته مموّهة فقط تُستبعد (لم يستلم مستوياتها)."""
+    groups: dict = {}
+    for r in sorted(rows, key=lambda x: x.created_at or datetime.min.replace(tzinfo=timezone.utc)):
+        k = decision_key(r.market, r.timeframe, r.signal_type, r.entry_price)
+        groups.setdefault(k, []).append(r)
+    out = []
+    for grp in groups.values():
+        rep = grp[0]
+        own = any(r.user_id == user_id for r in grp)
+        got_full = own or any(variants.get(r.id) == "full" for r in grp)
+        st = getattr(rep.status, "value", rep.status)
+        if st in ("ACTIVE", "PENDING") and not got_full:
+            continue
+        side = getattr(rep.signal_type, "value", rep.signal_type)
+        r_val = _r_multiple(rep.entry_price, rep.stop_loss, rep.take_profit_1, rep.take_profit_2, st) \
+            if st in ("TP1_HIT", "TP2_HIT", "SL_HIT", "BREAKEVEN") else None
+        out.append({
+            "id": rep.id, "market": rep.market, "timeframe": rep.timeframe, "type": side, "status": st,
+            "confidence": rep.ai_confidence, "entry": rep.entry_price, "sl": rep.stop_loss,
+            "tp1": rep.take_profit_1, "tp2": rep.take_profit_2, "rr": rep.risk_reward_ratio,
+            "r": round(r_val, 2) if r_val is not None else None,
+            "source": "own" if own else "bot", "received": "full" if got_full else "masked",
+            "created_at": rep.created_at.isoformat() if rep.created_at else None,
+            "closed_at": rep.exit_executed.isoformat() if rep.exit_executed else None,
+            "expires_at": rep.expires_at.isoformat() if rep.expires_at else None,
+        })
+    out.sort(key=lambda x: x["created_at"] or "", reverse=True)
+    return out
+
+
+@router.get("/my-trades")
+def my_trades(
+    status: str = "all",
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 20,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """صفقاتي: كل ما وصل المستخدم (البوت + حسابه)، بفلتر الحالة والتاريخ وصفحات، مع ملخص بـR على المحسومة."""
+    from app.models.signal_delivery import SignalDelivery
+    page, page_size = max(1, page), max(1, min(page_size, 100))
+    variants: dict = {}
+    for sid, var in (db.query(SignalDelivery.signal_id, SignalDelivery.variant)
+                     .filter(SignalDelivery.user_id == user.id, SignalDelivery.ok == True).all()):  # noqa: E712
+        if variants.get(sid) != "full":
+            variants[sid] = var or "full"
+    q = db.query(Signal).filter((Signal.user_id == user.id) | (Signal.id.in_(list(variants) or [0])))
+    try:
+        if date_from:
+            q = q.filter(Signal.created_at >= datetime.fromisoformat(date_from).replace(tzinfo=timezone.utc))
+        if date_to:
+            q = q.filter(Signal.created_at < datetime.fromisoformat(date_to).replace(tzinfo=timezone.utc) + timedelta(days=1))
+    except ValueError:
+        raise HTTPException(400, "صيغة التاريخ YYYY-MM-DD")
+    items = build_my_trades(q.all(), user.id, variants)
+    closed = [x for x in items if x["r"] is not None]
+    wins = sum(1 for x in closed if x["status"] in _WIN)
+    losses = sum(1 for x in closed if x["status"] == "SL_HIT")
+    summary = {
+        "total": len(items), "wins": wins, "losses": losses,
+        "breakeven": sum(1 for x in closed if x["status"] == "BREAKEVEN"),
+        "open": sum(1 for x in items if x["status"] in ("ACTIVE", "PENDING")),
+        "win_rate": round(100 * wins / (wins + losses)) if wins + losses else None,
+        "total_r": round(sum(x["r"] for x in closed), 2),
+    }
+    if status in _TRADE_FILTERS:
+        items = [x for x in items if x["status"] in _TRADE_FILTERS[status]]
+    start = (page - 1) * page_size
+    return {"items": items[start:start + page_size], "count": len(items), "page": page,
+            "pages": max(1, -(-len(items) // page_size)), "summary": summary}
+
+
+@router.get("/{signal_id}/chart")
+async def signal_chart(signal_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """(2026-10-24) شارت التحقق: شموع حقيقية لفترة صفقة **مغلقة** مع خطوطها (services/trade_chart.py). المغلقة مكشوفة لكل مسجّل."""
+    from app.services.trade_chart import build_chart
+    sig = db.query(Signal).filter(Signal.id == signal_id).first()
+    if not sig:
+        raise HTTPException(404, "الصفقة غير موجودة")
+    res = await build_chart(sig)
+    if not res.get("ok"):
+        raise HTTPException(400 if "بعد إغلاق" in res["error"] else 503, res["error"])
+    return res
+
+
 _OPEN_STATUSES = (SignalStatus.PENDING, SignalStatus.ACTIVE)
 
 
