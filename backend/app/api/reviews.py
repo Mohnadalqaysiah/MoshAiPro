@@ -104,6 +104,51 @@ def submit_review(data: ReviewIn, user: User = Depends(get_current_user), db: Se
     return {"success": True, "status": "pending"}
 
 
+def display_name_for(user: User, anonymous: bool) -> str:
+    """(2026-10-24) رأي من البوت: الاسم الأول + أول حرف من العائلة، أو "مشترك Qaffel" إن طلب الإخفاء."""
+    if anonymous:
+        return "مشترك Qaffel"
+    parts = (user.full_name or "").split()
+    if not parts:
+        return "مشترك Qaffel"
+    return (parts[0] + (f" {parts[1][0]}." if len(parts) > 1 and parts[1] else ""))[:40]
+
+
+def upsert_bot_review(db: Session, user: User, rating: int, text: str, media_type: Optional[str],
+                      media_file_id: Optional[str], anonymous: bool, consent: bool) -> dict:
+    """(2026-10-24) رأي من البوت — نفس شروط submit_review (مشترك مدفوع ≥7 أيام، موافقة، رأي واحد يعود للمراجعة عند تعديله).
+    يُرجع {"ok": bool, "error"?, "status"?} بدل HTTPException: البوت يعرض السبب للعميل."""
+    el = _eligibility(db, user)
+    if not el["eligible"]:
+        return {"ok": False, "error": "متاح للمشتركين بعد 7 أيام من أول اشتراك مدفوع" if el["reason"] == "no_paid"
+                else f"يمكنك إرسال رأيك بعد {el['days_left']} يوم"}
+    if not consent:
+        return {"ok": False, "error": "يلزم الموافقة على نشر الرأي"}
+    t = (text or "").strip()
+    media_type = media_type if media_type in ("photo", "video") and media_file_id else None
+    lo = 5 if media_type else 20
+    if not 1 <= int(rating) <= 5:
+        return {"ok": False, "error": "التقييم من 1 إلى 5"}
+    if not lo <= len(t) <= 600:
+        return {"ok": False, "error": f"النص بين {lo} و600 حرف"}
+    last = (db.query(Payment).filter(Payment.user_id == user.id, Payment.status == PaymentStatus.APPROVED)
+              .order_by(Payment.created_at.desc()).first())
+    r = db.query(Review).filter(Review.user_id == user.id).first()
+    if not r:
+        r = Review(user_id=user.id, source="member")
+        db.add(r)
+    r.rating, r.text = int(rating), t
+    r.display_name = display_name_for(user, anonymous)
+    r.anonymous, r.via = bool(anonymous), "bot"
+    r.media_type, r.media_file_id = media_type, (media_file_id if media_type else None)
+    r.plan_at_review = (last.plan.value if hasattr(last.plan, "value") else str(last.plan)) if last else None
+    r.subscribed_since, r.consent_public = el["since"], True
+    r.status, r.approved_at, r.reject_reason, r.channel_posted_at = "pending", None, None, None
+    db.commit()
+    _CACHE.clear()
+    return {"ok": True, "status": "pending"}
+
+
 @router.get("/reviews/mine")
 def my_review(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     el = _eligibility(db, user)

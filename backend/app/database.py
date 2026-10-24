@@ -78,6 +78,10 @@ def init_db() -> None:
                     conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_blocked_at TIMESTAMPTZ"))
                     # (2026-10-24) وسم الصفقات المخفَّفة — services/relax_policy.py (نموذج Signal يقرأه كل استعلام إشارات)
                     conn.execute(text("ALTER TABLE signals ADD COLUMN IF NOT EXISTS relaxed_rule VARCHAR(40)"))
+                    # (2026-10-24) آراء من البوت بصورة/فيديو + النشر بالقناة — models/review.py
+                    for _col in ("via VARCHAR NOT NULL DEFAULT 'web'", "media_type VARCHAR", "media_file_id VARCHAR",
+                                 "anonymous BOOLEAN NOT NULL DEFAULT FALSE", "channel_posted_at TIMESTAMPTZ"):
+                        conn.execute(text(f"ALTER TABLE reviews ADD COLUMN IF NOT EXISTS {_col}"))
                     conn.execute(text("ALTER TABLE shadow_signals ADD COLUMN IF NOT EXISTS levels_version INTEGER"))
                     conn.execute(text("CREATE INDEX IF NOT EXISTS ix_shadow_signals_levels_version ON shadow_signals (levels_version)"))
                 finally:

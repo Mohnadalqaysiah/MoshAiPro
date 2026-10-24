@@ -7,8 +7,10 @@ import os, asyncio, aiohttp
 from datetime import datetime, timezone, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand, WebAppInfo, Poll
 import messages as M   # (2026-10-19) نصوص الرسائل الموحّدة (HTML) — راجع messages.py
+import review_flow as RF   # (2026-10-24) إرسال رأي من البوت بنص وصورة/فيديو
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, ContextTypes, PollAnswerHandler, TypeHandler,
+    MessageHandler, filters,
 )
 from loguru import logger
 
@@ -339,7 +341,7 @@ def kb_main():
          InlineKeyboardButton("❓ المساعدة",      callback_data="m_help")],
         # ── داشبورد ──
         [InlineKeyboardButton("🌐 فتح الداشبورد", web_app=WebAppInfo(url=FRONTEND_URL))],
-        [ch_btn()],
+        [InlineKeyboardButton("⭐ أرسل رأيك", callback_data="m_review"), ch_btn()],
     ])
 
 
@@ -2164,6 +2166,89 @@ async def _mark_telegram_seen(update: Update, context: ContextTypes.DEFAULT_TYPE
         logger.debug(f"telegram-seen {u.id}: {e}")
 
 
+# ─────────────────────── آراء العملاء من البوت (2026-10-24) ───────────────────────
+_rf = RF.ReviewFlow()
+_RV_CANCEL = [InlineKeyboardButton("❌ إلغاء", callback_data="rv_cancel")]
+
+
+def _kb_rating():
+    return InlineKeyboardMarkup([[InlineKeyboardButton(f"{n}⭐", callback_data=f"rv_r_{n}") for n in range(1, 6)],
+                                 _RV_CANCEL])
+
+
+async def on_review_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+    uid, d = q.from_user.id, q.data
+    if d == "m_review":
+        st = await _get("/api/v1/bot/review-status", {"telegram_id": str(uid)})
+        if not st.get("linked"):
+            await q.message.reply_text("🔗 اربط حسابك بالمنصة أولاً لإرسال رأيك.",
+                                       reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(
+                                           "🌐 فتح المنصة", web_app=WebAppInfo(url=FRONTEND_URL))]]))
+            return
+        if not st.get("eligible"):
+            why = ("إرسال الرأي متاح للمشتركين بعد 7 أيام من أول اشتراك مدفوع — حتى يكون رأيك عن تجربة حقيقية."
+                   if st.get("reason") == "no_paid" else f"يمكنك إرسال رأيك بعد {st.get('days_left')} يوم من اشتراكك.")
+            await q.message.reply_text(f"⏳ {why}")
+            return
+        _rf.start(uid)
+        note = "\n<i>رأيك السابق سيُستبدل بالجديد بعد المراجعة.</i>" if st.get("existing") else ""
+        await q.message.reply_text(f"⭐ <b>كيف تقيّم تجربتك مع Qaffel؟</b>{note}", parse_mode="HTML",
+                                   reply_markup=_kb_rating())
+        return
+    if d == "rv_cancel":
+        await q.message.reply_text(_rf.cancel(uid))
+        return
+    if d.startswith("rv_r_"):
+        txt = _rf.on_rating(uid, int(d.split("_")[-1]))
+        if txt:
+            await q.message.reply_text(txt, parse_mode="HTML", reply_markup=InlineKeyboardMarkup([[
+                InlineKeyboardButton("⏭ تخطّي", callback_data="rv_skip")], _RV_CANCEL]))
+        return
+    if d == "rv_skip":
+        txt = _rf.on_skip(uid)
+        if txt:
+            await q.message.reply_text(txt, reply_markup=InlineKeyboardMarkup([_RV_CANCEL]))
+        return
+    if d in ("rv_pub_name", "rv_pub_anon"):
+        payload = _rf.on_consent(uid, anonymous=(d == "rv_pub_anon"))
+        if not payload:
+            return
+        res = await _post("/api/v1/bot/reviews", json={"telegram_id": str(uid), **payload})
+        if res.get("ok"):
+            await q.message.reply_text(RF.THANKS, parse_mode="HTML", reply_markup=InlineKeyboardMarkup([[ch_btn()]]))
+        else:
+            await q.message.reply_text(f"⚠️ {res.get('error') or 'تعذّر الإرسال — حاول بعد قليل.'}")
+
+
+async def on_review_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """نص أو صورة أو فيديو — يُعالج فقط إن كان المستخدم داخل خطوات الرأي؛ غير ذلك يُتجاهل كما كان."""
+    msg, uid = update.message, update.effective_user.id if update.effective_user else None
+    if not msg or uid is None or not _rf.active(uid):
+        return
+    step = _rf.step(uid)
+    if step == "media" and (msg.photo or msg.video):
+        kind = "photo" if msg.photo else "video"
+        fid = msg.photo[-1].file_id if msg.photo else msg.video.file_id
+        size = (msg.video.file_size or 0) if msg.video else 0
+        ok, txt = _rf.on_media(uid, kind, fid, size)
+        await msg.reply_text(txt, parse_mode="HTML",
+                             reply_markup=InlineKeyboardMarkup([_RV_CANCEL]) if ok else None)
+        return
+    if step == "text" and msg.text:
+        ok, txt = _rf.on_text(uid, msg.text)
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("✅ انشره باسمي", callback_data="rv_pub_name"),
+                                    InlineKeyboardButton("🙈 بدون اسمي", callback_data="rv_pub_anon")],
+                                   _RV_CANCEL]) if ok else InlineKeyboardMarkup([_RV_CANCEL])
+        await msg.reply_text(txt, parse_mode="HTML", reply_markup=kb)
+        return
+    hint = {"rating": "اختر عدد النجوم من الأزرار.", "media": "أرسل صورة أو فيديو، أو اضغط تخطّي.",
+            "text": "اكتب رأيك نصاً.", "consent": "اختر طريقة النشر من الأزرار."}.get(step)
+    if hint:
+        await msg.reply_text(hint)
+
+
 def main():
     if not BOT_TOKEN:
         logger.error("❌ TELEGRAM_BOT_TOKEN غير محدد!")
@@ -2178,7 +2263,10 @@ def main():
     app.add_handler(CommandHandler("help",  cmd_help))
     app.add_handler(CommandHandler("challenge", cmd_challenge))
     app.add_handler(CommandHandler("settings", cmd_settings))
+    app.add_handler(CallbackQueryHandler(on_review_button, pattern=r"^(m_review|rv_)"))   # قبل المعالج العام
     app.add_handler(CallbackQueryHandler(on_button))
+    app.add_handler(MessageHandler((filters.TEXT & ~filters.COMMAND) | filters.PHOTO | filters.VIDEO,
+                                   on_review_message))
     app.add_handler(PollAnswerHandler(on_poll_answer))
 
     async def post_init(application: Application):

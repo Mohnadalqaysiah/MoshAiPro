@@ -33,3 +33,9 @@ class Review(Base):
     created_at       = Column(DateTime(timezone=True), server_default=func.now())
     updated_at       = Column(DateTime(timezone=True), onupdate=func.now())
     approved_at      = Column(DateTime(timezone=True), nullable=True)
+    # (2026-10-24) رأي من البوت: صورة/فيديو (file_id تيليجرام — لا يُنزَّل ولا يُخزَّن الملف عندنا)، وإخفاء الاسم، والنشر بالقناة
+    via               = Column(String, nullable=False, default="web")      # web | bot
+    media_type        = Column(String, nullable=True)                      # photo | video
+    media_file_id     = Column(String, nullable=True)
+    anonymous         = Column(Boolean, nullable=False, default=False)
+    channel_posted_at = Column(DateTime(timezone=True), nullable=True)

@@ -4232,7 +4232,66 @@ def admin_list_reviews(status: str = Query(default="pending"), admin: User = Dep
         "display_name": r.display_name, "city": r.city, "market_tag": r.market_tag, "plan": r.plan_at_review,
         "user_email": emails.get(r.user_id), "admin_reply": r.admin_reply, "reject_reason": r.reject_reason,
         "created_at": r.created_at.isoformat() if r.created_at else None,
+        # (2026-10-24) من البوت
+        "via": r.via, "media_type": r.media_type, "anonymous": r.anonymous,
+        "channel_posted": bool(r.channel_posted_at),
     } for r in rows]}
+
+
+@router.get("/reviews/{review_id}/media")
+def admin_review_media(review_id: int, admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    """(2026-10-24) معاينة صورة/فيديو الرأي — يُجلب من تيليجرام عبر الخادم (رابط الملف يحمل توكن البوت فلا يصل للمتصفح)."""
+    from fastapi.responses import Response
+    from app.models.review import Review
+    r = db.query(Review).filter(Review.id == review_id).first()
+    if not r or not r.media_file_id:
+        raise HTTPException(404, "لا وسائط")
+    token = _get_bot_token(db)
+    if not token:
+        raise HTTPException(400, "TELEGRAM_BOT_TOKEN غير مضبوط")
+    info = requests.get(f"https://api.telegram.org/bot{token}/getFile", params={"file_id": r.media_file_id}, timeout=20)
+    path = (info.json().get("result") or {}).get("file_path") if info.status_code == 200 else None
+    if not path:
+        raise HTTPException(502, "تعذّر جلب الملف من تيليجرام (قد يكون أكبر من 20MB)")
+    f = requests.get(f"https://api.telegram.org/file/bot{token}/{path}", timeout=60)
+    ctype = "video/mp4" if r.media_type == "video" else "image/jpeg"
+    return Response(content=f.content, media_type=ctype, headers={"Cache-Control": "private, max-age=3600"})
+
+
+def _review_caption(r) -> str:
+    import html as _html
+    stars = "⭐" * int(r.rating or 0)
+    who = _html.escape(r.display_name or "مشترك Qaffel")
+    badge = "رأي مشترك موثّق" if r.source == "member" else "رأي عميل"
+    lines = [f"{stars}  <b>{badge}</b>", "", f"«{_html.escape(r.text or '')}»", "", f"— {who}"]
+    if r.admin_reply:
+        lines += ["", f"💬 <i>رد الفريق: {_html.escape(r.admin_reply)}</i>"]
+    lines += ["", "📢 @QaffelPlatform"]
+    return "\n".join(lines)[:1024]
+
+
+def _post_review_to_channel(r, token: str) -> Optional[str]:
+    """(2026-10-24) ينشر الرأي المعتمد بالقناة باسم البوت. يُرجع None عند النجاح أو وصف الخطأ."""
+    channel = get_settings().TELEGRAM_CHANNEL_ID
+    if not channel:
+        return "TELEGRAM_CHANNEL_ID غير مضبوط"
+    caption = _review_caption(r)
+    base = f"https://api.telegram.org/bot{token}"
+    try:
+        if r.media_type == "photo" and r.media_file_id:
+            resp = requests.post(f"{base}/sendPhoto", data={"chat_id": channel, "photo": r.media_file_id,
+                                                            "caption": caption, "parse_mode": "HTML"}, timeout=30)
+        elif r.media_type == "video" and r.media_file_id:
+            resp = requests.post(f"{base}/sendVideo", data={"chat_id": channel, "video": r.media_file_id,
+                                                            "caption": caption, "parse_mode": "HTML"}, timeout=60)
+        else:
+            resp = requests.post(f"{base}/sendMessage", json={"chat_id": channel, "text": caption,
+                                                              "parse_mode": "HTML"}, timeout=20)
+        if resp.status_code != 200:
+            return resp.json().get("description", str(resp.status_code))[:200]
+        return None
+    except Exception as e:
+        return type(e).__name__
 
 
 @router.post("/reviews/{review_id}/moderate")
@@ -4252,9 +4311,19 @@ def admin_moderate_review(review_id: int, data: ReviewModerateIn, admin: User = 
     if data.admin_reply is not None:
         r.admin_reply = data.admin_reply.strip() or None
     r.approved_at = datetime.now(timezone.utc) if data.status == "approved" else None
+    # (2026-10-24) أول اعتماد ← نشر بالقناة مرة واحدة (فشل النشر لا يُلغي الاعتماد، ويُعرض للأدمن)
+    channel = None
+    if data.status == "approved" and not r.channel_posted_at:
+        token = _get_bot_token(db)
+        err = _post_review_to_channel(r, token) if token else "TELEGRAM_BOT_TOKEN غير مضبوط"
+        if err is None:
+            r.channel_posted_at = datetime.now(timezone.utc)
+            channel = "posted"
+        else:
+            channel = f"failed: {err}"
     db.commit()
     clear_cache()
-    return {"success": True}
+    return {"success": True, "channel": channel}
 
 
 @router.post("/reviews/import")
