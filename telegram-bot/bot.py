@@ -1698,6 +1698,8 @@ async def monitor_watchlists(app: Application):
                                 "tp2":         _tp2 or _tp1,
                                 "confidence":  conf,
                                 "rr":          _rr,
+                                # (2026-10-24) وسم التخفيف الجزئي — يُحفظ بالصف للقياس وقاعدة الرجوع
+                                **({"relaxed_rule": data["relaxed_rule"]} if data.get("relaxed_rule") else {}),
                                 # (2026-10-16) سياق ICT لتقرير الجودة — كان يُحفظ بمسار الماسح فقط (تغطية 26%)
                                 **{k: v for k, v in (
                                     ("wyckoff_phase", (data.get("wyckoff") or {}).get("phase") if isinstance(data.get("wyckoff"), dict) else data.get("wyckoff")),
