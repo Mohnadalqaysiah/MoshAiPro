@@ -1719,6 +1719,44 @@ async def bot_latest_signals(
     return {**res, "linked": True}
 
 
+@router.get("/review-status")
+def bot_review_status(
+    telegram_id: str,
+    _: bool = Depends(verify_bot),
+    db: Session = Depends(get_db),
+):
+    """(2026-10-24) هل يحق للمستخدم المرتبط إرسال رأي من البوت؟ (نفس شرط الموقع: مشترك مدفوع ≥7 أيام)."""
+    from app.api.reviews import _eligibility
+    from app.models.review import Review
+    user = _get_linked_user(telegram_id, db)
+    if not user:
+        return {"linked": False}
+    el = _eligibility(db, user)
+    r = db.query(Review).filter(Review.user_id == user.id).first()
+    return {"linked": True, "eligible": el["eligible"], "reason": el["reason"], "days_left": el["days_left"],
+            "existing": r.status if r else None}
+
+
+@router.post("/reviews")
+def bot_submit_review(
+    telegram_id: str = Body(..., embed=True),
+    rating: int = Body(..., embed=True),
+    text: str = Body(..., embed=True),
+    media_type: Optional[str] = Body(None, embed=True),
+    media_file_id: Optional[str] = Body(None, embed=True),
+    anonymous: bool = Body(False, embed=True),
+    consent: bool = Body(False, embed=True),
+    _: bool = Depends(verify_bot),
+    db: Session = Depends(get_db),
+):
+    """(2026-10-24) رأي من البوت بنص وصورة/فيديو — يذهب لمراجعة الأدمن؛ عند الاعتماد يُنشر بالقناة (admin.py)."""
+    from app.api.reviews import upsert_bot_review
+    user = _get_linked_user(telegram_id, db)
+    if not user:
+        return {"ok": False, "error": "اربط حسابك أولاً"}
+    return upsert_bot_review(db, user, rating, text, media_type, media_file_id, anonymous, consent)
+
+
 @router.get("/user-stats")
 def bot_user_stats(
     telegram_id: str,

@@ -10,6 +10,20 @@ const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const TABS = [['pending', 'بانتظار المراجعة'], ['approved', 'منشورة'], ['rejected', 'مرفوضة'], ['all', 'الكل']]
 const REASONS = ['إساءة أو ألفاظ', 'محتوى غير متعلق بالمنصة', 'يحتوي بيانات شخصية', 'إعلان أو رابط']
 
+// (2026-10-24) صورة/فيديو رأي من البوت — تُجلب عبر الخادم (رابط تيليجرام يحمل توكن البوت)، فـaxios+blob لا <img src>
+function ReviewMedia({ id, type }) {
+  const [url, setUrl] = useState(null)
+  const [err, setErr] = useState(null)
+  const show = () => axios.get(`${API}/api/v1/admin/reviews/${id}/media`, { responseType: 'blob' })
+    .then((r) => setUrl(URL.createObjectURL(r.data))).catch((e) => setErr(e.response?.status === 502 ? 'تعذّر الجلب من تيليجرام' : 'خطأ'))
+  if (url) return type === 'video'
+    ? <video src={url} controls className="max-h-64 rounded-lg border border-gray-800" />
+    : <img src={url} alt="" className="max-h-64 rounded-lg border border-gray-800" />
+  return <button onClick={show} className="text-xs px-3 py-1.5 rounded-lg bg-gray-800 border border-gray-700 text-gray-200">
+    {type === 'video' ? '🎬 عرض الفيديو' : '🖼 عرض الصورة'}{err && <span className="text-red-400"> — {err}</span>}
+  </button>
+}
+
 const Stars = ({ n }) => <span className="inline-flex">{[1, 2, 3, 4, 5].map((k) => <Star key={k} size={13} className={k <= n ? 'text-yellow-400 fill-yellow-400' : 'text-gray-600'} />)}</span>
 
 export default function ReviewsAdminPanel() {
@@ -26,7 +40,10 @@ export default function ReviewsAdminPanel() {
   const moderate = async (id, status, reject_reason) => {
     setBusy(id); setMsg('')
     try {
-      await axios.post(`${API}/api/v1/admin/reviews/${id}/moderate`, { status, admin_reply: reply[id] ?? undefined, reject_reason })
+      const r = await axios.post(`${API}/api/v1/admin/reviews/${id}/moderate`, { status, admin_reply: reply[id] ?? undefined, reject_reason })
+      // (2026-10-24) أول اعتماد يُنشر بالقناة — فشل النشر لا يُلغي الاعتماد لكن يُعرض هنا
+      if (r.data?.channel === 'posted') setMsg('✅ اعتُمد ونُشر في قناة Qaffel')
+      else if (r.data?.channel?.startsWith('failed')) setMsg(`⚠️ اعتُمد لكن تعذّر النشر بالقناة: ${r.data.channel.slice(8)}`)
       load()
     } catch (e) { setMsg(e.response?.data?.detail || e.message) } finally { setBusy(null) }
   }
@@ -71,10 +88,14 @@ export default function ReviewsAdminPanel() {
                 <Stars n={r.rating} />
                 <b className="text-white">{r.display_name}</b>{r.city && <span className="text-gray-500">· {r.city}</span>}
                 <span className="text-xs text-gray-500">{r.source === 'member' ? `مشترك · ${r.user_email || ''} · ${r.plan || ''}` : `مُدخل يدوياً · ${r.source_note}`}</span>
+                {r.via === 'bot' && <span className="text-[11px] px-2 py-0.5 rounded-full bg-sky-900/40 text-sky-300 border border-sky-800">من البوت</span>}
+                {r.anonymous && <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-800 text-gray-300 border border-gray-700">بدون اسم</span>}
+                {r.status === 'approved' && <span className={`text-[11px] px-2 py-0.5 rounded-full border ${r.channel_posted ? 'bg-green-900/30 text-green-300 border-green-800' : 'bg-gray-800 text-gray-400 border-gray-700'}`}>{r.channel_posted ? 'منشور بالقناة' : 'غير منشور بالقناة'}</span>}
               </div>
               <span className="text-xs text-gray-500" dir="ltr">{r.created_at?.slice(0, 16).replace('T', ' ')}</span>
             </div>
             <p className="text-sm text-gray-200 leading-relaxed">{r.text}</p>
+            {r.media_type && <ReviewMedia id={r.id} type={r.media_type} />}
             {r.reject_reason && <p className="text-xs text-red-400">سبب الرفض: {r.reject_reason}</p>}
             <textarea rows={2} placeholder="رد الفريق (اختياري — يظهر تحت الرأي)" defaultValue={r.admin_reply || ''}
               onChange={(e) => setReply({ ...reply, [r.id]: e.target.value })}

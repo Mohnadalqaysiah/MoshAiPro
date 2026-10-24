@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     # (2026-10-24، قرار المالك) تخفيف جزئي لفلتر "بيع في منطقة خصم" على هذه الأطر فقط (services/relax_policy.py).
     # الرجوع الفوري بلا إعادة بناء: اتركه فارغاً بـ.env.prod (RELAX_SELL_IN_DISCOUNT_TFS=) ثم أعد إنشاء الحاوية.
     RELAX_SELL_IN_DISCOUNT_TFS: str = "15m,1h"
+
+    # (2026-10-24) القناة العامة — البوت مشرف فيها، ينشر الآراء المعتمدة
+    TELEGRAM_CHANNEL_ID: str = "@QaffelPlatform"
     
     # ----- Security -----
     SECRET_KEY: str
