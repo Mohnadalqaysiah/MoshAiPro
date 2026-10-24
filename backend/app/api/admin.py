@@ -2366,7 +2366,7 @@ class ReportSendIn(BaseModel):
 # ينحرفوا عن بعض. راجع الملف المشترك للشرح الكامل.
 
 
-def _build_performance_report(signals: list, days: int, db: Session) -> tuple[str, str]:
+def _build_performance_report(signals: list, days: int, db: Session, lang: str = "ar") -> tuple[str, str]:
     """
     يبني تقرير الأداء — يُعيد (telegram_text, email_html)
 
@@ -2420,6 +2420,8 @@ def _build_performance_report(signals: list, days: int, db: Session) -> tuple[st
     def fr(v):
         return f"{v:+.2f}R".replace("-", "−") if v is not None else "—"
 
+    by_mkt: dict = {}
+    top: list = []
     tg_lines = [
         f"📊 <b>تقرير أداء Qaffel AI</b>  ·  {period}",
         "━━━━━━━━━━━━━━━━━━",
@@ -2459,6 +2461,32 @@ def _build_performance_report(signals: list, days: int, db: Session) -> tuple[st
         "📢 @QaffelPlatform",
     ]
     tg_text = "\n".join(tg_lines)
+    # (2026-10-24) نسخة إنجليزية لمن اختار الإنجليزية بحسابه — نفس الأرقام
+    if lang == "en":
+        period_en = "today" if days == 1 else f"last {days} days" if days < 30 else "this month"
+        en = [f"📊 <b>Qaffel AI performance report</b>  ·  {period_en}", "━━━━━━━━━━━━━━━━━━"]
+        if not closed:
+            en += ["No closed decisions in this period yet."]
+        else:
+            en += [
+                f"<b>{r_sign}{total_r:.2f}R</b>  net result   <i>(avg {fr(avg_r)} per trade)</i>".replace("-", "−"),
+                f"✅ {len(wins)} wins   ❌ {len(losses)} losses   ·   win rate <b>{win_rate}%</b>",
+                "▰" * k_bar + "▱" * (10 - k_bar),
+                "", "<b>By market</b>",
+            ]
+            for mkt, m in sorted(by_mkt.items(), key=lambda kv: -kv[1]["r"]):
+                dot = "🟢" if m["r"] > 0 else "🔴" if m["r"] < 0 else "⚪"
+                en.append(f"{dot} <code>{mkt}</code>  ✅{m['w']} ❌{m['l']}  <b>{fr(m['r'])}</b>")
+            if top:
+                en += ["", "<b>Top trades</b>"]
+                for d in top:
+                    tgt = "TP2 🏆" if d["status"] == "TP2_HIT" else "TP1 ✅"
+                    en.append(f"{d['market']} {'BUY' if d['signal_type'] == 'BUY' else 'SELL'} — {tgt}  <b>{fr(d['r'])}</b>")
+            if losses:
+                en.append(f"❌ Losses: {len(losses)} trades × −1R (planned stop)")
+        en += ["", f"<i>{len(closed)} unique decisions delivered to {total_rows:,} recipients  ·  R = result as a multiple of risk</i>",
+               "<i>Technical analysis for information only — not investment advice.</i>", "📢 @QaffelPlatform"]
+        tg_text = "\n".join(en)
 
     # ── Email (HTML) ─────────────────────────────────────────────────────────
     rows = ""
@@ -2682,11 +2710,21 @@ def send_performance_report(
         _kb = {"inline_keyboard": [[{"text": "📊 التفاصيل في حسابي", "url": f"{_front}/dashboard?tab=performance"}],
                                    [{"text": "📢 قناة Qaffel", "url": "https://t.me/QaffelPlatform"}]]}
 
+        # (2026-10-24) من اختار الإنجليزية يستلم النسخة الإنجليزية (تُبنى فقط إن وُجد مستلم إنجليزي)
+        tg_text_en = None
+        if any((u.language or "ar") == "en" for u in tg_users):
+            tg_text_en, _ = _build_performance_report(signals, data.days, db, lang="en")
+            if market_filter:
+                tg_text_en = f"🎯 Custom report — {data.symbols or data.category}\n\n{tg_text_en}"
+        _kb_en = {"inline_keyboard": [[{"text": "📊 Details in my account", "url": f"{_front}/dashboard?tab=performance"}],
+                                      [{"text": "📢 Qaffel channel", "url": "https://t.me/QaffelPlatform"}]]}
+
         def _tg_broadcast():
             import time as _t
             sent = 0
             for u in tg_users:
-                ok = _send_telegram_message(u.telegram_id, tg_text, reply_markup=_kb)
+                _en = tg_text_en is not None and (u.language or "ar") == "en"
+                ok = _send_telegram_message(u.telegram_id, tg_text_en if _en else tg_text, reply_markup=_kb_en if _en else _kb)
                 if ok:
                     sent += 1
                 _t.sleep(0.05)
