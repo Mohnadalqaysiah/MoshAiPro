@@ -4055,7 +4055,9 @@ export default function Admin() {
                   {[
                     { key:'trial_chat_limit',        label:'محادثات التجريبي',        color:'gray' },
                     { key:'trial_analysis_limit',     label:'تحليلات التجريبي',        color:'gray' },
-                    { key:'trial_signal_daily_limit', label:'إشارات مكشوفة يومياً (تجريبي)', color:'gray' },
+                    // (2026-10-25، قرار المالك) حدان منفصلان: داخل أسبوع التجربة، وبعد انتهائها — يسريان على الموقع والبوت معاً
+                    { key:'trial_active_signal_daily_limit', label:'إشارات كاملة يومياً — تجربة نشطة (0 = بلا حد، كل الإشارات كاملة)', color:'gray' },
+                    { key:'trial_signal_daily_limit', label:'إشارات كاملة يومياً — تجربة منتهية (0 = بلا حد)', color:'gray' },
                     { key:'weekly_chat_limit',      label:'محادثات الأسبوعي',   color:'blue' },
                     { key:'weekly_analysis_limit',  label:'تحليلات الأسبوعي',   color:'blue' },
                     { key:'monthly_chat_limit',     label:'محادثات الشهري',     color:'purple' },

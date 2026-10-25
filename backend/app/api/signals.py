@@ -77,21 +77,20 @@ def _calc_lot_size(account_balance: float, risk_percent: float,
 router = APIRouter()
 
 
-def _trial_signal_daily_limit(db: Session) -> int:
-    """عدد الإشارات الكاملة (غير مموّهة) المسموحة يومياً لمستخدمي التجربة —
-    قابل للتعديل من لوحة الإدارة (SiteSettings)، مطابق لنمط trial_analysis_limit."""
-    from app.services.signal_quota import daily_limit
-    return daily_limit(db)
+def _trial_signal_daily_limit(db: Session, user: Optional[User] = None) -> int:
+    """(2026-10-25) الحد اليومي لفئة المستخدم (signal_quota.limit_for): تجربة نشطة / منتهية، كلٌّ بمفتاحه من اللوحة.
+    0 = بلا حد. بلا مستخدم: حد التجربة المنتهية (المفتاح القائم)."""
+    from app.services.signal_quota import daily_limit, limit_for
+    return limit_for(db, user) if user is not None else daily_limit(db)
 
 
 def _has_full_signal_access(user: Optional[User]) -> bool:
-    """أدمن أو مشترك فعلي (أسبوعي/شهري) يشوف كل تفاصيل كل الإشارات دايماً،
-    بدون حد يومي ولا تمويه."""
+    """أدمن أو اشتراك مدفوع **فعّال** — كل التفاصيل دائماً. (2026-10-25) من التواريخ لا من plan المحفوظة: الاشتراك المنتهي
+    كان يبقى WEEKLY/MONTHLY حتى يطلب تحليلاً فيستلم كل شيء كاملاً بلا نهاية (signal_quota.tier_of)."""
     if not user:
         return False
-    if user.role == UserRole.ADMIN:
-        return True
-    return user.plan in (PlanType.WEEKLY, PlanType.MONTHLY)
+    from app.services.signal_quota import has_full_access
+    return has_full_access(user)
 
 
 @router.post("/analyze")
@@ -332,7 +331,7 @@ async def get_latest_signals(
         signals = _unique[:limit]
 
         full_access = _has_full_signal_access(user)
-        free_limit  = _trial_signal_daily_limit(db)
+        free_limit  = _trial_signal_daily_limit(db, user)
         unlimited   = free_limit <= 0   # 0 = غير محدود، بنفس اتفاقية باقي حدود لوحة الإدارة
 
         # (2026-10-19، قرار المالك "وحّد") الحصة يومية وموحّدة مع تيليجرام (signal_quota): ما فُتح اليوم بأي قناة يبقى
@@ -343,9 +342,13 @@ async def get_latest_signals(
         if full_access or unlimited:
             open_ids = {s.id for s in signals}
         else:
+            # (2026-10-25) قراءة فقط: عرض القائمة لا يستهلك الحصة — كانت 3 حسابات جديدة تفقد حصتها كاملة لحظة فتح
+            # الداشبورد. الفتح بضغطة (/signals/{id}/unlock) أو بوصول الإشارة على تيليجرام.
             from app.services.signal_quota import open_batch
-            flags = open_batch(db, user.id, signals, "web", limit=free_limit)
+            flags = open_batch(db, user.id, signals, "web", limit=free_limit, consume=False)
             open_ids = {s.id for s, ok in zip(signals, flags) if ok}
+        from app.services.signal_quota import quota_status, _market_open
+        quota = {"tier": "full", "limit": 0, "used": 0, "remaining": None} if full_access else quota_status(db, user)
 
         data = []
         for i, s in enumerate(signals):
@@ -363,6 +366,9 @@ async def get_latest_signals(
                 "created_at":       s.created_at.isoformat(),
                 "expires_at":       s.expires_at.isoformat() if s.expires_at else None,
                 "locked":           not unlocked,
+                # (2026-10-25) يمكن فتحها بضغطة: بقي من الحصة وسوقها مفتوح
+                "can_unlock":       (not unlocked) and bool(quota.get("remaining")) and _market_open(s.market),
+                "market_open":      _market_open(s.market) if not unlocked else True,
             }
             if unlocked:
                 item.update({
@@ -390,6 +396,7 @@ async def get_latest_signals(
             "count": len(data),
             "full_access": full_access,
             "free_limit": free_limit,
+            "quota": quota,
             "data": data,
         }
 
@@ -887,7 +894,7 @@ def signals_scorecard(
             "wins":     total_wins,
             "losses":   total_losses,
             "win_rate": overall_win_rate,
-            "total":    len(all_signals),
+            "total":    sum(r["total"] for r in result),   # (2026-10-25) كان all_signals غير معرّف ← المسار يرمي 500 دائماً
         }
     }
 
@@ -1128,7 +1135,23 @@ def _can_see_signal_levels(signal: Signal, user: User, db: Session) -> bool:
     if _has_full_signal_access(user):
         return True
     from app.services.signal_quota import try_unlock
-    return try_unlock(db, user.id, signal, "web", limit=_trial_signal_daily_limit(db))
+    return try_unlock(db, user.id, signal, "web", limit=_trial_signal_daily_limit(db, user))
+
+
+@router.post("/{signal_id}/unlock")
+def unlock_signal(signal_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """(2026-10-25) فتح إشارة نشطة بضغطة من الموقع — يستهلك فتحة من الحصة اليومية (لا يُستهلك شيء بمجرد العرض).
+    الإشارة المعاد إصدارها لفكرة مفتوحة اليوم تُفتح بلا خصم؛ سوق مغلق لا يُفتح."""
+    from app.services.signal_quota import try_unlock, quota_status, _market_open
+    sig = db.query(Signal).filter(Signal.id == signal_id).first()
+    if not sig:
+        raise HTTPException(404, "الإشارة غير موجودة")
+    if _has_full_signal_access(user) or sig.status not in _OPEN_STATUSES:
+        return {"unlocked": True, "quota": quota_status(db, user)}
+    if not _market_open(sig.market):
+        return {"unlocked": False, "reason": "market_closed", "quota": quota_status(db, user)}
+    ok = try_unlock(db, user.id, sig, "web", limit=_trial_signal_daily_limit(db, user))
+    return {"unlocked": ok, "reason": None if ok else "quota_exhausted", "quota": quota_status(db, user)}
 
 
 @router.get("/{signal_id}")
