@@ -2,7 +2,7 @@
 Mosh AI Pro v5 - Bot API
 Endpoints خاصة بالبوت (تتحقق من BOT_SECRET بدلاً من JWT المستخدم)
 """
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta   # (2026-10-25) timedelta كان مفقوداً ← إجابة التحدّي ترمي NameError
 from fastapi import APIRouter, Depends, HTTPException, Header, Body
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
@@ -1609,10 +1609,9 @@ def bot_mark_result_broadcast(
 
 
 def _bot_has_full_signal_access(u: User) -> bool:
-    """أدمن أو مشترك فعلي (أسبوعي/شهري) يشوف كل تفاصيل كل الإشارات دايماً —
-    نفس تعريف _has_full_signal_access بـ signals.py، مكرّر هون لأن bot.py
-    وsignals.py مسارين مستقلين وما بدنا استيراد دائري."""
-    return u.role == UserRole.ADMIN or u.plan in (PlanType.WEEKLY, PlanType.MONTHLY)
+    """أدمن أو اشتراك مدفوع **فعّال** — (2026-10-25) من services/signal_quota.tier_of (مصدر واحد مع الموقع)."""
+    from app.services.signal_quota import has_full_access
+    return has_full_access(u)
 
 
 @router.get("/active-subscribers")
@@ -1672,11 +1671,9 @@ def bot_consume_signal_notification(
     if _bot_has_full_signal_access(user):
         return {"unlocked": True}
 
-    row = db.query(SiteSettings).filter(SiteSettings.key == "trial_signal_daily_limit").first()
-    try:
-        free_limit = int(row.value) if row and row.value else 3
-    except Exception:
-        free_limit = 3
+    # (2026-10-25) حد فئة المستخدم: تجربة نشطة (افتراضي بلا حد) أو منتهية — signal_quota.limit_for
+    from app.services.signal_quota import limit_for
+    free_limit = limit_for(db, user)
     if free_limit <= 0:
         return {"unlocked": True}
 

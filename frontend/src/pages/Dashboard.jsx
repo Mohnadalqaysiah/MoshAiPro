@@ -65,6 +65,8 @@ export default function Dashboard() {
   const tx = T[lang] || T.ar
   const isAr = lang === 'ar'
   const [signals, setSignals]       = useState([])
+  // (2026-10-25) حصة الإشارات الكاملة اليومية (signal_quota) — للعرض وفتح الإشارة بضغطة
+  const [quota, setQuota]           = useState(null)
   const [signalHistory, setSignalHistory] = useState([])
   const [analyzing, setAnalyzing]   = useState(null)
   const [quickCat, setQuickCat]     = useState(() => localStorage.getItem('mosh_quick_cat') || '')
@@ -138,10 +140,22 @@ export default function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
 
+  // (2026-10-25) إشارة مقفلة: تُفتح بضغطة إن بقي من الحصة (عرض القائمة وحده لا يستهلك شيئاً)، وإلا صفحة الاشتراك
+  const openLocked = async (sig) => {
+    if (!sig.can_unlock) { navigate('/pricing'); return }
+    try {
+      const r = await axios.post(`${API}/api/v1/signals/${sig.id}/unlock`)
+      if (r.data?.quota) setQuota(r.data.quota)
+      if (!r.data?.unlocked) { navigate('/pricing'); return }
+      await fetchSignals(signalsLimit + 2)
+    } catch { navigate('/pricing') }
+  }
+
   const fetchSignals = async (limit = 10) => {
     try {
       const res = await axios.get(`${API}/api/v1/signals/latest?limit=${limit}`)
       setSignals(res.data.data || [])
+      setQuota(res.data.quota || null)
     } catch (e) {
       // no signals yet
     }
@@ -857,7 +871,7 @@ export default function Dashboard() {
                   return (
                     <article
                       key={sig.id || i}
-                      onClick={() => locked ? navigate('/pricing') : setQuickResult({ ...sig, market })}
+                      onClick={() => locked ? openLocked(sig) : setQuickResult({ ...sig, market })}
                       className="rounded-3xl q-glass overflow-hidden cursor-pointer q-glass-hover transition-colors"
                     >
                       <div className={`relative h-24 ${art}`}>
@@ -877,8 +891,14 @@ export default function Dashboard() {
                         {locked ? (
                           <div className="flex items-center gap-2 mt-3 text-xs">
                             <Lock size={12} className="text-amber-300 flex-shrink-0" />
+                            {sig.can_unlock ? (
+                              <span className="text-amber-300 font-semibold">{isAr ? `🔓 اضغط لفتحها — تبقى لك ${quota?.remaining ?? 0} من ${quota?.limit ?? 0} اليوم` : `🔓 Tap to open — ${quota?.remaining ?? 0} of ${quota?.limit ?? 0} left today`}</span>
+                            ) : sig.market_open === false ? (
+                              <span className="text-gray-400">{isAr ? '⏸ السوق مغلق الآن — تُفتح حين يفتح' : '⏸ Market closed — opens when the market does'}</span>
+                            ) : (<>
                             <span className="text-gray-400">{isAr ? 'الاتجاه والدخول والوقف والأهداف للمشتركين —' : 'Direction, entry & SL/TP for subscribers —'}</span>
                             <span className="text-amber-300 font-semibold hover:underline">{isAr ? 'اشترك لرؤيتها' : 'Subscribe to view'}</span>
+                            </>)}
                           </div>
                         ) : (
                           <div className="grid grid-cols-3 gap-x-3 gap-y-2 mt-3 tabular-nums">
@@ -1026,7 +1046,7 @@ export default function Dashboard() {
                   return (
                     <div key={sig.id || i}
                       className="flex gap-0 hover:bg-gray-700/20 transition-colors cursor-pointer"
-                      onClick={() => locked ? navigate('/pricing') : setQuickResult({ ...sig, market })}
+                      onClick={() => locked ? openLocked(sig) : setQuickResult({ ...sig, market })}
                     >
                       <div className={`w-1 flex-shrink-0 ${accentBg} opacity-70`} />
                       <div className="flex-1 px-4 py-3">
@@ -1052,8 +1072,14 @@ export default function Dashboard() {
                         {locked ? (
                           <div className="flex items-center gap-2 mt-2 text-xs">
                             <Lock size={12} className="text-yellow-500 flex-shrink-0" />
+                            {sig.can_unlock ? (
+                              <span className="text-amber-300 font-semibold">{isAr ? `🔓 اضغط لفتحها — تبقى لك ${quota?.remaining ?? 0} من ${quota?.limit ?? 0} اليوم` : `🔓 Tap to open — ${quota?.remaining ?? 0} of ${quota?.limit ?? 0} left today`}</span>
+                            ) : sig.market_open === false ? (
+                              <span className="text-gray-400">{isAr ? '⏸ السوق مغلق الآن — تُفتح حين يفتح' : '⏸ Market closed — opens when the market does'}</span>
+                            ) : (<>
                             <span className="text-gray-500">{isAr ? 'الاتجاه والدخول والوقف والأهداف للمشتركين — ' : 'Direction, entry, stop and targets are for subscribers — '}</span>
                             <span className="text-yellow-400 font-semibold hover:underline">{isAr ? 'اشترك لرؤية التفاصيل الكاملة' : 'Subscribe to see full details'}</span>
+                            </>)}
                           </div>
                         ) : (entryMin || entryExact || sl || tp1) && (
                           <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">

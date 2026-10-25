@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from loguru import logger
 
 from app.database import get_db
-from app.models.user import User
+from app.models.user import User, PlanType   # (2026-10-25) PlanType كان مفقوداً ← استبدال نقاط بأيام اشتراك يرمي NameError
 from app.models.affiliate import Affiliate, AffiliateReferral, TIER1_RATE, TIER2_RATE, TIER2_THRESHOLD, generate_affiliate_code
 from app.models.site_settings import SiteSettings
 from app.services.auth_service import get_current_user
