@@ -35,6 +35,27 @@ def _halves(rs):
     return sum(a) / len(a), sum(b) / len(b)
 
 
+def _weeks(items):
+    """(2026-10-27، طلب المالك "بهمني عدد النتائج ايضا") عرض فقط — لا يدخل أي حكم: لكل أسبوع ISO العدد والرابح/الخاسر
+    ومجموع R الإجمالي وبعد سبريد الجدول. items = [(created_at, r, net_or_None)]."""
+    if not items:
+        return ""
+    wk = {}
+    for t, r, nr in items:
+        t = t if t.tzinfo else t.replace(tzinfo=timezone.utc)
+        y, w, _ = t.isocalendar()
+        b = wk.setdefault((y, w), [0, 0, 0.0, 0.0, 0])
+        b[0] += 1
+        b[1] += 1 if r > 0 else 0
+        b[2] += r
+        if nr is not None:
+            b[3] += nr
+            b[4] += 1
+    parts = [f"W{w:02d}: {b[0]} ({b[1]}/{b[0] - b[1]}) {b[2]:+.1f}R" + (f"، بعد السبريد {b[3]:+.1f}R" if b[4] else "")
+             for (y, w), b in sorted(wk.items())]
+    return "\n      📅 " + " | ".join(parts)
+
+
 def _line(name, rs, base_total, mode="reject", nets=None, rows=None):
     n = len(rs)
     if not n:
@@ -42,6 +63,8 @@ def _line(name, rs, base_total, mode="reject", nets=None, rows=None):
     avg = sum(rs) / n
     h1, h2 = _halves(rs)
     hs = "عينة صغيرة" if h1 is None else f"{h1:+.2f}R ← {h2:+.2f}R"
+    wins = sum(1 for r in rs if r > 0)
+    tot = f" | {wins} رابحة / {n - wins} خاسرة، مجموع {sum(rs):+.1f}R"
     if mode == "reject":
         ok_n, ok_e, ok_h = n >= 30, avg < -0.3, h1 is not None and h1 < 0 and h2 < 0
         verdict = "🟠 مرشّح لتجربة صامتة (ثم قرار المالك)" if ok_n and ok_e and ok_h else \
@@ -69,12 +92,12 @@ def _line(name, rs, base_total, mode="reject", nets=None, rows=None):
         ok = [x for x in nets if x is not None]
         if ok:
             na = sum(ok) / len(ok)
-            extra += f" | بعد سبريد الجدول {na:+.2f}R"
+            extra += f" | بعد سبريد الجدول {na:+.2f}R (مجموع {sum(ok):+.1f}R)"
             if mode == "reject" and (na > 0) != (avg > 0):
                 verdict += "\n      ⚠️ الاتجاه ينقلب بعد السبريد — لا يُعتمد الحكم الإجمالي وحده (قرار المالك)"
     if rows is not None:
         extra += f" | ({rows} صفاً → {n} فرصة محسومة)"
-    return f"  {name:<34} ن={n:<4} توقّع {avg:+.2f}R | النصفان {hs}{extra}\n      {verdict}"
+    return f"  {name:<34} ن={n:<4} توقّع {avg:+.2f}R | النصفان {hs}{tot}{extra}\n      {verdict}"
 
 
 def main():
@@ -98,7 +121,8 @@ def main():
         ("كل صفقات الشراء", lambda d: d["side"] == "BUY"),
     ]
     for name, f in cands:
-        print(_line(name, [d["r"] for d in decided if f(d)], base))
+        sel = [d for d in decided if f(d)]
+        print(_line(name, [d["r"] for d in sel], base) + _weeks([(d["created_at"], d["r"], None) for d in sel]))
 
     from app.services import shadow_stats as st
     print("\n" + "═" * 90 + "\n(2) قواعد الرفض القائمة — صفقات منعتها (بجدول الظل، نظيفة، فرص مستقلة)\n" + "═" * 90)
@@ -119,7 +143,8 @@ def main():
         rows = [s for s in sh if s.reason == rsn]
         reps = _reps(rows)
         print(_line(rsn, [s.r_multiple for s in reps], base, mode="relax",
-                    nets=[st.net_r(s) for s in reps], rows=len(rows)))
+                    nets=[st.net_r(s) for s in reps], rows=len(rows))
+              + _weeks([(s.created_at, float(s.r_multiple), st.net_r(s)) for s in reps]))
         # (2026-10-18) تأكيد من القديمة السليمة — نفس شروط الجديدة، لكن رأينا أرقامها قبل التسجيل فلا تُحكِّم
         lrows = [s for s in lv if s.reason == rsn]
         lreps = _reps(lrows)

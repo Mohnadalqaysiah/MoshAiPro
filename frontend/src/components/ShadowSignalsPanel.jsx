@@ -105,11 +105,13 @@ export default function ShadowSignalsPanel() {
                 <th className="px-3 py-2.5">المجموع (إجمالي)</th>
                 <th className="px-3 py-2.5">المتوسط (إجمالي)</th>
                 <th className="px-3 py-2.5">المتوسط بعد السبريد</th>
+                <th className="px-3 py-2.5">المجموع بعد السبريد</th>
+                <th className="text-right px-3 py-2.5">حسب الأسبوع (عدد · إجمالي · بعد السبريد)</th>
                 <th className="text-right px-3 py-2.5">ماذا يعني حتى الآن</th>
               </tr>
             </thead>
             <tbody>
-              {data.summary.length === 0 && <tr><td colSpan={8} className="text-center text-gray-500 py-6">{scope === 'clean' ? 'لا صفقات ظل نظيفة بهذه الفترة بعد — تتجمع من لحظة نشر الإصلاح' : 'لا صفقات ظل بهذه الفترة'}</td></tr>}
+              {data.summary.length === 0 && <tr><td colSpan={10} className="text-center text-gray-500 py-6">{scope === 'clean' ? 'لا صفقات ظل نظيفة بهذه الفترة بعد — تتجمع من لحظة نشر الإصلاح' : 'لا صفقات ظل بهذه الفترة'}</td></tr>}
               {data.summary.map((b) => (
                 <tr key={b.reason} onClick={() => { const r = reason === b.reason ? '' : b.reason; setReason(r); setPage(1); load({ reason: r, page: 1 }) }}
                   className={`border-t border-gray-800/70 cursor-pointer hover:bg-gray-800/40 ${reason === b.reason ? 'bg-blue-900/20' : ''}`}>
@@ -120,6 +122,18 @@ export default function ShadowSignalsPanel() {
                   <td className={`px-3 py-2.5 text-center font-semibold ${rc(b.r_gross)}`} dir="ltr">{b.template ? <span className="text-gray-600 text-xs">صافٍ أصلاً</span> : R(b.r_gross)}</td>
                   <td className={`px-3 py-2.5 text-center ${rc(b.avg_gross)}`} dir="ltr">{b.template ? '—' : R(b.avg_gross)}</td>
                   <td className={`px-3 py-2.5 text-center font-semibold ${rc(b.avg_net)}`} dir="ltr">{R(b.avg_net)}</td>
+                  <td className={`px-3 py-2.5 text-center font-semibold ${rc(b.r_net)}`} dir="ltr">{R(b.r_net)}</td>
+                  {/* (2026-10-27) طلب المالك: العدد والمجموع لا النسبة وحدها — عرض فقط، لا يدخل الحكم */}
+                  <td className="px-3 py-2.5 text-[11px] whitespace-nowrap">
+                    {(b.weekly || []).map((w) => (
+                      <div key={w.week}>
+                        <span className="text-gray-500">{w.week.slice(5)}</span>{' '}
+                        <span className="text-gray-300">{w.n}</span>{' · '}
+                        <span className={rc(w.r_gross)} dir="ltr">{b.template ? '—' : R(w.r_gross)}</span>{' · '}
+                        <span className={rc(w.r_net)} dir="ltr">{R(w.r_net)}</span>
+                      </div>
+                    ))}
+                  </td>
                   <td className="px-3 py-2.5 text-xs">{verdict(b)}</td>
                 </tr>
               ))}

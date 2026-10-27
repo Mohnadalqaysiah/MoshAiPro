@@ -169,12 +169,33 @@ def summarize(rows: list, official: bool = True) -> Dict:
         "avg_net": round(sum(nets_ok) / len(nets_ok), 3) if nets_ok else None,
         "net_missing_spread": len(nets) - len(nets_ok),
         "min_required": MIN_INDEPENDENT,
+        # (2026-10-27، طلب المالك "بهمني عدد النتائج ايضا") عرض فقط — لا يدخل الحكم
+        "weekly": weekly_totals(dec, tpl),
     }
     out["verdict"], out["verdict_label"] = _verdict(out, tpl)
     out["official"] = official
     if not official and out["verdict"] not in ("no_data",):
         out["verdict_label"] = "تأكيدي (بيانات قديمة رأيناها): " + out["verdict_label"]
     return out
+
+
+def weekly_totals(dec: list, tpl: bool = False) -> List[Dict]:
+    """عدد الصفقات المحسومة ومجموعها بـR لكل أسبوع ISO (UTC)، من الأقدم للأحدث. للعرض فقط."""
+    weeks: Dict[str, Dict] = {}
+    for s in dec:
+        y, w, _ = _aware(s.created_at).isocalendar()
+        b = weeks.setdefault(f"{y}-W{w:02d}", {"n": 0, "wins": 0, "gross": 0.0, "net": 0.0, "net_n": 0})
+        b["n"] += 1
+        b["wins"] += 0 if s.outcome in LOSS else 1
+        b["gross"] += float(s.r_multiple)
+        nr = net_r(s)
+        if nr is not None:
+            b["net"] += nr
+            b["net_n"] += 1
+    return [{"week": k, "n": b["n"], "wins": b["wins"], "losses": b["n"] - b["wins"],
+             "r_gross": None if tpl else round(b["gross"], 2),
+             "r_net": round(b["net"], 2) if b["net_n"] else None}
+            for k, b in sorted(weeks.items())]
 
 
 def _verdict(b: Dict, tpl: bool):
