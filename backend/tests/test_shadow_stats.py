@@ -271,8 +271,21 @@ def test_diag_review_reads_clean_opportunities_rules_unchanged():
     assert "ن=20" in out and "بعد سبريد الجدول" in out
 
 
+def test_weekly_totals_display_only():
+    """(2026-10-27) العدد والمجموع لكل أسبوع — عرض فقط، لا يغيّر الحكم."""
+    rows = [row(outcome="TP1_HIT", r=1.0, minutes=0, version=2), row(outcome="SL_HIT", r=-1.0, minutes=600, version=2),
+            row(outcome="TP2_HIT", r=3.0, minutes=8 * 24 * 60, version=2)]
+    wk = st.weekly_totals(rows)
+    assert [w["week"] for w in wk] == ["2026-W43", "2026-W44"]
+    assert (wk[0]["n"], wk[0]["wins"], wk[0]["losses"], wk[0]["r_gross"]) == (2, 1, 1, 0.0)
+    assert wk[1]["r_gross"] == 3.0 and wk[1]["r_net"] is not None and wk[1]["r_net"] < 3.0
+    b = st.summarize(rows)
+    assert sum(w["n"] for w in b["weekly"]) == b["decided"]
+    assert st.weekly_totals(rows, tpl=True)[0]["r_gross"] is None
+
+
 if __name__ == "__main__":
-    tests = [(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
+    tests =[(n, f) for n, f in sorted(globals().items()) if n.startswith("test_") and callable(f)]
     failed = 0
     for n, f in tests:
         try:
