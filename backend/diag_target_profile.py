@@ -16,7 +16,7 @@
 لا يكتب شيئاً.
 
     docker cp backend/diag_target_profile.py moshapi_backend:/app/
-    docker exec moshapi_backend python diag_target_profile.py [أيام=14] 2>/dev/null
+    docker exec moshapi_backend python diag_target_profile.py [أيام=14] [أساليب مثل CFLMO] 2>/dev/null
 """
 import sys, asyncio
 sys.path.insert(0, "/app")
@@ -41,7 +41,13 @@ PROFILES = [("A", "كما هو اليوم"), ("B", "هدف 1R كامل"), ("C", 
             # (2026-10-14) محاسبة صادقة يقدر عليها المتداول فعلاً — A وF-H تعدّ TP1 ربحاً وتُبقي الصفقة كاملة لـTP2
             # معاً (مستحيل تنفيذياً). I/J = الأسلوب الحالي بصدق، C/K = TP1 قريب بصدق.
             ("I", "صادق: إغلاق كامل عند TP1 الحالي"), ("J", "صادق: نصف عند TP1 الحالي + تعادل + الباقي TP2"),
-            ("K", "صادق: نصف عند 0.7R + تعادل + الباقي TP2")]
+            ("K", "صادق: نصف عند 0.7R + تعادل + الباقي TP2"),
+            # (2026-10-30) فكرة المالك: هدف ثانٍ عند 2.5R والبعيد يصير ثالثاً. L/M صادقان، وO بمحاسبة المنصة الحالية
+            # (أعلى هدف بلغته الصفقة يُقفل كله) — مستحيل تنفيذياً، يُعرض فقط ليُرى أثر العدّ على الرقم المعلن مقابل F.
+            ("L", "صادق: ثلث 1R + تعادل + ثلث 2.5R + ثلث البعيد"), ("M", "صادق: نصف 1R + تعادل + نصف 2.5R"),
+            ("O", "محاسبة المنصة: 1R ثم 2.5R ثم البعيد")]
+if len(sys.argv) > 2:                                            # (2026-10-30) لاختصار الناتج: مثلاً CFLMO
+    PROFILES = [p for p in PROFILES if p[0] in sys.argv[2]]
 
 
 async def _candles(sym):
@@ -92,6 +98,49 @@ def run(rows, created, end_ts, entry, sl, tp1, tp2, is_buy, profile):
     sl_touch = lambda hi, lo, px: (lo <= px) if is_buy else (hi >= px)
     still_open = end_ts > datetime.now(timezone.utc)
     last_close = bars[-1][2]
+
+    if profile in ("L", "M", "O"):
+        far = r_of(tp2 if ((tp2 > tp1) if is_buy else (tp2 < tp1)) else tp1)
+    if profile in ("L", "M"):
+        # سلّم أهداف صادق: يُغلق جزء عند كل هدف، والوقف للدخول من الشمعة التالية لأول هدف. إن كان البعيد ≤ 2.5R فهدفان فقط.
+        if far <= 1.0:
+            steps = [(far, 1.0)]
+        elif far <= 2.5:
+            steps = [(1.0, 0.5), (far, 0.5)]
+        elif profile == "M":
+            steps = [(1.0, 0.5), (2.5, 0.5)]
+        else:
+            steps = [(1.0, 1 / 3), (2.5, 1 / 3), (far, 1 / 3)]
+        cur_sl, armed, banked, left, i = sl, False, 0.0, 1.0, 0
+        for hi, lo, _ in bars:
+            if armed:
+                cur_sl = entry
+            if sl_touch(hi, lo, cur_sl):
+                return banked + left * r_of(cur_sl)
+            while i < len(steps) and reached(hi, lo, lvl(steps[i][0])):
+                banked += steps[i][0] * steps[i][1]
+                left -= steps[i][1]
+                i += 1
+                armed = True
+            if i == len(steps):
+                return banked
+        return None if still_open else banked + left * r_of(last_close)
+
+    if profile == "O":
+        one = min(1.0, far)
+        best = None
+        for hi, lo, _ in bars:
+            if sl_touch(hi, lo, sl):
+                return -1.0 if best is None else best
+            if reached(hi, lo, lvl(far)):
+                return far
+            if far > 2.5 and reached(hi, lo, lvl(2.5)):
+                best = 2.5
+            elif best is None and reached(hi, lo, lvl(one)):
+                best = one
+        if still_open:
+            return None
+        return r_of(last_close) if best is None else best
 
     if profile in ("C", "J", "K"):
         # النصف الأول يُغلق عند half_r (C: 1R، K: 0.7R، J: TP1 الأصلي)، ثم الوقف للدخول (من الشمعة
