@@ -8,12 +8,18 @@
   (3) كيلزون Midnight_Open: ≥ 10 قرارات جديدة، مرشّح إن المتوسط < −0.3R
   (4) ظل ZONE_CONFLICT_BUY_IN_PREMIUM (نظيف، فرص مستقلة): أسبوعان ISO مكتملان متتاليان، صافيهما بعد سبريد الجدول موجب
       بكلٍّ منهما، ومجموع فرصهما المحسومة ≥ 20
+(2026-10-30، بعد مراجعة 30/10، قرار المالك "مابدي امنع صفقات ممكن تربح")
+  (5) GBPJPY: من 31/10 (بعد رؤية أرقام المراجعة)، ≥ 15 قراراً جديداً، مرشّح إن المتوسط < −0.3R
+  (6) الهدف الثاني ≥ 8R: من 14/10 (سقف TP1، نفس فصل diag_relax_check المسجّل 24/10)، ≥ 30 قراراً، مرشّح إن المتوسط < −0.3R
+      وسالب بالنصفين. نفس عتبات القاعدة (1). لا منع حتى يتحقق هذا ثم يقرر المالك.
 
     docker exec moshapi_backend python diag_watch.py
 """
 from datetime import datetime, timedelta, timezone
 
 WATCH_START = datetime(2026, 10, 28, tzinfo=timezone.utc)
+GBPJPY_START = datetime(2026, 10, 31, tzinfo=timezone.utc)
+TP1_CAP_START = datetime(2026, 10, 14, tzinfo=timezone.utc)
 
 
 def _aware(d):
@@ -45,6 +51,15 @@ def rule_15m(rs15, rs1h, need=40):
     if a1h is None:
         return "waiting", "⏳ لا قرارات 1h جديدة للمقارنة"
     return ("candidate", "🟠 مرشّح للدراسة") if a15 < a1h / 2 and a15 < 0.1 else ("ok", "✅ لم تتحقق — يبقى كما هو")
+
+
+def rule_tp2(rs, need=30, thr=-0.3):
+    """(6): نفس القاعدة (1) — العدد، والمتوسط، وسالب بالنصفين. rs مرتبة زمنياً."""
+    if len(rs) < need:
+        return "waiting", f"⏳ {len(rs)}/{need} — لا حكم"
+    h = len(rs) // 2
+    bad = _avg(rs) < thr and _avg(rs[:h]) < 0 and _avg(rs[h:]) < 0
+    return ("candidate", "🟠 مرشّح — يُعرض على المالك") if bad else ("ok", "✅ لم تتحقق — لا منع")
 
 
 def iso_weeks(now):
@@ -102,6 +117,15 @@ def main():
     print(f"(4) ظل شراء في منطقة علاوة — {len(reps)} فرصة محسومة جديدة (الأسابيع المكتملة فقط):")
     print("\n".join(lines) if lines else "      لا أسبوع مكتمل بعد")
     print(f"      {label}\n")
+
+    rs = [d["r"] for d in decs if d["market"] == "GBPJPY" and d["created_at"] >= GBPJPY_START]
+    print(f"(5) GBPJPY (من {GBPJPY_START:%Y-%m-%d}) — {_fmt(rs)}\n      {rule_simple(rs, 15)[1]}\n")
+
+    tp2r = lambda d: abs((d["tp2"] or d["entry"]) - d["entry"]) / max(1e-12, abs(d["entry"] - d["stop_loss"]))
+    capped = sorted((d for d in closed_decisions(db, TP1_CAP_START) if d["status"] != "BREAKEVEN" and tp2r(d) >= 8),
+                    key=lambda d: d["created_at"])
+    rs = [d["r"] for d in capped]
+    print(f"(6) الهدف الثاني ≥ 8R (من {TP1_CAP_START:%Y-%m-%d}) — {_fmt(rs)}\n      {rule_tp2(rs)[1]}\n")
     print("⚠️ \"مرشّح\" = يُعرض على المالك. لا شيء يُطبَّق من هنا، والعتبات لا تُعدَّل بعد رؤية الأرقام.")
     db.close()
 
