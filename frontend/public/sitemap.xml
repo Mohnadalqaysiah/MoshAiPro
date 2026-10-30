@@ -54,6 +54,14 @@
     <priority>0.9</priority>
   </url>
 
+  <!-- سجل الأداء (عربي فقط، فُتح 2026-10-30) -->
+  <url>
+    <loc>https://qaffel.com/results</loc>
+    <lastmod>2026-10-30</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+
   <!-- الأسعار (عربي) -->
   <url>
     <loc>https://qaffel.com/pricing</loc>

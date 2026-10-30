@@ -63,6 +63,7 @@ export default function PublicLayout({ children }) {
   // [المسار, النص, رابط عادي خارج React؟]
   const navLinks = [
     [p('/strategy-builder'), T.nav.builder],
+    ...(isAr ? [['/results', T.nav.results]] : []),   // سجل الأداء عربي فقط، ولا /en/results
     [p('/pricing'), T.nav.pricing],
     ['/referral', T.nav.referral],
     [p('/blog'), T.nav.blog],
@@ -131,6 +132,7 @@ export default function PublicLayout({ children }) {
                 <li><Link to="/login">{T.login}</Link></li>
                 <li><Link to={p('/pricing')}>{T.nav.pricing}</Link></li>
                 <li><Link to={p('/strategy-builder')}>{T.nav.builder}</Link></li>
+                {isAr && <li><Link to="/results">{T.nav.results}</Link></li>}
                 <li><a href="/games/challenge">{T.nav.games}</a></li>
               </ul></div>
               <div><h4>{T.fCompany}</h4><ul>

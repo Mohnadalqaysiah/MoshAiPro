@@ -35,12 +35,13 @@ from app.database import Base  # noqa: E402
 from app.models.market_config import MarketConfig  # noqa: E402
 from app.models.signal import Signal, SignalStatus, SignalType  # noqa: E402
 from app.models.site_settings import SiteSettings  # noqa: E402
-from app.services.weekly_markets import GROUPS, week_grade, weekly_table  # noqa: E402
+from app.services.weekly_markets import GROUPS, closed_decisions, week_grade, weekly_table  # noqa: E402
 
 NOW = datetime.now(timezone.utc)
 
 
 def _db(enabled=None):
+    TR._cache.clear()
     eng = create_engine("sqlite://")
     Base.metadata.create_all(eng, tables=[Signal.__table__, SiteSettings.__table__, MarketConfig.__table__])
     s = sessionmaker(bind=eng)()
@@ -99,6 +100,109 @@ def test_chart_rejects_pre_baseline_and_open():
             assert False
         except HTTPException as e:
             assert e.status_code == code, (sid, e.status_code)
+
+
+def _counting_closed(calls):
+    import app.services.weekly_markets as WM
+    real = WM.closed_decisions
+
+    def fake(db, since):
+        calls.append(since)
+        return real(db, since)
+    WM.closed_decisions = fake
+    return lambda: setattr(WM, "closed_decisions", real)
+
+
+def test_public_summary_and_trades_are_cached():
+    s = _db(True)
+    calls = []
+    restore = _counting_closed(calls)
+    try:
+        first = TR.public_summary(weeks=8, db=s)
+        n = len(calls)
+        assert n and TR.public_summary(weeks=8, db=s) == first and len(calls) == n
+        TR.public_trades(weeks=8, group=None, result=None, page=1, page_size=20, db=s)
+        n = len(calls)
+        t = TR.public_trades(weeks=8, group="forex", result="loss", page=1, page_size=20, db=s)
+        assert len(calls) == n and [x["id"] for x in t["items"]] == [2]       # الفلتر يعمل على القائمة المخزَّنة
+        TR.public_summary(weeks=4, db=s)
+        assert len(calls) > n                                                  # كل نافذة مفتاحها
+    finally:
+        restore()
+
+
+def test_filters_do_not_change_cached_order():
+    s = _db(True)
+    decs = sorted(closed_decisions(s, TR._since(8)), key=lambda d: d["created_at"])   # من الأقدم: عكس ترتيب العرض
+    TR._cache_put(("decisions", 8), decs)
+    before = [d["id"] for d in decs]
+    t = TR.public_trades(weeks=8, group=None, result=None, page=1, page_size=20, db=s)
+    assert [x["id"] for x in t["items"]] == before[::-1]                       # العرض من الأحدث
+    assert [d["id"] for d in TR._cache[("decisions", 8)][1]] == before         # والمخزَّنة لم تُمس
+
+
+def test_cache_expires():
+    s = _db(True)
+    calls = []
+    restore = _counting_closed(calls)
+    try:
+        TR.public_summary(weeks=8, db=s)
+        n = len(calls)
+        key = ("summary", 8)
+        TR._cache[key] = (TR._cache[key][0] - TR.CACHE_TTL - 1, TR._cache[key][1])
+        TR.public_summary(weeks=8, db=s)
+        assert len(calls) > n
+    finally:
+        restore()
+
+
+def test_closing_page_applies_at_once_despite_cache():
+    s = _db(True)
+    TR.public_summary(weeks=8, db=s)
+    TR.public_trades(weeks=8, group=None, result=None, page=1, page_size=20, db=s)
+    s.query(SiteSettings).filter(SiteSettings.key == TR.FLAG).update({"value": "false"})
+    s.commit()
+    for fn in (lambda: TR.public_summary(weeks=8, db=s),
+               lambda: TR.public_trades(weeks=8, group=None, result=None, page=1, page_size=20, db=s),
+               lambda: asyncio.run(TR.public_chart(1, db=s))):
+        try:
+            fn()
+            assert False, "يجب أن يكون مغلقاً"
+        except HTTPException as e:
+            assert e.status_code == 404
+
+
+def test_chart_cached_only_when_ok():
+    s = _db(True)
+    calls = []
+
+    async def fake(db, signal_id):
+        calls.append(signal_id)
+        if signal_id == 99:
+            raise HTTPException(404, "x")
+        return {"ok": True, "id": signal_id}
+    real, TR.build_chart_public = TR.build_chart_public, fake
+    try:
+        for _ in range(2):
+            assert asyncio.run(TR.public_chart(1, db=s))["id"] == 1
+        assert calls == [1]
+        for _ in range(2):
+            try:
+                asyncio.run(TR.public_chart(99, db=s))
+                assert False
+            except HTTPException:
+                pass
+        assert calls == [1, 99, 99]
+    finally:
+        TR.build_chart_public = real
+
+
+def test_cache_is_bounded():
+    TR._cache.clear()
+    for i in range(TR.CACHE_MAX + 5):
+        TR._cache_put(("chart", i), {"ok": True})
+    assert len(TR._cache) <= TR.CACHE_MAX
+    TR._cache.clear()
 
 
 def _cells(n=100, be=0, r=40.0, won=5):

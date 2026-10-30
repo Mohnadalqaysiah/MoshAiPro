@@ -8,7 +8,11 @@
   - **كل** القرارات المغلقة منذ بداية حلقة الرصد الموثوقة (OUTCOME_FIX_DATE)، الرابحة والخاسرة والتأمين، قراراً واحداً لكل صفقة.
   - الطريقة مكتوبة على الصفحة: الصفقة رابحة عند وصول الهدف الأول (معيار المالك 16/10)، والنتيجة بمضاعف R.
   - كل صفقة قابلة للتحقق بشموع حقيقية (services/trade_chart.py — نفس مرجع حساب النتيجة).
+
+المسارات العامة بلا تسجيل دخول ولا حدّ للطلبات، وتحميل الصفحة ~2 ثانية حساب (قياس الإنتاج 30/10) على نفس الخادم الذي يرصد الصفقات،
+فتُخزَّن مؤقتاً لكل عامل. الفحص `_require_open` يسبق التخزين دائماً: إغلاق الصفحة يسري فوراً. معاينة الأدمن بلا تخزين.
 """
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -23,6 +27,22 @@ from app.services.auth_service import get_admin_user
 router = APIRouter()
 FLAG = "public_track_record_enabled"
 RESULTS = {"win": ("TP1_HIT", "TP2_HIT"), "loss": ("SL_HIT",), "breakeven": ("BREAKEVEN",)}
+CACHE_TTL = 120.0
+CHART_TTL = 600.0
+CACHE_MAX = 500          # الشارتات وحدها تزيد المفاتيح (weeks محدود بـ26)
+_cache: dict = {}
+
+
+def _cache_get(key, ttl: float):
+    hit = _cache.get(key)
+    return hit[1] if hit and time.monotonic() - hit[0] < ttl else None
+
+
+def _cache_put(key, value):
+    if len(_cache) >= CACHE_MAX:
+        _cache.clear()
+    _cache[key] = (time.monotonic(), value)
+    return value
 
 
 def is_enabled(db: Session) -> bool:
@@ -64,15 +84,17 @@ def build_summary(db: Session, weeks: int) -> dict:
     }
 
 
-def build_trades(db: Session, weeks: int, group: Optional[str], result: Optional[str], page: int, page_size: int) -> dict:
+def build_trades(db: Session, weeks: int, group: Optional[str], result: Optional[str], page: int, page_size: int,
+                 decs: Optional[list] = None) -> dict:
+    """decs: قائمة جاهزة من المسار العام المخزَّن — تُقرأ ولا تُعدَّل."""
     from app.models.signal import Signal
     from app.services.weekly_markets import closed_decisions
-    decs = closed_decisions(db, _since(weeks))
+    decs = closed_decisions(db, _since(weeks)) if decs is None else decs
     if group:
         decs = [d for d in decs if d["group"] == group]
     if result in RESULTS:
         decs = [d for d in decs if d["status"] in RESULTS[result]]
-    decs.sort(key=lambda d: d["created_at"], reverse=True)
+    decs = sorted(decs, key=lambda d: d["created_at"], reverse=True)
     page, page_size = max(1, page), max(1, min(page_size, 50))
     chunk = decs[(page - 1) * page_size: page * page_size]
     tp1 = {s.id: s.take_profit_1 for s in db.query(Signal).filter(Signal.id.in_([d["id"] for d in chunk] or [0])).all()}
@@ -108,20 +130,31 @@ def _require_open(db: Session):
 @router.get("/public/track-record")
 def public_summary(weeks: int = 8, db: Session = Depends(get_db)):
     _require_open(db)
-    return build_summary(db, max(1, min(weeks, 26)))
+    weeks = max(1, min(weeks, 26))
+    key = ("summary", weeks)
+    cached = _cache_get(key, CACHE_TTL)
+    return cached if cached is not None else _cache_put(key, build_summary(db, weeks))
 
 
 @router.get("/public/track-record/trades")
 def public_trades(weeks: int = 8, group: Optional[str] = None, result: Optional[str] = None, page: int = 1,
                   page_size: int = 20, db: Session = Depends(get_db)):
+    from app.services.weekly_markets import closed_decisions
     _require_open(db)
-    return build_trades(db, max(1, min(weeks, 26)), group, result, page, page_size)
+    weeks = max(1, min(weeks, 26))
+    key = ("decisions", weeks)                              # القائمة لا الصفحة: group نص حر من الزائر فلا يصلح مفتاحاً
+    decs = _cache_get(key, CACHE_TTL)
+    if decs is None:
+        decs = _cache_put(key, closed_decisions(db, _since(weeks)))
+    return build_trades(db, weeks, group, result, page, page_size, decs=decs)
 
 
 @router.get("/public/track-record/{signal_id}/chart")
 async def public_chart(signal_id: int, db: Session = Depends(get_db)):
     _require_open(db)
-    return await build_chart_public(db, signal_id)
+    key = ("chart", signal_id)
+    cached = _cache_get(key, CHART_TTL)
+    return cached if cached is not None else _cache_put(key, await build_chart_public(db, signal_id))
 
 
 # ─── معاينة الأدمن (تعمل والسجل مغلق) ───────────────────────────────────────
