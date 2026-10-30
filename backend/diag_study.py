@@ -34,7 +34,7 @@ def _conf(c):
 
 def _rr(d):
     risk = abs(d["entry"] - d["stop_loss"]) or 1e-12
-    r2 = abs((d["tp2"] or d["entry"]) - d["entry"]) / risk
+    r2 = abs((d.get("far") or d["tp2"] or d["entry"]) - d["entry"]) / risk
     return "TP2 <2R" if r2 < 2 else "TP2 2-3R" if r2 < 3 else "TP2 3-5R" if r2 < 5 else "TP2 5-8R" if r2 < 8 else "TP2 ≥8R"
 
 

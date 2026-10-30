@@ -84,6 +84,7 @@ async def build_chart(signal) -> dict:
         "status": status, "interval": interval, "source": source,
         "entry": signal.entry_price, "sl": signal.stop_loss, "tp1": signal.take_profit_1,
         "tp2": signal.take_profit_2 if signal.take_profit_2 and signal.take_profit_2 != signal.take_profit_1 else None,
+        "tp3": signal.take_profit_3, "tp3_hit": bool(signal.tp3_hit_at),
         "opened_at": start.isoformat(), "closed_at": end.isoformat(),
         "candles": [{"t": c["t"].isoformat(), "o": c["o"], "h": c["h"], "l": c["l"], "c": c["c"]} for c in win],
     }

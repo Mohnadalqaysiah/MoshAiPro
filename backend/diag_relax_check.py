@@ -137,7 +137,7 @@ def report_reason(reason, reps, lv_reps, platform, group_of):
 
 def report_tp2(decided):
     print("═" * 92 + "\nالهدف الثاني ≥ 8R — صفقات المنصة الفعلية (مرشّح رفض جديد)\n" + "═" * 92)
-    tp2r = lambda d: abs((d["tp2"] or d["entry"]) - d["entry"]) / max(1e-12, abs(d["entry"] - d["stop_loss"]))
+    tp2r = lambda d: abs((d.get("far") or d["tp2"] or d["entry"]) - d["entry"]) / max(1e-12, abs(d["entry"] - d["stop_loss"]))
     hits = [d for d in decided if tp2r(d) >= 8]
     before = [d["r"] for d in hits if d["created_at"] < CUTOFF_TP2]
     after = [d["r"] for d in hits if d["created_at"] >= CUTOFF_TP2]

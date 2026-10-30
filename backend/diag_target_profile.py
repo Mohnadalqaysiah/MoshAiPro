@@ -244,7 +244,7 @@ async def main():
             exp = exp if exp.tzinfo else exp.replace(tzinfo=timezone.utc)
             entry, sl = float(s.entry_price), float(s.stop_loss)
             tp1 = float(s.take_profit_1)
-            tp2 = float(s.take_profit_2 or tp1)
+            tp2 = float(s.take_profit_3 or s.take_profit_2 or tp1)   # (2026-10-30) البعيد: إشارات السلّم ينقسم هدفها لـ2.5R وثالث
             if not abs(entry - sl):
                 continue
             is_buy = (s.signal_type.value if hasattr(s.signal_type, "value") else s.signal_type) == "BUY"

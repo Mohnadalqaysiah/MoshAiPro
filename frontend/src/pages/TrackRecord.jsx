@@ -14,7 +14,7 @@ import useSEO from '../hooks/useSEO'
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const GROUPS = { gold: 'الذهب', metals: 'الفضة والمعادن', energy: 'الطاقة', index: 'المؤشرات', forex: 'فوركس',
   crypto: 'كريبتو', gulf: 'خليجي', stock: 'أسهم أمريكية' }
-const ST = { TP2_HIT: ['🏆', 'الهدف 2', '#34d399'], TP1_HIT: ['✅', 'الهدف 1', '#34d399'], SL_HIT: ['❌', 'وقف الخسارة', '#fb7185'],
+const ST = { TP3_HIT: ['🏆', 'الهدف 3', '#34d399'], TP2_HIT: ['🏆', 'الهدف 2', '#34d399'], TP1_HIT: ['✅', 'الهدف 1', '#34d399'], SL_HIT: ['❌', 'وقف الخسارة', '#fb7185'],
   BREAKEVEN: ['⚖️', 'تأمين', '#94a3b8'] }
 const fmtR = (r) => r == null ? '—' : `${r > 0 ? '+' : ''}${Number(r).toFixed(2)}R`.replace('-', '−')
 const rColor = (r) => r > 0 ? '#34d399' : r < 0 ? '#fb7185' : '#94a3b8'
@@ -105,6 +105,7 @@ export default function TrackRecord() {
               <li>الصفقة <b>رابحة</b> عند وصول الهدف الأول، و<b>خاسرة</b> عند ضرب وقف الخسارة، و"تأمين" إذا عادت للدخول بعد نقل الوقف (0R).</li>
               <li>النتيجة بمضاعف المخاطرة <b>R</b>: ‎+1R ربح بقدر ما خاطرت، ‎−1R خسارة الوقف. النقاط لا تُجمع بين الأسواق فلا نستخدمها.</li>
               <li>النتائج تقيس وصول كل صفقة إلى أهدافها أو وقفها، قبل السبريد، ولا تمثل نتيجة عميل بعينه. الصفقة التي تنتهي مدتها دون هدف أو وقف لا تُحسب ربحاً ولا خسارة.</li>
+              {sum?.ladder_since && <li>منذ {sum.ladder_since} قد يكون للصفقة ثلاثة أهداف (1R ثم 2.5R ثم الهدف البعيد)، وتُحسب بأعلى هدف بلغته؛ فلا تُقارن الأسابيع قبل هذا التاريخ بما بعده مباشرة.</li>}
               <li>البيانات تبدأ من {sum?.baseline || '…'} — تاريخ بدء نظام الرصد الحالي. لا نعرض ما قبله لأننا لا نستطيع ضمان دقته.</li>
             </ul>
           </div>
@@ -162,7 +163,7 @@ export default function TrackRecord() {
           <div className="qp-card" style={{ padding: 0 }}>
             {trades?.items?.length === 0 && <p className="qp-faint" style={{ padding: 24, textAlign: 'center' }}>لا صفقات بهذا الفلتر</p>}
             {trades?.items?.map((t) => {
-              const [ic, lbl, col] = ST[t.status] || ['', t.status, '#94a3b8']
+              const [ic, lbl, col] = ST[t.tp3_hit ? 'TP3_HIT' : t.status] || ['', t.status, '#94a3b8']
               return (
                 <div key={t.id} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px 16px', padding: '12px 16px', borderTop: '1px solid rgba(148,163,184,.12)' }}>
                   <div style={{ minWidth: 140 }}>

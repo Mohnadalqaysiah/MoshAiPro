@@ -49,6 +49,7 @@ def signal_full(s: dict, mname: str, tf_label: str, conf: float) -> str:
     buy, dot, side = _side(s.get("signal_type", "BUY"))
     entry, sl, tp1, tp2 = s.get("entry_price"), s.get("stop_loss"), s.get("take_profit_1"), s.get("take_profit_2")
     r1, r2 = r_of(entry, sl, tp1, buy), r_of(entry, sl, tp2, buy)
+    tp3 = s.get("take_profit_3")
     mode = {"SWING": "main trend", "SCALP": "quick trade"}.get(s.get("trade_type") or "")
     lines = [
         f"{dot} <b>{side} {_e(mname)}</b>",
@@ -59,7 +60,9 @@ def signal_full(s: dict, mname: str, tf_label: str, conf: float) -> str:
         f"🎯 TP1       <code>{fmt_price(tp1)}</code>   <i>{fmt_r(r1)}</i>",
     ]
     if tp2 and float(tp2) != float(tp1 or 0):
-        lines.append(f"🏁 TP2       <code>{fmt_price(tp2)}</code>   <i>{fmt_r(r2)}</i>")
+        lines.append(f"{'🎯' if tp3 else '🏁'} TP2       <code>{fmt_price(tp2)}</code>   <i>{fmt_r(r2)}</i>")
+    if tp3:
+        lines.append(f"🏁 TP3       <code>{fmt_price(tp3)}</code>   <i>{fmt_r(r_of(entry, sl, tp3, buy))}</i>")
     lines += ["", "🛡 At TP1, move your stop to entry to lock the trade."]
     if s.get("expires_at"):
         lines.append(_deadline(s["expires_at"]))
@@ -83,8 +86,8 @@ def signal_masked(s: dict, mname: str, tf_label: str) -> str:
     ])
 
 
-_HEAD = {"TP2_HIT": "🏆 TP2 hit", "TP1_HIT": "✅ TP1 hit", "BREAKEVEN": "⚖️ Closed at breakeven", "SL_HIT": "🔴 Stop loss hit"}
-_TARGET = {"TP1_HIT": "TP1", "TP2_HIT": "TP2", "SL_HIT": "Stop", "BREAKEVEN": "Entry"}
+_HEAD = {"TP3_HIT": "🏆 TP3 hit", "TP2_HIT": "🏆 TP2 hit", "TP1_HIT": "✅ TP1 hit", "BREAKEVEN": "⚖️ Closed at breakeven", "SL_HIT": "🔴 Stop loss hit"}
+_TARGET = {"TP1_HIT": "TP1", "TP2_HIT": "TP2", "TP3_HIT": "TP3", "SL_HIT": "Stop", "BREAKEVEN": "Entry"}
 
 
 def outcome_subscriber(o: dict, mname: str) -> str:
@@ -92,7 +95,8 @@ def outcome_subscriber(o: dict, mname: str) -> str:
     _, _, side = _side(o.get("signal_type", "BUY"))
     r = outcome_result_r(o)
     pct = float(o.get("pnl_pct") or 0)
-    tip = {"TP2_HIT": "Full target — excellent trade 🎯",
+    tip = {"TP3_HIT": "Full target — excellent trade 🎯",
+           "TP2_HIT": "Next is TP3 — the stop at entry protects the profit 🛡" if o.get("tp3") else "Full target — excellent trade 🎯",
            "TP1_HIT": "Next is TP2 — the stop at entry protects the profit 🛡",
            "BREAKEVEN": "Breakeven protected your capital — that's its job 🛡",
            "SL_HIT": "The loss was planned in advance (−1R) — sticking to the plan is what wins long term"}.get(st, "")
@@ -115,8 +119,8 @@ def outcome_expired(o: dict, mname: str) -> str:
     _, _, side = _side(o.get("signal_type", "BUY"))
     r = outcome_result_r(o)
     mkt = _e(o.get("market", "") or mname)
-    if st in ("TP1_HIT", "TP2_HIT"):
-        target = "TP2" if st == "TP2_HIT" else "TP1"
+    if st in ("TP1_HIT", "TP2_HIT", "TP3_HIT"):
+        target = {"TP3_HIT": "TP3", "TP2_HIT": "TP2"}.get(st, "TP1")
         lines = [
             f"🏆 <b>Qaffel signal result — {target} hit!</b>",
             "",

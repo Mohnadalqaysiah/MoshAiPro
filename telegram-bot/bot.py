@@ -518,6 +518,7 @@ def fmt_analysis_en(data: dict, symbol: str, timeframe: str) -> str:
     if sl:  msg += f"🛑 Stop:   `{_fmt_price(sl)}`\n"
     if tp1: msg += f"✅ TP1:    `{_fmt_price(tp1)}`\n"
     if tp2: msg += f"✅ TP2:    `{_fmt_price(tp2)}`\n"
+    if lvls.get("tp3"): msg += f"✅ TP3:    `{_fmt_price(lvls['tp3'])}`\n"
     if rr:  msg += f"⚖️ R/R:    `{float(rr):.2f}x`\n"
     if rec in ("BUY", "SELL"):
         msg += "💡 At TP1, consider moving your stop to entry to lock the trade\n"
@@ -594,6 +595,7 @@ def fmt_analysis(data: dict, symbol: str, timeframe: str) -> str:
     if sl:  msg += f"🛑 وقف:   `{_fmt_price(sl)}`\n"
     if tp1: msg += f"✅ هدف 1: `{_fmt_price(tp1)}`\n"
     if tp2: msg += f"✅ هدف 2: `{_fmt_price(tp2)}`\n"
+    if lvls.get("tp3"): msg += f"✅ هدف 3: `{_fmt_price(lvls['tp3'])}`\n"
     if rr:  msg += f"⚖️ R/R:   `{float(rr):.2f}x`\n"
     if rec in ("BUY", "SELL"):
         # (2026-10-03) نفس تنبيه "تأمين الصفقة" بـfmt_new_signal — موحَّد
@@ -676,6 +678,7 @@ def fmt_new_signal(s: dict) -> str:
         f"🛑 وقف:   `{sl}`\n"
         f"✅ هدف 1: `{tp1}`\n"
         f"✅ هدف 2: `{tp2}`\n"
+        + (f"✅ هدف 3: `{_fmt_price(s['take_profit_3'])}`\n" if s.get("take_profit_3") else "")
     )
     if rr:
         msg += f"⚖️ R/R:   `{float(rr):.1f}x`\n"
@@ -737,7 +740,7 @@ def fmt_outcome(o: dict) -> str:
     # (2026-10-16) "إغلاق" = المستوى الذي أُغلقت عنده الصفقة لا سعر لحظة الاكتشاف — الحلقة ترصد كل ~90ث فالسعر
     # الحالي قد يكون تجاوز الوقف/الهدف (XRP: وقف 1.30405 وعُرض 1.3054؛ AMD: وقف 536.78 وعُرض 534.99) فيبدو
     # الخروج أسوأ/أفضل مما حدث. النسبة والنقاط محسوبة أصلاً من المستوى (_pnl_for_outcome).
-    _exit = {"SL_HIT": o.get("sl"), "TP1_HIT": o.get("tp1"), "TP2_HIT": o.get("tp2"),
+    _exit = {"SL_HIT": o.get("sl"), "TP1_HIT": o.get("tp1"), "TP2_HIT": o.get("tp2"), "TP3_HIT": o.get("tp3"),
              "BREAKEVEN": o.get("entry")}.get(o["status"])
     price   = _fmt_price(_exit if _exit is not None else o["current_price"])
     tp1     = _fmt_price(o["tp1"])
@@ -758,13 +761,13 @@ def fmt_outcome(o: dict) -> str:
     # نقاطاً صغيرة جداً مقابل نفس جودة صفقة على الذهب تبان نقاطها ضخمة —
     # فرق مظهري بحت سببه السعر المطلق للرمز، لا جودة القرار. % مقارنة
     # عادلة بين كل الرموز، فصارت هي البارزة والنقاط تفصيل ثانوي بعدها.
-    if status == "TP2_HIT":
-        header  = "🏆 *الهدف 2 تحقق!*"
+    if status in ("TP2_HIT", "TP3_HIT"):
+        header  = "🏆 *الهدف 3 تحقق!*" if status == "TP3_HIT" else "🏆 *الهدف 2 تحقق!*"
         pnl_line = (
             f"📈 الربح: *{sign_pct}{pnl_pct:.2f}%*"
             f"  │  {sign_pts}{_fmt_pts(pnl)} نقطة"
         )
-        tip = "صفقة ممتازة — الهدف الكامل 🎯"
+        tip = "الهدف التالي هدف 3 — استمر بالمتابعة 🎯" if status == "TP2_HIT" and o.get("tp3") else "صفقة ممتازة — الهدف الكامل 🎯"
     elif status == "TP1_HIT":
         header  = "✅ *الهدف 1 تحقق!*"
         pnl_line = (
@@ -1096,14 +1099,14 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         sigs = res.get("data", [])
 
         STATUS_ICONS = {
-            "ACTIVE":  "🔵", "TP1_HIT": "✅", "TP2_HIT": "🏆",
+            "ACTIVE":  "🔵", "TP1_HIT": "✅", "TP2_HIT": "🏆", "TP3_HIT": "🏆",
             "SL_HIT":  "❌", "PENDING": "⏳", "EXPIRED":  "⚫", "BREAKEVEN": "⚖️",
         }
         STATUS_AR = {
-            "ACTIVE":"نشطة", "TP1_HIT":"هدف 1 ✅", "TP2_HIT":"هدف 2 🏆",
+            "ACTIVE":"نشطة", "TP1_HIT":"هدف 1 ✅", "TP2_HIT":"هدف 2 🏆", "TP3_HIT":"هدف 3 🏆",
             "SL_HIT":"وقف ❌", "PENDING":"معلقة", "EXPIRED":"منتهية", "BREAKEVEN":"تأمين ⚖️",
         } if lg != "en" else {
-            "ACTIVE":"active", "TP1_HIT":"TP1 ✅", "TP2_HIT":"TP2 🏆",
+            "ACTIVE":"active", "TP1_HIT":"TP1 ✅", "TP2_HIT":"TP2 🏆", "TP3_HIT":"TP3 🏆",
             "SL_HIT":"stop ❌", "PENDING":"pending", "EXPIRED":"expired", "BREAKEVEN":"breakeven ⚖️",
         }
 
@@ -1134,8 +1137,9 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 dir_emoji   = "▲" if stype == "BUY" else "▼"
                 dir_ar      = (("BUY" if stype == "BUY" else "SELL") if lg == "en" else ("شراء" if stype == "BUY" else "بيع"))
-                status_icon = STATUS_ICONS.get(status, "○")
-                status_ar   = STATUS_AR.get(status, status)
+                _st_show    = "TP3_HIT" if s.get("tp3_hit") else status
+                status_icon = STATUS_ICONS.get(_st_show, "○")
+                status_ar   = STATUS_AR.get(_st_show, status)
                 conf_bar    = "█" * int(conf / 20) + "░" * (5 - int(conf / 20))
 
                 msg += (
@@ -1646,7 +1650,7 @@ async def outcome_checker(app: Application):
                         if o.get("audience") == "expired":
                             _txt = ME.outcome_expired(o, _mname)
                             _kb = InlineKeyboardMarkup([[InlineKeyboardButton("💳 Renew subscription", url=f"{FRONTEND_URL}/pricing"), ch_btn("en")]]) \
-                                if o.get("status") in ("TP1_HIT", "TP2_HIT") else InlineKeyboardMarkup([[ch_btn("en")]])
+                                if o.get("status") in ("TP1_HIT", "TP2_HIT", "TP3_HIT") else InlineKeyboardMarkup([[ch_btn("en")]])
                         else:
                             _txt = ME.outcome_subscriber(o, _mname)
                             _kb = InlineKeyboardMarkup([
@@ -1658,7 +1662,7 @@ async def outcome_checker(app: Application):
                     elif o.get("audience") == "expired":
                         _txt = M.outcome_expired(o, _mname)
                         _kb = InlineKeyboardMarkup([[InlineKeyboardButton("💳 جدّد اشتراكك", url=f"{FRONTEND_URL}/pricing"), ch_btn()]]) \
-                            if o.get("status") in ("TP1_HIT", "TP2_HIT") else InlineKeyboardMarkup([[ch_btn()]])
+                            if o.get("status") in ("TP1_HIT", "TP2_HIT", "TP3_HIT") else InlineKeyboardMarkup([[ch_btn()]])
                     else:
                         _txt = M.outcome_subscriber(o, _mname)
                         _kb = InlineKeyboardMarkup([
@@ -1986,6 +1990,7 @@ async def monitor_watchlists(app: Application):
                                 "sl":          _sl,
                                 "tp1":         _tp1,
                                 "tp2":         _tp2 or _tp1,
+                                **({"tp3": levels["tp3"]} if levels.get("tp3") else {}),   # (2026-10-30) سلّم الأهداف
                                 "confidence":  conf,
                                 "rr":          _rr,
                                 # (2026-10-24) وسم التخفيف الجزئي — يُحفظ بالصف للقياس وقاعدة الرجوع

@@ -2977,7 +2977,7 @@ export default function Admin() {
                         <tbody>
                           {reportData.signals.slice(0, reportLimit).map((s,i) => {
                             const isWin = ['TP1_HIT','TP2_HIT'].includes(s.status)
-                            const statusLabel = {TP1_HIT:'هدف 1 ✅',TP2_HIT:'هدف 2 🏆',SL_HIT:'وقف ❌',BREAKEVEN:'تأمين ⚖️'}[s.status]||s.status
+                            const statusLabel = s.tp3_hit ? 'هدف 3 🏆' : {TP1_HIT:'هدف 1 ✅',TP2_HIT:'هدف 2 🏆',SL_HIT:'وقف ❌',BREAKEVEN:'تأمين ⚖️'}[s.status]||s.status
                             return (
                               <tr key={i} className="border-b border-gray-800/50 hover:bg-gray-800/30">
                                 <td className="py-2 font-medium">{s.market}{s.timeframe && <span className="text-gray-500 text-xs mr-1">{s.timeframe}</span>}</td>

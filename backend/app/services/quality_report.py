@@ -395,7 +395,7 @@ def _enriched_decisions(db, days: int) -> list:
             "broadcast":    bool(s.broadcast_sent),
             "sl_pct":       (abs(entry - sl) / entry * 100) if entry else None,
             "r":            _r_multiple(s.entry_price, s.stop_loss,
-                                        s.take_profit_1, s.take_profit_2, d["status"]),
+                                        s.take_profit_1, s.final_tp, d["status"]),
             "killzone":     s.killzone or None,
             "wyckoff":      s.wyckoff_phase or None,
             "zone":         s.premium_discount or None,

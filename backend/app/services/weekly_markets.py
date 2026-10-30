@@ -60,7 +60,7 @@ def closed_decisions(db, since: datetime) -> List[Dict]:
         s = by_id.get(d["id"])
         if not s:
             continue
-        r = _r_multiple(s.entry_price, s.stop_loss, s.take_profit_1, s.take_profit_2, st)
+        r = _r_multiple(s.entry_price, s.stop_loss, s.take_profit_1, s.final_tp, st)
         if r is None:
             continue
         m = (d["market"] or "").upper()
@@ -68,6 +68,8 @@ def closed_decisions(db, since: datetime) -> List[Dict]:
                     "group": market_group(m, cat.get(m, "")), "status": st, "r": r,
                     "side": getattr(d["signal_type"], "value", d["signal_type"]), "timeframe": d.get("timeframe"),
                     "stop_loss": s.stop_loss, "entry": s.entry_price, "tp2": s.take_profit_2,
+                    # (2026-10-30) far = الهدف البعيد للمراجعات (TP2 ≥ 8R) — بعد السلّم tp2 = 2.5R دائماً
+                    "tp3": s.take_profit_3, "tp3_hit": bool(s.tp3_hit_at), "far": s.take_profit_3 or s.take_profit_2,
                     "premium_discount": s.premium_discount})
     return out
 

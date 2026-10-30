@@ -127,6 +127,7 @@ def signal_full(s: dict, mname: str, tf_label: str, conf: float) -> str:
     buy, dot, side = _side(s.get("signal_type", "BUY"))
     entry, sl, tp1, tp2 = s.get("entry_price"), s.get("stop_loss"), s.get("take_profit_1"), s.get("take_profit_2")
     r1, r2 = r_of(entry, sl, tp1, buy), r_of(entry, sl, tp2, buy)
+    tp3 = s.get("take_profit_3")   # (2026-10-30) سلّم الأهداف: البعيد ثالث، والثاني عند 2.5R
     mode = {"SWING": "اتجاه رئيسي", "SCALP": "صفقة سريعة"}.get(s.get("trade_type") or "")
     lines = [
         f"{dot} <b>{side} {_e(mname)}</b>  ·  <code>{_e(s.get('market', ''))}</code>",
@@ -137,7 +138,9 @@ def signal_full(s: dict, mname: str, tf_label: str, conf: float) -> str:
         f"🎯 الهدف 1    <code>{fmt_price(tp1)}</code>   <i>{fmt_r(r1)}</i>",
     ]
     if tp2 and float(tp2) != float(tp1 or 0):
-        lines.append(f"🏁 الهدف 2    <code>{fmt_price(tp2)}</code>   <i>{fmt_r(r2)}</i>")
+        lines.append(f"{'🎯' if tp3 else '🏁'} الهدف 2    <code>{fmt_price(tp2)}</code>   <i>{fmt_r(r2)}</i>")
+    if tp3:
+        lines.append(f"🏁 الهدف 3    <code>{fmt_price(tp3)}</code>   <i>{fmt_r(r_of(entry, sl, tp3, buy))}</i>")
     lines += ["", "🛡 عند الهدف 1 انقل الوقف لنقطة الدخول لتأمين الصفقة."]
     if s.get("expires_at"):
         lines.append(_deadline(s["expires_at"]))
@@ -168,12 +171,12 @@ def signal_masked(s: dict, mname: str, tf_label: str) -> str:
 
 
 # ─── النتيجة للمشترك ─────────────────────────────────────────────────────────
-_HEAD = {"TP2_HIT": "🏆 الهدف 2 تحقق", "TP1_HIT": "✅ الهدف 1 تحقق",
+_HEAD = {"TP3_HIT": "🏆 الهدف 3 تحقق", "TP2_HIT": "🏆 الهدف 2 تحقق", "TP1_HIT": "✅ الهدف 1 تحقق",
          "BREAKEVEN": "⚖️ أُغلقت على التأمين", "SL_HIT": "🔴 ضُرب وقف الخسارة"}
 
 
 def _exit_price(o: dict):
-    return {"SL_HIT": o.get("sl"), "TP1_HIT": o.get("tp1"), "TP2_HIT": o.get("tp2"),
+    return {"SL_HIT": o.get("sl"), "TP1_HIT": o.get("tp1"), "TP2_HIT": o.get("tp2"), "TP3_HIT": o.get("tp3"),
             "BREAKEVEN": o.get("entry")}.get(o.get("status")) or o.get("current_price")
 
 
@@ -192,7 +195,8 @@ def outcome_subscriber(o: dict, mname: str) -> str:
     buy, _, side = _side(o.get("signal_type", "BUY"))
     r = outcome_result_r(o)
     pct = float(o.get("pnl_pct") or 0)
-    tip = {"TP2_HIT": "الهدف الكامل — صفقة ممتازة 🎯",
+    tip = {"TP3_HIT": "الهدف الكامل — صفقة ممتازة 🎯",
+           "TP2_HIT": "الهدف التالي هو الهدف 3 — الوقف على الدخول يحمي الربح 🛡" if o.get("tp3") else "الهدف الكامل — صفقة ممتازة 🎯",
            "TP1_HIT": "الهدف التالي هو الهدف 2 — الوقف على الدخول يحمي الربح 🛡",
            "BREAKEVEN": "التأمين حمى رأس المال — هذا دوره 🛡",
            "SL_HIT": "الخسارة محسوبة مسبقاً (−1R) — الالتزام بالخطة هو ما يربح على المدى الطويل"}.get(st, "")
@@ -201,7 +205,7 @@ def outcome_subscriber(o: dict, mname: str) -> str:
         "",
         f"<b>{fmt_r(r)}</b>   <i>({pct:+.2f}%)</i>",
         f"الدخول <code>{fmt_price(o.get('entry'))}</code>  ➜  "
-        f"{ {'TP1_HIT': 'الهدف 1', 'TP2_HIT': 'الهدف 2', 'SL_HIT': 'الوقف', 'BREAKEVEN': 'الدخول'}.get(st, 'الإغلاق') } "
+        f"{ {'TP1_HIT': 'الهدف 1', 'TP2_HIT': 'الهدف 2', 'TP3_HIT': 'الهدف 3', 'SL_HIT': 'الوقف', 'BREAKEVEN': 'الدخول'}.get(st, 'الإغلاق') } "
         f"<code>{fmt_price(_exit_price(o))}</code>",
     ]
     if o.get("created_at"):
@@ -218,9 +222,9 @@ def outcome_expired(o: dict, mname: str) -> str:
     _, _, side = _side(o.get("signal_type", "BUY"))
     r = outcome_result_r(o)
     mkt = _e(o.get("market", ""))
-    if st in ("TP1_HIT", "TP2_HIT"):
+    if st in ("TP1_HIT", "TP2_HIT", "TP3_HIT"):
         # (2026-10-19) صياغة المالك حرفياً
-        target = "الهدف الثاني" if st == "TP2_HIT" else "الهدف الأول"
+        target = {"TP3_HIT": "الهدف الثالث", "TP2_HIT": "الهدف الثاني"}.get(st, "الهدف الأول")
         r_txt = fmt_r(r).replace(".0R", "R")
         lines = [
             f"🏆 <b>نتيجة إشارة من Qaffel — {target} تحقق!</b>",

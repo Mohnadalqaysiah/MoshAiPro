@@ -127,7 +127,7 @@ export default function Dashboard() {
           risk_reward: d.risk_reward_ratio,
           levels: {
             entry: d.entry_price, stop_loss: d.stop_loss,
-            tp1: d.take_profit_1, tp2: d.take_profit_2,
+            tp1: d.take_profit_1, tp2: d.take_profit_2, tp3: d.take_profit_3,
             risk_reward: d.risk_reward_ratio,
           },
         })
@@ -292,6 +292,7 @@ export default function Dashboard() {
     const sl    = lvl.stop_loss || result.stop_loss_zone
     const tp1   = lvl.tp1 || result.take_profit_zones?.[0]
     const tp2   = lvl.tp2 || result.take_profit_zones?.[1]
+    const tp3   = lvl.tp3 || result.take_profit_3
     const rr    = result.risk_reward || lvl.risk_reward
     const price = result.current_price
     const sym   = result.market || result.symbol || ''
@@ -331,6 +332,7 @@ export default function Dashboard() {
       `🛑 SL: ${fmt(sl)}`,
       tp1 ? `🎯 TP1: ${fmt(tp1)}` : null,
       tp2 ? `🎯 TP2: ${fmt(tp2)}` : null,
+      tp3 ? `🎯 TP3: ${fmt(tp3)}` : null,
       rr  ? `⚖️ R/R: 1:${typeof rr === 'number' ? rr.toFixed(1) : rr}` : null,
       `💡 Conf: ${Math.round(conf)}%`,
       `🤖 Qaffel AI`,
@@ -401,6 +403,7 @@ export default function Dashboard() {
                 { label: isAr ? 'وقف الخسارة' : 'Stop loss', val: fmt(sl, 5),    color: 'text-red-400' },
                 { label: isAr ? 'الهدف الأول' : 'TP1', val: fmt(tp1, 5),   color: 'text-green-400' },
                 { label: isAr ? 'الهدف الثاني' : 'TP2', val: fmt(tp2, 5),   color: 'text-green-300' },
+                ...(tp3 ? [{ label: isAr ? 'الهدف الثالث' : 'TP3', val: fmt(tp3, 5), color: 'text-green-200' }] : []),
                 { label: 'R/R',          val: rr ? `1:${typeof rr === 'number' ? rr.toFixed(1) : rr}` : '—', color: 'text-yellow-400' },
               ].map(({ label, val, color }) => (
                 <div key={label} className="bg-gray-800 rounded-xl px-3 py-2.5">
@@ -858,6 +861,7 @@ export default function Dashboard() {
                   const sl         = levels.stop_loss || sig.stop_loss_zone || sig.stop_loss
                   const tp1        = levels.tp1 || sig.take_profit_zones?.[0] || sig.take_profit_1
                   const tp2        = levels.tp2 || sig.take_profit_zones?.[1] || sig.take_profit_2
+                  const tp3        = levels.tp3 || sig.take_profit_3
                   const rr         = sig.risk_reward || levels.risk_reward || sig.risk_reward_ratio
                   const locked     = !!sig.locked
                   const livePrice  = sig.current_price
@@ -908,6 +912,7 @@ export default function Dashboard() {
                               { l: 'R/R', v: rr ? `1:${typeof rr === 'number' ? rr.toFixed(1) : rr}` : '—', c: 'text-amber-300' },
                               { l: isAr ? 'الهدف الأول' : 'TP1', v: fmt(tp1), c: 'text-emerald-400' },
                               { l: isAr ? 'الهدف الثاني' : 'TP2', v: fmt(tp2), c: 'text-emerald-300' },
+                              ...(tp3 ? [{ l: isAr ? 'الهدف الثالث' : 'TP3', v: fmt(tp3), c: 'text-emerald-200' }] : []),
                               // /signals/latest لا يرجّع سعراً حياً (بس نتيجة التحليل المباشر) — نخفي الخلية بدل "—" دائمة
                               ...(livePrice != null ? [{ l: isAr ? 'السعر الحالي' : 'Price', v: fmt(livePrice, market === 'BTCUSD' ? 2 : 4), c: 'text-cyan-300' }] : []),
                             ].map(x => (
@@ -979,11 +984,12 @@ export default function Dashboard() {
                           ACTIVE:  { label: isAr ? 'نشطة'      : 'Active',  icon: '🟢', cls: 'bg-blue-500/15 text-blue-400 border-blue-500/30' },
                           TP1_HIT: { label: isAr ? 'هدف 1'     : 'TP1',     icon: '✅', cls: 'bg-green-500/15 text-green-400 border-green-500/30' },
                           TP2_HIT: { label: isAr ? 'هدف 2'     : 'TP2',     icon: '🎯', cls: 'bg-green-500/15 text-green-400 border-green-500/30' },
+                          TP3_HIT: { label: isAr ? 'هدف 3'     : 'TP3',     icon: '🏆', cls: 'bg-green-500/15 text-green-400 border-green-500/30' },
                           SL_HIT:  { label: isAr ? 'وقف خسارة' : 'SL',      icon: '❌', cls: 'bg-red-500/15 text-red-400 border-red-500/30' },
                           EXPIRED: { label: isAr ? 'منتهية'    : 'Expired', icon: '⏰', cls: 'bg-gray-600/30 text-gray-400 border-gray-600/40' },
                           BREAKEVEN: { label: isAr ? 'تأمين'   : 'Breakeven', icon: '⚖️', cls: 'bg-amber-500/15 text-amber-400 border-amber-500/30' },
                         }
-                        const st = HIST_STATUS[s.status] || { label: s.status, icon: '•', cls: 'bg-gray-600/30 text-gray-400 border-gray-600/40' }
+                        const st = HIST_STATUS[s.tp3_hit ? 'TP3_HIT' : s.status] || { label: s.status, icon: '•', cls: 'bg-gray-600/30 text-gray-400 border-gray-600/40' }
                         return (
                           <div key={s.id} className="flex items-center justify-between gap-2 text-xs px-3 py-2 rounded-lg bg-white/[0.02]">
                             <span className="flex items-center gap-2">
@@ -1024,6 +1030,7 @@ export default function Dashboard() {
                   const sl         = levels.stop_loss || sig.stop_loss_zone || sig.stop_loss
                   const tp1        = levels.tp1 || sig.take_profit_zones?.[0] || sig.take_profit_1
                   const tp2        = levels.tp2 || sig.take_profit_zones?.[1] || sig.take_profit_2
+                  const tp3        = levels.tp3 || sig.take_profit_3
                   const rr         = sig.risk_reward || levels.risk_reward || sig.risk_reward_ratio
                   const locked     = !!sig.locked
                   const livePrice  = sig.current_price
@@ -1092,6 +1099,7 @@ export default function Dashboard() {
                             {sl != null && <span className="text-xs"><span className="text-gray-500">SL </span><span className="text-red-400 font-mono">{fmt(sl)}</span></span>}
                             {tp1 != null && <span className="text-xs"><span className="text-gray-500">TP1 </span><span className="text-green-400 font-mono">{fmt(tp1)}</span></span>}
                             {tp2 != null && <span className="text-xs"><span className="text-gray-500">TP2 </span><span className="text-green-300 font-mono">{fmt(tp2)}</span></span>}
+                            {tp3 != null && <span className="text-xs"><span className="text-gray-500">TP3 </span><span className="text-green-200 font-mono">{fmt(tp3)}</span></span>}
                             {livePrice != null && (
                               <span className="text-xs"><span className="text-gray-500">{isAr ? 'السعر ' : 'Price '}</span><span className="text-blue-300 font-mono">{fmt(livePrice, market === 'BTCUSD' ? 2 : 4)}</span></span>
                             )}

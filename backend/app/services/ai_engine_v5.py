@@ -341,6 +341,8 @@ class MoshAIEngineV5:
                             # (2026-10-14، بتفويض صريح من المالك) TP1 قريب — بعد كل البوابات حتى لا
                             # يتغيّر أي قرار، فقط موضع الهدف الأول. راجع _cap_tp1.
                             analysis = self._cap_tp1(analysis, symbol, timeframe)
+                            # (2026-10-30، قرار المالك) الهدف البعيد فوق 2.5R ينقسم: ثانٍ عند 2.5R وثالث بعيد. راجع tp_ladder.py
+                            analysis = self._apply_tp_ladder(analysis, symbol, timeframe)
 
                         # ── MARKET CONTEXT — optional news/sentiment summary ──
                         # Advisory only, same contract as the Gemini summary
@@ -684,7 +686,7 @@ class MoshAIEngineV5:
 
             # ── المستويات الرئيسية (levels dict) ─────────────────────────
             lvls = analysis.get("levels", {})
-            for k in ("entry", "entry_zone_min", "entry_zone_max", "stop_loss", "tp1", "tp2"):
+            for k in ("entry", "entry_zone_min", "entry_zone_max", "stop_loss", "tp1", "tp2", "tp3"):
                 if lvls.get(k):
                     lvls[k] = _shift(lvls[k])
 
@@ -2383,6 +2385,28 @@ class MoshAIEngineV5:
         analysis["levels"] = lv
         analysis["tp1_capped"] = True
         logger.info(f"TP1_CAP [{symbol}/{timeframe}] TP1 {tp1} → {new_tp1} ({self.TP1_CAP_R}R), TP2 {far}")
+        return analysis
+
+    def _apply_tp_ladder(self, analysis: dict, symbol: str, timeframe: str) -> dict:
+        """(2026-10-30) بعد _cap_tp1 وبعد كل البوابات: لا يغيّر قراراً ولا دخولاً ولا وقفاً. risk_reward يبقى إلى الهدف البعيد."""
+        from app.services import tp_ladder
+        if not tp_ladder.ladder_enabled():
+            return analysis
+        lv = analysis.get("levels") or {}
+        try:
+            entry, sl, tp1 = float(lv["entry"]), float(lv["stop_loss"]), float(lv["tp1"])
+            tp2 = float(lv.get("tp2") or tp1)
+        except (KeyError, TypeError, ValueError):
+            return analysis
+        split = tp_ladder.split_far_target(entry, sl, tp1, tp2, analysis.get("recommendation") == "BUY")
+        if not split:
+            return analysis
+        lv["tp2"], lv["tp3"] = split
+        tz = analysis.get("take_profit_zones")
+        if isinstance(tz, list) and tz:
+            analysis["take_profit_zones"] = [tz[0], split[0], split[1]] + list(tz[2:])
+        analysis["levels"] = lv
+        logger.info(f"TP_LADDER [{symbol}/{timeframe}] TP1 {tp1} TP2 {split[0]} TP3 {split[1]}")
         return analysis
 
     @staticmethod

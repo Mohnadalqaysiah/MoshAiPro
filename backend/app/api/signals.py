@@ -33,7 +33,7 @@ def _r_stats(decisions: list, raw_rows: list) -> dict:
         s = meta.get(d["id"])
         if s is None:
             continue
-        r = _r_multiple(s.entry_price, s.stop_loss, s.take_profit_1, s.take_profit_2, d["status"])
+        r = _r_multiple(s.entry_price, s.stop_loss, s.take_profit_1, s.final_tp, d["status"])
         if r is None:
             continue
         rs.append(r)
@@ -221,7 +221,7 @@ async def analyze_market(
                 from app.services import market_fingerprint
                 if crypto_weekend_paused(db, symbol):
                     _shid = record_shadow(db, source="web", symbol=symbol, timeframe=timeframe, signal_type=rec,
-                                          entry=entry, sl=sl, tp1=tp1, tp2=tp2, confidence=conf, rr=rr,
+                                          entry=entry, sl=sl, tp1=tp1, tp2=levels.get("tp3") or tp2, confidence=conf, rr=rr,
                                           expires_at=expires_at, user_id=user.id)
                     market_fingerprint.schedule(analysis, symbol, timeframe, rec, shadow_id=_shid)
                 elif loss_streak_reason:
@@ -247,6 +247,7 @@ async def analyze_market(
                         stop_loss         = float(sl),
                         take_profit_1     = float(tp1),
                         take_profit_2     = float(tp2 or tp1),
+                        take_profit_3     = float(levels["tp3"]) if levels.get("tp3") else None,
                         current_price     = analysis.get("current_price"),
                         ai_confidence     = conf,
                         # (2026-10-16) سياق ICT لتقرير الجودة — كان يُحفظ بمسار الماسح فقط (تغطية 26%)
@@ -376,6 +377,8 @@ async def get_latest_signals(
                     "stop_loss":        s.stop_loss,
                     "take_profit_1":    s.take_profit_1,
                     "take_profit_2":    s.take_profit_2,
+                    "take_profit_3":    s.take_profit_3,
+                    "tp3_hit":          bool(s.tp3_hit_at),
                     "risk_reward_ratio": s.risk_reward_ratio,
                     "news_context":     s.notes,
                 })
@@ -386,7 +389,7 @@ async def get_latest_signals(
                     "recommendation": None, "signal_type": None,
                     "ai_confidence": None, "ai_confidence_score": None,
                     "entry_price": None, "stop_loss": None,
-                    "take_profit_1": None, "take_profit_2": None,
+                    "take_profit_1": None, "take_profit_2": None, "take_profit_3": None,
                     "risk_reward_ratio": None,
                 })
             data.append(item)
@@ -437,6 +440,8 @@ async def get_signal_history(
             "sl":          s.stop_loss,
             "tp1":         s.take_profit_1,
             "tp2":         s.take_profit_2,
+            "tp3":         s.take_profit_3,
+            "tp3_hit":     bool(s.tp3_hit_at),
             "rr":          s.risk_reward_ratio,
             "quality":     s.signal_quality.value if hasattr(s.signal_quality, 'value') else s.signal_quality,
             "created_at":  s.created_at.isoformat() if s.created_at else None,
@@ -485,7 +490,8 @@ def get_user_lifetime_stats(db: Session, user: User) -> dict:
     _rep = {r.id: r for r in rows_all}
     for d in decisions:
         r0 = _rep.get(d["id"])
-        d["r"] = _r_multiple(r0.entry_price, r0.stop_loss, r0.take_profit_1, r0.take_profit_2, d["status"]) if r0 else None
+        d["r"] = _r_multiple(r0.entry_price, r0.stop_loss, r0.take_profit_1, r0.final_tp, d["status"]) if r0 else None
+        d["tp3_hit"] = bool(r0 and r0.tp3_hit_at)
     _rs = [d["r"] for d in decisions if d.get("r") is not None]
 
     wins   = [d for d in decisions if d["points"] > 0]
@@ -508,6 +514,7 @@ def get_user_lifetime_stats(db: Session, user: User) -> dict:
             "market":     d["market"],
             "type":       d["signal_type"],
             "status":     d["status"],
+            "tp3_hit":    d.get("tp3_hit", False),
             "points":     round(d["points"], 2),
             "r":          round(d["r"], 2) if d.get("r") is not None else None,
             "closed_at":  d["exit_executed"].strftime("%d/%m %H:%M") if d["exit_executed"] else "",
@@ -695,12 +702,14 @@ async def get_signal_performance(
         day_decisions = verified_unique_decisions(day_raw)
         day_wins  = [d for d in day_decisions if d["points"] > 0]
         day_losses= [d for d in day_decisions if d["points"] < 0]
+        _tp3_ids = {r.id for r in day_raw if getattr(r, "tp3_hit_at", None)}
         trades_detail = [
             {
                 "id":     d["id"],
                 "market": d["market"],
                 "type":   d["signal_type"],
                 "status": d["status"],
+                "tp3_hit": d["id"] in _tp3_ids,
                 "points": round(d["points"], 2),
                 "entry":  d["entry_price"],
                 "exit":   d["exit_executed"].isoformat() if d["exit_executed"] else None,
@@ -959,6 +968,7 @@ def signals_backtest(
                 "id":         d["id"],
                 "direction":  d["signal_type"],
                 "status":     d["status"],
+            "tp3_hit":    d.get("tp3_hit", False),
                 "entry":      d["entry_price"],
                 "rr":         rr,
                 "created_at": d["created_at"].isoformat() if d["created_at"] else None,
@@ -1047,12 +1057,13 @@ def build_my_trades(rows: list, user_id: int, variants: dict) -> list:
         if st in ("ACTIVE", "PENDING") and not got_full:
             continue
         side = getattr(rep.signal_type, "value", rep.signal_type)
-        r_val = _r_multiple(rep.entry_price, rep.stop_loss, rep.take_profit_1, rep.take_profit_2, st) \
+        r_val = _r_multiple(rep.entry_price, rep.stop_loss, rep.take_profit_1, rep.final_tp, st) \
             if st in ("TP1_HIT", "TP2_HIT", "SL_HIT", "BREAKEVEN") else None
         out.append({
             "id": rep.id, "market": rep.market, "timeframe": rep.timeframe, "type": side, "status": st,
             "confidence": rep.ai_confidence, "entry": rep.entry_price, "sl": rep.stop_loss,
-            "tp1": rep.take_profit_1, "tp2": rep.take_profit_2, "rr": rep.risk_reward_ratio,
+            "tp1": rep.take_profit_1, "tp2": rep.take_profit_2, "tp3": rep.take_profit_3,
+            "tp3_hit": bool(rep.tp3_hit_at), "rr": rep.risk_reward_ratio,
             "r": round(r_val, 2) if r_val is not None else None,
             "source": "own" if own else "bot", "received": "full" if got_full else "masked",
             "created_at": rep.created_at.isoformat() if rep.created_at else None,
@@ -1189,6 +1200,8 @@ async def get_signal_details(
                 "stop_loss": signal.stop_loss,
                 "take_profit_1": signal.take_profit_1,
                 "take_profit_2": signal.take_profit_2,
+                "take_profit_3": signal.take_profit_3,
+                "tp3_hit": bool(signal.tp3_hit_at),
                 "current_price": signal.current_price,
                 "ai_confidence": signal.ai_confidence,
                 "ai_reasoning": signal.ai_reasoning,

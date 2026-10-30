@@ -100,6 +100,9 @@ class Signal(Base):
     # Metadata
     # (2026-10-24) صفقة مرّت بتخفيف فلتر (services/relax_policy.py) — "SELL_IN_DISCOUNT" أو None. للقياس الأسبوعي وقاعدة الرجوع.
     relaxed_rule = Column(String(40), nullable=True)
+    # (2026-10-30) سلّم الأهداف — services/tp_ladder.py. الهدف الثالث فوق TP2_HIT، لا حالة جديدة.
+    take_profit_3 = Column(Float, nullable=True)
+    tp3_hit_at = Column(DateTime(timezone=True), nullable=True)
     signal_hash = Column(String, unique=True, index=True)
     notes = Column(String, nullable=True)
     
@@ -114,3 +117,8 @@ class Signal(Base):
     
     def __repr__(self):
         return f"<Signal(id={self.id}, market={self.market}, type={self.signal_type}, status={self.status})>"
+
+    @property
+    def final_tp(self):
+        """الهدف الذي تُحسب عليه TP2_HIT: الثالث إن تحقق، وإلا الثاني. كل حساب R يمر من هنا."""
+        return self.take_profit_3 if self.tp3_hit_at and self.take_profit_3 else self.take_profit_2
