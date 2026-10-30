@@ -45,7 +45,9 @@ PROFILES = [("A", "كما هو اليوم"), ("B", "هدف 1R كامل"), ("C", 
             # (2026-10-30) فكرة المالك: هدف ثانٍ عند 2.5R والبعيد يصير ثالثاً. L/M صادقان، وO بمحاسبة المنصة الحالية
             # (أعلى هدف بلغته الصفقة يُقفل كله) — مستحيل تنفيذياً، يُعرض فقط ليُرى أثر العدّ على الرقم المعلن مقابل F.
             ("L", "صادق: ثلث 1R + تعادل + ثلث 2.5R + ثلث البعيد"), ("M", "صادق: نصف 1R + تعادل + نصف 2.5R"),
-            ("O", "محاسبة المنصة: 1R ثم 2.5R ثم البعيد")]
+            ("O", "محاسبة المنصة: 1R ثم 2.5R ثم البعيد"),
+            # (2026-10-30) يجمع H وO: هل الهدف الأول 0.7R يضيف فوق سلّم 2.5R أم يأخذ منه؟
+            ("P", "محاسبة المنصة: 0.7R ثم 2.5R ثم البعيد")]
 if len(sys.argv) > 2:                                            # (2026-10-30) لاختصار الناتج: مثلاً CFLMO
     PROFILES = [p for p in PROFILES if p[0] in sys.argv[2]]
 
@@ -99,7 +101,7 @@ def run(rows, created, end_ts, entry, sl, tp1, tp2, is_buy, profile):
     still_open = end_ts > datetime.now(timezone.utc)
     last_close = bars[-1][2]
 
-    if profile in ("L", "M", "O"):
+    if profile in ("L", "M", "O", "P"):
         far = r_of(tp2 if ((tp2 > tp1) if is_buy else (tp2 < tp1)) else tp1)
     if profile in ("L", "M"):
         # سلّم أهداف صادق: يُغلق جزء عند كل هدف، والوقف للدخول من الشمعة التالية لأول هدف. إن كان البعيد ≤ 2.5R فهدفان فقط.
@@ -126,8 +128,8 @@ def run(rows, created, end_ts, entry, sl, tp1, tp2, is_buy, profile):
                 return banked
         return None if still_open else banked + left * r_of(last_close)
 
-    if profile == "O":
-        one = min(1.0, far)
+    if profile in ("O", "P"):
+        one = min(1.0 if profile == "O" else 0.7, far)
         best = None
         for hi, lo, _ in bars:
             if sl_touch(hi, lo, sl):
