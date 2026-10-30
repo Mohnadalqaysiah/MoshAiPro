@@ -111,7 +111,7 @@ def test_build_chart_closed_only_and_uses_fetch():
     sig = SimpleNamespace(id=7, market="XAUUSD", timeframe="1h", signal_type=SimpleNamespace(value="SELL"),
                           status=SimpleNamespace(value="ACTIVE"), created_at=NOW - timedelta(hours=5),
                           exit_executed=None, expires_at=None, entry_price=4150, stop_loss=4160,
-                          take_profit_1=4140, take_profit_2=4140)
+                          take_profit_1=4140, take_profit_2=4140, take_profit_3=None, tp3_hit_at=None)
     assert asyncio.run(TC.build_chart(sig))["error"] == "الشارت متاح بعد إغلاق الصفقة"
     sig.status, sig.exit_executed = SimpleNamespace(value="TP1_HIT"), NOW - timedelta(hours=2)
     calls = []

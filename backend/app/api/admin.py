@@ -1718,7 +1718,7 @@ def admin_signal_decisions(
             continue
         ids = d.get("row_ids", []) + d.get("merged_row_ids", [])
         st = d["status"]
-        r = _r_multiple(rep.entry_price, rep.stop_loss, rep.take_profit_1, rep.take_profit_2, st) if st in CLOSED else None
+        r = _r_multiple(rep.entry_price, rep.stop_loss, rep.take_profit_1, rep.final_tp, st) if st in CLOSED else None
         info = _signal_info(rep)
         info.update({
             "status":          st,
@@ -2341,6 +2341,8 @@ def _signal_info(s: Signal) -> dict:
         "stop_loss":     s.stop_loss,
         "take_profit_1": s.take_profit_1,
         "take_profit_2": s.take_profit_2,
+        "take_profit_3": s.take_profit_3,
+        "tp3_hit": bool(s.tp3_hit_at),
         "points_earned": s.points_earned,
         "profit_loss":   s.profit_loss,
         "ai_confidence": s.ai_confidence,
@@ -2404,7 +2406,7 @@ def _build_performance_report(signals: list, days: int, db: Session, lang: str =
     for d in closed:
         rep = _by_id.get(d["id"])
         d["r"] = _r_multiple(rep.entry_price, rep.stop_loss, rep.take_profit_1,
-                             rep.take_profit_2, d["status"]) if rep else None
+                             rep.final_tp, d["status"]) if rep else None
     _rs     = [d["r"] for d in closed if d["r"] is not None]
     total_r = sum(_rs)
     avg_r   = total_r / len(_rs) if _rs else 0.0
@@ -2615,7 +2617,7 @@ def get_performance_report(
     for d in decisions:
         rep = _rows_by_id.get(d["id"])
         d["r"] = _r_multiple(rep.entry_price, rep.stop_loss, rep.take_profit_1,
-                             rep.take_profit_2, d["status"]) if rep else None
+                             rep.final_tp, d["status"]) if rep else None
     _rs = [d["r"] for d in decisions if d["r"] is not None]
 
     decisions.sort(key=lambda d: d["exit_executed"] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)

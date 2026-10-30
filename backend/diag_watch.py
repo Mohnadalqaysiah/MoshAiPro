@@ -121,7 +121,7 @@ def main():
     rs = [d["r"] for d in decs if d["market"] == "GBPJPY" and d["created_at"] >= GBPJPY_START]
     print(f"(5) GBPJPY (من {GBPJPY_START:%Y-%m-%d}) — {_fmt(rs)}\n      {rule_simple(rs, 15)[1]}\n")
 
-    tp2r = lambda d: abs((d["tp2"] or d["entry"]) - d["entry"]) / max(1e-12, abs(d["entry"] - d["stop_loss"]))
+    tp2r = lambda d: abs((d.get("far") or d["tp2"] or d["entry"]) - d["entry"]) / max(1e-12, abs(d["entry"] - d["stop_loss"]))
     capped = sorted((d for d in closed_decisions(db, TP1_CAP_START) if d["status"] != "BREAKEVEN" and tp2r(d) >= 8),
                     key=lambda d: d["created_at"])
     rs = [d["r"] for d in capped]

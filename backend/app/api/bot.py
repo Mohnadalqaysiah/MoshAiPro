@@ -12,6 +12,7 @@ from loguru import logger
 from app.database import get_db
 from app.services.telegram_reach import reachable as _reachable
 from app.services.relax_policy import should_drop as should_drop_relaxed
+from app.services.tp_ladder import tp3_open_clause
 from app.models.user import User, PlanType, UserRole
 from app.models.signal import Signal, SignalStatus, SignalType
 from app.models.site_settings import SiteSettings
@@ -238,6 +239,7 @@ async def bot_analyze(
             sl     = levels.get("stop_loss") or analysis.get("stop_loss_zone")
             tp1    = levels.get("tp1")
             tp2    = levels.get("tp2")
+            tp3    = levels.get("tp3")   # (2026-10-30) سلّم الأهداف — tp_ladder.py
             conf   = analysis.get("ai_confidence_score", 0)
             rr     = levels.get("risk_reward")
             
@@ -272,7 +274,7 @@ async def bot_analyze(
                 if crypto_weekend_paused(db, symbol):
                     _shid = record_shadow(db, source="analyze" if telegram_id else "scanner", symbol=symbol,
                                           timeframe=timeframe, signal_type=rec, entry=entry, sl=sl, tp1=tp1,
-                                          tp2=tp2, confidence=conf, rr=rr, expires_at=expires_at,
+                                          tp2=tp3 or tp2, confidence=conf, rr=rr, expires_at=expires_at,
                                           user_id=signal_user_id)
                     market_fingerprint.schedule(analysis, symbol, timeframe, rec, shadow_id=_shid)
                 elif should_drop_relaxed(db, analysis, symbol):
@@ -289,6 +291,7 @@ async def bot_analyze(
                         stop_loss          = float(sl),
                         take_profit_1      = float(tp1),
                         take_profit_2      = float(tp2) if tp2 else None,
+                        take_profit_3      = float(tp3) if tp3 else None,
                         risk_reward_ratio  = float(rr) if rr else None,
                         ai_confidence      = float(conf),
                         # (2026-09-15) الحقلان كانا NULL بكل الصفوف (162/162):
@@ -530,8 +533,9 @@ async def bot_check_outcomes(
     # بعد دورة تسجيل TP1 يضيع — تشخيص 2026-10-09 وجد ~200 صف وصل TP2 فعلياً
     # بالشموع ومسجّل TP1. للصف المقفول على TP1: لا ترقية إلا لـTP2، ولمس
     # الستوب بعد TP1 يُنهي الرصد ويُبقي TP1 (راجع _tp1_locked تحت).
+    # (2026-10-30) نفس المبدأ درجة أعلى: بلغت الهدف الثاني ولها ثالث ← تبقى تحت الرصد، والثاني مقفل (tp_ladder.py).
     active = db.query(Signal).filter(
-        Signal.status.in_([SignalStatus.ACTIVE, SignalStatus.TP1_HIT]),
+        or_(Signal.status.in_([SignalStatus.ACTIVE, SignalStatus.TP1_HIT]), tp3_open_clause(Signal)),
         Signal.expires_at > now,
     ).all()
 
@@ -662,6 +666,7 @@ async def bot_check_outcomes(
             sl     = float(sig.stop_loss)
             tp1    = float(sig.take_profit_1)
             tp2    = float(sig.take_profit_2)
+            tp3    = float(sig.take_profit_3) if sig.take_profit_3 else None
             is_buy = sig.signal_type.value == "BUY"
 
             # (2026-09-09) بلاغ حقيقي: هالفحص كان يقارن السعر اللحظي بس، بينما
@@ -710,9 +715,12 @@ async def bot_check_outcomes(
             # اللحظي تحت كمان (range_check=False)، لا فقط بالمشي بالشموع.
             already_triggered = sig.entry_executed is not None
             _tp1_locked = sig.status == SignalStatus.TP1_HIT
-            if _tp1_locked:
-                already_triggered = True   # TP1 مسجّل ⇒ الدخول تفعّل حتماً
-            _sl_after_tp1 = False
+            # (2026-10-30) TP2_HIT لا يدخل هذه الحلقة إلا صفقة تنتظر هدفها الثالث (استعلام active أعلاه)
+            _tp2_locked = sig.status == SignalStatus.TP2_HIT
+            if _tp1_locked or _tp2_locked:
+                already_triggered = True   # هدف مسجّل ⇒ الدخول تفعّل حتماً
+            _sl_after_tp1 = False          # الوقف بعد هدف مقفل (الأول أو الثاني): تبقى النتيجة وينتهي الرصد
+            _tp3_hit = False
             if range_check:
                 try:
                     created = sig.created_at
@@ -810,7 +818,7 @@ async def bot_check_outcomes(
                     # هابط. والعكس ممكن (ربح وهمي من شمعة قبل الدخول).
                     # الآن: لا شمعة تسبق شمعة التفعيل تُفحص أبداً.
                     _entry_floor = None
-                    _floor_src = sig.entry_executed or (sig.exit_executed if _tp1_locked else None)
+                    _floor_src = sig.entry_executed or (sig.exit_executed if (_tp1_locked or _tp2_locked) else None)
                     if _floor_src is not None:
                         _ee = _floor_src
                         if _ee.tzinfo is None:
@@ -829,6 +837,15 @@ async def bot_check_outcomes(
                         sl_touch  = (lo <= sl) if is_buy else (hi >= sl)
                         tp2_touch = has_tp2 and ((hi >= tp2) if is_buy else (lo <= tp2))
                         tp1_touch = (hi >= tp1) if is_buy else (lo <= tp1)
+                        if _tp2_locked:
+                            # مقفول على الهدف 2: نفس منطق القفل تحت درجة أعلى — الوقف أولاً عند التعادل
+                            if sl_touch:
+                                _sl_after_tp1 = True
+                                break
+                            if (hi >= tp3) if is_buy else (lo <= tp3):
+                                _tp3_hit = True
+                                break
+                            continue
                         if _tp1_locked:
                             # مقفول على TP1: الستوب بعده يُنهي الرصد (الهدف الأول
                             # يبقى)، وTP2 قبله يرقّي. لا شيء غيرهما.
@@ -904,6 +921,13 @@ async def bot_check_outcomes(
                 elif (price <= sl) if is_buy else (price >= sl):
                     _sl_after_tp1 = True
 
+            if _tp2_locked and not _tp3_hit and not _sl_after_tp1 \
+                    and not walked and market_upper in _SPOT_SYMBOLS:
+                if (price >= tp3) if is_buy else (price <= tp3):
+                    _tp3_hit = True
+                elif (price <= sl) if is_buy else (price >= sl):
+                    _sl_after_tp1 = True
+
             if _sl_after_tp1:
                 # الصفقة أُغلقت بالستوب بعد TP1 — النتيجة تبقى TP1 وينتهي الرصد
                 # (وإلا قد ترى نافذة لاحقة TP2 بعد خروج شمعة الستوب منها)
@@ -912,7 +936,7 @@ async def bot_check_outcomes(
                 continue
 
             if new_status is None and not walked and already_triggered \
-                    and not _tp1_locked and market_upper in _SPOT_SYMBOLS:
+                    and not _tp1_locked and not _tp2_locked and market_upper in _SPOT_SYMBOLS:
                 if is_buy:
                     if   price <= sl:  new_status = SignalStatus.SL_HIT
                     elif price >= tp2: new_status = SignalStatus.TP2_HIT
@@ -927,10 +951,13 @@ async def bot_check_outcomes(
             if new_status == SignalStatus.SL_HIT and sig.be_alert_sent and not _tp1_locked:
                 new_status = SignalStatus.BREAKEVEN
 
-            if new_status and new_status != sig.status:
+            if _tp3_hit:
+                new_status = SignalStatus.TP2_HIT   # الحالة تبقى، والهدف الثالث بـtp3_hit_at (tp_ladder.py)
+
+            if _tp3_hit or (new_status and new_status != sig.status):
                 is_buy  = sig.signal_type.value == "BUY"
                 points, pnl_pct, exit_p = _pnl_for_outcome(
-                    entry, price, sl, tp1, tp2, sig.market, is_buy, new_status
+                    entry, price, sl, tp1, tp3 if _tp3_hit else tp2, sig.market, is_buy, new_status
                 )
 
                 # حفظ النتيجة على الإشارة
@@ -940,13 +967,16 @@ async def bot_check_outcomes(
                 sig.profit_loss             = points
                 sig.profit_loss_percentage  = pnl_pct
                 sig.exit_executed           = datetime.now(timezone.utc)
+                if _tp3_hit:
+                    sig.tp3_hit_at          = sig.exit_executed
                 db.commit()
 
                 # تحديث performance tracker في المحرك (Task 6) — مرة وحدة
                 # لكل قرار فريد، مو لكل صف/مستخدم (انظر التعليق فوق الحلقة)
                 dkey = decision_key(sig.market, sig.timeframe, sig.signal_type, sig.entry_price)
                 # ترقية TP1→TP2 ليست قراراً جديداً — حُسب WIN عند TP1 أصلاً
-                if dkey not in _perf_counted_this_cycle and not _tp1_locked                         and new_status != SignalStatus.BREAKEVEN:   # التأمين ليس ربحاً ولا خسارة للمعايرة
+                if dkey not in _perf_counted_this_cycle and not _tp1_locked and not _tp2_locked \
+                        and new_status != SignalStatus.BREAKEVEN:   # التأمين ليس ربحاً ولا خسارة للمعايرة
                     _perf_counted_this_cycle.add(dkey)
                     perf_result = "WIN" if new_status in (SignalStatus.TP1_HIT, SignalStatus.TP2_HIT) else "LOSS"
                     mosh_ai_engine_v5.update_performance(perf_result)
@@ -960,11 +990,12 @@ async def bot_check_outcomes(
                     "market":       sig.market,
                     "timeframe":    sig.timeframe,
                     "signal_type":  sig.signal_type.value,
-                    "status":       new_status.value,
+                    "status":       "TP3_HIT" if _tp3_hit else new_status.value,
                     "entry":        entry,
                     "sl":           sl,
                     "tp1":          tp1,
                     "tp2":          tp2,
+                    "tp3":          tp3,
                     "current_price":price,
                     "pnl_points":   points,
                     "pnl_pct":      pnl_pct,
@@ -1343,7 +1374,7 @@ def _equivalent_open_broadcast(db: Session, s: Signal) -> bool:
         Signal.signal_type == s.signal_type,
         Signal.broadcast_sent == True,  # noqa: E712
         Signal.id != s.id,
-        Signal.status.in_([SignalStatus.ACTIVE, SignalStatus.TP1_HIT]),
+        or_(Signal.status.in_([SignalStatus.ACTIVE, SignalStatus.TP1_HIT]), tp3_open_clause(Signal)),
         Signal.expires_at > now,
     ).all()
     return any(_entries_equivalent(o.entry_price, s.entry_price) for o in others)
@@ -1356,7 +1387,7 @@ def _open_equivalent_rows(db: Session, market: str, signal_type, entry, exclude_
     q = db.query(Signal).filter(
         Signal.market == market,
         Signal.signal_type == signal_type,
-        Signal.status.in_([SignalStatus.ACTIVE, SignalStatus.TP1_HIT]),
+        or_(Signal.status.in_([SignalStatus.ACTIVE, SignalStatus.TP1_HIT]), tp3_open_clause(Signal)),
         (Signal.expires_at.is_(None)) | (Signal.expires_at > now),
     )
     if exclude_id is not None:
@@ -1380,7 +1411,7 @@ def _user_already_has_trade(db: Session, user: User, market: str, signal_type, e
         seen = {r.id for r in rows}
         rows += [o for o in db.query(Signal).filter(
                     Signal.market == market, Signal.signal_type == signal_type,
-                    Signal.status.in_([SignalStatus.ACTIVE, SignalStatus.TP1_HIT]),
+                    or_(Signal.status.in_([SignalStatus.ACTIVE, SignalStatus.TP1_HIT]), tp3_open_clause(Signal)),
                     (Signal.expires_at.is_(None)) | (Signal.expires_at > now)).all()
                  if o.id not in seen and _same_trade_wide(
                      {"entry_price": o.entry_price, "stop_loss": o.stop_loss, "take_profit_1": o.take_profit_1}, new)]
@@ -1483,6 +1514,7 @@ def bot_new_signals(
             "stop_loss":      s.stop_loss,
             "take_profit_1":  s.take_profit_1,
             "take_profit_2":  s.take_profit_2,
+            "take_profit_3":  s.take_profit_3,
             "risk_reward_ratio": s.risk_reward_ratio,
             "wyckoff_phase":  s.wyckoff_phase,
             "premium_discount": s.premium_discount,
@@ -1849,6 +1881,7 @@ def bot_save_alert_signal(
     tp2: float,
     confidence: float,
     rr: float = 0.0,
+    tp3: Optional[float] = None,              # (2026-10-30) سلّم الأهداف — tp_ladder.py
     wyckoff_phase: Optional[str] = None,      # (2026-10-16) سياق ICT — كان يُحفظ بمسار الماسح فقط
     premium_discount: Optional[str] = None,
     killzone: Optional[str] = None,
@@ -1895,7 +1928,7 @@ def bot_save_alert_signal(
     from app.services.weekend_policy import crypto_weekend_paused, record_shadow
     if crypto_weekend_paused(db, symbol):
         record_shadow(db, source="watch", symbol=symbol, timeframe=timeframe, signal_type=signal_type,
-                      entry=entry, sl=sl, tp1=tp1, tp2=tp2, confidence=confidence, rr=rr,
+                      entry=entry, sl=sl, tp1=tp1, tp2=tp3 or tp2, confidence=confidence, rr=rr,
                       expires_at=datetime.now(timezone.utc) + timedelta(hours=tf_hours.get(timeframe, 24)),
                       user_id=user.id)
         return {"saved": False, "reason": "crypto_weekend_pause"}
@@ -1930,6 +1963,7 @@ def bot_save_alert_signal(
         stop_loss         = round(sl, 5),
         take_profit_1     = round(tp1, 5),
         take_profit_2     = round(tp2, 5),
+        take_profit_3     = round(tp3, 5) if tp3 else None,
         ai_confidence     = confidence,
         risk_reward_ratio = rr,
         signal_hash       = sig_hash,

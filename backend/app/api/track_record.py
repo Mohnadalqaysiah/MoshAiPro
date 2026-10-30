@@ -37,6 +37,14 @@ def _since(weeks: int):
     return max(start.replace(hour=0, minute=0, second=0, microsecond=0), OUTCOME_FIX_DATE)
 
 
+def _ladder_since(db: Session) -> Optional[str]:
+    """(2026-10-30) تاريخ أول صفقة بثلاثة أهداف — يُكتب بالصفحة حتى لا تُقارن الأسابيع قبله وبعده دون تنبيه."""
+    from sqlalchemy import func
+    from app.models.signal import Signal
+    first = db.query(func.min(Signal.created_at)).filter(Signal.take_profit_3.isnot(None)).scalar()
+    return first.date().isoformat() if first else None
+
+
 def build_summary(db: Session, weeks: int) -> dict:
     from app.services.quality_report import OUTCOME_FIX_DATE
     from app.services.weekly_markets import closed_decisions, weekly_table
@@ -51,6 +59,7 @@ def build_summary(db: Session, weeks: int) -> dict:
         "win_rate": round(100 * wins / len(decided), 1) if decided else None,
         # (2026-10-30) المتوسط على كل الصفقات المعروض عددها (التأمين 0R صفقة حقيقية) ليُشتق من أرقام الصفحة نفسها
         "total_r": round(total_r, 2), "avg_r": round(total_r / len(decs), 3) if decs else None,
+        "ladder_since": _ladder_since(db),
         "weekly": weekly_table(db, weeks),
     }
 
@@ -69,7 +78,8 @@ def build_trades(db: Session, weeks: int, group: Optional[str], result: Optional
     tp1 = {s.id: s.take_profit_1 for s in db.query(Signal).filter(Signal.id.in_([d["id"] for d in chunk] or [0])).all()}
     items = [{"id": d["id"], "market": d["market"], "group": d["group"], "timeframe": d["timeframe"], "type": d["side"],
               "status": d["status"], "r": round(d["r"], 2), "entry": d["entry"], "sl": d["stop_loss"],
-              "tp1": tp1.get(d["id"]), "tp2": d["tp2"], "created_at": d["created_at"].isoformat()} for d in chunk]
+              "tp1": tp1.get(d["id"]), "tp2": d["tp2"], "tp3": d.get("tp3"), "tp3_hit": d.get("tp3_hit", False),
+              "created_at": d["created_at"].isoformat()} for d in chunk]
     return {"items": items, "count": len(decs), "page": page, "pages": max(1, -(-len(decs) // page_size))}
 
 

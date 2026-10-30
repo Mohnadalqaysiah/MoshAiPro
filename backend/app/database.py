@@ -78,6 +78,9 @@ def init_db() -> None:
                     conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_blocked_at TIMESTAMPTZ"))
                     # (2026-10-24) وسم الصفقات المخفَّفة — services/relax_policy.py (نموذج Signal يقرأه كل استعلام إشارات)
                     conn.execute(text("ALTER TABLE signals ADD COLUMN IF NOT EXISTS relaxed_rule VARCHAR(40)"))
+                    # (2026-10-30) سلّم الأهداف — services/tp_ladder.py (نموذج Signal يقرأهما كل استعلام إشارات)
+                    conn.execute(text("ALTER TABLE signals ADD COLUMN IF NOT EXISTS take_profit_3 DOUBLE PRECISION"))
+                    conn.execute(text("ALTER TABLE signals ADD COLUMN IF NOT EXISTS tp3_hit_at TIMESTAMPTZ"))
                     # (2026-10-24) آراء من البوت بصورة/فيديو + النشر بالقناة — models/review.py
                     for _col in ("via VARCHAR NOT NULL DEFAULT 'web'", "media_type VARCHAR", "media_file_id VARCHAR",
                                  "anonymous BOOLEAN NOT NULL DEFAULT FALSE", "channel_posted_at TIMESTAMPTZ"):

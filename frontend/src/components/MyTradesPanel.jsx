@@ -10,6 +10,7 @@ import { Activity, RefreshCw, Search, X } from 'lucide-react'
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 const ST = {
+  TP3_HIT:   { ar: 'الهدف 3', en: 'TP3', icon: '🏆', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' },
   TP2_HIT:   { ar: 'الهدف 2', en: 'TP2', icon: '🏆', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' },
   TP1_HIT:   { ar: 'الهدف 1', en: 'TP1', icon: '✅', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30' },
   SL_HIT:    { ar: 'وقف خسارة', en: 'Stop', icon: '❌', cls: 'bg-rose-500/15 text-rose-300 border-rose-500/30' },
@@ -31,6 +32,7 @@ function TradeChart({ d, isAr }) {
   const W = 760, H = 340, PAD_L = 8, PAD_R = 64, PAD_T = 12, PAD_B = 24
   const c = d.candles
   const levels = [
+    { v: d.tp3, label: isAr ? 'الهدف 3' : 'TP3', color: '#34d399', dash: '2 4' },
     { v: d.tp2, label: isAr ? 'الهدف 2' : 'TP2', color: '#34d399', dash: '6 4' },
     { v: d.tp1, label: isAr ? 'الهدف 1' : 'TP1', color: '#34d399' },
     { v: d.entry, label: isAr ? 'الدخول' : 'Entry', color: '#cbd5e1' },
@@ -83,7 +85,7 @@ export function ChartModal({ trade, onClose, isAr, url }) {
     axios.get(url || `${API}/api/v1/signals/${trade.id}/chart`).then((r) => setD(r.data))
       .catch((e) => setErr(e.response?.data?.detail || (isAr ? 'تعذّر تحميل الشارت' : 'Could not load chart')))
   }, [trade.id])
-  const st = ST[trade.status] || {}
+  const st = ST[trade.tp3_hit ? 'TP3_HIT' : trade.status] || {}
   return (
     <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={onClose}>
       <div className="w-full max-w-3xl rounded-2xl bg-gray-900 border border-gray-700 p-4 sm:p-5" onClick={(e) => e.stopPropagation()} dir={isAr ? 'rtl' : 'ltr'}>
@@ -101,7 +103,8 @@ export function ChartModal({ trade, onClose, isAr, url }) {
             <div className="rounded-xl bg-gray-950 border border-gray-800 p-2"><TradeChart d={d} isAr={isAr} /></div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 text-xs tabular-nums">
               {[[isAr ? 'الدخول' : 'Entry', d.entry, 'text-white'], [isAr ? 'الوقف' : 'Stop', d.sl, 'text-rose-300'],
-                [isAr ? 'الهدف 1' : 'TP1', d.tp1, 'text-emerald-300'], [isAr ? 'الهدف 2' : 'TP2', d.tp2, 'text-emerald-300']].map(([l, v, cls]) => (
+                [isAr ? 'الهدف 1' : 'TP1', d.tp1, 'text-emerald-300'], [isAr ? 'الهدف 2' : 'TP2', d.tp2, 'text-emerald-300'],
+                ...(d.tp3 ? [[isAr ? 'الهدف 3' : 'TP3', d.tp3, 'text-emerald-300']] : [])].map(([l, v, cls]) => (
                 <div key={l} className="rounded-lg bg-gray-800/60 px-3 py-2"><div className="text-gray-500">{l}</div><div className={`font-semibold ${cls}`}>{fmtP(v)}</div></div>
               ))}
             </div>
@@ -181,7 +184,7 @@ export default function MyTradesPanel({ isAr = true }) {
           <p className="px-5 py-10 text-center text-gray-500 text-sm">{isAr ? 'لا صفقات بهذا الفلتر بعد' : 'No trades for this filter yet'}</p>
         )}
         {data?.items?.map((t) => {
-          const st = ST[t.status] || ST.EXPIRED
+          const st = ST[t.tp3_hit ? 'TP3_HIT' : t.status] || ST.EXPIRED
           const buy = t.type === 'BUY'
           return (
             <div key={t.id} className="px-5 py-3 flex flex-wrap items-center gap-x-4 gap-y-2">

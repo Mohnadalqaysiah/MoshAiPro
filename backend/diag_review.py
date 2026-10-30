@@ -113,7 +113,7 @@ def main():
           f"{base / max(1, len(decided)):+.3f}R، مجموع {base:+.1f}R\n")
 
     print("═" * 90 + "\n(1) شروط رفض مرشّحة — ن ≥ 30، < −0.3R، سالبة بالنصفين\n" + "═" * 90)
-    tp2r = lambda d: abs((d["tp2"] or d["entry"]) - d["entry"]) / max(1e-12, abs(d["entry"] - d["stop_loss"]))
+    tp2r = lambda d: abs((d.get("far") or d["tp2"] or d["entry"]) - d["entry"]) / max(1e-12, abs(d["entry"] - d["stop_loss"]))
     cands = [
         ("المؤشرات الأمريكية (مجموعة)", lambda d: d["group"] == "index"),
         ("الهدف الثاني ≥ 8R (وقف ضيق)", lambda d: tp2r(d) >= 8),

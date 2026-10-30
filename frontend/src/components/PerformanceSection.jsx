@@ -23,6 +23,7 @@ const T = {
     sell: 'بيع',
     tp1: 'TP1',
     tp2: 'TP2',
+    tp3: 'TP3',
     sl: 'SL',
     recentTrades: 'آخر الصفقات المغلقة',
     rolling30: 'متوسط آخر {n} يوم',
@@ -45,7 +46,7 @@ const T = {
     tp2Hits: 'وصلت للهدف الثاني',
     whyProfit: 'نسبة النجاح وحدها لا تحكم: متوسط الصفقة الرابحة يساوي {x} أضعاف الخاسرة، لذلك تبقى النتيجة الصافية {sign} رغم أن الرابحة أقل عدداً.',
     // (2026-10-16) سياسة الحساب المعتمدة من المالك تُعلَن للعميل — DECISIONS.md
-    disclaimer: 'تُحسب الإشارة رابحة عند بلوغ الهدف الأول، ويُحسب الهدف الثاني بكامل مسافته؛ إدارة الصفقة بعد الهدف الأول حسب خطة المتداول. «تأمين ⚖️» = عادت للدخول بعد رسالة التأمين (0، لا ربح ولا خسارة). محسوبة على كل الإشارات المرسلة بمخاطرة ثابتة لكل صفقة، قبل السبريد والعمولة. الأداء السابق لا يضمن المستقبل.',
+    disclaimer: 'تُحسب الإشارة رابحة عند بلوغ الهدف الأول، وتُحسب النتيجة بأعلى هدف بلغته بكامل مسافته؛ إدارة الصفقة بعد الهدف الأول حسب خطة المتداول. «تأمين ⚖️» = عادت للدخول بعد رسالة التأمين (0، لا ربح ولا خسارة). محسوبة على كل الإشارات المرسلة بمخاطرة ثابتة لكل صفقة، قبل السبريد والعمولة. الأداء السابق لا يضمن المستقبل.',
   },
   en: {
     title: 'Signal Performance',
@@ -63,6 +64,7 @@ const T = {
     sell: 'SELL',
     tp1: 'TP1',
     tp2: 'TP2',
+    tp3: 'TP3',
     sl: 'SL',
     recentTrades: 'Recent Closed Trades',
     rolling30: 'Rolling {n}-Day Average',
@@ -84,7 +86,7 @@ const T = {
     payoffVal: '{x}× the loss',
     tp2Hits: 'Reached TP2',
     whyProfit: 'Win rate alone doesn’t decide it: the average win is {x}× the average loss, so the net result stays {sign} even with fewer winners.',
-    disclaimer: 'A signal counts as a win once TP1 is reached, and TP2 counts at its full distance; managing the trade after TP1 is up to the trader. "Breakeven ⚖️" = returned to entry after the breakeven alert (0, neither win nor loss). Computed over every signal sent, fixed risk per trade, before spread and commission. Past performance does not guarantee future results.',
+    disclaimer: 'A signal counts as a win once TP1 is reached, and the result counts at the highest target reached; managing the trade after TP1 is up to the trader. "Breakeven ⚖️" = returned to entry after the breakeven alert (0, neither win nor loss). Computed over every signal sent, fixed risk per trade, before spread and commission. Past performance does not guarantee future results.',
   },
 }
 
@@ -139,6 +141,7 @@ export default function PerformanceSection() {
 
   const statusLabel = (status) => {
     if (status === 'TP1_HIT') return { label: tx.tp1, cls: 'bg-blue-900/50 text-blue-300' }
+    if (status === 'TP3_HIT') return { label: tx.tp3, cls: 'bg-purple-900/50 text-purple-300' }
     if (status === 'TP2_HIT') return { label: tx.tp2, cls: 'bg-purple-900/50 text-purple-300' }
     if (status === 'SL_HIT')  return { label: tx.sl,  cls: 'bg-red-900/50 text-red-300' }
     if (status === 'BREAKEVEN') return { label: '⚖️ 0R', cls: 'bg-amber-900/40 text-amber-300' }
@@ -376,7 +379,7 @@ export default function PerformanceSection() {
 
           <div className="divide-y divide-gray-700/40">
             {allRecentTrades.slice(0, tradesLimit).map((t, i) => {
-              const st  = statusLabel(t.status)
+              const st  = statusLabel(t.tp3_hit ? 'TP3_HIT' : t.status)
               const ty  = typeLabel(t.type)
               const isWin  = t.status === 'TP1_HIT' || t.status === 'TP2_HIT'
               const isLoss = t.status === 'SL_HIT'

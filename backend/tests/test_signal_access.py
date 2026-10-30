@@ -55,7 +55,7 @@ def _sig(i=0, status=SignalStatus.ACTIVE, user_id=1, market="XAUUSD", entry=None
     return SimpleNamespace(
         id=100 + i, market=market, timeframe="4h", user_id=user_id,
         entry_price=entry if entry is not None else round(2400.0 * (1 + 0.03 * i), 5),   # 3% بين كل إشارة: أفكار مختلفة
-        stop_loss=2410.0, take_profit_1=2385.0, take_profit_2=2370.0, current_price=2398.0, ai_confidence=78,
+        stop_loss=2410.0, take_profit_1=2385.0, take_profit_2=2370.0, take_profit_3=2340.0, tp3_hit_at=None, current_price=2398.0, ai_confidence=78,
         ai_reasoning="سبب", wyckoff_phase=None, premium_discount=None, killzone=None, risk_reward_ratio=1.5,
         profit_loss=None, profit_loss_percentage=None, notes=None,
         created_at=datetime(2026, 10, 19, tzinfo=timezone.utc), expires_at=None,
@@ -212,7 +212,7 @@ def test_detail_link_consumes_and_masked_has_no_direction():
         assert _detail(db, _sig(i), u)["locked"] is False
     d = _detail(db, _sig(3), u)
     assert d["locked"] is True
-    for k in ("signal_type", "entry_price", "stop_loss", "take_profit_1", "take_profit_2", "ai_confidence", "ai_reasoning"):
+    for k in ("signal_type", "entry_price", "stop_loss", "take_profit_1", "take_profit_2", "take_profit_3", "ai_confidence", "ai_reasoning"):
         assert k not in d, k
     assert _detail(db, _sig(0), u)["locked"] is False
     assert db.unlock_count() == 3
@@ -235,7 +235,7 @@ def test_viewing_latest_consumes_nothing():
     full = _latest_full(db, u)
     assert full["quota"] == {"tier": "trial_expired", "limit": 3, "used": 0, "remaining": 3}
     for x in full["data"]:
-        for k in ("recommendation", "signal_type", "ai_confidence", "entry_price", "stop_loss", "take_profit_1"):
+        for k in ("recommendation", "signal_type", "ai_confidence", "entry_price", "stop_loss", "take_profit_1", "take_profit_3"):
             assert x[k] is None, k
 
 
