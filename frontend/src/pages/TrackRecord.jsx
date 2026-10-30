@@ -69,7 +69,7 @@ export default function TrackRecord() {
   const w = sum?.weekly
   const cards = sum ? [
     ['صفقة مغلقة', sum.decisions], ['نسبة الربح', sum.win_rate != null ? `${sum.win_rate}%` : '—'],
-    ['صافي النتيجة', fmtR(sum.total_r)], ['متوسط الصفقة', fmtR(sum.avg_r)],
+    ['مجموع النتيجة', fmtR(sum.total_r)], ['متوسط الصفقة', fmtR(sum.avg_r)],
   ] : []
 
   return (

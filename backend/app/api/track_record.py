@@ -49,7 +49,8 @@ def build_summary(db: Session, weeks: int) -> dict:
         "decisions": len(decs), "wins": wins, "losses": len(decided) - wins,
         "breakeven": len(decs) - len(decided),
         "win_rate": round(100 * wins / len(decided), 1) if decided else None,
-        "total_r": round(total_r, 2), "avg_r": round(total_r / len(decided), 3) if decided else None,
+        # (2026-10-30) المتوسط على كل الصفقات المعروض عددها (التأمين 0R صفقة حقيقية) ليُشتق من أرقام الصفحة نفسها
+        "total_r": round(total_r, 2), "avg_r": round(total_r / len(decs), 3) if decs else None,
         "weekly": weekly_table(db, weeks),
     }
 

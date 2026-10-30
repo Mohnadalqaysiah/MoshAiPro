@@ -71,6 +71,7 @@ def test_open_shows_all_wins_losses_breakeven_no_cherry_picking():
     sm = TR.public_summary(weeks=8, db=s)
     assert (sm["decisions"], sm["wins"], sm["losses"], sm["breakeven"]) == (4, 2, 1, 1)
     assert sm["total_r"] == round(1 + 2 - 1, 2) and sm["win_rate"] == round(100 * 2 / 3, 1)
+    assert sm["avg_r"] == round(sm["total_r"] / sm["decisions"], 3)      # مشتق من الرقمين المعروضين، والتأمين ضمنهما
     t = TR.public_trades(weeks=8, group=None, result=None, page=1, page_size=20, db=s)
     assert t["count"] == 4 and {x["status"] for x in t["items"]} == {"TP1_HIT", "SL_HIT", "TP2_HIT", "BREAKEVEN"}
     assert [x["id"] for x in TR.public_trades(weeks=8, group=None, result="loss", page=1, page_size=20, db=s)["items"]] == [2]
