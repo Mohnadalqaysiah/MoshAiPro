@@ -19,6 +19,8 @@ _METALS = {"XAGUSD", "XPTUSD", "XPDUSD", "COPPER"}
 _ENERGY = {"USOIL", "OIL", "BRENT", "BRENT OIL", "NATGAS"}
 _INDEX = {"NAS100", "US30", "SP500"}
 _CLOSED = ("TP1_HIT", "TP2_HIT", "SL_HIT", "BREAKEVEN")
+EXCELLENT_AVG_R = 0.40       # "الأسبوع الممتاز" (DECISIONS 30/10، معتمد من المالك) — لا يُعدَّل بعد رؤية الأرقام
+EXCELLENT_MIN_GROUPS = 5     # من مجموعات GROUPS الثماني، والمجموعة بلا صفقات لا تُعدّ رابحة
 
 
 def market_group(symbol: str, category: str) -> str:
@@ -72,6 +74,17 @@ def closed_decisions(db, since: datetime) -> List[Dict]:
                     "tp3": s.take_profit_3, "tp3_hit": bool(s.tp3_hit_at), "far": s.take_profit_3 or s.take_profit_2,
                     "premium_discount": s.premium_discount})
     return out
+
+
+def week_grade(cells: Dict) -> Dict:
+    """حكم أسبوع من خلايا weekly_table. المتوسط على كل الصفقات والتأمين 0R ضمنها، كمتوسط سجل الأداء (30/10)."""
+    total = cells.get("_total", {})
+    n = total.get("n", 0) + total.get("be", 0)
+    r = total.get("r", 0.0)
+    avg = r / n if n else None
+    groups_won = sum(1 for k, _ in GROUPS if cells.get(k, {}).get("r", 0) > 0)
+    return {"n": n, "r": r, "avg_r": avg, "groups_won": groups_won,
+            "excellent": avg is not None and avg >= EXCELLENT_AVG_R and groups_won >= EXCELLENT_MIN_GROUPS}
 
 
 def weekly_table(db, weeks: int = 8) -> Dict:
