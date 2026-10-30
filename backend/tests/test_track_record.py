@@ -30,10 +30,12 @@ from sqlalchemy import create_engine  # noqa: E402
 from sqlalchemy.orm import sessionmaker  # noqa: E402
 
 import app.api.track_record as TR  # noqa: E402
+import diag_gate as DG  # noqa: E402
 from app.database import Base  # noqa: E402
 from app.models.market_config import MarketConfig  # noqa: E402
 from app.models.signal import Signal, SignalStatus, SignalType  # noqa: E402
 from app.models.site_settings import SiteSettings  # noqa: E402
+from app.services.weekly_markets import GROUPS, week_grade, weekly_table  # noqa: E402
 
 NOW = datetime.now(timezone.utc)
 
@@ -97,6 +99,68 @@ def test_chart_rejects_pre_baseline_and_open():
             assert False
         except HTTPException as e:
             assert e.status_code == code, (sid, e.status_code)
+
+
+def _cells(n=100, be=0, r=40.0, won=5):
+    """أسبوع بـwon مجموعات رابحة والباقي خاسر."""
+    cells = {"_total": {"n": n, "be": be, "r": r}}
+    for i, (k, _) in enumerate(GROUPS):
+        cells[k] = {"r": 1.0 if i < won else -1.0}
+    return cells
+
+
+def _week(cells, current=False):
+    return {"cells": cells, "current": current}
+
+
+def test_excellent_week_thresholds():
+    assert week_grade(_cells())["excellent"] is True                           # الحدّان نفسهما ناجحان: ≥ +0.40R و≥ 5
+    assert week_grade(_cells(r=39.9))["excellent"] is False
+    assert week_grade(_cells(won=4))["excellent"] is False
+    assert week_grade({})["excellent"] is False and week_grade({})["avg_r"] is None
+
+
+def test_excellent_week_counts_breakeven_in_average():
+    g = week_grade(_cells(n=90, be=20, r=41.0))                                # 41 ÷ 110 = +0.37R، ولو حُسب على 90 لنجح
+    assert g["n"] == 110 and round(g["avg_r"], 2) == 0.37 and g["excellent"] is False
+
+
+def test_excellent_week_group_needs_positive_r():
+    c = {"_total": {"n": 100, "be": 0, "r": 60.0}}
+    c.update({k: {"r": 2.0} for k, _ in GROUPS[:4]})
+    c[GROUPS[4][0]] = {"r": 0.0}                                               # متعادلة، والباقي بلا صفقات، و_total لا يُعدّ
+    g = week_grade(c)
+    assert g["groups_won"] == 4 and g["excellent"] is False
+
+
+def test_gate_verdict_uses_last_two_complete_weeks():
+    good, bad = _week(_cells()), _week(_cells(r=10.0))
+    assert DG.verdict([bad, good, good]) is True                               # الأقدم لا يدخل
+    assert DG.verdict([good, bad, good]) is False
+    assert DG.verdict([good, good, _week(_cells(r=-50.0), current=True)]) is True   # الجاري لا يدخل الحكم
+    assert DG.verdict([bad, good, _week(_cells(), current=True)]) is False     # ولا يُكمل أسبوعاً ناقصاً
+    assert DG.verdict([good, _week(_cells(), current=True)]) is None
+
+
+def _week_of(d):
+    return {"from": (d - timedelta(days=d.weekday())).date().isoformat()}
+
+
+def test_gate_reads_real_table_and_open_trades():
+    s = _db(False)
+    assert sum(week_grade(w["cells"])["n"] for w in weekly_table(s, weeks=2)["weeks"]) == 4   # الأربع المغلقة والتأمين ضمنها
+    assert DG.open_decisions(s, _week_of(NOW - timedelta(days=1))) == 1        # ACTIVE وحدها، من _db
+    assert DG.open_decisions(s, _week_of(NOW - timedelta(days=30))) == 0       # أسبوع آخر
+
+
+def test_gate_open_trades_count_decisions_not_user_rows():
+    s = _db(False)
+    a = s.query(Signal).filter(Signal.id == 5).one()
+    s.add(Signal(id=6, user_id=2, market=a.market, timeframe=a.timeframe, signal_type=a.signal_type, status=a.status,
+                 entry_price=a.entry_price, stop_loss=a.stop_loss, take_profit_1=a.take_profit_1,
+                 take_profit_2=a.take_profit_2, ai_confidence=70, signal_hash="h6", created_at=a.created_at))
+    s.commit()
+    assert DG.open_decisions(s, _week_of(a.created_at)) == 1
 
 
 if __name__ == "__main__":
