@@ -206,7 +206,8 @@ export default function LandingV2() {
   const tfBars = (k) => Array.from({ length: 12 }, (_, i) => 20 + Math.round(70 * Math.abs(Math.sin((i + 1) * (k + 1.3)))))
   const navLinks = [['#engine', T.nav.engine], ['#features', T.nav.features], [p('/strategy-builder'), T.nav.builder, true],
     ...(isAr ? [['/results', T.nav.results, true]] : []),   // سجل الأداء عربي فقط، ولا /en/results
-    ...(showReviews ? [['#reviews', X.navReviews]] : []), ['#pricing', T.nav.pricing], ['#referral', X.navReferral], ['#faq', T.nav.faq]]
+    ...(showReviews ? [['#reviews', X.navReviews]] : []), ['#pricing', T.nav.pricing], ['#referral', X.navReferral], ['#faq', T.nav.faq],
+    [p('/blog'), T.nav.blog, true]]
 
   return (
     <div className="qx" dir={isAr ? 'rtl' : 'ltr'} ref={rootRef}>
