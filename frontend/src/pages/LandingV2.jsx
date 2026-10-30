@@ -205,6 +205,7 @@ export default function LandingV2() {
 
   const tfBars = (k) => Array.from({ length: 12 }, (_, i) => 20 + Math.round(70 * Math.abs(Math.sin((i + 1) * (k + 1.3)))))
   const navLinks = [['#engine', T.nav.engine], ['#features', T.nav.features], [p('/strategy-builder'), T.nav.builder, true],
+    ...(isAr ? [['/results', T.nav.results, true]] : []),   // سجل الأداء عربي فقط، ولا /en/results
     ...(showReviews ? [['#reviews', X.navReviews]] : []), ['#pricing', T.nav.pricing], ['#referral', X.navReferral], ['#faq', T.nav.faq]]
 
   return (
@@ -594,6 +595,7 @@ export default function LandingV2() {
               <li><Link to="/register">{T.fRegister}</Link></li>
               <li><Link to="/pricing">{T.nav.pricing}</Link></li>
               <li><Link to={p('/strategy-builder')}>{T.nav.builder}</Link></li>
+              {isAr && <li><Link to="/results">{T.nav.results}</Link></li>}
               <li><Link to={isAr ? '/blog' : '/en/blog'}>{T.nav.blog}</Link></li>
               <li><a href="/games/challenge">{T.nav.games}</a></li>
             </ul></div>

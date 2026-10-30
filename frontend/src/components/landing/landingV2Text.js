@@ -64,7 +64,7 @@ export const COND_KEYS = [['bos', 20], ['sweep', 20], ['fvg', 15], ['ob', 15], [
 export const TXT = {
   ar: {
     nav: { engine: 'المحرك', features: 'المميزات', builder: 'الاستراتيجيات', pricing: 'الأسعار', faq: 'الأسئلة',
-      about: 'من نحن', contact: 'تواصل معنا', referral: 'برنامج الإحالة', games: 'الألعاب التعليمية', blog: 'المدونة' },
+      about: 'من نحن', contact: 'تواصل معنا', referral: 'برنامج الإحالة', games: 'الألعاب التعليمية', blog: 'المدونة', results: 'سجل الأداء' },
     login: 'الدخول', start: 'ابدأ مجاناً', dashboard: 'لوحة التحكم', menu: 'القائمة', preview: 'معاينة — ليست الصفحة الرئيسية بعد',
     heroPill: 'يراقب الأسواق الآن · ICT · SMC · Wyckoff',
     h1a: 'اقرأ السوق', h1b: 'كما تقرؤه ', h1c: 'المؤسسات.',

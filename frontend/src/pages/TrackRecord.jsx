@@ -12,6 +12,7 @@ import { ChartModal } from '../components/MyTradesPanel'
 import useSEO from '../hooks/useSEO'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const WEEKS = 26   // أقصى ما يقبله الخادم — بنافذة 8 أسابيع كانت "كل صفقة منذ البداية" ستصير غير صحيحة بعد منتصف نوفمبر
 const GROUPS = { gold: 'الذهب', metals: 'الفضة والمعادن', energy: 'الطاقة', index: 'المؤشرات', forex: 'فوركس',
   crypto: 'كريبتو', gulf: 'خليجي', stock: 'أسهم أمريكية' }
 const ST = { TP3_HIT: ['🏆', 'الهدف 3', '#34d399'], TP2_HIT: ['🏆', 'الهدف 2', '#34d399'], TP1_HIT: ['✅', 'الهدف 1', '#34d399'], SL_HIT: ['❌', 'وقف الخسارة', '#fb7185'],
@@ -44,12 +45,12 @@ export default function TrackRecord() {
   }, [closed])
 
   useEffect(() => {
-    axios.get(base, { params: { weeks: 8 } }).then((r) => setSum(r.data))
+    axios.get(base, { params: { weeks: WEEKS } }).then((r) => setSum(r.data))
       .catch((e) => { if (e.response?.status === 404 || e.response?.status === 401 || e.response?.status === 403) setClosed(true) })
   }, [base])
   useEffect(() => {
     if (closed) return
-    axios.get(`${base}/trades`, { params: { weeks: 8, group: filt.group || undefined, result: filt.result || undefined, page: filt.page, page_size: 20 } })
+    axios.get(`${base}/trades`, { params: { weeks: WEEKS, group: filt.group || undefined, result: filt.result || undefined, page: filt.page, page_size: 20 } })
       .then((r) => setTrades(r.data)).catch(() => setTrades({ items: [], pages: 1 }))
   }, [base, filt, closed])
 
@@ -83,7 +84,7 @@ export default function TrackRecord() {
         <div className="qp-wrap qp-narrow">
           <span className="qp-eyebrow">سجل الأداء</span>
           <h1 className="qp-h1">كل صفقاتنا<br /><span className="qp-grad">الرابحة والخاسرة</span></h1>
-          <p className="qp-lead">لا نختار ما نعرضه: كل صفقة أُغلقت منذ {sum?.baseline || '…'} موجودة هنا، وكل واحدة يمكنك التحقق منها بالشارت الحقيقي.</p>
+          <p className="qp-lead">لا نختار ما نعرضه: كل صفقة أُغلقت منذ {sum?.since || '…'} موجودة هنا، وكل واحدة يمكنك التحقق منها بالشارت الحقيقي.</p>
         </div>
       </section>
 
