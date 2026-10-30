@@ -518,7 +518,7 @@ def fmt_analysis_en(data: dict, symbol: str, timeframe: str) -> str:
     if sl:  msg += f"🛑 Stop:   `{_fmt_price(sl)}`\n"
     if tp1: msg += f"✅ TP1:    `{_fmt_price(tp1)}`\n"
     if tp2: msg += f"✅ TP2:    `{_fmt_price(tp2)}`\n"
-    if lvls.get("tp3"): msg += f"✅ TP3:    `{_fmt_price(lvls['tp3'])}`\n"
+    if lvls.get("ladder_tp3"): msg += f"✅ TP3:    `{_fmt_price(lvls['ladder_tp3'])}`\n"
     if rr:  msg += f"⚖️ R/R:    `{float(rr):.2f}x`\n"
     if rec in ("BUY", "SELL"):
         msg += "💡 At TP1, consider moving your stop to entry to lock the trade\n"
@@ -595,7 +595,7 @@ def fmt_analysis(data: dict, symbol: str, timeframe: str) -> str:
     if sl:  msg += f"🛑 وقف:   `{_fmt_price(sl)}`\n"
     if tp1: msg += f"✅ هدف 1: `{_fmt_price(tp1)}`\n"
     if tp2: msg += f"✅ هدف 2: `{_fmt_price(tp2)}`\n"
-    if lvls.get("tp3"): msg += f"✅ هدف 3: `{_fmt_price(lvls['tp3'])}`\n"
+    if lvls.get("ladder_tp3"): msg += f"✅ هدف 3: `{_fmt_price(lvls['ladder_tp3'])}`\n"
     if rr:  msg += f"⚖️ R/R:   `{float(rr):.2f}x`\n"
     if rec in ("BUY", "SELL"):
         # (2026-10-03) نفس تنبيه "تأمين الصفقة" بـfmt_new_signal — موحَّد
@@ -1990,7 +1990,7 @@ async def monitor_watchlists(app: Application):
                                 "sl":          _sl,
                                 "tp1":         _tp1,
                                 "tp2":         _tp2 or _tp1,
-                                **({"tp3": levels["tp3"]} if levels.get("tp3") else {}),   # (2026-10-30) سلّم الأهداف
+                                **({"tp3": levels["ladder_tp3"]} if levels.get("ladder_tp3") else {}),   # (2026-10-30) سلّم الأهداف
                                 "confidence":  conf,
                                 "rr":          _rr,
                                 # (2026-10-24) وسم التخفيف الجزئي — يُحفظ بالصف للقياس وقاعدة الرجوع

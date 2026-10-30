@@ -686,7 +686,7 @@ class MoshAIEngineV5:
 
             # ── المستويات الرئيسية (levels dict) ─────────────────────────
             lvls = analysis.get("levels", {})
-            for k in ("entry", "entry_zone_min", "entry_zone_max", "stop_loss", "tp1", "tp2", "tp3"):
+            for k in ("entry", "entry_zone_min", "entry_zone_max", "stop_loss", "tp1", "tp2", "tp3", "ladder_tp3"):
                 if lvls.get(k):
                     lvls[k] = _shift(lvls[k])
 
@@ -2393,6 +2393,8 @@ class MoshAIEngineV5:
         if not tp_ladder.ladder_enabled():
             return analysis
         lv = analysis.get("levels") or {}
+        # levels["tp3"] قيمة قديمة من ict_engine/gemini لا تُرصد — المعتمد ladder_tp3 وحده (حادثة نشر 30/10)
+        lv.pop("tp3", None)
         try:
             entry, sl, tp1 = float(lv["entry"]), float(lv["stop_loss"]), float(lv["tp1"])
             tp2 = float(lv.get("tp2") or tp1)
@@ -2402,9 +2404,10 @@ class MoshAIEngineV5:
         if not split:
             return analysis
         lv["tp2"], lv["tp3"] = split
+        lv["ladder_tp3"] = split[1]
         tz = analysis.get("take_profit_zones")
         if isinstance(tz, list) and tz:
-            analysis["take_profit_zones"] = [tz[0], split[0], split[1]] + list(tz[2:])
+            analysis["take_profit_zones"] = [tz[0], split[0], split[1]] + list(tz[3:])
         analysis["levels"] = lv
         logger.info(f"TP_LADDER [{symbol}/{timeframe}] TP1 {tp1} TP2 {split[0]} TP3 {split[1]}")
         return analysis
