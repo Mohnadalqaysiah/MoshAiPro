@@ -12,7 +12,8 @@ import { ChartModal } from '../components/MyTradesPanel'
 import useSEO from '../hooks/useSEO'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-const WEEKS = 26   // أقصى ما يقبله الخادم — بنافذة 8 أسابيع كانت "كل صفقة منذ البداية" ستصير غير صحيحة بعد منتصف نوفمبر
+// (2026-10-30، طلب المالك) نافذة متحركة والسجل الكامل بزر. weeks = الأسابيع السابقة للجاري: 3 ← 4 صفوف بالجدول، و26 أقصى الخادم
+const PERIODS = [[3, 'آخر 4 أسابيع'], [26, 'السجل الكامل']]
 const GROUPS = { gold: 'الذهب', metals: 'الفضة والمعادن', energy: 'الطاقة', index: 'المؤشرات', forex: 'فوركس',
   crypto: 'كريبتو', gulf: 'خليجي', stock: 'أسهم أمريكية' }
 const ST = { TP3_HIT: ['🏆', 'الهدف 3', '#34d399'], TP2_HIT: ['🏆', 'الهدف 2', '#34d399'], TP1_HIT: ['✅', 'الهدف 1', '#34d399'], SL_HIT: ['❌', 'وقف الخسارة', '#fb7185'],
@@ -28,6 +29,7 @@ export default function TrackRecord() {
   const [closed, setClosed] = useState(false)
   const [trades, setTrades] = useState(null)
   const [filt, setFilt] = useState({ group: '', result: '', page: 1 })
+  const [weeks, setWeeks] = useState(PERIODS[0][0])
   const [chart, setChart] = useState(null)
 
   useSEO({
@@ -44,15 +46,20 @@ export default function TrackRecord() {
     return () => { const x = document.querySelector('meta[name="robots"][content="noindex"]'); if (x) x.remove() }
   }, [closed])
 
+  // live: رد متأخر من الفترة السابقة لا يكتب أرقامها تحت اسم الفترة الجديدة
   useEffect(() => {
-    axios.get(base, { params: { weeks: WEEKS } }).then((r) => setSum(r.data))
+    let live = true
+    axios.get(base, { params: { weeks } }).then((r) => { if (live) setSum(r.data) })
       .catch((e) => { if (e.response?.status === 404 || e.response?.status === 401 || e.response?.status === 403) setClosed(true) })
-  }, [base])
+    return () => { live = false }
+  }, [base, weeks])
   useEffect(() => {
     if (closed) return
-    axios.get(`${base}/trades`, { params: { weeks: WEEKS, group: filt.group || undefined, result: filt.result || undefined, page: filt.page, page_size: 20 } })
-      .then((r) => setTrades(r.data)).catch(() => setTrades({ items: [], pages: 1 }))
-  }, [base, filt, closed])
+    let live = true
+    axios.get(`${base}/trades`, { params: { weeks, group: filt.group || undefined, result: filt.result || undefined, page: filt.page, page_size: 20 } })
+      .then((r) => { if (live) setTrades(r.data) }).catch(() => { if (live) setTrades({ items: [], pages: 1 }) })
+    return () => { live = false }
+  }, [base, filt, closed, weeks])
 
   if (closed) {
     return (
@@ -90,6 +97,13 @@ export default function TrackRecord() {
 
       <section className="qp-sec" style={{ paddingTop: 0 }}>
         <div className="qp-wrap">
+          <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+            {PERIODS.map(([v, l]) => (
+              <button key={v} onClick={() => { setWeeks(v); setFilt({ ...filt, page: 1 }) }} className={weeks === v ? 'qp-btn' : 'qp-btn-ghost'}
+                style={{ padding: '6px 14px', fontSize: 13, minHeight: 36 }}>{l}</button>
+            ))}
+            <span className="qp-faint" style={{ fontSize: 13, flexBasis: '100%', textAlign: 'center' }}>الأرقام أدناه منذ {sum?.since || '…'}، وتتحرك الفترة تلقائياً كل أسبوع</span>
+          </div>
           <div className="qp-grid qp-g4" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))' }}>
             {cards.map(([l, v]) => (
               <div key={l} className="qp-card" style={{ textAlign: 'center' }}>

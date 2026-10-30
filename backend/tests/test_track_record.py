@@ -197,6 +197,12 @@ def test_chart_cached_only_when_ok():
         TR.build_chart_public = real
 
 
+def test_four_week_view_starts_three_weeks_before_this_monday():
+    monday = (NOW - timedelta(days=NOW.weekday())).date()
+    assert TR._since(3).date() == monday - timedelta(days=21)                  # زر "آخر 4 أسابيع" بالصفحة = weeks=3
+    assert TR._since(3).weekday() == 0
+
+
 def test_cache_is_bounded():
     TR._cache.clear()
     for i in range(TR.CACHE_MAX + 5):
