@@ -142,6 +142,13 @@ def test_gate_verdict_uses_last_two_complete_weeks():
     assert DG.verdict([good, _week(_cells(), current=True)]) is None
 
 
+def test_gate_preliminary_verdict_counts_running_week():
+    good, bad = _week(_cells()), _week(_cells(r=10.0))
+    assert DG.verdict([bad, good, _week(_cells(), current=True)], with_current=True) is True
+    assert DG.verdict([bad, good, _week(_cells(r=10.0), current=True)], with_current=True) is False   # العتبات نفسها
+    assert DG.verdict([_week(_cells(), current=True)], with_current=True) is None
+
+
 def _week_of(d):
     return {"from": (d - timedelta(days=d.weekday())).date().isoformat()}
 
