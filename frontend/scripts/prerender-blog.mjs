@@ -129,6 +129,47 @@ function build(post, lang) {
   return { path, html: h }
 }
 
+// (2026-10-30) سجل الأداء /results: نفس سبب المقالات (canonical الرئيسية بالـHTML الخام). بلا أرقام عمداً: الحيّة تأتي من الـAPI
+// بعد الرندر، ورقم مطبوع هنا يتقادم. عربي فقط، فلا hreflang — مثل ما يفعل useSEO لصفحة بلا نسخة /en.
+const RESULTS = {
+  title: 'سجل الأداء | Qaffel AI — كل الصفقات الرابحة والخاسرة',
+  desc: 'سجل أداء إشارات Qaffel AI: كل الصفقات المغلقة، الرابحة والخاسرة، أسبوعياً ولكل سوق، وكل صفقة قابلة للتحقق بالشارت الحقيقي.',
+  h1: 'كل صفقاتنا الرابحة والخاسرة',
+  lead: 'لا نختار ما نعرضه: كل صفقة أُغلقت منذ بدء نظام الرصد الحالي موجودة هنا، أسبوعاً بأسبوع ولكل سوق، وكل واحدة يمكنك التحقق منها بالشارت الحقيقي.',
+  method: [
+    'كل صفقة تُحسب مرة واحدة حتى لو وصلت لمئات المشتركين.',
+    'الصفقة رابحة عند وصول الهدف الأول، وخاسرة عند ضرب وقف الخسارة، و"تأمين" إذا عادت للدخول بعد نقل الوقف.',
+    'النتيجة بمضاعف المخاطرة R، والنقاط لا تُجمع بين الأسواق فلا نستخدمها.',
+    'النتائج تقيس وصول كل صفقة إلى أهدافها أو وقفها، قبل السبريد، ولا تمثل نتيجة عميل بعينه. الصفقة التي تنتهي مدتها دون هدف أو وقف لا تُحسب ربحاً ولا خسارة.',
+  ],
+  risk: 'الأداء السابق لا يضمن النتائج المستقبلية. التحليلات لأغراض تعليمية وليست نصيحة استثمارية، والتداول ينطوي على مخاطر قد تفقدك جزءاً من رأس مالك أو كله.',
+}
+
+function buildResults() {
+  const page = readFileSync(resolve(ROOT, 'src/pages/TrackRecord.jsx'), 'utf8')
+  for (const s of [RESULTS.title, RESULTS.desc, RESULTS.risk]) {
+    if (!page.includes(s)) throw new Error(`prerender: /results لا يطابق TrackRecord.jsx: ${s.slice(0, 40)}`)
+  }
+  const url = `${ORIGIN}/results`
+  let h = template
+  h = sub(h, /<title>[\s\S]*?<\/title>/, `<title>${esc(RESULTS.title)}</title>`, 'title')
+  h = sub(h, /<meta name="description" content="[^"]*" \/>/, `<meta name="description" content="${esc(RESULTS.desc)}" />`, 'meta description')
+  h = sub(h, /<link rel="canonical" href="[^"]*" \/>/, `<link rel="canonical" href="${url}" />`, 'canonical')
+  h = sub(h, /<link rel="alternate" hreflang="ar"[^>]*>\s*<link rel="alternate" hreflang="en"[^>]*>\s*<link rel="alternate" hreflang="x-default"[^>]*>\s*/, '', 'hreflang')
+  h = sub(h, /<meta property="og:url" content="[^"]*" \/>/, `<meta property="og:url" content="${url}" />`, 'og:url')
+  h = sub(h, /<meta property="og:title" content="[^"]*" \/>/, `<meta property="og:title" content="${esc(RESULTS.title)}" />`, 'og:title')
+  h = sub(h, /<meta property="og:description" content="[^"]*" \/>/, `<meta property="og:description" content="${esc(RESULTS.desc)}" />`, 'og:description')
+  h = sub(h, /<meta property="og:locale:alternate" content="[^"]*" \/>\s*/, '', 'og:locale:alternate')
+  h = sub(h, /<meta name="twitter:title" content="[^"]*" \/>/, `<meta name="twitter:title" content="${esc(RESULTS.title)}" />`, 'twitter:title')
+  h = sub(h, /<meta name="twitter:description" content="[^"]*" \/>/, `<meta name="twitter:description" content="${esc(RESULTS.desc)}" />`, 'twitter:description')
+  const lis = RESULTS.method.map((m) => `<li>${esc(m)}</li>`).join('')
+  return sub(h, /<div id="root"><\/div>/,
+    `<div id="root"><main><h1>${esc(RESULTS.h1)}</h1><p>${esc(RESULTS.lead)}</p><h2>كيف نحسب</h2><ul>${lis}</ul><p>${esc(RESULTS.risk)}</p></main></div>`, 'root')
+}
+
+writeFileSync(resolve(DIST, 'results.html'), buildResults())
+console.log('prerender: /results → results.html')
+
 for (const slug of TRIAL_SLUGS) {
   const post = BLOG_POSTS.find((p) => p.slug === slug)
   if (!post) throw new Error(`prerender: المقال ${slug} غير موجود بـblogPosts.js`)
