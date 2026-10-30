@@ -26,6 +26,16 @@ def test_15m_rule_needs_both_conditions():
     assert W.rule_15m([0.05] * 40, [0.08] * 10)[0] == "ok"                # < +0.1 لكن ليس < نصف 1h
 
 
+def test_tp2_rule_needs_count_average_and_both_halves():
+    assert W.rule_tp2([-1.0] * 29)[0] == "waiting"
+    assert W.rule_tp2([-1.0] * 30)[0] == "candidate"
+    assert W.rule_tp2([-0.2] * 30)[0] == "ok"                             # ليس أسوأ من −0.3R
+    assert W.rule_tp2([1.0] * 5 + [-1.0] * 10 + [-0.8] * 15)[0] == "candidate"
+    assert W.rule_tp2([-1.0] * 15 + [0.1] * 15)[0] == "ok"                # النصف الثاني موجب
+    assert W.GBPJPY_START.date().isoformat() == "2026-10-31"
+    assert W.TP1_CAP_START.date().isoformat() == "2026-10-14"
+
+
 def test_iso_weeks_only_completed():
     assert W.iso_weeks(datetime(2026, 11, 1, 23, tzinfo=timezone.utc)) == []
     wk = W.iso_weeks(datetime(2026, 11, 9, 1, tzinfo=timezone.utc))
