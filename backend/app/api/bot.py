@@ -239,7 +239,7 @@ async def bot_analyze(
             sl     = levels.get("stop_loss") or analysis.get("stop_loss_zone")
             tp1    = levels.get("tp1")
             tp2    = levels.get("tp2")
-            tp3    = levels.get("tp3")   # (2026-10-30) سلّم الأهداف — tp_ladder.py
+            tp3    = levels.get("ladder_tp3")   # (2026-10-30) لا "tp3": قيمة قديمة من المحرك لا تُرصد — tp_ladder.py
             conf   = analysis.get("ai_confidence_score", 0)
             rr     = levels.get("risk_reward")
             

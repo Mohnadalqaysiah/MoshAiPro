@@ -127,7 +127,7 @@ export default function Dashboard() {
           risk_reward: d.risk_reward_ratio,
           levels: {
             entry: d.entry_price, stop_loss: d.stop_loss,
-            tp1: d.take_profit_1, tp2: d.take_profit_2, tp3: d.take_profit_3,
+            tp1: d.take_profit_1, tp2: d.take_profit_2, ladder_tp3: d.take_profit_3,
             risk_reward: d.risk_reward_ratio,
           },
         })
@@ -292,7 +292,7 @@ export default function Dashboard() {
     const sl    = lvl.stop_loss || result.stop_loss_zone
     const tp1   = lvl.tp1 || result.take_profit_zones?.[0]
     const tp2   = lvl.tp2 || result.take_profit_zones?.[1]
-    const tp3   = lvl.tp3 || result.take_profit_3
+    const tp3   = lvl.ladder_tp3 || result.take_profit_3
     const rr    = result.risk_reward || lvl.risk_reward
     const price = result.current_price
     const sym   = result.market || result.symbol || ''
@@ -861,7 +861,7 @@ export default function Dashboard() {
                   const sl         = levels.stop_loss || sig.stop_loss_zone || sig.stop_loss
                   const tp1        = levels.tp1 || sig.take_profit_zones?.[0] || sig.take_profit_1
                   const tp2        = levels.tp2 || sig.take_profit_zones?.[1] || sig.take_profit_2
-                  const tp3        = levels.tp3 || sig.take_profit_3
+                  const tp3        = levels.ladder_tp3 || sig.take_profit_3
                   const rr         = sig.risk_reward || levels.risk_reward || sig.risk_reward_ratio
                   const locked     = !!sig.locked
                   const livePrice  = sig.current_price
@@ -1030,7 +1030,7 @@ export default function Dashboard() {
                   const sl         = levels.stop_loss || sig.stop_loss_zone || sig.stop_loss
                   const tp1        = levels.tp1 || sig.take_profit_zones?.[0] || sig.take_profit_1
                   const tp2        = levels.tp2 || sig.take_profit_zones?.[1] || sig.take_profit_2
-                  const tp3        = levels.tp3 || sig.take_profit_3
+                  const tp3        = levels.ladder_tp3 || sig.take_profit_3
                   const rr         = sig.risk_reward || levels.risk_reward || sig.risk_reward_ratio
                   const locked     = !!sig.locked
                   const livePrice  = sig.current_price

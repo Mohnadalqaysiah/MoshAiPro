@@ -221,7 +221,7 @@ async def analyze_market(
                 from app.services import market_fingerprint
                 if crypto_weekend_paused(db, symbol):
                     _shid = record_shadow(db, source="web", symbol=symbol, timeframe=timeframe, signal_type=rec,
-                                          entry=entry, sl=sl, tp1=tp1, tp2=levels.get("tp3") or tp2, confidence=conf, rr=rr,
+                                          entry=entry, sl=sl, tp1=tp1, tp2=levels.get("ladder_tp3") or tp2, confidence=conf, rr=rr,
                                           expires_at=expires_at, user_id=user.id)
                     market_fingerprint.schedule(analysis, symbol, timeframe, rec, shadow_id=_shid)
                 elif loss_streak_reason:
@@ -247,7 +247,7 @@ async def analyze_market(
                         stop_loss         = float(sl),
                         take_profit_1     = float(tp1),
                         take_profit_2     = float(tp2 or tp1),
-                        take_profit_3     = float(levels["tp3"]) if levels.get("tp3") else None,
+                        take_profit_3     = float(levels["ladder_tp3"]) if levels.get("ladder_tp3") else None,
                         current_price     = analysis.get("current_price"),
                         ai_confidence     = conf,
                         # (2026-10-16) سياق ICT لتقرير الجودة — كان يُحفظ بمسار الماسح فقط (تغطية 26%)

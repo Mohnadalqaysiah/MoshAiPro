@@ -152,6 +152,32 @@ def _analysis(tp1=101.0, tp2=106.0, rec="BUY"):
                                               "risk_reward": 6.0}, "take_profit_zones": [tp1, tp2]}
 
 
+def test_legacy_engine_tp3_is_never_taken_as_ladder_target():
+    """حادثة نشر 30/10: المحرك ينتج levels["tp3"] قديماً، فحُفظ هدف ثالث والسلّم معطّل."""
+    def legacy(tp2):
+        a = _analysis(tp2=tp2)
+        a["levels"]["tp3"] = 120.0
+        return a
+    os.environ["TP_LADDER_ENABLED"] = "0"
+    try:
+        a = ENGINE._apply_tp_ladder(legacy(106.0), "BTCUSD", "1h")
+        assert "ladder_tp3" not in a["levels"] and a["levels"]["tp2"] == 106.0
+    finally:
+        os.environ["TP_LADDER_ENABLED"] = "1"
+    a = ENGINE._apply_tp_ladder(legacy(102.0), "BTCUSD", "1h")           # هدف قريب: هدفان، والقديم لا يُعرض
+    assert "ladder_tp3" not in a["levels"] and "tp3" not in a["levels"]
+    a = ENGINE._apply_tp_ladder(legacy(106.0), "BTCUSD", "1h")           # الثالث هو البعيد لا القديم
+    assert a["levels"]["ladder_tp3"] == 106.0 and a["levels"]["tp3"] == 106.0
+
+
+def test_writers_read_ladder_key_only():
+    for f in ("app/api/bot.py", "app/api/signals.py", "../telegram-bot/bot.py"):
+        if not (ROOT / f).exists():
+            continue
+        src = (ROOT / f).read_text(encoding="utf-8")
+        assert 'levels.get("tp3")' not in src and 'lvls.get("tp3")' not in src and 'levels["tp3"]' not in src, f
+
+
 def test_engine_splits_and_keeps_everything_else():
     a = ENGINE._apply_tp_ladder(_analysis(), "BTCUSD", "1h")
     lv = a["levels"]
@@ -356,8 +382,14 @@ def test_waiting_tp3_counts_as_open_trade():
         assert not B._open_equivalent_rows(db, s.market, s.signal_type, s.entry_price)
 
 
+class _Skip(Exception):
+    pass
+
+
 # ─── الرسائل ──────────────────────────────────────────────────────────────────
 def _msgs():
+    if not (ROOT.parent / "telegram-bot").exists():      # صورة الخادم بلا مجلد البوت
+        raise _Skip()
     sys.path.insert(0, str(ROOT.parent / "telegram-bot"))
     import messages as M
     import messages_en as ME
@@ -443,6 +475,8 @@ if __name__ == "__main__":
         try:
             f()
             print(f"✅ {n}")
+        except _Skip:
+            print(f"⏭ {n}")
         except Exception as e:
             failed += 1
             import traceback
