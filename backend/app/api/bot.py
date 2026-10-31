@@ -1549,6 +1549,13 @@ def bot_new_signals(
     return {"signals": deduped, "count": len(deduped)}
 
 
+@router.post("/channel-open-claim")
+def bot_channel_open_claim(_: bool = Depends(verify_bot), db: Session = Depends(get_db)):
+    """(2026-10-31) هل يُنشر منشور القناة التالي مفتوحاً؟ يحسبه من عدد اليوم — services/channel_open.py"""
+    from app.services import channel_open
+    return {"open": channel_open.claim(db)}
+
+
 @router.post("/mark-broadcast/{signal_id}")
 def bot_mark_broadcast(
     signal_id: int,

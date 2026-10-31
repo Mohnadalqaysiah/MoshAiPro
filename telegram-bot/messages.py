@@ -22,6 +22,11 @@ CHANNEL_HANDLE = "@QaffelPlatform"
 CHANNEL_LINE = f"📢 قناتنا: {CHANNEL_HANDLE}"
 
 
+def channel_text(masked: str, full: str, is_open: bool) -> str:
+    """(2026-10-31) نص منشور القناة: مفتوح ضمن عدد المالك وإلا مموّه، وبلا "تابع قناتنا" داخل القناة نفسها."""
+    return (full if is_open else masked).replace("\n\n" + CHANNEL_LINE, "").replace("\n" + CHANNEL_LINE, "")
+
+
 class TeaserGate:
     """(2026-10-24) سقف منشورات القناة: ~26 إشارة/يوم تُغرق القناة فيكتمها المتابعون. مرة واحدة لكل قرار، وحد يومي،
     وفاصل أدنى بين منشورين. نقي (بلا شبكة) ليُختبر."""

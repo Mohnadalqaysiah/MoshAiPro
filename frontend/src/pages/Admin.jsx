@@ -4050,6 +4050,21 @@ export default function Admin() {
                       <a href="/results?preview=1" target="_blank" rel="noreferrer" className="text-xs text-sky-300 hover:underline whitespace-nowrap">معاينة ↗</a>
                     </div>
                   </div>
+                  {/* (2026-10-31) أول N إشارة باليوم مفتوحة بالقناة العامة والباقي مموّه — services/channel_open.py */}
+                  <div className="bg-gray-900 border border-sky-800/50 rounded-xl p-3 space-y-2">
+                    <p className="text-sm text-sky-300 font-semibold">إشارات مفتوحة بقناة تيليجرام يومياً</p>
+                    <p className="text-xs text-gray-400">أول هذا العدد من منشورات اليوم (بتوقيت UTC) يظهر كاملاً: الاتجاه والدخول والوقف والأهداف، والباقي مموّه. 0 = الكل مموّه. والمنشورات نفسها بحد 6 يومياً وبفاصل ساعة.</p>
+                    <div className="flex items-center gap-2">
+                      <input type="number" min="0" dir="ltr"
+                        value={settingEdits.channel_open_daily ?? (siteSettings.channel_open_daily?.value || '0')}
+                        onChange={e => setSettingEdits(s => ({...s, channel_open_daily: e.target.value}))}
+                        className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1.5 text-sm text-white" />
+                      <button disabled={settingSaving === 'channel_open_daily'} onClick={() => saveSetting('channel_open_daily')}
+                        className="flex items-center bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-2.5 py-2 rounded-lg transition">
+                        {settingSaving === 'channel_open_daily' ? <RefreshCw size={12} className="animate-spin"/> : <CheckCircle size={12}/>}
+                      </button>
+                    </div>
+                  </div>
                   <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">حدود الاستخدام</h2>
                   <p className="text-xs text-gray-400">0 = غير محدود</p>
                   {[

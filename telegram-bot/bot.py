@@ -354,8 +354,9 @@ def cat_label(k: str, lg: str) -> str:
 _teasers = None   # TeaserGate — يُنشأ عند أول استخدام (messages مستورد كـM)
 
 
-async def post_channel_teaser(app, sig: dict, text: str):
-    """(2026-10-24) ينشر الإشارة المموّهة بالقناة العامة — مرة لكل قرار، بسقف يومي وفاصل أدنى."""
+async def post_channel_teaser(app, sig: dict, masked: str, full: str):
+    """(2026-10-24) ينشر الإشارة بالقناة العامة — مرة لكل قرار، بسقف يومي وفاصل أدنى.
+    (2026-10-31، طلب المالك) أول "channel_open_daily" إشارة باليوم مفتوحة والباقي مموّه، والعدّ بالخادم. تعذّر السؤال = مموّهة."""
     global _teasers
     if not CHANNEL_ID:
         return
@@ -367,15 +368,16 @@ async def post_channel_teaser(app, sig: dict, text: str):
         return
     try:
         bot_url = f"https://t.me/{app.bot.username}" if getattr(app.bot, "username", None) else FRONTEND_URL
+        is_open = bool((await _post("/api/v1/bot/channel-open-claim")).get("open"))
         await app.bot.send_message(
-            chat_id=CHANNEL_ID, text=text.replace("\n\n" + M.CHANNEL_LINE, ""), parse_mode="HTML",   # لا "تابع قناتنا" داخل القناة
+            chat_id=CHANNEL_ID, text=M.channel_text(masked, full, is_open), parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup([[
                 InlineKeyboardButton("💳 الاشتراك", url=f"{FRONTEND_URL}/pricing"),
                 InlineKeyboardButton("🤖 جرّب البوت", url=bot_url),
             ]]),
         )
         _teasers.mark(key, now)
-        logger.info(f"📢 قناة: إشارة مموّهة {key[0]}/{key[1]} ({_teasers.count}/{_teasers.daily_max} اليوم)")
+        logger.info(f"📢 قناة: إشارة {'مفتوحة' if is_open else 'مموّهة'} {key[0]}/{key[1]} ({_teasers.count}/{_teasers.daily_max} اليوم)")
     except Exception as e:
         logger.warning(f"channel teaser {key}: {e}")
 
@@ -1522,7 +1524,7 @@ async def broadcast_new_signals(app: Application):
                         InlineKeyboardButton("💳 فعّل اشتراكك", url=f"{FRONTEND_URL}/pricing"),
                         ch_btn(),
                     ]])
-                    await post_channel_teaser(app, sig, msg_masked)
+                    await post_channel_teaser(app, sig, msg_masked, msg_full)
                     # (2026-10-24) النسخة الإنجليزية لمن اختار الإنجليزية بحسابه — اسم السوق = الرمز
                     msg_full_en   = ME.signal_full(sig, sig.get("market", ""), sig.get("timeframe", ""), get_confidence(sig))
                     msg_masked_en = ME.signal_masked(sig, sig.get("market", ""), sig.get("timeframe", ""))

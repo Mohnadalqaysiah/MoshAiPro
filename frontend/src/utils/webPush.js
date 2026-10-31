@@ -1,6 +1,16 @@
 import axios from 'axios'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const OFF_KEY = 'qaffel_push_off'
+
+// (2026-10-31) أوقفها العميل بنفسه من هذا الجهاز: بانر "فعّل الإشعارات" لا يعود يطلبها منه
+export function pushTurnedOff() {
+  try { return localStorage.getItem(OFF_KEY) === '1' } catch { return false }
+}
+
+function rememberPushOff(off) {
+  try { off ? localStorage.setItem(OFF_KEY, '1') : localStorage.removeItem(OFF_KEY) } catch { /* noop */ }
+}
 
 // (2026-09-27) VAPID applicationServerKey يوصل base64url من الخادم —
 // pushManager.subscribe يحتاجه Uint8Array. تحويل قياسي (MDN).
@@ -45,6 +55,7 @@ export async function subscribeToPush() {
     endpoint: json.endpoint,
     keys: { p256dh: json.keys.p256dh, auth: json.keys.auth },
   })
+  rememberPushOff(false)
   return sub
 }
 
@@ -55,4 +66,9 @@ export async function unsubscribeFromPush() {
     await axios.post(`${API}/api/v1/auth/push/unsubscribe`, { endpoint: sub.endpoint })
   } catch { /* noop */ }
   await sub.unsubscribe()
+}
+
+export async function turnPushOff() {
+  await unsubscribeFromPush()
+  rememberPushOff(true)
 }

@@ -44,7 +44,7 @@ self.addEventListener('push', e => {
   e.waitUntil(
     self.registration.showNotification(data.title || 'Qaffel AI', {
       body:    data.body  || 'إشارة جديدة متاحة',
-      icon:    '/favicon.svg',
+      icon:    '/brand/android-chrome-192x192.png',   // أندرويد لا يعرض SVG أيقونةً للإشعار
       badge:   '/favicon.svg',
       tag:     data.tag   || 'signal',
       data:    { url: data.url || '/dashboard' },
