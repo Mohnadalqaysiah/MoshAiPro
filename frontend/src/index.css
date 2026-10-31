@@ -34,6 +34,7 @@
     radial-gradient(900px 600px at 0% 100%,  #3B0764 0%, transparent 55%),
     linear-gradient(180deg, #1A0B3F, #0F0724);
   --q-panel: rgba(0,0,0,0.18);
+  --q-popover: #150A33;   /* قائمة فوق المحتوى: صلبة، فـq-panel شفاف ويُظهر ما خلفه */
 }
 
 /* ── LIGHT MODE — warm slate palette, easy on the eyes ───────────────
@@ -65,6 +66,7 @@
     radial-gradient(900px 600px at 0% 100%,  #CFFAFE 0%, transparent 55%),
     linear-gradient(180deg, #F5F3FF, #EDE9FE);
   --q-panel: rgba(255,255,255,0.35);
+  --q-popover: #FFFFFF;
 }
 
 @tailwind base;
@@ -396,6 +398,7 @@ html {
    ══════════════════════════════════════════════════════════════════════ */
 .q-ground { background: var(--q-ground); background-attachment: fixed; }
 .q-panel  { background: var(--q-panel); }
+.q-popover { background: var(--q-popover); }
 .q-glass  { background: var(--q-glass); border: 1px solid var(--q-line); }
 .q-glass-hover:hover { background: var(--q-glass2); }
 .q-line   { border-color: var(--q-line); }

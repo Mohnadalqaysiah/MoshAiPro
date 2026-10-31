@@ -4,6 +4,7 @@ import axios from 'axios'
 import { Bell } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
+import PushToggle from './PushToggle'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const POLL_MS = 60000
@@ -88,11 +89,12 @@ export default function NotificationBell() {
 
       {open && (
         <div
-          className="absolute top-11 end-0 w-72 max-h-96 overflow-y-auto rounded-2xl q-panel border q-line shadow-2xl z-40"
+          className="absolute top-11 end-0 w-72 max-h-96 overflow-y-auto rounded-2xl q-popover border q-line shadow-2xl z-40"
           dir={isAr ? 'rtl' : 'ltr'}
         >
-          <div className="px-4 py-3 border-b q-line">
+          <div className="px-4 py-3 border-b q-line space-y-2">
             <h3 className="text-sm font-bold text-white">{isAr ? 'الإشعارات' : 'Notifications'}</h3>
+            <PushToggle />
           </div>
           {loading ? (
             <p className="text-gray-500 text-xs text-center py-6">{isAr ? 'جاري التحميل...' : 'Loading...'}</p>

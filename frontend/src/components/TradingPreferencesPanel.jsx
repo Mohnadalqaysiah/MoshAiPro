@@ -3,6 +3,7 @@ import axios from 'axios'
 import { useAuth } from '../contexts/AuthContext'
 import { useLang } from '../contexts/LangContext'
 import useMarkets from '../hooks/useMarkets'
+import PushToggle from './PushToggle'
 import { Save, CheckCircle, AlertCircle, TrendingUp, Bell, Calculator } from 'lucide-react'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -226,6 +227,10 @@ export default function TradingPreferencesPanel() {
       </div>
 
       {/* ── Notification Preferences ── */}
+      {/* (2026-10-31) جرس الإشعارات بهيدر الجوال فقط، فمفتاح إشعارات التطبيق هنا أيضاً لمن يستخدم الكمبيوتر */}
+      <div className="bg-gray-800 border border-gray-700 rounded-xl p-6">
+        <PushToggle />
+      </div>
       <div className="bg-gray-800 border border-gray-700 rounded-xl p-6">
         <h2 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
           <Bell size={16} className="text-blue-400" /> {isAr ? 'إعدادات إشعارات التيليجرام' : 'Telegram Notification Preferences'}

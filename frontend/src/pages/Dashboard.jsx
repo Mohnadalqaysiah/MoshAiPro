@@ -10,6 +10,7 @@ import ExpiryCountdown from '../components/ExpiryCountdown'
 import TradingViewChart from '../components/TradingViewChart'
 import ReferralWidget from '../components/ReferralWidget'
 import PriceAlertWidget from '../components/PriceAlertWidget'
+import TelegramChannelCard from '../components/TelegramChannelCard'
 import SignalScorecard from '../components/SignalScorecard'
 import RedemptionWidget from '../components/RedemptionWidget'
 import BestOpportunityWidget from '../components/BestOpportunityWidget'
@@ -651,6 +652,8 @@ export default function Dashboard() {
       {/* ══ TAB: الرئيسية ══ */}
       {activeTab === 'home' && (
         <div className="space-y-6">
+
+          <TelegramChannelCard isAr={isAr} />
 
           {/* ── Telegram CTA — prominent for unlinked users ── */}
           {showTgCard && (

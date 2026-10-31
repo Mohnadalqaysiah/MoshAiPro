@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useLang } from '../contexts/LangContext'
 import { Bell, X, CheckCircle, Share } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
-import { isPushSupported, getExistingSubscription, subscribeToPush } from '../utils/webPush'
+import { isPushSupported, getExistingSubscription, subscribeToPush, pushTurnedOff } from '../utils/webPush'
 
 // (2026-09-27) قناة موازية لتيليجرام — خصوصاً لعميل الموقع اللي ما ربط
 // حسابه بتيليجرام (لا يصله أي تنبيه شخصي حالياً بلا هاي القناة). إخفاء
@@ -24,7 +24,7 @@ export default function PushNotificationBanner() {
   const [needsIOSInstall, setNeedsIOSInstall] = useState(false)
 
   useEffect(() => {
-    if (!user) { setSubscribed(true); return }
+    if (!user || pushTurnedOff()) { setSubscribed(true); return }
 
     const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent)
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true
