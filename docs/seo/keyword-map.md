@@ -5,7 +5,9 @@
 الفائزون (مصدر أغلب النقرات — لا يُنافَسون بمقال جديد على نفس النية): الرئيسية، `ai-trading-bot-telegram`،
 `free-gold-trading-signals`، `gold-analysis-ai`.
 
-آخر تحديث: 2026-10-17
+آخر تحديث: 2026-10-31
+
+**توزيع الصفحات الأربع (31/10، مهمة CTR):** الرئيسية للعلامة والتعريف بالمنصة. `ai-trading-bot-telegram` لبوت تيليجرام ونية "مجاني". `gold-analysis-ai` لتحليل الذهب وXAUUSD بالعربية والإنجليزية. كلمة "free gold trading signals" تبقى لـ`free-gold-trading-signals`، و"trading signals bot" لـ`trading-signals-bot-guide`: مقالا الذهب والبوت يربطان إليهما ولا ينافسانهما.
 
 ## العناقيد
 
