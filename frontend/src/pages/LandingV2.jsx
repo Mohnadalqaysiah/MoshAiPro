@@ -78,8 +78,8 @@ export default function LandingV2() {
       ? 'Qaffel AI | إشارات تداول ذكية بالذكاء الاصطناعي'
       : 'Qaffel AI | Smart AI Trading Signals',
     description: isAr
-      ? `منصة Qaffel AI تحلل الذهب والبيتكوين والفوركس بتقنية ICT/SMC والذكاء الاصطناعي. إشارات دقيقة على Telegram. ابدأ مجاناً بـ${trial.analyses} تحليلات.`
-      : `Qaffel AI analyzes Gold, Bitcoin and Forex using ICT/SMC and AI. Accurate signals on Telegram. Start free with ${trial.analyses} analyses.`,
+      ? `Qaffel AI منصة تحليلات وإشارات تداول بالذكاء الاصطناعي للذهب والبيتكوين والفوركس، بمنهجية ICT/SMC وتنبيهات على تيليجرام. ابدأ مجاناً بـ${trial.analyses} تحليلات.`
+      : `Qaffel AI is an AI trading analysis and signals platform for gold, bitcoin and forex, built on ICT/SMC, with Telegram alerts. Start free with ${trial.analyses} analyses.`,
   })
 
   // FAQPage من الأسئلة الظاهرة فعلاً بالصفحة (بدل نسخة ثابتة بـindex.html كانت تختلف عنها وتظهر بكل الصفحات)
