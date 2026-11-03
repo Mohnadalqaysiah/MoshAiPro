@@ -105,6 +105,15 @@ def _ext_fvg(a: Dict, value: Optional[str]) -> Optional[bool]:
     return bool(fvg.get("in_bullish_fvg") or fvg.get("in_bearish_fvg"))
 
 
+def _ext_fvg_retrace(a: Dict, value: Optional[str]) -> Optional[bool]:
+    """(2026-11-03) عودة السعر إلى FVG حديثة. شرط fvg أعلاه لا يتحقق أبداً (DECISIONS 03/11)، ويبقى كما هو حتى يقرر المالك."""
+    r = (a.get("fvg") or {}).get("retrace") or {}
+    hint = _direction_hint(value)
+    if hint == "BULL": return bool(r.get("bullish"))
+    if hint == "BEAR": return bool(r.get("bearish"))
+    return bool(r.get("bullish") or r.get("bearish"))
+
+
 def _ext_liquidity_sweep(a: Dict, value: Optional[str]) -> Optional[bool]:
     sweep = a.get("liquidity_sweep") or {}
     hint = _direction_hint(value)
@@ -194,6 +203,8 @@ _SESSION_WINDOWS = {
     "ASIA":     [(0, 9), (23, 24)],   # طوكيو/سيدني
     "LONDON":   [(7, 16)],            # صيفاً — تُحسب فعلياً بـ_session_windows_utc
     "NEW_YORK": [(12, 21)],
+    # (2026-11-03) نوافذ ICT Silver Bullet: 03-04 و10-11 و14-15 بتوقيت نيويورك المحلي — تُحسب بـ_session_windows_utc
+    "SILVER_BULLET": [(7, 8), (14, 15), (18, 19)],
 }
 
 
@@ -223,6 +234,7 @@ def _session_windows_utc(day) -> Dict[str, list]:
         "ASIA":     _SESSION_WINDOWS["ASIA"],
         "LONDON":   [(8 - lon_off, 17 - lon_off)],
         "NEW_YORK": [(8 + ny_off, 17 + ny_off)],
+        "SILVER_BULLET": [(3 + ny_off, 4 + ny_off), (10 + ny_off, 11 + ny_off), (14 + ny_off, 15 + ny_off)],
     }
 
 
@@ -329,6 +341,7 @@ SUPPORTED_CONDITION_TYPES = {
     "choch":     _ext_choch,
     "ob":        _ext_ob,
     "fvg":       _ext_fvg,
+    "fvg_retrace": _ext_fvg_retrace,
     "liquidity": _ext_liquidity_sweep,
     "eqh":       _ext_equal_highs,
     "eql":       _ext_equal_lows,
@@ -340,6 +353,7 @@ SUPPORTED_CONDITION_TYPES = {
     "london":    lambda a, v: _session_match(a, "LONDON"),
     "newyork":   lambda a, v: _session_match(a, "NEW_YORK"),
     "asian":     lambda a, v: _session_match(a, "ASIA"),
+    "silverbullet": lambda a, v: _session_match(a, "SILVER_BULLET"),
     "killzones": _ext_killzone,
     # Technical Indicators
     "rsi":   _ext_rsi,

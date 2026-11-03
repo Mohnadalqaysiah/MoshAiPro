@@ -21,7 +21,10 @@ import pandas as pd
 from loguru import logger
 
 SHADOW_START = datetime(2026, 10, 16, tzinfo=timezone.utc)
-SHADOW_TEMPLATES = ["gold_session_sell", "gold_session_buy", "gold_session_trend_buy", "gold_session_trend_sell"]
+SHADOW_TEMPLATES = ["gold_session_sell", "gold_session_buy", "gold_session_trend_buy", "gold_session_trend_sell",
+                    "gold_silver_bullet_buy", "gold_silver_bullet_sell", "nas_silver_bullet_buy", "nas_silver_bullet_sell"]
+# (2026-11-03) القالب الذي يُضاف لاحقاً تبدأ عينته من يوم تثبيته — غيره SHADOW_START
+SHADOW_START_BY_KEY = {k: datetime(2026, 11, 4, tzinfo=timezone.utc) for k in SHADOW_TEMPLATES[4:]}
 RUN_INTERVAL_SEC = 6 * 3600
 LOOKBACK_DAYS = 3            # > أقصى مدة صفقة (24 ساعة) + فجوة العطلة
 _LOCK_KEY = 90210007         # 90210001..90210006 مستخدَمة
@@ -50,6 +53,7 @@ def _ts(v):
 def save_trades(db, key: str, symbol: str, trades: list) -> int:
     from app.models.shadow_signal import ShadowSignal
     reason = f"tpl:{key}"
+    start = SHADOW_START_BY_KEY.get(key, SHADOW_START)
     last = (db.query(ShadowSignal.exit_time).filter(ShadowSignal.reason == reason)
               .order_by(ShadowSignal.exit_time.desc()).first())
     busy_until = last[0] if last else None
@@ -58,7 +62,7 @@ def save_trades(db, key: str, symbol: str, trades: list) -> int:
     n = 0
     for tr in sorted(trades, key=lambda x: x["time"]):
         t0, t1 = _ts(tr["time"]), _ts(tr["exit_time"])
-        if t0 < SHADOW_START or (busy_until is not None and t0 < busy_until):
+        if t0 < start or (busy_until is not None and t0 < busy_until):
             continue
         h = hashlib.md5(f"{reason}-{tr['time']}".encode()).hexdigest()
         if db.query(ShadowSignal.id).filter(ShadowSignal.signal_hash == h).first():

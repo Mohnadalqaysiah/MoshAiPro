@@ -247,6 +247,8 @@ class ICTEngine:
         in_bullish_fvg = any(fvg["bottom"] <= current <= fvg["top"] for fvg in bullish_fvgs)
         in_bearish_fvg = any(fvg["bottom"] <= current <= fvg["top"] for fvg in bearish_fvgs)
 
+        # (2026-11-03) ⚠️ in_*_fvg أعلاه False دائماً: الفجوة التي دخلها السعر تُحذف كـ"مملوءة" قبل هذا السؤال (DECISIONS 03/11).
+        # لا يُصلَّح هنا: المحرك يقرؤها، وإصلاحها يغيّر توليد الإشارات، وهذا قرار المالك. retrace مفتاح إضافي لا يقرؤه المحرك.
         return {
             "bullish_fvgs": bullish_fvgs,
             "bearish_fvgs": bearish_fvgs,
@@ -254,7 +256,21 @@ class ICTEngine:
             "in_bearish_fvg": in_bearish_fvg,
             "nearest_bullish": bullish_fvgs[0] if bullish_fvgs else None,
             "nearest_bearish": bearish_fvgs[0] if bearish_fvgs else None,
+            "retrace": self._fvg_retrace(df),
         }
+
+    def _fvg_retrace(self, df: pd.DataFrame, bars: int = 12) -> Dict:
+        """هل عاد السعر إلى FVG تكوّنت خلال آخر bars شمعة ولم تُكسر بإغلاق خلفها؟ (12 شمعة = 3 ساعات على 15m)"""
+        high, low, close = df["high"].values, df["low"].values, df["close"].values
+        n, now = len(df), float(close[-1])
+        out = {"bullish": False, "bearish": False}
+        for i in range(max(2, n - 1 - bars), n - 1):              # الشمعة الأخيرة لا تعود لفجوة صنعتها هي
+            after = close[i + 1:]
+            if low[i] > high[i - 2] and high[i - 2] <= now <= low[i] and after.min() >= high[i - 2]:
+                out["bullish"] = True
+            if high[i] < low[i - 2] and high[i] <= now <= low[i - 2] and after.max() <= low[i - 2]:
+                out["bearish"] = True
+        return out
 
     # ─── BOS & CHoCH ─────────────────────────────────────────────────────────
 
