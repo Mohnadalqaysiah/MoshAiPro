@@ -97,6 +97,34 @@ def _session_sniper(side, trend_tf=None):
     ]
 
 
+def _silver_bullet(side):
+    """(2026-11-03) ICT Silver Bullet بنسخة 15 دقيقة: الأصل على 1-5 دقائق، والمنصة تفحص من 15 دقيقة فصاعداً.
+    الدخول من FVG وحده (لا Order Block) بشرط fvg_retrace، لأن شرط fvg لا يتحقق أبداً (DECISIONS 03/11). وسحب السيولة وكسر الهيكل
+    يُقرآن من آخر 150 شمعة بلا ترتيب بينهما، فالنص المعروض لا يَعِد بترتيب الأصل."""
+    s = _SIDE[side]
+    return [
+        _g("نافذة الطلقة الفضية", "AND", [
+            _c("sessions", "silverbullet", "Silver Bullet", "15m"),
+        ]),
+        _g("سحب السيولة", "AND", [
+            _c("smc", "liquidity", "Liquidity Sweep", "15m", s["dir"]),
+        ]),
+        _g("تأكيد الهيكل", "OR", [
+            _c("smc", "choch", "CHoCH", "15m", s["dir"]),
+            _c("smc", "bos", "BOS", "15m", s["dir"]),
+        ]),
+        _g("منطقة الدخول", "AND", [
+            _c("smc", "fvg_retrace", "FVG Retrace", "15m", s["dir"]),
+        ]),
+    ]
+
+
+_SB_DESC_AR = ("نسخة مبسّطة على 15 دقيقة من استراتيجية ICT Silver Bullet (الأصل على 1-5 دقائق): داخل نوافذها الثلاث فقط، 03-04 و10-11 و14-15 "
+               "بتوقيت نيويورك، يدخل عند عودة السعر إلى FVG تكوّنت خلال آخر 3 ساعات، بوجود سحب سيولة وكسر هيكل، دون اشتراط ترتيبهما كما في الأصل.")
+_SB_DESC_EN = ("A simplified 15-minute version of the ICT Silver Bullet (the original runs on 1-5 minutes): only inside its three windows, 03-04, "
+               "10-11 and 14-15 New York time, it enters when price returns to an FVG formed in the last 3 hours, with a liquidity sweep and "
+               "a structure break present, without requiring their exact order as the original does.")
+
 _FAMILIES = [
     {
         "family": "gold_trend", "build": _gold_trend, "symbols": ["XAU/USD"], "timeframes": ["4H", "15m"],
@@ -142,24 +170,85 @@ _FAMILIES = [
         "desc_en": "The gold trend logic applied to silver: 4H trend + pullback into the right zone + structure confirmation "
                    "+ entry zone on 15m. Silver is more volatile — the stop comes from silver's own structure.",
     },
+    # (2026-11-03، طلب المالك) الطلقة الفضية وقوالب الناسداك والأسواق الأخرى. الشروط نفسها المختبرة على الذهب، تُحكم بشروط القبول نفسها.
+    {
+        "family": "gold_silver_bullet", "build": _silver_bullet, "symbols": ["XAU/USD"], "timeframes": ["15m"],
+        "style": "silver_bullet", "name": "Gold Silver Bullet", "name_ar": "الطلقة الفضية — الذهب",
+        "desc_ar": _SB_DESC_AR, "desc_en": _SB_DESC_EN,
+    },
+    {
+        "family": "nas_silver_bullet", "build": _silver_bullet, "symbols": ["NAS100"], "timeframes": ["15m"],
+        "style": "silver_bullet", "name": "Nasdaq Silver Bullet", "name_ar": "الطلقة الفضية — ناسداك",
+        "desc_ar": _SB_DESC_AR, "desc_en": _SB_DESC_EN,
+    },
+    {
+        "family": "nas_trend", "build": _gold_trend, "symbols": ["NAS100"], "timeframes": ["4H", "15m"],
+        "style": "trend", "name": "Nasdaq Trend Pro", "name_ar": "ناسداك مع الاتجاه",
+        "desc_ar": "يتداول مع اتجاه ناسداك على 4 ساعات بعد تراجع السعر لمنطقة مناسبة (خصم للشراء، علاوة للبيع)، بشرط تأكيد هيكلي "
+                   "(BOS أو CHoCH) ومنطقة دخول (Order Block أو FVG) على 15 دقيقة.",
+        "desc_en": "Trades with the Nasdaq's 4H trend after a pullback into the right zone (discount for buys, premium for sells), "
+                   "requiring a structure confirmation (BOS or CHoCH) and an entry zone (Order Block or FVG) on 15m.",
+    },
+    {
+        "family": "nas_liquidity", "build": _liquidity_hunter, "symbols": ["NAS100"], "timeframes": ["1H", "15m"],
+        "style": "liquidity_reversal", "name": "Nasdaq Liquidity Hunter", "name_ar": "صياد السيولة — ناسداك",
+        "desc_ar": "سحب سيولة على 15 دقيقة (إلزامي) في منطقة مناسبة على الساعة، ثم تأكيد انعكاس (CHoCH أو BOS) ومنطقة دخول. "
+                   "سحب السيولة وحده لا يكفي.",
+        "desc_en": "A liquidity sweep on 15m (mandatory) in the right 1H zone, then a reversal confirmation (CHoCH or BOS) and "
+                   "an entry zone. A sweep alone is never enough.",
+    },
+    {
+        "family": "btc_trend", "build": _gold_trend, "symbols": ["BTC/USD"], "timeframes": ["4H", "15m"],
+        "style": "trend", "name": "Bitcoin Trend Pro", "name_ar": "البيتكوين مع الاتجاه",
+        "desc_ar": "يتداول مع اتجاه البيتكوين على 4 ساعات بعد تراجع السعر لمنطقة مناسبة، بشرط تأكيد هيكلي ومنطقة دخول على 15 دقيقة.",
+        "desc_en": "Trades with Bitcoin's 4H trend after a pullback into the right zone, requiring a structure confirmation and "
+                   "an entry zone on 15m.",
+    },
+    {
+        "family": "btc_liquidity", "build": _liquidity_hunter, "symbols": ["BTC/USD"], "timeframes": ["1H", "15m"],
+        "style": "liquidity_reversal", "name": "Bitcoin Liquidity Hunter", "name_ar": "صياد السيولة — البيتكوين",
+        "desc_ar": "سحب سيولة على 15 دقيقة (إلزامي) في منطقة مناسبة على الساعة، ثم تأكيد انعكاس ومنطقة دخول. سحب السيولة وحده لا يكفي.",
+        "desc_en": "A liquidity sweep on 15m (mandatory) in the right 1H zone, then a reversal confirmation and an entry zone. "
+                   "A sweep alone is never enough.",
+    },
+    {
+        "family": "oil_trend", "build": _gold_trend, "symbols": ["USOIL"], "timeframes": ["4H", "15m"],
+        "style": "trend", "name": "Oil Trend Pro", "name_ar": "النفط مع الاتجاه",
+        "desc_ar": "يتداول مع اتجاه النفط على 4 ساعات بعد تراجع السعر لمنطقة مناسبة، بشرط تأكيد هيكلي ومنطقة دخول على 15 دقيقة.",
+        "desc_en": "Trades with oil's 4H trend after a pullback into the right zone, requiring a structure confirmation and "
+                   "an entry zone on 15m.",
+    },
+    {
+        "family": "eur_session", "build": _session_sniper, "symbols": ["EUR/USD"], "timeframes": ["15m"],
+        "style": "session", "name": "EUR/USD Session Sniper", "name_ar": "قنّاص الجلسات — يورو/دولار",
+        "desc_ar": "فرص اليورو/دولار خلال جلستي لندن ونيويورك فقط: سحب سيولة + تأكيد هيكلي + منطقة دخول، كلها على 15 دقيقة. "
+                   "الجلسة وحدها لا تطلق إشارة.",
+        "desc_en": "EUR/USD setups during the London and New York sessions only: liquidity sweep + structure confirmation + "
+                   "entry zone, all on 15m. The session alone never fires a signal.",
+    },
 ]
 
 
-# (2026-10-15) نتائج اختبار المالك — باكتيست واقعي (حد أدنى للوقف + خصم السبريد)، الذهب هابط طوال الفترة.
-# الحالة: tested = اجتاز شروط القبول الأربعة، negative = صافٍ سالب، testing = بيانات غير كافية أو لم يُختبر.
+# (2026-11-03) إعادة الاختبار بعد إصلاح شرط FVG (DECISIONS 03/11): diag_template_backtest، 45 يوماً حتى 03/11، باكتيست واقعي
+# (حد أدنى للوقف + خصم السبريد)، بشروط القبول المسجّلة 15/10 كما هي. نتائج أكتوبر حُذفت لأنها قيست بشرط FVG المعطوب،
+# والقوالب التي لم يُعَد اختبارها تظهر "قيد الاختبار" بلا أرقام. 16 قالباً اختُبرت معاً، فقالب يجتاز بفارق ضئيل ليس دليلاً قوياً.
 _TEST_RESULTS = {
-    "gold_session_sell":   {"status": "tested",   "days": 45, "trades": 57, "net_r": 23.57, "weeks_won": 6, "weeks": 7, "max_dd_r": 3.18},
-    "gold_liquidity_sell": {"status": "testing",  "days": 30, "trades": 19, "net_r": 2.8},
-    "silver_trend_sell":   {"status": "testing",  "days": 30, "trades": 6,  "net_r": 0.82},
-    "gold_trend_buy":      {"status": "testing",  "days": 30, "trades": 3,  "net_r": -1.65},
-    "silver_trend_buy":    {"status": "testing",  "days": 30, "trades": 1,  "net_r": -1.1},
-    "gold_session_buy":    {"status": "negative", "days": 30, "trades": 29, "net_r": -2.2},
-    "gold_liquidity_buy":  {"status": "negative", "days": 30, "trades": 24, "net_r": -3.42},
-    "gold_trend_sell":     {"status": "negative", "days": 30, "trades": 10, "net_r": -4.77},
-    "gold_session_trend_sell": {"status": "tested", "days": 45, "trades": 45, "net_r": 16.37, "weeks_won": 7, "weeks": 7, "max_dd_r": 3.39},
-    "gold_session_trend_buy": {"status": "negative", "days": 45, "trades": 18, "net_r": -3.97, "weeks_won": 2, "weeks": 7, "max_dd_r": 5.41},
+    "gold_session_sell":       {"status": "tested",   "days": 45, "trades": 62, "net_r": 16.16, "weeks_won": 5, "weeks": 7, "max_dd_r": 3.76},
+    "gold_session_trend_sell": {"status": "tested",   "days": 45, "trades": 50, "net_r": 12.17, "weeks_won": 6, "weeks": 7, "max_dd_r": 4.40},
+    "nas_liquidity_buy":       {"status": "tested",   "days": 45, "trades": 31, "net_r": 0.49,  "weeks_won": 4, "weeks": 7, "max_dd_r": 4.32},
+    "nas_liquidity_sell":      {"status": "testing",  "days": 45, "trades": 22, "net_r": 1.55,  "weeks_won": 3, "weeks": 6, "max_dd_r": 4.35},
+    "nas_trend_buy":           {"status": "negative", "days": 45, "trades": 15, "net_r": -1.06, "weeks_won": 2, "weeks": 4, "max_dd_r": 2.29},
+    "nas_trend_sell":          {"status": "negative", "days": 45, "trades": 11, "net_r": -0.43, "weeks_won": 2, "weeks": 4, "max_dd_r": 4.29},
+    "gold_silver_bullet_buy":  {"status": "testing",  "days": 45, "trades": 4,  "net_r": 0.77,  "weeks_won": 2, "weeks": 4, "max_dd_r": 1.10},
+    "gold_silver_bullet_sell": {"status": "testing",  "days": 45, "trades": 5,  "net_r": 2.89,  "weeks_won": 2, "weeks": 3, "max_dd_r": 1.01},
+    "nas_silver_bullet_buy":   {"status": "testing",  "days": 45, "trades": 5,  "net_r": 0.40,  "weeks_won": 1, "weeks": 3, "max_dd_r": 1.55},
+    "nas_silver_bullet_sell":  {"status": "negative", "days": 45, "trades": 4,  "net_r": -1.78, "weeks_won": 1, "weeks": 4, "max_dd_r": 2.27},
 }
-TEST_MARKET_NOTE = {"ar": "فترة الاختبار كان الذهب فيها هابطاً", "en": "tested while gold was in a downtrend"}
+# حال السوق أثناء الاختبار (21/09 → 03/11، عقود آجلة): يفسّر نجاح البيع وخسارة الشراء
+MARKET_NOTE = {
+    "XAU/USD": {"ar": "خلال فترة الاختبار هبط الذهب نحو 10%", "en": "gold fell about 10% during the test period"},
+    "NAS100":  {"ar": "خلال فترة الاختبار هبط ناسداك نحو 8%", "en": "the Nasdaq fell about 8% during the test period"},
+}
 
 
 def _min_score(groups: List[Dict]) -> int:
@@ -192,7 +281,7 @@ def all_templates() -> List[Dict]:
                          "tp": "Risk/Reward", "rr": "2"},
                 "test_status": _TEST_RESULTS.get(f"{f['family']}_{side.lower()}", {}).get("status", "testing"),
                 "test_result": _TEST_RESULTS.get(f"{f['family']}_{side.lower()}"),
-                "test_note": TEST_MARKET_NOTE if f"{f['family']}_{side.lower()}" in _TEST_RESULTS else None,
+                "test_note": MARKET_NOTE.get(f["symbols"][0]) if f"{f['family']}_{side.lower()}" in _TEST_RESULTS else None,
                 "groups": groups,
             })
     return out

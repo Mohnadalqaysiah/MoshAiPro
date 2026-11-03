@@ -160,12 +160,12 @@ def main():
                   + (f"، بعد سبريد الجدول {lna:+.2f}R" if lna is not None else "") + agree)
 
     print("\n" + "═" * 90 + "\n(3) قوالب الذهب بتجربة الظل مقابل المحرك\n" + "═" * 90)
-    from app.services.template_shadow import SHADOW_START, SHADOW_TEMPLATES
+    from app.services.template_shadow import SHADOW_START, SHADOW_START_BY_KEY, SHADOW_TEMPLATES
     weeks_running = (now - SHADOW_START).days / 7
     gold_engine = [d["r"] for d in decided if d["market"] == "XAUUSD" and d["created_at"] >= SHADOW_START]
     eng_net = sum(gold_engine)
     print(f"  مدة التجربة: {weeks_running:.1f} أسبوع | المحرك للذهب بنفس الفترة: {len(gold_engine)} قرار، {eng_net:+.2f}R")
-    for key in SHADOW_TEMPLATES:
+    for key in [k for k in SHADOW_TEMPLATES if k not in SHADOW_START_BY_KEY]:   # قوالب الذهب الأربعة: مقارنتها بمحرك الذهب من نفس التاريخ
         rows = (db.query(ShadowSignal).filter(ShadowSignal.reason == f"tpl:{key}", ShadowSignal.r_multiple.isnot(None))
                   .order_by(ShadowSignal.created_at).all())
         rs = [s.r_multiple for s in rows]

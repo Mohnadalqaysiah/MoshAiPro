@@ -124,6 +124,7 @@ const CAT = [
       ["choch", "CHoCH", "Change of Character — تغيّر طابع", "Change of Character"],
       ["ob", "Order Block", "منطقة أوامر مؤسساتية", "Institutional order zone"],
       ["fvg", "FVG", "Fair Value Gap — فجوة سعرية", "Fair Value Gap — a price imbalance"],
+      ["fvg_retrace", "FVG Retrace", "عودة السعر إلى FVG حديثة", "Price back inside a recent FVG"],
       ["liquidity", "Liquidity Sweep", "سحب سيولة قبل الانعكاس", "Liquidity grab before a reversal"],
       ["eqh", "Equal Highs", "قمم متساوية", "Equal highs"],
       ["eql", "Equal Lows", "قيعان متساوية", "Equal lows"],
@@ -143,6 +144,7 @@ const CAT = [
       ["london", "London Session", "جلسة لندن", "London session"],
       ["newyork", "New York Session", "جلسة نيويورك", "New York session"],
       ["asian", "Asian Session", "الجلسة الآسيوية", "Asian session"],
+      ["silverbullet", "Silver Bullet", "نوافذ الطلقة الفضية", "Silver Bullet windows"],
       ["killzones", "Kill Zones", "نوافذ التقلب العالي", "High-volatility windows"],
     ]},
 ];
@@ -268,7 +270,7 @@ function Modal({ title, children, onClose, danger, wide }) {
 ========================================================================= */
 const STYLE_LABEL = {
   trend: ["مع الاتجاه", "Trend"], liquidity_reversal: ["انعكاس بعد سحب سيولة", "Liquidity reversal"],
-  session: ["جلسات", "Sessions"],
+  session: ["جلسات", "Sessions"], silver_bullet: ["الطلقة الفضية", "Silver Bullet"],
 };
 const LOGIC_LABEL = { AND: ["الكل", "All"], OR: ["واحد على الأقل", "At least one"], AT_LEAST: ["عدد محدد", "At least N"] };
 
@@ -277,6 +279,7 @@ function TemplateLibrary({ isAr, onCopied, showToast }) {
   const [open, setOpen] = useState(null);
   const [busy, setBusy] = useState(null);
   const [sub, setSub] = useState("tested");
+  const [market, setMarket] = useState("");
   useEffect(() => {
     axios.get(`${API}/api/v1/strategies/templates`)
       .then((r) => setItems(r.data.templates || []))
@@ -316,6 +319,17 @@ function TemplateLibrary({ isAr, onCopied, showToast }) {
                 </button>
               ))}
             </div>
+            <div className="flex flex-wrap gap-1.5">
+              {["", ...new Set(items.flatMap((t) => t.symbols))].map((m) => (
+                <button key={m || "all"} onClick={() => setMarket(m)}
+                  style={market === m
+                    ? { background: C.surfaceHi, color: C.text, border: `1px solid ${C.sub}` }
+                    : { background: "transparent", color: C.muted, border: `1px solid ${C.border}` }}
+                  className="px-2.5 py-1 rounded-lg text-xs">
+                  {m || (isAr ? "كل الأسواق" : "All markets")}
+                </button>
+              ))}
+            </div>
             <div style={{ color: C.muted, fontSize: 12, lineHeight: 1.7 }}>
               {sub === "tested"
                 ? (isAr ? "قوالب اجتازت شروطنا الأربعة في الباكتيست. هذا ليس ضماناً للربح — راقب نتيجتها وفق حالة السوق المذكورة تحت كل قالب."
@@ -327,7 +341,7 @@ function TemplateLibrary({ isAr, onCopied, showToast }) {
         );
       })()}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {items.filter((t) => (sub === "tested") === (t.test_status === "tested"))
+        {items.filter((t) => (sub === "tested") === (t.test_status === "tested") && (!market || t.symbols.includes(market)))
           .sort((a, b) => (a.test_status === "negative") - (b.test_status === "negative"))
           .map((t) => {
           const buy = t.side === "BUY";

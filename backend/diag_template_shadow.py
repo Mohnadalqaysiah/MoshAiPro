@@ -19,7 +19,9 @@ from app.services.quality_report import _r_multiple
 from app.services.template_shadow import SHADOW_START
 
 NAMES = {"gold_session_sell": "قنّاص — بيع", "gold_session_buy": "قنّاص — شراء",
-         "gold_session_trend_buy": "قنّاص+اتجاه — شراء", "gold_session_trend_sell": "قنّاص+اتجاه — بيع"}
+         "gold_session_trend_buy": "قنّاص+اتجاه — شراء", "gold_session_trend_sell": "قنّاص+اتجاه — بيع",
+         "gold_silver_bullet_buy": "طلقة ذهب — شراء", "gold_silver_bullet_sell": "طلقة ذهب — بيع",     # من 2026-11-04
+         "nas_silver_bullet_buy": "طلقة ناسداك — شراء", "nas_silver_bullet_sell": "طلقة ناسداك — بيع"}
 TP1 = ("TP2_HIT", "TP1_BE", "EXPIRED_TP1")
 
 
@@ -56,7 +58,7 @@ def _line(name, st):
 
 def main():
     db = SessionLocal()
-    print(f"التجربة الصامتة لقوالب الذهب منذ {SHADOW_START.date()} — لا شيء منها أُرسل لأي مشترك\n")
+    print(f"التجربة الصامتة للقوالب منذ {SHADOW_START.date()} — لا شيء منها أُرسل لأي مشترك. سطر المحرك للذهب، فلا يقارَن بقالب الناسداك\n")
     rows = (db.query(ShadowSignal).filter(ShadowSignal.reason.like("tpl:%"))
               .order_by(ShadowSignal.created_at).all())
     table = {}
