@@ -51,6 +51,17 @@ def test_1day_alias_matches_bot():
                                              {}, set(), False))
 
 
+def test_owner_who_was_delivered_shows_delivery_not_exclusion():
+    assert D.reasons(_u(), SIG, {1: (True, "full", None)}, {1}, False) == ["✅ وصلته (كاملة)"]
+
+
+def test_merge_deliveries_success_from_any_row_wins():
+    rows = [NS(user_id=1, ok=False, variant="full", error="x"), NS(user_id=1, ok=True, variant="masked", error=None),
+            NS(user_id=2, ok=False, variant="full", error="blocked"), NS(user_id=None, ok=True, variant="full", error=None)]
+    m = D.merge_deliveries(rows)
+    assert m == {1: (True, "masked", None), 2: (False, "full", "blocked")}
+
+
 if __name__ == "__main__":
     n = 0
     for name, fn in list(globals().items()):
