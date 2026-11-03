@@ -229,22 +229,26 @@ _FAMILIES = [
 ]
 
 
-# (2026-10-15) نتائج اختبار المالك — باكتيست واقعي (حد أدنى للوقف + خصم السبريد)، الذهب هابط طوال الفترة.
-# الحالة: tested = اجتاز شروط القبول الأربعة، negative = صافٍ سالب، testing = بيانات غير كافية أو لم يُختبر.
+# (2026-11-03) إعادة الاختبار بعد إصلاح شرط FVG (DECISIONS 03/11): diag_template_backtest، 45 يوماً حتى 03/11، باكتيست واقعي
+# (حد أدنى للوقف + خصم السبريد)، بشروط القبول المسجّلة 15/10 كما هي. نتائج أكتوبر حُذفت لأنها قيست بشرط FVG المعطوب،
+# والقوالب التي لم يُعَد اختبارها تظهر "قيد الاختبار" بلا أرقام. 16 قالباً اختُبرت معاً، فقالب يجتاز بفارق ضئيل ليس دليلاً قوياً.
 _TEST_RESULTS = {
-    "gold_session_sell":   {"status": "tested",   "days": 45, "trades": 57, "net_r": 23.57, "weeks_won": 6, "weeks": 7, "max_dd_r": 3.18},
-    "gold_liquidity_sell": {"status": "testing",  "days": 30, "trades": 19, "net_r": 2.8},
-    "silver_trend_sell":   {"status": "testing",  "days": 30, "trades": 6,  "net_r": 0.82},
-    "gold_trend_buy":      {"status": "testing",  "days": 30, "trades": 3,  "net_r": -1.65},
-    "silver_trend_buy":    {"status": "testing",  "days": 30, "trades": 1,  "net_r": -1.1},
-    "gold_session_buy":    {"status": "negative", "days": 30, "trades": 29, "net_r": -2.2},
-    "gold_liquidity_buy":  {"status": "negative", "days": 30, "trades": 24, "net_r": -3.42},
-    "gold_trend_sell":     {"status": "negative", "days": 30, "trades": 10, "net_r": -4.77},
-    "gold_session_trend_sell": {"status": "tested", "days": 45, "trades": 45, "net_r": 16.37, "weeks_won": 7, "weeks": 7, "max_dd_r": 3.39},
-    "gold_session_trend_buy": {"status": "negative", "days": 45, "trades": 18, "net_r": -3.97, "weeks_won": 2, "weeks": 7, "max_dd_r": 5.41},
+    "gold_session_sell":       {"status": "tested",   "days": 45, "trades": 62, "net_r": 16.16, "weeks_won": 5, "weeks": 7, "max_dd_r": 3.76},
+    "gold_session_trend_sell": {"status": "tested",   "days": 45, "trades": 50, "net_r": 12.17, "weeks_won": 6, "weeks": 7, "max_dd_r": 4.40},
+    "nas_liquidity_buy":       {"status": "tested",   "days": 45, "trades": 31, "net_r": 0.49,  "weeks_won": 4, "weeks": 7, "max_dd_r": 4.32},
+    "nas_liquidity_sell":      {"status": "testing",  "days": 45, "trades": 22, "net_r": 1.55,  "weeks_won": 3, "weeks": 6, "max_dd_r": 4.35},
+    "nas_trend_buy":           {"status": "negative", "days": 45, "trades": 15, "net_r": -1.06, "weeks_won": 2, "weeks": 4, "max_dd_r": 2.29},
+    "nas_trend_sell":          {"status": "negative", "days": 45, "trades": 11, "net_r": -0.43, "weeks_won": 2, "weeks": 4, "max_dd_r": 4.29},
+    "gold_silver_bullet_buy":  {"status": "testing",  "days": 45, "trades": 4,  "net_r": 0.77,  "weeks_won": 2, "weeks": 4, "max_dd_r": 1.10},
+    "gold_silver_bullet_sell": {"status": "testing",  "days": 45, "trades": 5,  "net_r": 2.89,  "weeks_won": 2, "weeks": 3, "max_dd_r": 1.01},
+    "nas_silver_bullet_buy":   {"status": "testing",  "days": 45, "trades": 5,  "net_r": 0.40,  "weeks_won": 1, "weeks": 3, "max_dd_r": 1.55},
+    "nas_silver_bullet_sell":  {"status": "negative", "days": 45, "trades": 4,  "net_r": -1.78, "weeks_won": 1, "weeks": 4, "max_dd_r": 2.27},
 }
-TEST_MARKET_NOTE = {"ar": "فترة الاختبار كان الذهب فيها هابطاً", "en": "tested while gold was in a downtrend"}
-_NOTE_FAMILIES = {"gold_trend", "gold_liquidity", "gold_session", "gold_session_trend", "silver_trend"}   # جولة أكتوبر الهابطة وحدها
+# حال السوق أثناء الاختبار (21/09 → 03/11، عقود آجلة): يفسّر نجاح البيع وخسارة الشراء
+MARKET_NOTE = {
+    "XAU/USD": {"ar": "خلال فترة الاختبار هبط الذهب نحو 10%", "en": "gold fell about 10% during the test period"},
+    "NAS100":  {"ar": "خلال فترة الاختبار هبط ناسداك نحو 8%", "en": "the Nasdaq fell about 8% during the test period"},
+}
 
 
 def _min_score(groups: List[Dict]) -> int:
@@ -277,7 +281,7 @@ def all_templates() -> List[Dict]:
                          "tp": "Risk/Reward", "rr": "2"},
                 "test_status": _TEST_RESULTS.get(f"{f['family']}_{side.lower()}", {}).get("status", "testing"),
                 "test_result": _TEST_RESULTS.get(f"{f['family']}_{side.lower()}"),
-                "test_note": TEST_MARKET_NOTE if f["family"] in _NOTE_FAMILIES and f"{f['family']}_{side.lower()}" in _TEST_RESULTS else None,
+                "test_note": MARKET_NOTE.get(f["symbols"][0]) if f"{f['family']}_{side.lower()}" in _TEST_RESULTS else None,
                 "groups": groups,
             })
     return out

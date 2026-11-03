@@ -82,15 +82,19 @@ def test_new_markets_exist_for_both_sides():
     assert all(n >= 2 for n in syms.values()), syms
 
 
-def test_gold_market_note_only_on_october_gold_families():
-    orig = dict(T._TEST_RESULTS)
-    T._TEST_RESULTS["nas_trend_buy"] = {"status": "testing", "days": 45, "trades": 1, "net_r": 0.1}
-    try:
-        assert T.get_template("nas_trend_buy")["test_note"] is None                        # لا "الذهب كان هابطاً" تحت ناسداك
-    finally:
-        T._TEST_RESULTS.clear()
-        T._TEST_RESULTS.update(orig)
-    assert T.get_template("gold_session_sell")["test_note"] == T.TEST_MARKET_NOTE
+def test_market_note_matches_the_template_market_and_only_with_results():
+    assert T.get_template("gold_session_sell")["test_note"] == T.MARKET_NOTE["XAU/USD"]
+    assert T.get_template("nas_trend_buy")["test_note"] == T.MARKET_NOTE["NAS100"]             # لا "الذهب هبط" تحت ناسداك
+    assert T.get_template("btc_trend_buy")["test_note"] is None                               # لم يُعَد اختباره: لا نتيجة ولا ملاحظة
+    assert T.get_template("btc_trend_buy")["test_status"] == "testing"
+
+
+def test_recorded_results_follow_the_acceptance_rule():
+    for key, r in T._TEST_RESULTS.items():
+        assert T.get_template(key), key
+        passed = r["net_r"] > 0 and r["trades"] >= 20 and r["weeks_won"] > r["weeks"] / 2 and r["max_dd_r"] < 6
+        want = "tested" if passed else "negative" if r["net_r"] < 0 else "testing"
+        assert r["status"] == want, key                                                       # الحالة من الشروط لا من الانطباع
 
 
 def _bars(rows):
