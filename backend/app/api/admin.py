@@ -4165,6 +4165,8 @@ _SHADOW_REASON_AR = {
     "HTF_CONFLICT": "تعارض مع الفريم الأكبر",
     "COMMODITY_COUNTER_4H_TREND": "سلع عكس اتجاه 4 ساعات",
     "SL_INSIDE_SPREAD_NOISE": "وقف داخل ضجيج السبريد",
+    "FVG_FIX_NEW": "إصلاح FVG — إشارة كانت ستُضاف",
+    "FVG_FIX_DROP": "إصلاح FVG — إشارة كانت ستختفي",
 }
 
 

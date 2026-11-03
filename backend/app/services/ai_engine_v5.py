@@ -287,6 +287,9 @@ class MoshAIEngineV5:
             if "momentum"       not in analysis: analysis["momentum"]       = ltf_analysis.get("momentum", {})
             if "range_conflict" not in analysis: analysis["range_conflict"] = ltf_analysis.get("range_conflict", {})
 
+            # (2026-11-03) قياس صامت لإصلاح FVG بالمحرك (DECISIONS 03/11): نسخة منفصلة قبل المعايرة، لا تمس analysis
+            _fvg_base = self._fvg_shadow_base(analysis, df_ltf)
+
             # ── AUTO CALIBRATION — adapts thresholds to market + performance ──
             analysis = self._auto_calibrate_thresholds(analysis, symbol, timeframe)
 
@@ -394,6 +397,7 @@ class MoshAIEngineV5:
             rec  = analysis.get("recommendation", "WAIT")
             conf = analysis.get("ai_confidence_score", 0)
             logger.success(f"✅ {symbol}/{timeframe}: {rec} | {conf}% | {int(ms)}ms")
+            _rec_before_price = rec   # الصمت يقارن القرار قبل حارس السعر، لأن نسخته لا تمر به
 
             # ── السعر الفوري + تصحيح Futures→Spot للمعادن والعقود الآجلة ──
             try:
@@ -431,6 +435,10 @@ class MoshAIEngineV5:
                 analysis.get("rejection_reason") or analysis.get("no_trade_reason") or "",
                 analysis.get("recommendation", "WAIT"),
             )
+
+            if _fvg_base is not None:
+                self._fvg_shadow_run(_fvg_base, analysis, _rec_before_price, symbol, timeframe,
+                                     htf_analysis, htf_timeframe, df_htf)
 
             # ── حفظ في الكاش ─────────────────────────────────────────────
             analysis["from_cache"] = False
@@ -2386,6 +2394,121 @@ class MoshAIEngineV5:
         analysis["tp1_capped"] = True
         logger.info(f"TP1_CAP [{symbol}/{timeframe}] TP1 {tp1} → {new_tp1} ({self.TP1_CAP_R}R), TP2 {far}")
         return analysis
+
+    # ── (2026-11-03) قياس صامت لإصلاح FVG بالمحرك — DECISIONS 03/11 ─────────────────────────────────────────
+    # in_*_fvg لا يتحقق أبداً، فنقاط "السعر في FVG" (15) لم تُمنح. هذه النسخة تعيد حساب التوافق كأنه أُصلح، وتمرره
+    # بطبقات القرار الحسابية نفسها، وتسجّل الفرق بجدول الظل: FVG_FIX_NEW إشارة كانت ستُضاف، FVG_FIX_DROP كانت ستختفي.
+    # لا يُمس analysis ولا ذاكرة المحرك: بلا _record_signal_issued، وبلا أخبار، وبلا Gemini جديد (يرى الحقل القديم).
+    _FVG_SHADOW_TF_HOURS = {"1m": 2, "5m": 4, "15m": 3, "30m": 12, "1h": 24, "4h": 72, "1d": 168, "1w": 336}  # صلاحية الحي
+
+    def _fvg_shadow_base(self, analysis: dict, df) -> Optional[dict]:
+        """نسخة التحليل بتوافق FVG المصحح، أو None إن لم يختلف شيء (السعر ليس داخل فجوة تختلف عن الحقل القديم)."""
+        try:
+            import copy
+            fvg = analysis.get("fvg") or {}
+            inside = fvg.get("inside") or {}
+            if bool(inside.get("bullish")) == bool(fvg.get("in_bullish_fvg")) and \
+                    bool(inside.get("bearish")) == bool(fvg.get("in_bearish_fvg")):
+                return None
+            base = copy.deepcopy(analysis)
+            fixed = base["fvg"]
+            fixed["in_bullish_fvg"], fixed["in_bearish_fvg"] = bool(inside.get("bullish")), bool(inside.get("bearish"))
+            conf = ict_engine.calculate_confluence(
+                base["market_structure"], base["order_blocks"], fixed, base["liquidity"],
+                base["premium_discount"], base["kill_zone"], base["wyckoff"], df)
+            levels = ict_engine.calculate_levels(df, conf["direction"], base["order_blocks"], fixed, base["liquidity"]) \
+                if conf["direction"] in ("BUY", "SELL") else {}
+            base.update({   # نفس حقول full_analysis المشتقة من التوافق
+                "confluence": conf, "levels": levels,
+                "ai_confidence_score": conf["confidence"], "recommendation": conf["direction"],
+                "signal_type": conf["quality"] if conf["direction"] != "WAIT" else "WATCH",
+                "entry_zones": [levels.get("entry", 0)] if levels else [],
+                "stop_loss_zone": levels.get("stop_loss", 0),
+                "take_profit_zones": [levels.get("tp1", 0), levels.get("tp2", 0), levels.get("tp3", 0)] if levels else [],
+                "risk_reward_ratio": levels.get("risk_reward", 0),
+            })
+            if isinstance(base.get("trend"), dict):
+                base["trend"]["strength"] = conf["confidence"]
+            return base
+        except Exception as e:
+            logger.warning(f"FVG shadow base skipped: {e}")
+            return None
+
+    def _fvg_shadow_decide(self, cf: dict, real: dict, symbol: str, timeframe: str,
+                           htf_analysis, htf_timeframe: str, df_htf) -> Optional[dict]:
+        """طبقات القرار نفسها على النسخة (analyze_market من المعايرة حتى التطبيع). None = لا يمكن الحكم بلا جلب بيانات."""
+        cf = self._auto_calibrate_thresholds(cf, symbol, timeframe)
+        cf = self._decision_finalizer(cf, symbol, timeframe, htf_analysis)
+        if cf.get("recommendation") in ("BUY", "SELL") and symbol.upper() in self._COMMODITY_TREND_FILTER:
+            trend = real.get("commodity_4h_trend")
+            if trend is None:
+                if htf_timeframe != "4h" or df_htf is None:
+                    return None
+                trend = self._ema50_4h_trend(df_htf)
+            rec = cf.get("recommendation")
+            if (trend == "UP" and rec == "SELL") or (trend == "DOWN" and rec == "BUY"):
+                cf = self._hard_reject(cf, "COMMODITY_COUNTER_4H_TREND")
+        if cf.get("recommendation") in ("BUY", "SELL"):
+            cf = self._institutional_gate(cf, symbol, timeframe, htf_analysis)
+            if cf.get("institutional_gate_passed"):
+                cf = self._output_safety_gate(cf, symbol, timeframe, htf_analysis)
+                if cf.get("recommendation") in ("BUY", "SELL"):
+                    cf = self._confidence_calibration_layer(cf, symbol, timeframe, htf_analysis)
+                    cf = self._classify_trade_mode(cf, symbol, timeframe, htf_analysis)
+                    if cf.get("recommendation") in ("BUY", "SELL"):
+                        cf = self._cap_tp1(cf, symbol, timeframe)
+                        cf = self._apply_tp_ladder(cf, symbol, timeframe)
+        if not cf.get("trade_type"):
+            cf = self._classify_trade_mode(cf, symbol, timeframe, htf_analysis)
+        cf = self._explainability_layer(cf, symbol, timeframe, htf_analysis)
+        return self._normalize_output_layer(cf, symbol, timeframe)
+
+    def _fvg_shadow_run(self, base: dict, real: dict, real_rec: str, symbol: str, timeframe: str,
+                        htf_analysis, htf_timeframe: str, df_htf) -> Optional[str]:
+        """يقارن القرار المصحح بالحقيقي ويسجّل الفرق. يعيد نوع الفرق أو None. لا يرمي ولا يغيّر real."""
+        try:
+            logger.disable("app.services.ai_engine_v5")      # لا سطور قرار مكررة بسجل الخادم؛ لا await بينها
+            logger.disable("app.services.ict_engine")
+            try:
+                cf = self._fvg_shadow_decide(base, real, symbol, timeframe, htf_analysis, htf_timeframe, df_htf)
+            finally:
+                logger.enable("app.services.ai_engine_v5")
+                logger.enable("app.services.ict_engine")
+            if cf is None:
+                return None
+            cf_rec = cf.get("recommendation")
+            kinds = []
+            if cf_rec in ("BUY", "SELL") and cf_rec != real_rec:
+                kinds.append(("NEW", cf, cf_rec, real.get("futures_basis")))
+            if real_rec in ("BUY", "SELL") and cf_rec != real_rec:
+                kinds.append(("DROP", real, real_rec, None))       # مستويات الحي فورية أصلاً
+            for kind, a, side, basis in kinds:
+                self._fvg_shadow_record(kind, a, side, symbol, timeframe, basis)
+            return "+".join(k for k, *_ in kinds) or None
+        except Exception as e:
+            logger.warning(f"FVG shadow skipped [{symbol}/{timeframe}]: {e}")
+            return None
+
+    def _fvg_shadow_record(self, kind: str, a: dict, side: str, symbol: str, timeframe: str, basis) -> None:
+        from datetime import timedelta, timezone as _tz
+        from app.database import SessionLocal
+        from app.services.weekend_policy import record_shadow
+        lv = a.get("levels") or {}
+        far = lv.get("ladder_tp3") or lv.get("tp2")     # الظل يأخذ البعيد هدفاً ثانياً كبقية الظل (DECISIONS 30/10)
+        vals = [lv.get("entry"), lv.get("stop_loss"), lv.get("tp1"), far]
+        if not all(vals[:3]):
+            return
+        if basis and symbol.upper() in self._FUTURES_SPOT_SYMBOLS:
+            vals = [round(float(v) + float(basis), 5) if v else v for v in vals]
+        db = SessionLocal()
+        try:
+            record_shadow(db, source="fvg_shadow", symbol=symbol, timeframe=timeframe, signal_type=side,
+                          entry=vals[0], sl=vals[1], tp1=vals[2], tp2=vals[3],
+                          confidence=a.get("ai_confidence_score"), rr=lv.get("risk_reward"),
+                          expires_at=datetime.now(_tz.utc) + timedelta(hours=self._FVG_SHADOW_TF_HOURS.get(timeframe, 24)),
+                          reason=f"FVG_FIX_{kind}")
+        finally:
+            db.close()
 
     def _apply_tp_ladder(self, analysis: dict, symbol: str, timeframe: str) -> dict:
         """(2026-10-30) بعد _cap_tp1 وبعد كل البوابات: لا يغيّر قراراً ولا دخولاً ولا وقفاً. risk_reward يبقى إلى الهدف البعيد."""
