@@ -120,17 +120,29 @@ def test_retrace_rejects_broken_old_and_untouched_gaps():
     assert ict_engine._fvg_retrace(_bars(old))["bullish"] is False
 
 
-def test_engine_fvg_fields_unchanged_and_old_flag_still_never_true():
-    """المحرك لا يتغير: retrace مفتاح إضافي، والخلل القديم موثّق هنا حتى يقرر المالك."""
+def test_engine_fvg_fields_unchanged_and_strategy_condition_fixed():
+    """المحرك لا يتغير: inside وretrace مفتاحان إضافيان، وحقله القديم يبقى False. شرط fvg للعملاء صار يتحقق (03/11)."""
     from app.services.ict_engine import ict_engine
     a = ict_engine.detect_fvg(_bars(_GAP_UP))
-    assert set(a) == {"bullish_fvgs", "bearish_fvgs", "in_bullish_fvg", "in_bearish_fvg", "nearest_bullish", "nearest_bearish", "retrace"}
+    assert set(a) == {"bullish_fvgs", "bearish_fvgs", "in_bullish_fvg", "in_bearish_fvg", "nearest_bullish", "nearest_bearish",
+                      "inside", "retrace"}
     assert a["retrace"]["bullish"] is True and a["in_bullish_fvg"] is False                # السعر داخل الفجوة، والحقل القديم يقول لا
     assert a["bullish_fvgs"] == []                                                          # حُذفت كمملوءة، وهذا سبب الخلل
     an = {"fvg": a}                                                                         # الشرط يقرأ من التحليل الكامل
-    assert E.SUPPORTED_CONDITION_TYPES["fvg"](an, "صاعد") is False
+    assert E.SUPPORTED_CONDITION_TYPES["fvg"](an, "صاعد") is True
+    assert E.SUPPORTED_CONDITION_TYPES["fvg"](an, "هابط") is False
     assert E.SUPPORTED_CONDITION_TYPES["fvg_retrace"](an, "صاعد") is True
     assert E.SUPPORTED_CONDITION_TYPES["fvg_retrace"](an, "هابط") is False
+
+
+def test_fvg_condition_sees_old_unbroken_gap_but_retrace_does_not():
+    from app.services.ict_engine import ict_engine
+    old = _GAP_UP[:3] + [(104, 105, 102, 104.5)] * 12 + [(104, 104.5, 102, 102.5)]           # فجوة أقدم من 3 ساعات، والسعر عاد إليها
+    a = {"fvg": ict_engine.detect_fvg(_bars(old))}
+    assert E.SUPPORTED_CONDITION_TYPES["fvg"](a, "صاعد") is True                            # الشرط العام: أي فجوة بالنافذة
+    assert E.SUPPORTED_CONDITION_TYPES["fvg_retrace"](a, "صاعد") is False                   # الطلقة: آخر 3 ساعات فقط
+    broken = _GAP_UP[:4] + [(104, 104.5, 99, 100), (100, 102.5, 100, 102)]
+    assert E.SUPPORTED_CONDITION_TYPES["fvg"]({"fvg": ict_engine.detect_fvg(_bars(broken))}, "صاعد") is False
 
 
 def test_new_shadow_templates_start_after_they_were_fixed():

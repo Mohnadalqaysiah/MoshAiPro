@@ -98,15 +98,16 @@ def _ext_ob(a: Dict, value: Optional[str]) -> Optional[bool]:
 
 
 def _ext_fvg(a: Dict, value: Optional[str]) -> Optional[bool]:
-    fvg = a.get("fvg") or {}
+    """(2026-11-03، المالك: "صلحه نعم") السعر داخل FVG لم تُكسر. كان يقرأ in_*_fvg الذي لا يتحقق أبداً (DECISIONS 03/11)."""
+    r = (a.get("fvg") or {}).get("inside") or {}
     hint = _direction_hint(value)
-    if hint == "BULL": return bool(fvg.get("in_bullish_fvg"))
-    if hint == "BEAR": return bool(fvg.get("in_bearish_fvg"))
-    return bool(fvg.get("in_bullish_fvg") or fvg.get("in_bearish_fvg"))
+    if hint == "BULL": return bool(r.get("bullish"))
+    if hint == "BEAR": return bool(r.get("bearish"))
+    return bool(r.get("bullish") or r.get("bearish"))
 
 
 def _ext_fvg_retrace(a: Dict, value: Optional[str]) -> Optional[bool]:
-    """(2026-11-03) عودة السعر إلى FVG حديثة. شرط fvg أعلاه لا يتحقق أبداً (DECISIONS 03/11)، ويبقى كما هو حتى يقرر المالك."""
+    """(2026-11-03) عودة السعر إلى FVG تكوّنت خلال آخر 3 ساعات — للطلقة الفضية. fvg أعلاه أي فجوة بالنافذة."""
     r = (a.get("fvg") or {}).get("retrace") or {}
     hint = _direction_hint(value)
     if hint == "BULL": return bool(r.get("bullish"))

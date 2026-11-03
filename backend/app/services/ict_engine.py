@@ -248,7 +248,8 @@ class ICTEngine:
         in_bearish_fvg = any(fvg["bottom"] <= current <= fvg["top"] for fvg in bearish_fvgs)
 
         # (2026-11-03) ⚠️ in_*_fvg أعلاه False دائماً: الفجوة التي دخلها السعر تُحذف كـ"مملوءة" قبل هذا السؤال (DECISIONS 03/11).
-        # لا يُصلَّح هنا: المحرك يقرؤها، وإصلاحها يغيّر توليد الإشارات، وهذا قرار المالك. retrace مفتاح إضافي لا يقرؤه المحرك.
+        # لا يُصلَّح هنا: المحرك يقرؤها، وإصلاحها يغيّر توليد الإشارات، وهذا قرار المالك. inside وretrace مفتاحان إضافيان
+        # للاستراتيجيات وحدها (المالك: "صلحه نعم" لشرط FVG عند العملاء)، والمحرك لا يقرأ أياً منهما.
         return {
             "bullish_fvgs": bullish_fvgs,
             "bearish_fvgs": bearish_fvgs,
@@ -256,11 +257,12 @@ class ICTEngine:
             "in_bearish_fvg": in_bearish_fvg,
             "nearest_bullish": bullish_fvgs[0] if bullish_fvgs else None,
             "nearest_bearish": bearish_fvgs[0] if bearish_fvgs else None,
-            "retrace": self._fvg_retrace(df),
+            "inside": self._fvg_retrace(df, bars=len(df)),   # داخل أي فجوة بالنافذة لم تُكسر — شرط fvg
+            "retrace": self._fvg_retrace(df),                  # فجوة آخر 3 ساعات على 15m — شرط fvg_retrace
         }
 
     def _fvg_retrace(self, df: pd.DataFrame, bars: int = 12) -> Dict:
-        """هل عاد السعر إلى FVG تكوّنت خلال آخر bars شمعة ولم تُكسر بإغلاق خلفها؟ (12 شمعة = 3 ساعات على 15m)"""
+        """هل السعر داخل FVG تكوّنت خلال آخر bars شمعة ولم تُكسر بإغلاق خلفها؟ (12 شمعة = 3 ساعات على 15m)"""
         high, low, close = df["high"].values, df["low"].values, df["close"].values
         n, now = len(df), float(close[-1])
         out = {"bullish": False, "bearish": False}
