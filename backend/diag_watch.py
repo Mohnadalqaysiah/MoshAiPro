@@ -12,6 +12,9 @@
   (5) GBPJPY: من 31/10 (بعد رؤية أرقام المراجعة)، ≥ 15 قراراً جديداً، مرشّح إن المتوسط < −0.3R
   (6) الهدف الثاني ≥ 8R: من 14/10 (سقف TP1، نفس فصل diag_relax_check المسجّل 24/10)، ≥ 30 قراراً، مرشّح إن المتوسط < −0.3R
       وسالب بالنصفين. نفس عتبات القاعدة (1). لا منع حتى يتحقق هذا ثم يقرر المالك.
+(2026-11-06، المالك: "اوك يلا"، بعد تقرير الجودة وأسبوع 30/10–06/11 — رأينا أرقامهما، فتُحكمان على الجديد وحده من 07/11)
+  (7) الجلسة المتأخرة 21–24 UTC (بساعة الإنشاء، تعريف quality_report._session): ≥ 30 قراراً جديداً، مرشّح إن المتوسط < −0.3R
+  (8) الكريبتو على فريم 15m: ≥ 20 قراراً جديداً، مرشّح إن المتوسط < −0.3R (لإيقاف تجريبي صامت، بقرار المالك)
 
     docker exec moshapi_backend python diag_watch.py
 """
@@ -20,6 +23,7 @@ from datetime import datetime, timedelta, timezone
 WATCH_START = datetime(2026, 10, 28, tzinfo=timezone.utc)
 GBPJPY_START = datetime(2026, 10, 31, tzinfo=timezone.utc)
 TP1_CAP_START = datetime(2026, 10, 14, tzinfo=timezone.utc)
+RULES_7_8_START = datetime(2026, 11, 7, tzinfo=timezone.utc)
 
 
 def _aware(d):
@@ -42,6 +46,11 @@ def rule_simple(rs, need, thr=-0.3):
     if len(rs) < need:
         return "waiting", f"⏳ {len(rs)}/{need} — لا حكم"
     return ("candidate", "🟠 مرشّح — يُعرض على المالك") if _avg(rs) < thr else ("ok", "✅ لم تتحقق — يبقى كما هو")
+
+
+def late_session(t) -> bool:
+    """(7): نفس تعريف تقرير الجودة — ساعة الإنشاء بتوقيت UTC من 21 فصاعداً."""
+    return _aware(t).hour >= 21
 
 
 def rule_15m(rs15, rs1h, need=40):
@@ -126,6 +135,12 @@ def main():
                     key=lambda d: d["created_at"])
     rs = [d["r"] for d in capped]
     print(f"(6) الهدف الثاني ≥ 8R (من {TP1_CAP_START:%Y-%m-%d}) — {_fmt(rs)}\n      {rule_tp2(rs)[1]}\n")
+
+    new = [d for d in decs if d["created_at"] >= RULES_7_8_START]
+    rs = [d["r"] for d in new if late_session(d["created_at"])]
+    print(f"(7) الجلسة المتأخرة 21–24 UTC (من {RULES_7_8_START:%Y-%m-%d}) — {_fmt(rs)}\n      {rule_simple(rs, 30)[1]}\n")
+    rs = [d["r"] for d in new if d["group"] == "crypto" and d["timeframe"] == "15m"]
+    print(f"(8) الكريبتو على 15m (من {RULES_7_8_START:%Y-%m-%d}) — {_fmt(rs)}\n      {rule_simple(rs, 20)[1]}\n")
     print("⚠️ \"مرشّح\" = يُعرض على المالك. لا شيء يُطبَّق من هنا، والعتبات لا تُعدَّل بعد رؤية الأرقام.")
     db.close()
 

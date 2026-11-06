@@ -36,6 +36,16 @@ def test_tp2_rule_needs_count_average_and_both_halves():
     assert W.TP1_CAP_START.date().isoformat() == "2026-10-14"
 
 
+def test_rules_7_8_definitions_and_start():
+    assert W.RULES_7_8_START == datetime(2026, 11, 7, tzinfo=timezone.utc)
+    assert W.late_session(datetime(2026, 11, 7, 21, 0, tzinfo=timezone.utc)) is True
+    assert W.late_session(datetime(2026, 11, 7, 20, 59, tzinfo=timezone.utc)) is False
+    assert W.late_session(datetime(2026, 11, 7, 23, 59)) is True                         # بلا منطقة زمنية = UTC
+    assert W.rule_simple([-1.0] * 29, 30)[0] == "waiting"
+    assert W.rule_simple([-1.0] * 20, 20)[0] == "candidate"
+    assert W.rule_simple([-0.3] * 20, 20)[0] == "ok"                                     # الحد −0.3 نفسه لا يكفي
+
+
 def test_iso_weeks_only_completed():
     assert W.iso_weeks(datetime(2026, 11, 1, 23, tzinfo=timezone.utc)) == []
     wk = W.iso_weeks(datetime(2026, 11, 9, 1, tzinfo=timezone.utc))
