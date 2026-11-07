@@ -15,6 +15,9 @@
 (2026-11-06، المالك: "اوك يلا"، بعد تقرير الجودة وأسبوع 30/10–06/11 — رأينا أرقامهما، فتُحكمان على الجديد وحده من 07/11)
   (7) الجلسة المتأخرة 21–24 UTC (بساعة الإنشاء، تعريف quality_report._session): ≥ 30 قراراً جديداً، مرشّح إن المتوسط < −0.3R
   (8) الكريبتو على فريم 15m: ≥ 20 قراراً جديداً، مرشّح إن المتوسط < −0.3R (لإيقاف تجريبي صامت، بقرار المالك)
+(2026-11-07، المالك: "بختار ب") القاعدة (2) تحققت ← إيقاف 15m عدا الذهب والمعادن من 08/11 (timeframe_pause.py)، فالقاعدة (8) صارت ضمنه
+  (9)  إعادة 15m الموقوف: ≥ 40 فرصة ظل مستقلة محسومة (TF15M_PAUSE)، مرشّح للإعادة إن متوسطها ≥ +0.1R **و** ≥ نصف متوسط 1h الحي بنفس الفترة
+  (10) الذهب والمعادن على 15m (الاستثناء، حي من 08/11): ≥ 30 قراراً جديداً، مرشّح للإيقاف أيضاً بنفس شرط (2): < نصف 1h و< +0.1R
 
     docker exec moshapi_backend python diag_watch.py
 """
@@ -46,6 +49,16 @@ def rule_simple(rs, need, thr=-0.3):
     if len(rs) < need:
         return "waiting", f"⏳ {len(rs)}/{need} — لا حكم"
     return ("candidate", "🟠 مرشّح — يُعرض على المالك") if _avg(rs) < thr else ("ok", "✅ لم تتحقق — يبقى كما هو")
+
+
+def rule_restore(shadow, live1h, need=40):
+    """(9) عكس القاعدة (2): الموقوف يعود إن صار جيداً بما يكفي مقارنة بالحي."""
+    if len(shadow) < need:
+        return "waiting", f"⏳ {len(shadow)}/{need} — لا حكم، الإيقاف باقٍ"
+    a, b = _avg(shadow), _avg(live1h)
+    if b is None:
+        return "waiting", "⏳ لا قرارات 1h حية للمقارنة"
+    return ("candidate", "🟢 مرشّح للإعادة — يُعرض على المالك") if a >= 0.1 and a >= b / 2 else ("ok", "⛔ لم تتحقق — الإيقاف باقٍ")
 
 
 def late_session(t) -> bool:
@@ -139,8 +152,17 @@ def main():
     new = [d for d in decs if d["created_at"] >= RULES_7_8_START]
     rs = [d["r"] for d in new if late_session(d["created_at"])]
     print(f"(7) الجلسة المتأخرة 21–24 UTC (من {RULES_7_8_START:%Y-%m-%d}) — {_fmt(rs)}\n      {rule_simple(rs, 30)[1]}\n")
-    rs = [d["r"] for d in new if d["group"] == "crypto" and d["timeframe"] == "15m"]
+    rs = [d["r"] for d in new if d["group"] == "crypto" and d["timeframe"] == "15m"]   # بعد 08/11 ضمن الإيقاف: لا قرارات حية
     print(f"(8) الكريبتو على 15m (من {RULES_7_8_START:%Y-%m-%d}) — {_fmt(rs)}\n      {rule_simple(rs, 20)[1]}\n")
+
+    from app.services.timeframe_pause import EXEMPT_GROUPS, PAUSE_START, REASON
+    live1h = [d["r"] for d in decs if d["timeframe"] == "1h" and d["created_at"] >= PAUSE_START]
+    rows = st.filter_scope(db.query(ShadowSignal).filter(ShadowSignal.reason == REASON,
+                                                         ShadowSignal.created_at >= PAUSE_START).all(), "clean")
+    sh = [s.r_multiple for s in st.representatives(rows) if s.outcome in st.DECIDED and s.r_multiple is not None]
+    print(f"(9) 15m الموقوف بالظل (من {PAUSE_START:%Y-%m-%d}) — {_fmt(sh)} | 1h الحي: {_fmt(live1h)}\n      {rule_restore(sh, live1h)[1]}\n")
+    rs = [d["r"] for d in decs if d["timeframe"] == "15m" and d["group"] in EXEMPT_GROUPS and d["created_at"] >= PAUSE_START]
+    print(f"(10) الذهب والمعادن على 15m (من {PAUSE_START:%Y-%m-%d}) — {_fmt(rs)}\n      {rule_15m(rs, live1h, need=30)[1]}\n")
     print("⚠️ \"مرشّح\" = يُعرض على المالك. لا شيء يُطبَّق من هنا، والعتبات لا تُعدَّل بعد رؤية الأرقام.")
     db.close()
 
