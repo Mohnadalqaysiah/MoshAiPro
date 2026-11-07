@@ -4167,6 +4167,7 @@ _SHADOW_REASON_AR = {
     "SL_INSIDE_SPREAD_NOISE": "وقف داخل ضجيج السبريد",
     "FVG_FIX_NEW": "إصلاح FVG — إشارة كانت ستُضاف",
     "FVG_FIX_DROP": "إصلاح FVG — إشارة كانت ستختفي",
+    "TF15M_PAUSE": "15 دقيقة موقوف (عدا الذهب والمعادن)",
 }
 
 
