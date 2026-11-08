@@ -810,6 +810,9 @@ export default function Admin() {
     loadStats()
   }, [user])
 
+  // (2026-11-08) الفلتر بالخادم — تغيير الباقة يعيد الجلب
+  useEffect(() => { if (tab === 'users') loadUsers() }, [planFilter])
+
   useEffect(() => {
     if (tab === 'users')     loadUsers()
     if (tab === 'payments')  loadPayments()
@@ -880,7 +883,7 @@ export default function Admin() {
   // وجود 360+ مستخدم فعلياً. الإرسال الفعلي بالخادم (/email/send) سليم
   // ومستقل تماماً (يستعلم كل is_active بنفسه، لا يعتمد هالقائمة إطلاقاً)
   // — كان خللاً بالعرض فقط لا بالإرسال. usersTotal يعرض r.data.total الحقيقي.
-  const loadUsers    = async () => { setLoading(true); const r = await axios.get(`${API}/api/v1/admin/users?search=${search}&limit=200`); setUsers(r.data.users); setUsersTotal(r.data.total || r.data.users.length); setOnlineCount(r.data.online_count || 0); setLoading(false) }
+  const loadUsers    = async () => { setLoading(true); const r = await axios.get(`${API}/api/v1/admin/users?search=${search}&limit=200${planFilter !== 'all' ? `&plan=${planFilter}` : ''}`); setUsers(r.data.users); setUsersTotal(r.data.total || r.data.users.length); setOnlineCount(r.data.online_count || 0); setLoading(false) }
   const loadTeam     = async () => { setTeamLoading(true); try { const r = await axios.get(`${API}/api/v1/admin/team`); setTeam(r.data.admins) } catch (e) {} finally { setTeamLoading(false) } }
   const searchForPromotion = async () => {
     if (!teamSearch.trim()) { setTeamSearchResults([]); return }

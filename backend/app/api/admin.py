@@ -240,10 +240,14 @@ def list_users(
     skip: int = 0,
     limit: int = 50,
     search: str = Query(default=""),
+    plan: str = Query(default="", description="trial | weekly | monthly | banned — فارغ = الكل"),
     admin: User = Depends(get_admin_user),
     db: Session = Depends(get_db)
 ):
     q = db.query(User)
+    # (2026-11-08) الفلتر بالخادم: كان بالمتصفح على أحدث 200 فقط، فالمشتركون القدامى لا يظهرون ("الشهرية" = 0)
+    if plan in {p.value for p in PlanType}:
+        q = q.filter(User.plan == PlanType(plan))
     if search:
         q = q.filter(
             User.email.ilike(f"%{search}%") |
