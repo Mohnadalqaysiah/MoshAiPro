@@ -873,6 +873,8 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # (2026-11-09) قمع الربط: يُسجَّل من ضغط Start بلا رابط (bot_starts)، ونعرف هل هو مربوط —
     # كان المربوط يُقال له "لربط حسابك…"، وغير المسجّل لا يجد زراً لإنشاء حساب.
     seen = await _post("/api/v1/bot/start-seen", json={"telegram_id": str(user.id), "lang": _lg}, timeout=8)
+    if "linked" not in seen:   # الباك إند أقدم من البوت أو فشل التسجيل — لا نطلب الربط من مربوط
+        seen = await _get("/api/v1/bot/user-status", {"telegram_id": str(user.id)}, timeout=8)
     if seen.get("linked"):
         await update.message.reply_text(
             "🤖 *Qaffel AI* — your account is linked ✅\n\nSignals and alerts arrive right here. Use the menu below."
