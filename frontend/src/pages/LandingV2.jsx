@@ -16,11 +16,11 @@ import useTrialLimits from '../hooks/useTrialLimits'
 import PublicChatBot from '../components/PublicChatBot'
 import { DEMO, TICKER, BLOG, COND_KEYS, TXT, HERO_SCENE, RR } from '../components/landing/landingV2Text'
 import '../styles/landing-v2.css'
+import { SAVINGS_RE } from '../utils/planSavings'
 
 const HeroScene = lazy(() => import('../components/landing/HeroScene'))
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const TG_URL = 'https://t.me/Qaffelbot'
-const SAVINGS_RE = /توفير|وفّر|وفر |save|%/i
 
 const Check = ({ s = 14, w = 3 }) => (
   <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={w} aria-hidden="true"><path d="M5 12 L10 17 L19 7" /></svg>

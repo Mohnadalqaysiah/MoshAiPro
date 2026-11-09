@@ -53,9 +53,9 @@ export const translations = {
     pricingSub:   'ابدأ مجاناً ثم اشترك بما يناسبك',
     plans: [
       { name: 'تجريبي',  price: 'مجاني', period: '',        badge: null,         features: ['{n} تحليلات', '{m} رسالة شات', 'جميع الأسواق', 'ربط Telegram'],                                                                                          cta: 'ابدأ مجاناً',  href: '/register', highlight: false },
-      { name: 'أسبوعي', price: '$7',    period: '/ أسبوع', badge: null,         features: ['تحليلات ICT/SMC غير محدودة', 'شات AI غير محدود', 'جميع الأسواق', 'تنبيهات Telegram', 'تحليل متعدد الفريمات'],                                         cta: 'اشترك الآن', href: '/pricing',  highlight: false },
-      { name: 'شهري',   price: '$30',   period: '/ شهر',   badge: 'الأكثر توفيراً', features: ['كل مزايا الأسبوعي', 'أولوية الدعم الفني', 'تقارير أسبوعية مفصّلة', 'وصول مبكر للمزايا الجديدة', 'توفير 46% مقارنة بالأسبوعي'], cta: 'اشترك الآن', href: '/pricing',  highlight: true  },
-      { name: 'سنوي',   price: '$179.9', period: '/ سنة',  badge: 'أفضل قيمة',     features: ['كل مزايا الشهري', '✨ باني الاستراتيجيات: وصول كامل بلا حدود', 'أفضل قيمة — شهران مجاناً', 'سعر مثبَّت طوال السنة'], cta: 'اشترك الآن', href: '/pricing',  highlight: false },
+      { name: 'أسبوعي', price: '$15',   period: '/ أسبوع', badge: null,         features: ['تحليلات ICT/SMC غير محدودة', 'شات AI غير محدود', 'جميع الأسواق', 'تنبيهات Telegram', 'تحليل متعدد الفريمات'],                                         cta: 'اشترك الآن', href: '/pricing',  highlight: false },
+      { name: 'شهري',   price: '$30',   period: '/ شهر',   badge: 'الأكثر توفيراً', features: ['كل مزايا الأسبوعي', 'أولوية الدعم الفني', 'تقارير أسبوعية مفصّلة', 'وصول مبكر للمزايا الجديدة'], cta: 'اشترك الآن', href: '/pricing',  highlight: true  },
+      { name: 'سنوي',   price: '$179.9', period: '/ سنة',  badge: 'أفضل قيمة',     features: ['كل مزايا الشهري', '✨ باني الاستراتيجيات: وصول كامل بلا حدود', 'أفضل قيمة', 'سعر مثبَّت طوال السنة'], cta: 'اشترك الآن', href: '/pricing',  highlight: false },
     ],
     faqTitle: 'الأسئلة الشائعة',
     faq: [
@@ -145,9 +145,9 @@ export const translations = {
     pricingSub:   'Start free then subscribe to whatever suits you',
     plans: [
       { name: 'Trial',   price: 'Free',  period: '',        badge: null,          features: ['{n} Analyses', '{m} Chat Messages', 'All Markets', 'Telegram Link'],                                                                              cta: 'Start Free',    href: '/register', highlight: false },
-      { name: 'Weekly',  price: '$7',    period: '/ week',  badge: null,          features: ['Unlimited ICT/SMC Analyses', 'Unlimited AI Chat', 'All Markets', 'Telegram Alerts', 'Multi-Timeframe Analysis'],                               cta: 'Subscribe Now', href: '/pricing',  highlight: false },
-      { name: 'Monthly', price: '$30',   period: '/ month', badge: 'Best Value',  features: ['All Weekly Features', 'Priority Support', 'Detailed Weekly Reports', 'Early Access to New Features', 'Save 46% vs Weekly'], cta: 'Subscribe Now', href: '/pricing',  highlight: true  },
-      { name: 'Yearly',  price: '$179.9', period: '/ year', badge: 'Best Deal',   features: ['All Monthly Features', '✨ Strategy Builder: full unlimited access', 'Best value — two months free', 'Price locked for the year'], cta: 'Subscribe Now', href: '/pricing',  highlight: false },
+      { name: 'Weekly',  price: '$15',   period: '/ week',  badge: null,          features: ['Unlimited ICT/SMC Analyses', 'Unlimited AI Chat', 'All Markets', 'Telegram Alerts', 'Multi-Timeframe Analysis'],                               cta: 'Subscribe Now', href: '/pricing',  highlight: false },
+      { name: 'Monthly', price: '$30',   period: '/ month', badge: 'Best Value',  features: ['All Weekly Features', 'Priority Support', 'Detailed Weekly Reports', 'Early Access to New Features'], cta: 'Subscribe Now', href: '/pricing',  highlight: true  },
+      { name: 'Yearly',  price: '$179.9', period: '/ year', badge: 'Best Deal',   features: ['All Monthly Features', '✨ Strategy Builder: full unlimited access', 'Best value', 'Price locked for the year'], cta: 'Subscribe Now', href: '/pricing',  highlight: false },
     ],
     faqTitle: 'Frequently Asked Questions',
     faq: [

@@ -11,17 +11,18 @@ import useFAQSchema from '../hooks/useFAQSchema'
 import PayPalInlineCheckout from '../components/PayPalInlineCheckout'
 import SpaceremitCheckout from '../components/SpaceremitCheckout'
 import DiscountPopup from '../components/DiscountPopup'
+import { SAVINGS_RE, planSavings } from '../utils/planSavings'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 const PRICING_FAQ_AR = [
-  { q: 'ما الفرق بين الباقة الأسبوعية والشهرية؟', a: 'المزايا نفسها بالباقتين (تحليل ICT/SMC كامل، شات AI غير محدود، تنبيهات Telegram، كل الأزواج). الباقة الشهرية توفّر 46% مقارنة بالأسبوعي وتضيف أولوية دعم وتقارير أسبوعية مفصّلة ووصول مبكر للمزايا الجديدة.' },
+  { q: 'ما الفرق بين الباقة الأسبوعية والشهرية؟', a: 'المزايا نفسها بالباقتين (تحليل ICT/SMC كامل، شات AI غير محدود، تنبيهات Telegram، كل الأزواج). الباقة الشهرية أوفر من الدفع أسبوعياً، وتضيف أولوية دعم وتقارير أسبوعية مفصّلة ووصول مبكر للمزايا الجديدة.' },
   { q: 'هل الاشتراك يتجدد تلقائياً؟', a: 'لا. الاشتراك غير ملزم وينتهي تلقائياً في نهاية المدة (أسبوع أو شهر) بدون أي تجديد أو خصم إضافي — تقدر تشترك من جديد يدوياً وقتما تحب.' },
   { q: 'ما طرق الدفع المتاحة؟', a: 'ندفع حالياً عبر USDT (شبكة TRC20) مباشرة، والتسعير بالدولار الأمريكي. التفعيل فوري بعد التحقق من التحويل.' },
   { q: 'هل أقدر أرقّي من الباقة الأسبوعية للشهرية؟', a: 'نعم، تقدر تشترك بالباقة الشهرية في أي وقت حتى لو عندك اشتراك أسبوعي فعّال — الحساب نفسه يستمر بكل بياناتك وسجلّك.' },
 ]
 const PRICING_FAQ_EN = [
-  { q: 'What is the difference between the weekly and monthly plan?', a: 'Both plans include the same features (full ICT/SMC analysis, unlimited AI chat, Telegram alerts, all pairs). The monthly plan saves 46% versus weekly and adds priority support, detailed weekly reports, and early access to new features.' },
+  { q: 'What is the difference between the weekly and monthly plan?', a: 'Both plans include the same features (full ICT/SMC analysis, unlimited AI chat, Telegram alerts, all pairs). The monthly plan costs less than paying weekly and adds priority support, detailed weekly reports, and early access to new features.' },
   { q: 'Does the subscription auto-renew?', a: 'No. Subscriptions are non-binding and expire automatically at the end of the period (week or month) with no renewal or extra charge — you can subscribe again manually whenever you like.' },
   { q: 'What payment methods are available?', a: 'We currently accept USDT (TRC20 network) directly, priced in US dollars. Activation is instant once the transfer is verified.' },
   { q: 'Can I upgrade from weekly to monthly?', a: 'Yes, you can subscribe to the monthly plan at any time even with an active weekly subscription — your account continues with all your data and history intact.' },
@@ -123,7 +124,7 @@ const DEFAULT_PLANS = [
     key: 'weekly',
     nameAr: 'الأسبوعية',
     nameEn: 'Weekly',
-    price: 7,
+    price: 15,
     periodAr: '/ أسبوع',
     periodEn: '/ week',
     popular: false,
@@ -138,8 +139,8 @@ const DEFAULT_PLANS = [
     periodAr: '/ شهر',
     periodEn: '/ month',
     popular: true,
-    featuresAr: ['كل مزايا الأسبوعي', 'أولوية الدعم الفني', 'تقارير أسبوعية مفصّلة', 'وصول مبكر للمزايا الجديدة', 'توفير 46% مقارنة بالأسبوعي'],
-    featuresEn: ['All Weekly Features', 'Priority Support', 'Detailed Weekly Reports', 'Early Access to New Features', 'Save 46% vs Weekly'],
+    featuresAr: ['كل مزايا الأسبوعي', 'أولوية الدعم الفني', 'تقارير أسبوعية مفصّلة', 'وصول مبكر للمزايا الجديدة'],
+    featuresEn: ['All Weekly Features', 'Priority Support', 'Detailed Weekly Reports', 'Early Access to New Features'],
   },
   {
     key: 'yearly',
@@ -150,8 +151,8 @@ const DEFAULT_PLANS = [
     periodEn: '/ year',
     popular: false,
     bestValue: true,
-    featuresAr: ['كل مزايا الشهري', '✨ باني الاستراتيجيات: وصول كامل بلا حدود', 'أفضل قيمة — شهران مجاناً', 'سعر مثبَّت طوال السنة', 'أولوية الدعم الفني', 'وصول مبكر للمزايا الجديدة'],
-    featuresEn: ['All Monthly Features', '✨ Strategy Builder: full unlimited access', 'Best value — two months free', 'Price locked for the year', 'Priority Support', 'Early Access to New Features'],
+    featuresAr: ['كل مزايا الشهري', '✨ باني الاستراتيجيات: وصول كامل بلا حدود', 'أفضل قيمة', 'سعر مثبَّت طوال السنة', 'أولوية الدعم الفني', 'وصول مبكر للمزايا الجديدة'],
+    featuresEn: ['All Monthly Features', '✨ Strategy Builder: full unlimited access', 'Best value', 'Price locked for the year', 'Priority Support', 'Early Access to New Features'],
   },
 ]
 
@@ -160,13 +161,18 @@ export default function Pricing() {
   const { lang } = useLang()
   const isAr = lang === 'ar'
 
+  // (2026-11-09) السعر من الباقات الحية (لوحة الإدارة) — كان "$7" مكتوباً والأسبوعي 15$
+  const [PLANS, setPlans]         = useState(DEFAULT_PLANS)
+  const priceOf = k => PLANS.find(p => p.key === k)?.price ?? DEFAULT_PLANS.find(p => p.key === k)?.price
+  const pw = priceOf('weekly'), pm = priceOf('monthly')
+  const savings = planSavings({ weekly: pw, monthly: pm, yearly: priceOf('yearly') })
   useSEO({
     title: isAr
-      ? 'أسعار الاشتراك | Qaffel AI — $7 أسبوعي أو $30 شهري'
-      : 'Pricing | Qaffel AI — $7/week or $30/month',
+      ? `أسعار الاشتراك | Qaffel AI — $${pw} أسبوعي أو $${pm} شهري`
+      : `Pricing | Qaffel AI — $${pw}/week or $${pm}/month`,
     description: isAr
-      ? 'اشترك في Qaffel AI بـ $7/أسبوع أو $30/شهر. احصل على إشارات تداول ICT/SMC غير محدودة للذهب والبيتكوين والفوركس مباشرة على Telegram.'
-      : 'Subscribe to Qaffel AI for $7/week or $30/month. Get unlimited ICT/SMC trading signals for Gold, Bitcoin and Forex delivered straight to Telegram.',
+      ? `اشترك في Qaffel AI بـ $${pw}/أسبوع أو $${pm}/شهر. احصل على إشارات تداول ICT/SMC غير محدودة للذهب والبيتكوين والفوركس مباشرة على Telegram.`
+      : `Subscribe to Qaffel AI for $${pw}/week or $${pm}/month. Get unlimited ICT/SMC trading signals for Gold, Bitcoin and Forex delivered straight to Telegram.`,
   })
   useBreadcrumbSchema([
     { name: isAr ? 'الرئيسية' : 'Home', path: isAr ? '/' : '/en' },
@@ -183,7 +189,6 @@ export default function Pricing() {
   const [error, setError]         = useState('')
   const [copied, setCopied]       = useState(false)
   const [WALLET, setWallet]       = useState('')
-  const [PLANS, setPlans]         = useState(DEFAULT_PLANS)
   const [cardPaymentEnabled, setCardPaymentEnabled] = useState(false)
   const [spaceremitEnabled, setSpaceremitEnabled]     = useState(false)
   const [spaceremitPublicKey, setSpaceremitPublicKey] = useState('')
@@ -452,7 +457,12 @@ export default function Pricing() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 {PLANS.map(p => {
                   const isSelected = selected === p.key
-                  const features = isAr ? p.featuresAr : p.featuresEn
+                  const save = savings[p.key] || 0
+                  const features = [
+                    ...((isAr ? p.featuresAr : p.featuresEn) || []).filter(f => !SAVINGS_RE.test(f)),
+                    ...(save ? [isAr ? `توفير ${save}% مقارنة بال${p.key === 'yearly' ? 'شهري' : 'أسبوعي'}`
+                                     : `Save ${save}% vs ${p.key === 'yearly' ? 'monthly' : 'weekly'}`] : []),
+                  ]
                   const name = isAr ? p.nameAr : p.nameEn
                   const period = isAr ? p.periodAr : p.periodEn
                   return (
