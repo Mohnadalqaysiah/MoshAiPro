@@ -10,8 +10,12 @@
 """
 from datetime import date, datetime, timedelta, timezone
 
-# ("FOMC" أو "CPI"، وقت الخبر بتوقيت UTC). أمثلة الصيغة: ("FOMC", datetime(2026, 12, 9, 19, 0, tzinfo=timezone.utc))
-EXTRA_EVENTS: list = []
+# ("FOMC" أو "CPI"، وقت الخبر بتوقيت UTC). (2026-11-09) من المالك بالمواعيد الرسمية؛ نيويورك شتاءً = UTC−5.
+EXTRA_EVENTS: list = [
+    ("CPI",  datetime(2026, 11, 10, 13, 30, tzinfo=timezone.utc)),   # تضخم أكتوبر — 08:30 نيويورك
+    ("FOMC", datetime(2026, 12, 9, 19, 0, tzinfo=timezone.utc)),     # قرار الفائدة — 14:00 نيويورك
+    ("CPI",  datetime(2026, 12, 10, 13, 30, tzinfo=timezone.utc)),   # تضخم نوفمبر — 08:30 نيويورك
+]
 
 
 def _nth_sunday(year: int, month: int, n: int) -> date:
