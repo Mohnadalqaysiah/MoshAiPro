@@ -20,6 +20,7 @@
     "firebase": "^12.19.0",
     "lightweight-charts": "^4.2.3",
     "lucide-react": "^0.303.0",
+    "qrcode.react": "^4.2.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.20.1",

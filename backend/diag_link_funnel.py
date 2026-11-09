@@ -50,7 +50,10 @@ def funnel(users, now):
         linked = [u for u in us if u.telegram_id]
         same_day = [u for u in linked if _aw(u.telegram_linked_at) and
                     (_aw(u.telegram_linked_at) - _aw(u.created_at)) <= timedelta(days=1)]
-        rows.append((wk, len(us), len(linked), len(same_day)))
+        g = [u for u in us if (u.auth_provider or "") == "google"]
+        p = [u for u in us if (u.auth_provider or "") != "google"]
+        rows.append((wk, len(us), len(linked), len(same_day),
+                     (len(g), sum(1 for u in g if u.telegram_id)), (len(p), sum(1 for u in p if u.telegram_id))))
 
     lags = defaultdict(int)
     for u in users:
@@ -79,19 +82,41 @@ def funnel(users, now):
     return rows, dict(lags), prof(un), prof(li)
 
 
+def bot_starts(db, now, days=(7, 30)):
+    """(2026-11-09) من ضغط Start بلا رابط وهو بلا حساب مربوط: كم هم، وكم ربط منهم لاحقاً."""
+    try:
+        from app.models.bot_start import BotStart
+        rows = db.query(BotStart).all()
+    except Exception:
+        db.rollback()
+        return None
+    linked_ids = {t for (t,) in db.query(User.telegram_id).filter(User.telegram_id.isnot(None)).all()}
+    out = {}
+    for d in days:
+        since = now - timedelta(days=d)
+        new = [r for r in rows if not r.had_account and _aw(r.first_at) and _aw(r.first_at) >= since]
+        out[d] = (len(new), sum(1 for r in new if r.telegram_id in linked_ids))
+    return out
+
+
 def main():
     db = SessionLocal()
     now = datetime.now(timezone.utc)
     try:
         users = db.query(User).filter(User.role != UserRole.ADMIN).all()
         rows, lags, un, li = funnel(users, now)
+        starts = bot_starts(db, now)
+        rem = [u for u in users if getattr(u, "telegram_link_reminded_at", None)]
+        rem_linked = sum(1 for u in rem if u.telegram_id and _aw(u.telegram_linked_at)
+                         and _aw(u.telegram_linked_at) > _aw(u.telegram_link_reminded_at))
     finally:
         db.close()
 
     print(f"قمع ربط تيليجرام — آخر {WEEKS} أسابيع، كل فوج عمره ≥ {MIN_AGE} أيام\n")
-    print("أسبوع التسجيل   سجّلوا  ربطوا   النسبة   ربطوا بنفس اليوم")
-    for wk, n, l, sd in rows:
-        print(f"{wk}     {n:5}   {l:5}   {_pct(l, n)}   {sd:4} ({_pct(sd, l).strip()} من المرتبطين)")
+    print("أسبوع التسجيل   سجّلوا  ربطوا   النسبة   بنفس اليوم        Google          كلمة سر")
+    for wk, n, l, sd, (gn, gl), (pn, pl) in rows:
+        print(f"{wk}     {n:5}   {l:5}   {_pct(l, n)}   {sd:4} ({_pct(sd, l).strip()})"
+              f"   {gl:3}/{gn:<3} {_pct(gl, gn)}   {pl:3}/{pn:<3} {_pct(pl, pn)}")
     tn = sum(r[1] for r in rows)
     tl = sum(r[2] for r in rows)
     print(f"{'المجموع':<14} {tn:5}   {tl:5}   {_pct(tl, tn)}\n")
@@ -109,6 +134,15 @@ def main():
     print(f"  {'العدد':<30} {un['n']:>12} {li['n']:>12}")
     for k, lab in labels:
         print(f"  {lab:<30} {un[k]:>5} {_pct(un[k], un['n'])} {li[k]:>5} {_pct(li[k], li['n'])}")
+
+    print("\nمن ضغط Start بالبوت بلا حساب مربوط (يُسجَّل منذ 2026-11-09):")
+    if starts is None:
+        print("  الجدول غير موجود بعد (انشر الباك إند أولاً).")
+    else:
+        for d, (n, l) in starts.items():
+            print(f"  آخر {d:>2} يوماً: {n:4} شخصاً، ربط منهم لاحقاً {l:4} ({_pct(l, n).strip()})")
+    print(f"\nتذكير الربط بعد يوم من التسجيل: شمل {len(rem)}، ربط منهم بعده {rem_linked} "
+          f"({_pct(rem_linked, len(rem)).strip()})")
 
     print("\nقراءة:")
     print(f"  • غير مرتبط وعاد خلال 7 أيام = {un['seen7']} — هؤلاء من يمكن إقناعهم الآن (تذكير/QR داخل المنصة).")

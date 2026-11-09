@@ -76,6 +76,8 @@ def init_db() -> None:
                     # (2026-10-19) من حظر البوت — services/telegram_reach.py. أولاً: نموذج User يقرأه
                     # كل استعلام مستخدم (الدخول نفسه) — لا يُعلَّق على نجاح خطوة قبله
                     conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_blocked_at TIMESTAMPTZ"))
+                    # (2026-11-09) تذكير ربط تيليجرام — services/link_reminder.py (نموذج User يقرأه كل استعلام مستخدم)
+                    conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS telegram_link_reminded_at TIMESTAMPTZ"))
                     # (2026-10-24) وسم الصفقات المخفَّفة — services/relax_policy.py (نموذج Signal يقرأه كل استعلام إشارات)
                     conn.execute(text("ALTER TABLE signals ADD COLUMN IF NOT EXISTS relaxed_rule VARCHAR(40)"))
                     # (2026-10-30) سلّم الأهداف — services/tp_ladder.py (نموذج Signal يقرأهما كل استعلام إشارات)

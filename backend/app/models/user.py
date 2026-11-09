@@ -129,6 +129,8 @@ class User(Base):
     # (2026-10-19) حظر البوت: تيليجرام رد "bot was blocked" ← يُستبعد من الإرسال الجماعي حتى يتفاعل أو يمر أسبوع
     # (services/telegram_reach.py). None = يصله الإرسال.
     telegram_blocked_at = Column(DateTime(timezone=True), nullable=True)
+    # (2026-11-09) تذكير ربط تيليجرام بعد التسجيل بيوم (services/link_reminder.py) — مرة واحدة فقط.
+    telegram_link_reminded_at = Column(DateTime(timezone=True), nullable=True)
 
     # Affiliate
     affiliate_code    = Column(String(8), unique=True, nullable=True, index=True)

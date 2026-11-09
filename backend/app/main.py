@@ -186,6 +186,10 @@ async def lifespan(app: FastAPI):
     checkout_reminder_task = asyncio.create_task(checkout_reminder_checker())
     logger.success("✅ Checkout reminder checker started")
 
+    # (2026-11-09) تذكير ربط تيليجرام بعد التسجيل بيوم — مرة واحدة (services/link_reminder.py)
+    from app.services.link_reminder import link_reminder_checker
+    link_reminder_task = asyncio.create_task(link_reminder_checker())
+
     # بدء بثّ إشعارات المتصفح (Web Push) — قناة موازية لتيليجرام
     from app.services.web_push_broadcaster import web_push_broadcaster
     web_push_task = asyncio.create_task(web_push_broadcaster())
@@ -207,6 +211,7 @@ async def lifespan(app: FastAPI):
     scanner_task.cancel()
     integrity_task.cancel()
     checkout_reminder_task.cancel()
+    link_reminder_task.cancel()
     web_push_task.cancel()
 
     # Shutdown

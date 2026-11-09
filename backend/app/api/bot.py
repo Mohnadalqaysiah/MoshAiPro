@@ -1564,6 +1564,13 @@ def bot_channel_open_claim(_: bool = Depends(verify_bot), db: Session = Depends(
     return {"open": channel_open.claim(db)}
 
 
+@router.post("/start-seen")
+def bot_start_seen(data: dict = Body(...), _: bool = Depends(verify_bot), db: Session = Depends(get_db)):
+    """(2026-11-09) ضغط Start بلا رابط ربط — يُسجَّل لقمع الربط، ويرجع هل الحساب مربوط ليختار البوت رسالته."""
+    from app.services.bot_starts import record_start
+    return record_start(db, data.get("telegram_id", ""), data.get("lang", ""))
+
+
 @router.post("/mark-broadcast/{signal_id}")
 def bot_mark_broadcast(
     signal_id: int,
