@@ -565,12 +565,13 @@ def _record_manual_payment(db: Session, user: User, plan: str, amount_usd: Optio
     """يسجّل منح الاشتراك اليدوي كصف Payment (provider=manual, معتمد فوراً) عشان يظهر
     بتبويب المدفوعات — نفس مبدأ باقي مزودي الدفع (usdt/stripe/spaceremit)، بس بدون
     تحقق تلقائي لأنه الأدمن هو يلي أكّد استلام الدفعة يدوياً."""
-    from app.api.subscription import PLANS
+    from app.api.subscription import _resolve_plans
     try:
         plan_enum = PaymentPlan(plan)
     except ValueError:
         plan_enum = PaymentPlan.MONTHLY
-    amount = amount_usd if amount_usd is not None else PLANS.get(plan, {}).get("price_usd", 0)
+    # (2026-11-09) السعر الحي من لوحة الإدارة — كان PLANS الثابت (الأسبوعي 7$ والفعلي 15$) فيُسجَّل المبلغ أقل بتقارير الإيراد
+    amount = amount_usd if amount_usd is not None else _resolve_plans(db).get(plan, {}).get("price_usd", 0)
     note = f"منح يدوي بواسطة {admin.email}" + (f" — {reason}" if reason else "")
     db.add(Payment(
         user_id=user.id,

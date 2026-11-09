@@ -64,10 +64,11 @@
     },
     {
       "id": "prices",
-      "title": "أسعار الخطط (أسبوعي 7$ / شهري 30$ / سنوي 179.9$)",
-      "note": "المصدر: PLANS في subscription.py (والإعدادات تتجاوزه من لوحة الإدارة). يتكرر بالواجهة والسكيما والمساعد والإدارة.",
+      "title": "أسعار الخطط (أسبوعي 15$ / شهري 30$ / سنوي 179.9$)",
+      "note": "المصدر الحقيقي: لوحة الإدارة (plan_<key>_price) عبر _resolve_plans. PLANS في subscription.py احتياط فقط. الواجهة تقرأ /subscription/plans؛ الثابت الباقي: السكيما بـindex.html وDEFAULT_PLANS والاحتياطات. نسب التوفير تُحسب حية (utils/planSavings.js) — لا تكتب \"توفير X%\" أو \"شهران مجاناً\" نصاً.",
       "patterns": [
-        "179\\.9|price_usd|_FALLBACK_PLANS|PLAN_PRICE|defaultPrice|\\$7/week|\\$30/month|price: '\\$|\"price\": \""
+        "179\\.9|price_usd|_FALLBACK_PLANS|PLAN_PRICE|defaultPrice|\\$7/week|\\$30/month|price: '\\$|\"price\": \"",
+        "planSavings|SAVINGS_RE"
       ],
       "files": [
         "backend/app/api/admin.py",
@@ -79,7 +80,8 @@
         "frontend/src/contexts/LangContext.jsx",
         "frontend/src/pages/Admin.jsx",
         "frontend/src/pages/LandingV2.jsx",
-        "frontend/src/pages/Pricing.jsx"
+        "frontend/src/pages/Pricing.jsx",
+        "frontend/src/utils/planSavings.js"
       ]
     },
     {

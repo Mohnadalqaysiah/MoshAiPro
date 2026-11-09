@@ -188,9 +188,18 @@ function UserModal({ user: u, onClose, onUpdate }) {
   const [renewPlan, setRenewPlan]       = useState('monthly')
   const [renewReason, setRenewReason]   = useState('')
   const [renewNotify, setRenewNotify]   = useState(true)
-  const PLAN_PRICE = { weekly: 7, monthly: 30 }
-  const [renewAmount, setRenewAmount]   = useState(PLAN_PRICE.monthly)
+  // (2026-11-09) المبلغ المقترح من الأسعار الحية (لوحة الإدارة) — كان ثابتاً 7$ للأسبوعي والفعلي 15$
+  const [PLAN_PRICE, setPlanPrice]      = useState({ weekly: 15, monthly: 30 })
+  const [renewAmount, setRenewAmount]   = useState(30)
   const [renewAmountTouched, setRenewAmountTouched] = useState(false)
+  useEffect(() => {
+    axios.get(`${API}/api/v1/subscription/plans`).then(r => {
+      const pl = r.data?.plans || {}
+      const live = { weekly: Number(pl.weekly?.price_usd) || 15, monthly: Number(pl.monthly?.price_usd) || 30 }
+      setPlanPrice(live)
+      if (!renewAmountTouched) setRenewAmount(live[renewPlan] ?? 0)
+    }).catch(() => {})
+  }, [])  // eslint-disable-line react-hooks/exhaustive-deps
   const setRenewPlanAndPrice = (val) => {
     setRenewPlan(val)
     if (!renewAmountTouched) setRenewAmount(PLAN_PRICE[val] ?? 0)
@@ -3847,7 +3856,7 @@ export default function Admin() {
                   </h2>
                   <p className="text-xs text-gray-400">اتركها فارغة لاستخدام القيم الافتراضية · التغييرات تظهر فوراً في صفحات الأسعار</p>
                   {[
-                    { key: 'weekly',  label: 'الأسبوعية', color: 'blue',   defaultPrice: '7',   defaultDays: '7'   },
+                    { key: 'weekly',  label: 'الأسبوعية', color: 'blue',   defaultPrice: '15',  defaultDays: '7'   },
                     { key: 'monthly', label: 'الشهرية',   color: 'purple', defaultPrice: '30',  defaultDays: '30'  },
                     { key: 'yearly',  label: 'السنوية',   color: 'amber',  defaultPrice: '179.9', defaultDays: '365' },
                   ].map(({ key, label, color, defaultPrice, defaultDays }) => (

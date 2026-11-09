@@ -30,7 +30,7 @@ PLANS = {
     "weekly": {
         "name":        "الأسبوعية",
         "name_en":     "Weekly",
-        "price_usd":   7,
+        "price_usd":   15,   # (2026-11-09) المالك: الأسبوعي 15$ (لوحة الإدارة تتجاوزه)
         "days":        7,
         "features":    ["تحليل ICT/SMC كامل", "شات AI غير محدود", "تنبيهات Telegram", "جميع الأزواج", "تحليل متعدد الفريمات", "باني الاستراتيجيات: استراتيجية واحدة على رمز واحد"],
         "features_en": ["Full ICT/SMC Analysis", "Unlimited AI Chat", "Telegram Alerts", "All Pairs", "Multi-Timeframe Analysis", "Strategy Builder: one strategy on one symbol"],
@@ -40,8 +40,8 @@ PLANS = {
         "name_en":     "Monthly",
         "price_usd":   30,
         "days":        30,
-        "features":    ["كل مزايا الأسبوعي", "أولوية الدعم الفني", "تقارير أسبوعية مفصّلة", "وصول مبكر للمزايا الجديدة", "توفير 46%"],
-        "features_en": ["All Weekly Features", "Priority Support", "Detailed Weekly Reports", "Early Access to New Features", "Save 46%"],
+        "features":    ["كل مزايا الأسبوعي", "أولوية الدعم الفني", "تقارير أسبوعية مفصّلة", "وصول مبكر للمزايا الجديدة"],
+        "features_en": ["All Weekly Features", "Priority Support", "Detailed Weekly Reports", "Early Access to New Features"],
         "popular":     True,
     },
     "yearly": {
@@ -49,8 +49,8 @@ PLANS = {
         "name_en":     "Yearly",
         "price_usd":   179.9,
         "days":        365,
-        "features":    ["كل مزايا الشهري", "✨ باني الاستراتيجيات: وصول كامل بلا حدود", "أفضل قيمة — شهران مجاناً", "سعر مثبَّت طوال السنة", "أولوية الدعم الفني", "وصول مبكر للمزايا الجديدة"],
-        "features_en": ["All Monthly Features", "✨ Strategy Builder: full unlimited access", "Best value — two months free", "Price locked for the year", "Priority Support", "Early Access to New Features"],
+        "features":    ["كل مزايا الشهري", "✨ باني الاستراتيجيات: وصول كامل بلا حدود", "أفضل قيمة", "سعر مثبَّت طوال السنة", "أولوية الدعم الفني", "وصول مبكر للمزايا الجديدة"],
+        "features_en": ["All Monthly Features", "✨ Strategy Builder: full unlimited access", "Best value", "Price locked for the year", "Priority Support", "Early Access to New Features"],
         "best_value":  True,
     },
 }

@@ -28,7 +28,7 @@ from loguru import logger
 # الحدّ الأدنى الافتراضي حين تتعذّر قراءة الإعدادات — يطابق PLANS بـ
 # app/api/subscription.py. لا يُستخدم إلا كشبكة أمان.
 _FALLBACK_PLANS = {
-    "weekly":  ("الأسبوعية", 7),
+    "weekly":  ("الأسبوعية", 15),
     "monthly": ("الشهرية", 30),
     "yearly":  ("السنوية", 179.9),
 }
