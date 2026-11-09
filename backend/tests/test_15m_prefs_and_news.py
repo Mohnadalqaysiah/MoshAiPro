@@ -50,6 +50,15 @@ def test_dated_extra_events_fire_once_in_window():
     assert EC.due(datetime(2026, 11, 17, 12, 30, tzinfo=UTC)) == []
 
 
+def test_dashboard_calendar_matches_bot_dates():
+    import re
+    src = (ROOT.parent / "frontend" / "src" / "components" / "EconomicCalendar.jsx").read_text(encoding="utf-8")
+    js = sorted(re.findall(r"\['(CPI|FOMC)',\s*'([0-9T:\-]+)Z'\]", src))
+    py = sorted((k, t.strftime("%Y-%m-%dT%H:%M:%S")) for k, t in EC.EXTRA_EVENTS)
+    assert js == py, (js, py)                                                           # حدّث القائمتين معاً
+    assert "WEEKLY_EVENTS" not in src                                                   # لا قائمة أسبوعية ثابتة
+
+
 def test_bot_loops_respect_mute_and_use_calendar():
     src = (ROOT.parent / "telegram-bot" / "bot.py").read_text(encoding="utf-8")
     for fn in ("market_session_notifier", "session_pre_alert", "economic_news_alert"):
