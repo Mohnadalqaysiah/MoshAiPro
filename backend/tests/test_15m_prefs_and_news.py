@@ -42,13 +42,12 @@ def test_news_only_on_real_days_not_every_week():
     assert EC.due(datetime(2026, 11, 6, 13, 0, tzinfo=UTC)) == []                     # بعد نافذة الساعة
 
 
-def test_dated_extra_event_fires_once_in_window():
-    EC.EXTRA_EVENTS.append(("FOMC", datetime(2026, 12, 9, 19, 0, tzinfo=UTC)))
-    try:
-        assert EC.due(datetime(2026, 12, 9, 18, 0, tzinfo=UTC))[0][0] == "FOMC"
-        assert EC.due(datetime(2026, 12, 16, 18, 0, tzinfo=UTC)) == []
-    finally:
-        EC.EXTRA_EVENTS.clear()
+def test_dated_extra_events_fire_once_in_window():
+    assert [k for k, _ in EC.due(datetime(2026, 11, 10, 12, 30, tzinfo=UTC))] == ["CPI"]   # 08:30 نيويورك − ساعة
+    assert EC.due(datetime(2026, 12, 9, 18, 0, tzinfo=UTC))[0][0] == "FOMC"
+    assert [k for k, _ in EC.due(datetime(2026, 12, 10, 12, 30, tzinfo=UTC))] == ["CPI"]
+    assert EC.due(datetime(2026, 12, 16, 18, 0, tzinfo=UTC)) == []                         # لا تكرار أسبوعي
+    assert EC.due(datetime(2026, 11, 17, 12, 30, tzinfo=UTC)) == []
 
 
 def test_bot_loops_respect_mute_and_use_calendar():
