@@ -988,7 +988,8 @@ def update_preferences(
 ):
     user.notify_watchlist      = data.notify_watchlist
     # ["all"] أو [] = كل الفريمات؛ تُحفظ فارغة (نفس اتفاقية notify_watchlist)
-    user.notify_timeframes     = [t for t in (data.notify_timeframes or []) if t != "all"]
+    from app.services.timeframe_pause import allowed_pref_timeframes
+    user.notify_timeframes     = allowed_pref_timeframes(data.notify_timeframes)   # (2026-11-09) بلا 15m وهو موقوف
     user.notify_timeframe      = data.notify_timeframes[0] if data.notify_timeframes and data.notify_timeframes != ['all'] else data.notify_timeframe
     user.notify_min_confidence = data.notify_min_confidence
     user.notifications_enabled = data.notifications_enabled

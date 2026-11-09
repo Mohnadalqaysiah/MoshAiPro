@@ -6,6 +6,7 @@ Qaffel AI Bot v2 — Professional Edition
 import os, asyncio, aiohttp
 from datetime import datetime, timezone, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand, WebAppInfo, Poll
+import econ_calendar   # (2026-11-09) مواعيد الأخبار الحقيقية
 import messages as M   # (2026-10-19) نصوص الرسائل الموحّدة (HTML) — راجع messages.py
 import review_flow as RF   # (2026-10-24) إرسال رأي من البوت بنص وصورة/فيديو
 import messages_en as ME   # (2026-10-24) نفس الرسائل بالإنجليزية لمن اختار الإنجليزية بحسابه
@@ -476,10 +477,10 @@ def kb_watchlist(uid: int):
 
 def kb_tf_select(back: str = "m_watchlist", lg: str = "ar"):
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton(tf_label("15m", lg), callback_data="wltf_15m"),
-         InlineKeyboardButton(tf_label("1h", lg),  callback_data="wltf_1h")],
-        [InlineKeyboardButton(tf_label("4h", lg),  callback_data="wltf_4h"),
-         InlineKeyboardButton(tf_label("1day", lg), callback_data="wltf_1day")],
+        # (2026-11-07→) 15m موقوف (timeframe_pause.py) فلا يُعرض؛ يعود الزر حين يُعاد الفريم
+        [InlineKeyboardButton(tf_label("1h", lg),  callback_data="wltf_1h"),
+         InlineKeyboardButton(tf_label("4h", lg),  callback_data="wltf_4h")],
+        [InlineKeyboardButton(tf_label("1day", lg), callback_data="wltf_1day")],
         [back_btn(lg, back)],
     ])
 
@@ -1801,7 +1802,7 @@ async def cmd_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "⚙️ *Customize the signals you receive*\n\n"
             "• Pick only the pairs you trade\n"
-            "• Choose timeframes: 15 min, 1 hour, 4 hours\n"
+            "• Choose timeframes: 1 hour, 4 hours\n"
             "• Set a minimum signal confidence\n"
             "• Or pause notifications\n\n"
             "You can also mute any pair straight from the 🔕 button under a signal.",
@@ -1812,7 +1813,7 @@ async def cmd_settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "⚙️ *خصّص الإشارات التي تصلك*\n\n"
         "• اختر الأزواج التي تتداولها فقط\n"
-        "• اختر الفريمات: 15 دقيقة، ساعة، 4 ساعات\n"
+        "• اختر الفريمات: ساعة، 4 ساعات\n"
         "• حدّد أقل نسبة ثقة للإشارة\n"
         "• أو أوقف الإشعارات مؤقتاً\n\n"
         "وتقدر توقف أي زوج مباشرة من زر 🔕 تحت الإشارة.",
@@ -2202,7 +2203,7 @@ async def market_session_notifier(app: Application):
                 sent = 0
                 for s in subs:
                     tid = s.get("telegram_id")
-                    if not tid:
+                    if not tid or s.get("notifications_enabled") is False:   # (2026-11-09) احترام الإيقاف
                         continue
                     try:
                         _m = (_OPEN_MSG_EN if current_open else _CLOSE_MSG_EN) if (s.get("lang") or "ar") == "en" else msg
@@ -2282,7 +2283,7 @@ async def session_pre_alert(app: Application):
                         sent = 0
                         for s in subs:
                             tid = s.get("telegram_id")
-                            if not tid:
+                            if not tid or s.get("notifications_enabled") is False:   # (2026-11-09) احترام الإيقاف
                                 continue
                             try:
                                 await app.bot.send_message(
@@ -2424,15 +2425,12 @@ async def economic_news_alert(app: Application):
             now   = datetime.now(timezone.utc)
             today = now.strftime("%Y-%m-%d")
 
-            for ev in _ECON_EVENTS:
-                if now.weekday() != ev["weekday"]:
-                    continue
-                ev_dt  = now.replace(hour=ev["utc_hour"], minute=ev["utc_min"], second=0, microsecond=0)
-                delta  = (ev_dt - now).total_seconds()
-                key    = (today, ev["type"])
+            # (2026-11-09) بالمواعيد الحقيقية — كانت كل أسبوع بيوم الأسبوع وحده (econ_calendar.py)
+            for ev_type, _ev_t in econ_calendar.due(now):
+                ev  = next(e for e in _ECON_EVENTS if e["type"] == ev_type)
+                key = (today, ev["type"])
 
-                # 55–65 دقيقة قبل الخبر ولم نُرسل اليوم
-                if 55 * 60 <= delta <= 65 * 60 and key not in _NEWS_NOTIFIED:
+                if key not in _NEWS_NOTIFIED:
                     _NEWS_NOTIFIED.add(key)
 
                     subs_data = await _get("/api/v1/bot/active-subscribers")
@@ -2440,7 +2438,7 @@ async def economic_news_alert(app: Application):
                     sent = 0
                     for s in subs:
                         tid = s.get("telegram_id")
-                        if not tid:
+                        if not tid or s.get("notifications_enabled") is False:   # (2026-11-09) احترام الإيقاف
                             continue
                         try:
                             await app.bot.send_message(

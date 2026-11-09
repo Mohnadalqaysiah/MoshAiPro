@@ -24,6 +24,12 @@ def enabled() -> bool:
     return os.getenv("PAUSE_15M", "1").strip().lower() not in ("0", "false", "no", "off")
 
 
+def allowed_pref_timeframes(tfs) -> list:
+    """(2026-11-09، طلب المالك) تفضيلات الفريمات لا تقبل 15m وهو موقوف — من اختاره صار "كل الفريمات" (migrate_15m_prefs.py)."""
+    tfs = [t for t in (tfs or []) if t != "all"]
+    return [t for t in tfs if t != PAUSED_TIMEFRAME] if enabled() else tfs
+
+
 def tf_paused(symbol: str, timeframe: str) -> bool:
     """True = لا صف Signal لهذه الإشارة، بل صف ظل. الاستثناء بالرمز وحده (weekly_markets: الذهب والمعادن)، فلا يحتاج قاعدة البيانات."""
     if not enabled() or timeframe != PAUSED_TIMEFRAME or not symbol:

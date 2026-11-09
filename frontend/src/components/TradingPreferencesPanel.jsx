@@ -10,7 +10,8 @@ const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 // (2026-10-12) الفريمات التي يُصدر عليها المحرك إشارات فعلاً (SCAN_TIMEFRAMES
 // بالبوت). 30m و1day كانا ظاهرين ولا تصدر عليهما إشارات — من اختارهما وحدهما
 // لن تصله أي إشارة.
-const TIMEFRAMES = ['15m', '1h', '4h']
+// (2026-11-09) 15m موقوف (timeframe_pause.py) فلا يُعرض للاختيار؛ يُعاد إلى القائمة حين يُعاد الفريم (migrate_15m_prefs.py --restore)
+const TIMEFRAMES = ['1h', '4h']
 const TF_LABEL = { '15m': { ar: '15 دقيقة', en: '15 min' }, '1h': { ar: 'ساعة', en: '1 hour' }, '4h': { ar: '4 ساعات', en: '4 hours' } }
 
 // (2026-10-09) مستخرج من Profile.jsx — كان "إدارة رأس المال + حاسبة اللوت"

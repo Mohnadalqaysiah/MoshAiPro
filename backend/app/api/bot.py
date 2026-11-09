@@ -2025,8 +2025,9 @@ def bot_save_watchlist(
     user = _get_linked_user(telegram_id, db)
     if not user:
         raise HTTPException(404, "User not linked")
+    from app.services.timeframe_pause import allowed_pref_timeframes
     user.notify_watchlist       = watchlist
-    user.notify_timeframe       = timeframe
+    user.notify_timeframe       = timeframe if allowed_pref_timeframes([timeframe]) else "1h"   # (2026-11-09) بلا 15m وهو موقوف
     user.notify_min_confidence  = min_confidence
     user.notifications_enabled  = notifications_enabled
     db.commit()
