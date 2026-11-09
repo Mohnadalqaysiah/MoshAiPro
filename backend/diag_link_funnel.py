@@ -91,6 +91,9 @@ def bot_starts(db, now, days=(7, 30)):
         db.rollback()
         return None
     linked_ids = {t for (t,) in db.query(User.telegram_id).filter(User.telegram_id.isnot(None)).all()}
+    admin_ids = {t for (t,) in db.query(User.telegram_id).filter(User.role == UserRole.ADMIN,
+                                                               User.telegram_id.isnot(None)).all()}
+    rows = [r for r in rows if r.telegram_id not in admin_ids]        # تجارب المالك (فك الربط ثم Start) لا تُحسب
     out = {}
     for d in days:
         since = now - timedelta(days=d)
