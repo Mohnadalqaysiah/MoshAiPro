@@ -35,6 +35,9 @@ SCAN_SYMBOLS = [
     "BNBUSD", "SOLUSD", "XRPUSD", "ADAUSD", "DOGEUSD",
     "AMD", "NFLX",
 ]
+# (2026-11-09) عملات التجربة بالظل (crypto_registry) — تُفحص بنفس الدورة، وإشاراتها للظل فقط حتى قرار المالك
+from app.services.crypto_registry import trial_symbols as _trial_symbols  # noqa: E402
+SCAN_SYMBOLS += [s for s in _trial_symbols() if s not in SCAN_SYMBOLS]
 SCAN_TIMEFRAMES = ["15m", "1h", "4h"]   # 20 × 3 = 60 analyze_market() calls/cycle
 
 SYSTEM_SCANNER_EMAIL = "system-scanner@qaffel.internal"

@@ -97,6 +97,11 @@ YFINANCE_MAP = {
     "NVDA":  "NVDA",  "AMZN": "AMZN",  "GOOGL":"GOOGL",
     "META":  "META",  "NFLX": "NFLX",  "AMD":  "AMD",
 }
+# (2026-11-09) عملات التجربة بالظل — services/crypto_registry.py (مصدرها الوحيد)
+from app.services import crypto_registry as _crypto_registry  # noqa: E402
+for _s, _t in _crypto_registry.yf_map('trial').items():
+    YFINANCE_MAP.setdefault(_s, _t)
+
 
 TWELVEDATA_MAP = {
     "XAUUSD": "XAU/USD",
@@ -808,7 +813,7 @@ class SmartDataProvider:
         _CRYPTO = {
             "BTCUSD","ETHUSD","BNBUSD","SOLUSD","XRPUSD","ADAUSD","DOTUSD",
             "LTCUSD","LINKUSD","MATICUSD","AVAXUSD","ATOMUSD","UNIUSD","TRXUSD",
-        }
+        } | set(_crypto_registry.symbols())   # (2026-11-09) كانت DOGEUSD غائبة فتُعامل كفوركس (مغلقة ليلة الجمعة)
         sym_up = symbol.upper()
         if sym_up in _CRYPTO:
             return True  # كريبتو 24/7 — كل الباقي يتبع جدول الفوركس

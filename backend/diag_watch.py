@@ -18,6 +18,9 @@
 (2026-11-07، المالك: "بختار ب") القاعدة (2) تحققت ← إيقاف 15m عدا الذهب والمعادن من 08/11 (timeframe_pause.py)، فالقاعدة (8) صارت ضمنه
   (9)  إعادة 15m الموقوف: ≥ 40 فرصة ظل مستقلة محسومة (TF15M_PAUSE)، مرشّح للإعادة إن متوسطها ≥ +0.1R **و** ≥ نصف متوسط 1h الحي بنفس الفترة
   (10) الذهب والمعادن على 15m (الاستثناء، حي من 08/11): ≥ 30 قراراً جديداً، مرشّح للإيقاف أيضاً بنفس شرط (2): < نصف 1h و< +0.1R
+(2026-11-09، المالك: "نبقيها لمدة اسبوع ومن ثم ندرسها ونقررها") عملات جديدة بالظل من 10/11 (crypto_registry.py):
+  (11) لكل عملة على 1h و4h (فرص ظل مستقلة محسومة، NEW_COIN_TRIAL): ≥ 10 ← مرشّحة للفتح إن المتوسط ≥ +0.1R و≥ نصف الكريبتو
+       الحي 1h/4h بنفس الفترة؛ سالبة ← لا تُفتح؛ بينهما أو أقل من 10 ← تمديد أسبوع. القراءة الأولى ~17/11. المالك يقرر.
 
     docker exec moshapi_backend python diag_watch.py
 """
@@ -59,6 +62,19 @@ def rule_restore(shadow, live1h, need=40):
     if b is None:
         return "waiting", "⏳ لا قرارات 1h حية للمقارنة"
     return ("candidate", "🟢 مرشّح للإعادة — يُعرض على المالك") if a >= 0.1 and a >= b / 2 else ("ok", "⛔ لم تتحقق — الإيقاف باقٍ")
+
+
+def rule_new_coin(rs, live_crypto, need=10):
+    """(11) عملة بالتجربة تُفتح للعملاء إن بلغت need ومتوسطها ≥ +0.1R و≥ نصف الكريبتو الحي (نفس شرط (9))؛
+    سالبة = لا تُفتح؛ وبينهما تمديد أسبوع. المالك يقرر في كل الحالات."""
+    if len(rs) < need:
+        return "waiting", f"⏳ {len(rs)}/{need} — لا حكم، تمديد أسبوع"
+    a, b = _avg(rs), _avg(live_crypto)
+    if a < 0:
+        return "reject", "⛔ سالبة — لا تُفتح"
+    if a >= 0.1 and (b is None or a >= b / 2):
+        return "candidate", "🟢 مرشّحة للفتح — تُعرض على المالك"
+    return "extend", "🟡 موجبة دون الشرط — تمديد أسبوع"
 
 
 def late_session(t) -> bool:
@@ -163,6 +179,18 @@ def main():
     print(f"(9) 15m الموقوف بالظل (من {PAUSE_START:%Y-%m-%d}) — {_fmt(sh)} | 1h الحي: {_fmt(live1h)}\n      {rule_restore(sh, live1h)[1]}\n")
     rs = [d["r"] for d in decs if d["timeframe"] == "15m" and d["group"] in EXEMPT_GROUPS and d["created_at"] >= PAUSE_START]
     print(f"(10) الذهب والمعادن على 15m (من {PAUSE_START:%Y-%m-%d}) — {_fmt(rs)}\n      {rule_15m(rs, live1h, need=30)[1]}\n")
+    from app.services import crypto_registry as CR
+    live_c = [d["r"] for d in decs if d["group"] == "crypto" and d["timeframe"] in ("1h", "4h")
+              and d["created_at"] >= CR.TRIAL_START]
+    rows = st.filter_scope(db.query(ShadowSignal).filter(ShadowSignal.reason == CR.REASON,
+                                                         ShadowSignal.created_at >= CR.TRIAL_START).all(), "clean")
+    reps = [s for s in st.representatives(rows) if s.outcome in st.DECIDED and s.r_multiple is not None]
+    print(f"(11) العملات الجديدة بالظل (من {CR.TRIAL_START:%Y-%m-%d}، 1h و4h) | الكريبتو الحي 1h/4h: {_fmt(live_c)}")
+    for sym in CR.symbols("trial"):
+        rs = [s.r_multiple for s in reps if (s.market or "").upper() == sym and s.timeframe in ("1h", "4h")]
+        print(f"      {sym:<8} {_fmt(rs)}\n               {rule_new_coin(rs, live_c)[1]}")
+    rs15 = [s.r_multiple for s in reps if s.timeframe == "15m"]
+    print(f"      (15m للاطلاع فقط — الكريبتو على 15m موقوف: {_fmt(rs15)})\n")
     print("⚠️ \"مرشّح\" = يُعرض على المالك. لا شيء يُطبَّق من هنا، والعتبات لا تُعدَّل بعد رؤية الأرقام.")
     db.close()
 

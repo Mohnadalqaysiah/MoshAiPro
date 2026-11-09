@@ -21,6 +21,11 @@ TYPICAL_SPREAD = {
     "AMD": 0.05, "NFLX": 0.10,
     "USDMYR": 0.0100,
 }
+# (2026-11-09) عملات التجربة بالظل — services/crypto_registry.py (مصدرها الوحيد)
+from app.services import crypto_registry as _crypto_registry  # noqa: E402
+for _s, _v in _crypto_registry.spreads('trial').items():
+    TYPICAL_SPREAD.setdefault(_s, _v)
+
 
 # أسهم الخليج: التيك 0.01-0.05 حسب السعر — السبريد ≈ تيكين
 GULF_STOCKS = {"ARAMCO", "RAJHI", "SABIC", "STC", "SNB", "MAADEN", "ALMARAI", "BAHRI",

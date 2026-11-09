@@ -35,6 +35,7 @@
         "backend/diag_watch.py",
         "backend/migrate_15m_prefs.py",
         "backend/tests/test_15m_prefs_and_news.py",
+        "backend/tests/test_new_coins.py",
         "backend/tests/test_timeframe_pause.py",
         "frontend/src/components/TradingPreferencesPanel.jsx",
         "telegram-bot/bot.py"
@@ -279,6 +280,7 @@
         "backend/diag_review.py",
         "backend/diag_shadow_signals.py",
         "backend/tests/test_fvg_shadow.py",
+        "backend/tests/test_new_coins.py",
         "backend/tests/test_shadow_levels.py",
         "backend/tests/test_shadow_stats.py",
         "backend/tests/test_timeframe_pause.py"
@@ -378,6 +380,43 @@
         "telegram-bot/bot.py"
       ],
       "guard": "test_link_funnel"
+    },
+    {
+      "id": "crypto_symbols",
+      "title": "قوائم رموز الكريبتو (الحية والتجريبية)",
+      "note": "المصدر: backend/app/services/crypto_registry.py. العملة التجريبية سطر واحد هناك. فتحها للعملاء (live) يمر أيضاً على: صف MarketConfig، وCATEGORIES وأسماء الرموز بـtelegram-bot/bot.py، وTradingViewChart.jsx، وchat_agent وnews_context، وmarket_scanner.",
+      "patterns": [
+        "crypto_registry|SOLUSD|AVAXUSD"
+      ],
+      "files": [
+        "backend/analyze_levers_confound.py",
+        "backend/analyze_min_rr_simulation.py",
+        "backend/analyze_sl_bucket_confound.py",
+        "backend/analyze_strategy_quality.py",
+        "backend/analyze_symbol_pnl.py",
+        "backend/app/api/admin.py",
+        "backend/app/api/bot.py",
+        "backend/app/api/games.py",
+        "backend/app/api/signals.py",
+        "backend/app/services/ai_engine_v5.py",
+        "backend/app/services/chat_agent.py",
+        "backend/app/services/crypto_registry.py",
+        "backend/app/services/market_scanner.py",
+        "backend/app/services/news_context.py",
+        "backend/app/services/smart_data.py",
+        "backend/app/services/spread_table.py",
+        "backend/app/services/tv_price_feed.py",
+        "backend/app/services/weekend_policy.py",
+        "backend/diag_trend.py",
+        "backend/diag_watch.py",
+        "backend/diagnose_signal_drought.py",
+        "backend/migrate_add_expanded_markets.py",
+        "backend/tests/test_new_coins.py",
+        "frontend/src/components/TradingViewChart.jsx",
+        "frontend/src/components/landing/landingV2Text.js",
+        "telegram-bot/bot.py"
+      ],
+      "guard": "test_new_coins"
     }
   ]
 }
