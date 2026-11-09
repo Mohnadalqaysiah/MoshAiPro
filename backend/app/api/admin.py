@@ -18,6 +18,7 @@ from app.services.telegram_reach import reachable as _reachable
 from app.models.user import User, UserRole, PlanType
 from app.models.payment import Payment, PaymentStatus, PaymentPlan
 from app.models.market_config import MarketConfig
+from app.services.crypto_registry import symbols as _crypto_registry_symbols
 from app.models.site_settings import SiteSettings
 from app.models.affiliate import Affiliate, AffiliateReferral, TIER1_RATE, TIER2_RATE, TIER2_THRESHOLD
 from app.models.signal import Signal, SignalStatus
@@ -1598,7 +1599,7 @@ def _calc_points(market: str, price_diff: float, entry_price: float = None) -> f
         # DOGE)، وموحّد المقياس تقريباً مع باقي الفئات (فوركس/JPY).
         "BTCUSD", "ETHUSD", "BNBUSD", "SOLUSD", "XRPUSD", "ADAUSD", "DOGEUSD",
         "DOTUSD", "LTCUSD", "LINKUSD", "MATICUSD", "AVAXUSD", "ATOMUSD", "UNIUSD", "TRXUSD",
-    ):
+    ) or market in _crypto_registry_symbols():   # (2026-11-09) crypto_registry
         if entry_price and entry_price > 0:
             return round((price_diff / entry_price) * 10000, 2)   # % move × 10000 (basis points)
         return round(price_diff * 1.0, 2)    # fallback إذا entry_price غير متوفر (لا يجب يصير بالمسارات الحالية)
@@ -4173,6 +4174,7 @@ _SHADOW_REASON_AR = {
     "FVG_FIX_NEW": "إصلاح FVG — إشارة كانت ستُضاف",
     "FVG_FIX_DROP": "إصلاح FVG — إشارة كانت ستختفي",
     "TF15M_PAUSE": "15 دقيقة موقوف (عدا الذهب والمعادن)",
+    "NEW_COIN_TRIAL": "عملة جديدة — تجربة بالظل",
 }
 
 

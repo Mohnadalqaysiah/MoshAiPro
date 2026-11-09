@@ -271,12 +271,20 @@ async def bot_analyze(
                 # (2026-10-12) كريبتو بالعطلة → جدول الظل فقط، لا صف Signal (لا بث ولا إحصائية)
                 from app.services.weekend_policy import crypto_weekend_paused, record_shadow
                 from app.services.timeframe_pause import tf_paused, REASON as TF_PAUSE_REASON
+                from app.services.crypto_registry import is_trial as coin_trial, REASON as COIN_TRIAL_REASON
                 from app.services import market_fingerprint
                 if crypto_weekend_paused(db, symbol):
                     _shid = record_shadow(db, source="analyze" if telegram_id else "scanner", symbol=symbol,
                                           timeframe=timeframe, signal_type=rec, entry=entry, sl=sl, tp1=tp1,
                                           tp2=tp3 or tp2, confidence=conf, rr=rr, expires_at=expires_at,
                                           user_id=signal_user_id)
+                    market_fingerprint.schedule(analysis, symbol, timeframe, rec, shadow_id=_shid)
+                elif coin_trial(symbol):
+                    # (2026-11-09، طلب المالك) عملة جديدة بالتجربة → ظل فقط أسبوعاً ثم قرار — crypto_registry.py
+                    _shid = record_shadow(db, source="analyze" if telegram_id else "scanner", symbol=symbol,
+                                          timeframe=timeframe, signal_type=rec, entry=entry, sl=sl, tp1=tp1,
+                                          tp2=tp3 or tp2, confidence=conf, rr=rr, expires_at=expires_at,
+                                          user_id=signal_user_id, reason=COIN_TRIAL_REASON)
                     market_fingerprint.schedule(analysis, symbol, timeframe, rec, shadow_id=_shid)
                 elif tf_paused(symbol, timeframe):
                     # (2026-11-07، قرار المالك) 15m عدا الذهب والمعادن → ظل فقط — timeframe_pause.py
@@ -1954,6 +1962,15 @@ def bot_save_alert_signal(
                       expires_at=datetime.now(timezone.utc) + timedelta(hours=tf_hours.get(timeframe, 24)),
                       user_id=user.id)
         return {"saved": False, "reason": "crypto_weekend_pause"}
+
+    # (2026-11-09، طلب المالك) عملة جديدة بالتجربة → لا تنبيه مراقبة؛ ظل فقط — crypto_registry.py
+    from app.services.crypto_registry import is_trial as coin_trial, REASON as COIN_TRIAL_REASON
+    if coin_trial(symbol):
+        record_shadow(db, source="watch", symbol=symbol, timeframe=timeframe, signal_type=signal_type,
+                      entry=entry, sl=sl, tp1=tp1, tp2=tp3 or tp2, confidence=confidence, rr=rr,
+                      expires_at=datetime.now(timezone.utc) + timedelta(hours=tf_hours.get(timeframe, 24)),
+                      user_id=user.id, reason=COIN_TRIAL_REASON)
+        return {"saved": False, "reason": "new_coin_trial"}
 
     # (2026-11-07، قرار المالك) 15m عدا الذهب والمعادن → لا تنبيه مراقبة؛ ظل للقياس فقط — timeframe_pause.py
     from app.services.timeframe_pause import tf_paused, REASON as TF_PAUSE_REASON

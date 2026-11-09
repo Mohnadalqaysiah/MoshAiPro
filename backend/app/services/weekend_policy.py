@@ -36,6 +36,9 @@ def _crypto_symbols(db) -> set:
         syms = {r[0].upper() for r in rows} or _FALLBACK_CRYPTO
     except Exception:
         syms = _FALLBACK_CRYPTO
+    # (2026-11-09) عملات التجربة بلا صف MarketConfig — تتوقف بالعطلة كباقي الكريبتو (crypto_registry)
+    from app.services.crypto_registry import symbols as _registry_symbols
+    syms = set(syms) | set(_registry_symbols())
     _cache.update(at=time.time(), symbols=syms)
     return syms
 

@@ -51,6 +51,11 @@ TV_SYMBOL_MAP: dict[str, str] = {
     # المستخدم أصلاً لـUSOIL/NAS100/US30/SP500.
     "NATGAS":  "NYMEX:NG1!",
 }
+# (2026-11-09) عملات التجربة بالظل — services/crypto_registry.py (مصدرها الوحيد)
+from app.services import crypto_registry as _crypto_registry  # noqa: E402
+for _s, _t in _crypto_registry.tv_map('trial').items():
+    TV_SYMBOL_MAP.setdefault(_s, _t)
+
 
 _TV_REVERSE_MAP: dict[str, str] = {v: k for k, v in TV_SYMBOL_MAP.items()}
 
