@@ -303,6 +303,39 @@ def affiliate_commission_email_body(
     """ + _FOOTER
 
 
+def telegram_link_reminder_email_body(name: str, link: str, lang: str = "ar") -> str:
+    """(2026-11-09) تذكير ربط تيليجرام بعد التسجيل بيوم — services/link_reminder.py. مرة واحدة."""
+    first = name.split()[0] if name else ""
+    if lang == "en":
+        return _HEADER + f"""
+    <div dir="ltr" style="text-align:left;">
+    <h2 style="color:#fff;margin-top:0;">One step left: link Telegram 📲</h2>
+    <p style="color:#cbd5e1;">Hi <strong style="color:#93c5fd;">{first or "there"}</strong>,</p>
+    <p style="color:#94a3b8;line-height:1.7;">
+      Your account is ready, but it isn't linked to Telegram yet, so signals and news alerts
+      can't reach you the moment they're issued. Linking takes one tap: the button opens our bot,
+      then press <strong style="color:#fff;">Start</strong>.
+    </p>
+    {_btn("Link Telegram", link, "#229ED9")}
+    <p style="color:#64748b;font-size:13px;">
+      This link is personal to your account, don't share it. You can unlink any time from Settings.
+    </p>
+    </div>
+    """ + _FOOTER
+    return _HEADER + f"""
+    <h2 style="color:#fff;margin-top:0;">خطوة أخيرة: اربط تيليجرام 📲</h2>
+    <p style="color:#cbd5e1;">أهلاً <strong style="color:#93c5fd;">{first or "بك"}</strong>،</p>
+    <p style="color:#94a3b8;line-height:1.7;">
+      حسابك جاهز، لكنه غير مربوط بتيليجرام بعد، فلا تصلك الإشارات وتحذيرات الأخبار لحظة صدورها.
+      الربط بضغطة واحدة: الزر يفتح البوت، ثم اضغط <strong style="color:#fff;">Start</strong>.
+    </p>
+    {_btn("ربط تيليجرام", link, "#229ED9")}
+    <p style="color:#64748b;font-size:13px;text-align:center;">
+      الرابط خاص بحسابك فلا تشاركه. يمكنك إلغاء الربط متى شئت من الإعدادات.
+    </p>
+    """ + _FOOTER
+
+
 def contact_email_body(name: str, sender_email: str, subject: str, message: str) -> str:
     return f"""
     <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;

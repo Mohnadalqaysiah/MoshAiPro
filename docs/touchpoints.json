@@ -98,7 +98,8 @@
         "frontend/src/components/UpgradeModal.jsx",
         "frontend/src/data/blogPosts.js",
         "frontend/src/pages/Admin.jsx",
-        "frontend/src/pages/Terms.jsx"
+        "frontend/src/pages/Terms.jsx",
+        "telegram-bot/bot.py"
       ]
     },
     {
@@ -205,6 +206,7 @@
         "backend/app/config.py",
         "backend/migrate_v3.py",
         "backend/tests/test_bot_reviews.py",
+        "backend/tests/test_link_funnel.py",
         "backend/tests/test_telegram_messages.py",
         "frontend/index.html",
         "frontend/src/components/AppShell.jsx",
@@ -237,12 +239,14 @@
         "backend/app/api/auth.py",
         "backend/app/api/bot.py",
         "backend/app/models/user.py",
+        "backend/app/services/link_reminder.py",
         "backend/app/services/web_push_broadcaster.py",
         "backend/diag_delivery.py",
         "backend/diag_prefs.py",
         "backend/diagnose_broadcast_reach.py",
         "backend/tests/test_15m_prefs_and_news.py",
         "backend/tests/test_delivery_diag.py",
+        "backend/tests/test_link_funnel.py",
         "backend/tests/test_telegram_messages.py",
         "frontend/src/components/TradingPreferencesPanel.jsx",
         "frontend/src/components/WatchlistQuickCard.jsx",
@@ -347,6 +351,31 @@
         "frontend/src/pages/TrackRecord.jsx"
       ],
       "guard": "frontend build (prerender-blog.mjs)"
+    },
+    {
+      "id": "link_entry_points",
+      "title": "مداخل ربط تيليجرام (رابط الربط، شاشة الخطوة الأخيرة، زر البوت، التذكير)",
+      "note": "كل مكان يعطي المستخدم رابط الربط أو يدعوه له. تغيير اسم البوت أو شكل الرابط أو شروط الدعوة يمر عليها كلها. القياس: diag_link_funnel.py.",
+      "patterns": [
+        "telegram-link|tg_link_step|link=telegram|start-seen|telegram_link_reminded_at|TelegramLinkStep"
+      ],
+      "files": [
+        "backend/app/api/auth.py",
+        "backend/app/api/bot.py",
+        "backend/app/database.py",
+        "backend/app/models/user.py",
+        "backend/app/services/link_reminder.py",
+        "backend/diag_link_funnel.py",
+        "backend/tests/test_link_funnel.py",
+        "frontend/src/components/AppShell.jsx",
+        "frontend/src/components/EmailVerifyModal.jsx",
+        "frontend/src/components/OnboardingTour.jsx",
+        "frontend/src/components/TelegramLinkBanner.jsx",
+        "frontend/src/components/TelegramLinkStep.jsx",
+        "frontend/src/pages/Dashboard.jsx",
+        "telegram-bot/bot.py"
+      ],
+      "guard": "test_link_funnel"
     }
   ]
 }

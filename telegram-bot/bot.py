@@ -870,26 +870,35 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await ensure_lang(update.effective_user)
     _lg = lang_for(update.effective_user)
-    if _lg == "en":
+    # (2026-11-09) قمع الربط: يُسجَّل من ضغط Start بلا رابط (bot_starts)، ونعرف هل هو مربوط —
+    # كان المربوط يُقال له "لربط حسابك…"، وغير المسجّل لا يجد زراً لإنشاء حساب.
+    seen = await _post("/api/v1/bot/start-seen", json={"telegram_id": str(user.id), "lang": _lg}, timeout=8)
+    if seen.get("linked"):
         await update.message.reply_text(
-            "🤖 *Qaffel AI*\n\n"
-            "Smart trading platform powered by ICT/SMC and AI\n\n"
-            "🔗 *To link your account:*\n"
-            "Open the platform → tap «Link Telegram» → open the link\n\n"
-            "Once linked, signals and alerts reach you here automatically 🚀",
+            "🤖 *Qaffel AI* — your account is linked ✅\n\nSignals and alerts arrive right here. Use the menu below."
+            if _lg == "en" else
+            "🤖 *Qaffel AI* — حسابك مربوط ✅\n\nالإشارات والتنبيهات تصلك هنا. استخدم القائمة بالأسفل.",
             parse_mode="Markdown",
-            reply_markup=kb_main("en"),
+            reply_markup=kb_main("en") if _lg == "en" else kb_main(),
         )
         return
-    await update.message.reply_text(
-        "🤖 *Qaffel AI*\n\n"
-        "منصة تداول ذكية بتقنية ICT/SMC والذكاء الاصطناعي\n\n"
-        "🔗 *لربط حسابك:*\n"
-        "افتح المنصة ← اضغط «ربط تيليجرام» ← افتح الرابط\n\n"
-        "بعد الربط ستصلك الإشارات والتنبيهات تلقائياً 🚀",
-        parse_mode="Markdown",
-        reply_markup=kb_main(),
-    )
+    reg_url = f"{FRONTEND_URL}/register?utm_source=telegram_bot&utm_medium=start"
+    link_url = f"{FRONTEND_URL}/dashboard?link=telegram"
+    if _lg == "en":
+        text = ("🤖 *Qaffel AI*\n\n"
+                "ICT/SMC trading signals, delivered right here.\n\n"
+                "*No account yet?* Create one for free (a free trial week, no card), then tap «Link Telegram». It takes a minute.\n"
+                "*Already have one?* Open the platform → «Link Telegram».")
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("🆕 Create free account", url=reg_url)],
+                                   [InlineKeyboardButton("🔗 I have an account — link", url=link_url)]])
+    else:
+        text = ("🤖 *Qaffel AI*\n\n"
+                "إشارات تداول بتحليل ICT/SMC تصلك هنا مباشرة.\n\n"
+                "*ليس لديك حساب؟* أنشئه مجاناً (أسبوع تجربة بدون بطاقة) ثم اضغط «ربط تيليجرام» — دقيقة واحدة.\n"
+                "*لديك حساب؟* افتح المنصة ← «ربط تيليجرام».")
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("🆕 إنشاء حساب مجاني", url=reg_url)],
+                                   [InlineKeyboardButton("🔗 لدي حساب — ربط", url=link_url)]])
+    await update.message.reply_text(text, parse_mode="Markdown", reply_markup=kb)
 
 
 async def cmd_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):

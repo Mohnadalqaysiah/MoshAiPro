@@ -24,6 +24,7 @@ const OnboardingTour     = lazy(() => import('./OnboardingTour'))
 const UpgradeModal       = lazy(() => import('./UpgradeModal'))
 import { subscriptionCta } from '../utils/subscriptionCta'
 const EmailVerifyModal   = lazy(() => import('./EmailVerifyModal'))
+const TelegramLinkStep   = lazy(() => import('./TelegramLinkStep'))
 const FeatureSurveyModal = lazy(() => import('./FeatureSurveyModal'))
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -490,6 +491,25 @@ export default function AppShell({ children }) {
     try { sessionStorage.setItem('verify_modal_seen', '1') } catch { /* noop */ }
   }
 
+  // (2026-11-09) "خطوة أخيرة: اربط تيليجرام" — للجديد (≤ 48 ساعة) غير المربوط بعد تفعيل بريده، مرة لكل حساب،
+  // أو عند ?link=telegram (زر البوت وتذكير الإشعار). 95% ممن يربطون يربطون خلال ساعة من التسجيل.
+  const [linkStepOpen, setLinkStepOpen] = useState(false)
+  const linkStepKey = user ? `tg_link_step_${user.id}` : ''
+  useEffect(() => {
+    if (!user || user.telegram_linked || needsVerify) return
+    const forced = new URLSearchParams(location.search).get('link') === 'telegram'
+    const ageH = user.created_at ? (Date.now() - new Date(user.created_at).getTime()) / 36e5 : Infinity
+    let seen = false
+    try { seen = !!localStorage.getItem(linkStepKey) } catch { /* noop */ }
+    if (!forced && (seen || ageH > 48)) return
+    const t = setTimeout(() => setLinkStepOpen(true), 700)
+    return () => clearTimeout(t)
+  }, [user?.id, user?.telegram_linked, needsVerify, location.search])  // eslint-disable-line react-hooks/exhaustive-deps
+  const closeLinkStep = () => {
+    setLinkStepOpen(false)
+    try { localStorage.setItem(linkStepKey, '1') } catch { /* noop */ }
+  }
+
   // (2026-10-05) رصد التثبيت الفعلي كـPWA على الشاشة الرئيسية — للأدمن،
   // عشان "مين ثبّت التطبيق" يصير سؤال له جواب حقيقي بدل تخمين. appinstalled
   // لا تدعمها iOS Safari إطلاقاً، فالإشارة الموثوقة الوحيدة اللي تغطي
@@ -557,14 +577,15 @@ export default function AppShell({ children }) {
             <div className="xl:hidden"><TrialBanner /></div>
             <div className="xl:hidden"><TelegramLinkBanner /></div>
             <PushNotificationBanner />
-            <OnboardingTour />
+            {!linkStepOpen && <OnboardingTour />}
             {verifyOpen && <EmailVerifyModal open onClose={closeVerify} />}
             {upgradeOpen && !verifyOpen && <UpgradeModal open onClose={closeUpgrade} reason="trial_expired" />}
-            {surveyOpen && !verifyOpen && !upgradeOpen && (
+            {linkStepOpen && !verifyOpen && !upgradeOpen && <TelegramLinkStep onClose={closeLinkStep} />}
+            {surveyOpen && !verifyOpen && !upgradeOpen && !linkStepOpen && (
               <FeatureSurveyModal onDone={() => { setSurveyOpen(false); setSurveyDone(true) }} />
             )}
-            {!verifyOpen && !upgradeOpen && !surveyOpen && <SpecialAnnouncementPopup />}
-            {!verifyOpen && !upgradeOpen && !surveyOpen && <DiscountPopup />}
+            {!verifyOpen && !upgradeOpen && !surveyOpen && !linkStepOpen && <SpecialAnnouncementPopup />}
+            {!verifyOpen && !upgradeOpen && !surveyOpen && !linkStepOpen && <DiscountPopup />}
           </Suspense>
 
           <main className="flex-1 min-w-0 px-3 sm:px-5 py-4 sm:py-5 max-w-[1180px] w-full mx-auto">
