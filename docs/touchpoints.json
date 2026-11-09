@@ -1,0 +1,352 @@
+{
+  "_readme": "خريطة المواضع (2026-11-09). قبل تعديل أي معلومة هنا: python scripts/touchpoints.py <id> وعدّل كل الأسطر الظاهرة. الفحص يُشغَّل باختبار backend/tests/test_touchpoints.py. أضف معلومة جديدة هنا عند أول تكرار لها في مكانين.",
+  "facts": [
+    {
+      "id": "econ_dates",
+      "title": "مواعيد الأخبار الاقتصادية (CPI / FOMC / NFP)",
+      "note": "قائمتان مؤرّختان متطابقتان: EXTRA_EVENTS بالبوت وDATED_EVENTS بالداشبورد. أي موعد جديد يُضاف بالمكانين.",
+      "patterns": [
+        "EXTRA_EVENTS|DATED_EVENTS|econ_calendar"
+      ],
+      "files": [
+        "backend/tests/test_15m_prefs_and_news.py",
+        "frontend/src/components/EconomicCalendar.jsx",
+        "telegram-bot/bot.py",
+        "telegram-bot/econ_calendar.py"
+      ],
+      "guard": "test_15m_prefs_and_news.test_dashboard_calendar_matches_bot_dates",
+      "docs": [
+        "DECISIONS.md (09/11 لماذا يحظر المستخدمون البوت)"
+      ]
+    },
+    {
+      "id": "tf15m_pause",
+      "title": "إيقاف فريم 15 دقيقة (عدا الذهب والمعادن)",
+      "note": "عند الإرجاع: PAUSE_15M=0، ثم migrate_15m_prefs.py --restore، ثم أعد 15m إلى TIMEFRAMES بلوحة التفضيلات وزر wltf_15m بـkb_tf_select بالبوت ونص /settings.",
+      "patterns": [
+        "timeframe_pause|tf_paused|PAUSE_15M|TF15M_PAUSE|tf15m|wltf_15m|allowed_pref_timeframes"
+      ],
+      "files": [
+        "backend/app/api/admin.py",
+        "backend/app/api/auth.py",
+        "backend/app/api/bot.py",
+        "backend/app/api/signals.py",
+        "backend/app/services/timeframe_pause.py",
+        "backend/diag_watch.py",
+        "backend/migrate_15m_prefs.py",
+        "backend/tests/test_15m_prefs_and_news.py",
+        "backend/tests/test_timeframe_pause.py",
+        "frontend/src/components/TradingPreferencesPanel.jsx",
+        "telegram-bot/bot.py"
+      ],
+      "guard": "test_timeframe_pause, test_15m_prefs_and_news",
+      "docs": [
+        "DECISIONS.md (إيقاف 15m)"
+      ]
+    },
+    {
+      "id": "timeframe_lists",
+      "title": "قوائم الفريمات المعروضة للمستخدم",
+      "note": "كل قائمة فريمات ثابتة بالواجهة والبوت. إضافة فريم أو إيقافه يمر عليها كلها.",
+      "patterns": [
+        "TIMEFRAMES ?= ?\\["
+      ],
+      "files": [
+        "backend/app/services/market_scanner.py",
+        "backend/diagnose_gold_silence.py",
+        "frontend/src/components/ChatBot.jsx",
+        "frontend/src/components/ConfluenceModal.jsx",
+        "frontend/src/components/TradingPreferencesPanel.jsx",
+        "frontend/src/pages/Signals.jsx",
+        "frontend/src/pages/StrategyBuilder.jsx",
+        "telegram-bot/bot.py"
+      ]
+    },
+    {
+      "id": "prices",
+      "title": "أسعار الخطط (أسبوعي 7$ / شهري 30$ / سنوي 179.9$)",
+      "note": "المصدر: PLANS في subscription.py (والإعدادات تتجاوزه من لوحة الإدارة). يتكرر بالواجهة والسكيما والمساعد والإدارة.",
+      "patterns": [
+        "179\\.9|price_usd|_FALLBACK_PLANS|PLAN_PRICE|defaultPrice|\\$7/week|\\$30/month|price: '\\$|\"price\": \""
+      ],
+      "files": [
+        "backend/app/api/admin.py",
+        "backend/app/api/subscription.py",
+        "backend/app/services/coupon_service.py",
+        "backend/app/services/platform_kb.py",
+        "frontend/index.html",
+        "frontend/src/components/UpgradeModal.jsx",
+        "frontend/src/contexts/LangContext.jsx",
+        "frontend/src/pages/Admin.jsx",
+        "frontend/src/pages/LandingV2.jsx",
+        "frontend/src/pages/Pricing.jsx"
+      ]
+    },
+    {
+      "id": "trial_length",
+      "title": "مدة التجربة المجانية (أسبوع)",
+      "note": "TRIAL_DAYS بالإعدادات وauth، وtimedelta(days=7) مكتوبة يدوياً بالإدارة والبوت، ونصوص 'أسبوع مجاني' بالمقالات والسكيما.",
+      "patterns": [
+        "TRIAL_DAYS|trial_ends_at *= *now \\+ timedelta|أسبوع مجاني|أسبوع تجربة|free week|full one-week|full week|week free|one free week"
+      ],
+      "files": [
+        "backend/app/api/admin.py",
+        "backend/app/api/auth.py",
+        "backend/app/api/bot.py",
+        "backend/app/config.py",
+        "frontend/index.html",
+        "frontend/src/components/UpgradeModal.jsx",
+        "frontend/src/data/blogPosts.js",
+        "frontend/src/pages/Admin.jsx",
+        "frontend/src/pages/Terms.jsx"
+      ]
+    },
+    {
+      "id": "trial_limits",
+      "title": "حدود التجربة (عدد التحليلات والمحادثات)",
+      "note": "تُقرأ من SiteSettings (trial_analysis_limit / trial_chat_limit) — لا تكتب رقماً ثابتاً بنص تسويقي.",
+      "patterns": [
+        "trial_analysis_limit|trial_chat_limit|trial_analyses_left|trial_chat_left|useTrialLimits"
+      ],
+      "files": [
+        "backend/app/api/admin.py",
+        "backend/app/api/affiliate.py",
+        "backend/app/api/auth.py",
+        "backend/app/api/bot.py",
+        "backend/app/api/chat.py",
+        "backend/app/api/signals.py",
+        "backend/app/api/subscription.py",
+        "backend/app/models/user.py",
+        "backend/app/services/auth_service.py",
+        "backend/create_admin.py",
+        "backend/migrate_v4.py",
+        "frontend/src/components/AppShell.jsx",
+        "frontend/src/components/TrialBanner.jsx",
+        "frontend/src/components/landing/landingV2Text.js",
+        "frontend/src/hooks/useTrialLimits.js",
+        "frontend/src/pages/Admin.jsx",
+        "frontend/src/pages/BlogList.jsx",
+        "frontend/src/pages/BlogPost.jsx",
+        "frontend/src/pages/LandingV2.jsx",
+        "frontend/src/pages/Register.jsx",
+        "telegram-bot/bot.py"
+      ]
+    },
+    {
+      "id": "targets_count",
+      "title": "عدد الأهداف بالنصوص (حتى ثلاثة أهداف)",
+      "note": "منذ 11-01 السلّم ثلاثة أهداف. 'هدفين' صحيحة فقط باستراتيجيات المستخدم (ict-strategy-automation) والنصيحة العامة.",
+      "patterns": [
+        "هدفين|two targets|three targets|ثلاثة أهداف|ثلاث أهداف|3 أهداف|حتى ثلاث|up to three|3 targets"
+      ],
+      "files": [
+        "backend/app/api/track_record.py",
+        "backend/app/services/platform_kb.py",
+        "backend/app/services/tp_ladder.py",
+        "backend/fix_legacy_tp3.py",
+        "backend/tests/test_tp_ladder.py",
+        "frontend/src/components/UpgradeModal.jsx",
+        "frontend/src/data/blogPosts.js",
+        "frontend/src/pages/SaudiLanding.jsx",
+        "frontend/src/pages/TrackRecord.jsx",
+        "frontend/src/pages/UAELanding.jsx"
+      ],
+      "docs": [
+        "memory: seo-session-rules-and-state"
+      ]
+    },
+    {
+      "id": "tp_ladder",
+      "title": "سلّم الأهداف (1R / 2.5R / بعيد)",
+      "note": "المنطق في tp_ladder.py ومفتاح ladder_tp3. تغيير المسافات يمر على المحرك والرسائل والنتائج.",
+      "patterns": [
+        "ladder_tp3|tp_ladder|2\\.5 ?R"
+      ],
+      "files": [
+        "backend/app/api/bot.py",
+        "backend/app/api/signals.py",
+        "backend/app/database.py",
+        "backend/app/models/signal.py",
+        "backend/app/services/ai_engine_v5.py",
+        "backend/app/services/tp_ladder.py",
+        "backend/app/services/weekly_markets.py",
+        "backend/diag_target_profile.py",
+        "backend/tests/test_fvg_shadow.py",
+        "backend/tests/test_target_ladder.py",
+        "backend/tests/test_telegram_messages.py",
+        "backend/tests/test_tp_ladder.py",
+        "frontend/src/pages/Dashboard.jsx",
+        "frontend/src/pages/TrackRecord.jsx",
+        "telegram-bot/bot.py",
+        "telegram-bot/messages.py"
+      ]
+    },
+    {
+      "id": "rating",
+      "title": "التقييم المنشور (4.9 / 412)",
+      "note": "قرار المالك إبقاؤه (10-17). أي تغيير بالعدد يمر على السكيما وأي نص يذكره.",
+      "patterns": [
+        "aggregateRating|ratingCount|reviewCount|4\\.9/5"
+      ],
+      "files": [
+        "frontend/index.html"
+      ]
+    },
+    {
+      "id": "telegram_links",
+      "title": "روابط تيليجرام (البوت @Qaffelbot والقناة @QaffelPlatform)",
+      "note": "تغيير اسم البوت أو القناة يمر على كل هذه الملفات.",
+      "patterns": [
+        "t\\.me/Qaffelbot|t\\.me/QaffelPlatform|Qaffelbot|QaffelPlatform"
+      ],
+      "files": [
+        "backend/app/api/admin.py",
+        "backend/app/api/auth.py",
+        "backend/app/config.py",
+        "backend/migrate_v3.py",
+        "backend/tests/test_bot_reviews.py",
+        "backend/tests/test_telegram_messages.py",
+        "frontend/index.html",
+        "frontend/src/components/AppShell.jsx",
+        "frontend/src/components/EmailVerifyModal.jsx",
+        "frontend/src/components/OnboardingTour.jsx",
+        "frontend/src/components/PublicLayout.jsx",
+        "frontend/src/components/TelegramChannelCard.jsx",
+        "frontend/src/components/TelegramLinkBanner.jsx",
+        "frontend/src/components/landing/HeroScene.jsx",
+        "frontend/src/components/landing/landingV2Text.js",
+        "frontend/src/contexts/LangContext.jsx",
+        "frontend/src/data/blogPosts.js",
+        "frontend/src/pages/Contact.jsx",
+        "frontend/src/pages/Dashboard.jsx",
+        "frontend/src/pages/LandingV2.jsx",
+        "telegram-bot/bot.py",
+        "telegram-bot/messages.py"
+      ]
+    },
+    {
+      "id": "notify_mute",
+      "title": "إيقاف الإشعارات من العميل (notifications_enabled)",
+      "note": "كل حلقة إرسال (إشارات، جلسات، أخبار، ويب بوش) يجب أن تحترمه.",
+      "patterns": [
+        "notifications_enabled"
+      ],
+      "files": [
+        "backend/analyze_delivery_gap.py",
+        "backend/app/api/admin.py",
+        "backend/app/api/auth.py",
+        "backend/app/api/bot.py",
+        "backend/app/models/user.py",
+        "backend/app/services/web_push_broadcaster.py",
+        "backend/diag_delivery.py",
+        "backend/diag_prefs.py",
+        "backend/diagnose_broadcast_reach.py",
+        "backend/tests/test_15m_prefs_and_news.py",
+        "backend/tests/test_delivery_diag.py",
+        "backend/tests/test_telegram_messages.py",
+        "frontend/src/components/TradingPreferencesPanel.jsx",
+        "frontend/src/components/WatchlistQuickCard.jsx",
+        "frontend/src/pages/Admin.jsx",
+        "telegram-bot/bot.py"
+      ],
+      "guard": "test_15m_prefs_and_news.test_bot_loops_respect_mute_and_use_calendar"
+    },
+    {
+      "id": "crypto_weekend",
+      "title": "إيقاف الكريبتو بالعطلة (السبت والأحد)",
+      "note": "القاعدة في weekend_policy.py وتُسجَّل ظلاً بسبب crypto_weekend.",
+      "patterns": [
+        "crypto_weekend|CRYPTO_WEEKEND|weekend_policy"
+      ],
+      "files": [
+        "backend/app/api/admin.py",
+        "backend/app/api/bot.py",
+        "backend/app/api/signals.py",
+        "backend/app/models/shadow_signal.py",
+        "backend/app/services/ai_engine_v5.py",
+        "backend/app/services/market_fingerprint.py",
+        "backend/app/services/shadow_evaluator.py",
+        "backend/app/services/shadow_stats.py",
+        "backend/app/services/timeframe_pause.py",
+        "backend/app/services/weekend_policy.py",
+        "backend/diag_crypto_weekend.py",
+        "backend/diag_review.py",
+        "backend/diag_shadow_signals.py",
+        "backend/tests/test_fvg_shadow.py",
+        "backend/tests/test_shadow_levels.py",
+        "backend/tests/test_shadow_stats.py",
+        "backend/tests/test_timeframe_pause.py"
+      ]
+    },
+    {
+      "id": "shadow_reasons",
+      "title": "أسباب صفقات الظل وتسمياتها بالعربي",
+      "note": "أي سبب جديد لـrecord_shadow يحتاج تسمية بـ_SHADOW_REASON_AR بالإدارة.",
+      "patterns": [
+        "record_shadow\\(|_SHADOW_REASON_AR"
+      ],
+      "files": [
+        "backend/app/api/admin.py",
+        "backend/app/api/bot.py",
+        "backend/app/api/signals.py",
+        "backend/app/services/ai_engine_v5.py",
+        "backend/app/services/weekend_policy.py",
+        "backend/tests/test_shadow_levels.py"
+      ]
+    },
+    {
+      "id": "points",
+      "title": "حجم النقطة لكل رمز (_calc_points)",
+      "note": "النقاط ليست عملة موحّدة بين الرموز — الحكم بـR. جدول الأحجام موثّق أيضاً بـCLAUDE.md.",
+      "patterns": [
+        "_calc_points|POINT_SIZE|point_size|pip_size"
+      ],
+      "files": [
+        "backend/analyze_levers_confound.py",
+        "backend/analyze_quality_levers.py",
+        "backend/analyze_sl_bucket_confound.py",
+        "backend/analyze_sl_distance_quality.py",
+        "backend/app/api/admin.py",
+        "backend/app/api/bot.py",
+        "backend/app/services/integrity_checker.py",
+        "backend/app/services/quality_report.py",
+        "backend/apply_verified_expired_corrections.py",
+        "backend/diag_index_outcomes.py",
+        "backend/fix_outcome_discrepancies.py",
+        "backend/fix_outcomes_pass2.py",
+        "backend/fix_pre_entry_outcomes.py",
+        "backend/fix_reversed_outcomes.py",
+        "backend/migrate_recalc_points.py",
+        "backend/simulate_tp_distance.py",
+        "telegram-bot/bot.py"
+      ],
+      "docs": [
+        "CLAUDE.md (جدول حساب النقاط)",
+        "DECISIONS.md"
+      ]
+    },
+    {
+      "id": "results_page",
+      "title": "صفحة النتائج /results",
+      "note": "العنوان والوصف ونص المخاطر مكرر بين TrackRecord.jsx والـprerender (البناء يفشل إن اختلفا).",
+      "patterns": [
+        "/results|TrackRecord|track_record"
+      ],
+      "files": [
+        "backend/app/api/track_record.py",
+        "backend/app/main.py",
+        "backend/diag_expired_entered.py",
+        "backend/tests/test_track_record.py",
+        "frontend/public/sitemap.xml",
+        "frontend/scripts/prerender-blog.mjs",
+        "frontend/src/App.jsx",
+        "frontend/src/components/PublicLayout.jsx",
+        "frontend/src/data/blogPosts.js",
+        "frontend/src/pages/Admin.jsx",
+        "frontend/src/pages/LandingV2.jsx",
+        "frontend/src/pages/TrackRecord.jsx"
+      ],
+      "guard": "frontend build (prerender-blog.mjs)"
+    }
+  ]
+}
