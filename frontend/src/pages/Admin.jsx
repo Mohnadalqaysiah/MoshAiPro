@@ -646,6 +646,7 @@ export default function Admin() {
   const [markets, setMarkets] = useState([])
   const [search, setSearch]   = useState('')
   const [planFilter, setPlanFilter] = useState('all')
+  const usersReq = useRef(0)
   const [loading, setLoading] = useState(false)
   const [selectedUser, setSelectedUser] = useState(null)
 
@@ -831,7 +832,7 @@ export default function Admin() {
     if (tab !== 'users') return
     const id = setInterval(loadUsers, 30000)
     return () => clearInterval(id)
-  }, [tab, search])
+  }, [tab, search, planFilter])   // (2026-11-08) بدون planFilter كان التحديث يعيد فلتر "الكل" كل 30 ثانية فيختفي الشهريون
 
   // عداد رسائل الدعم غير المقروءة — يعمل دائماً (بادج بالقائمة الجانبية)
   useEffect(() => {
@@ -883,7 +884,8 @@ export default function Admin() {
   // وجود 360+ مستخدم فعلياً. الإرسال الفعلي بالخادم (/email/send) سليم
   // ومستقل تماماً (يستعلم كل is_active بنفسه، لا يعتمد هالقائمة إطلاقاً)
   // — كان خللاً بالعرض فقط لا بالإرسال. usersTotal يعرض r.data.total الحقيقي.
-  const loadUsers    = async () => { setLoading(true); const r = await axios.get(`${API}/api/v1/admin/users?search=${search}&limit=200${planFilter !== 'all' ? `&plan=${planFilter}` : ''}`); setUsers(r.data.users); setUsersTotal(r.data.total || r.data.users.length); setOnlineCount(r.data.online_count || 0); setLoading(false) }
+  // (2026-11-08) seq: رد طلب أقدم (فلتر سابق) لا يكتب فوق رد الطلب الأحدث
+  const loadUsers    = async () => { const seq = ++usersReq.current; setLoading(true); const r = await axios.get(`${API}/api/v1/admin/users?search=${search}&limit=200${planFilter !== 'all' ? `&plan=${planFilter}` : ''}`); if (seq !== usersReq.current) return; setUsers(r.data.users); setUsersTotal(r.data.total || r.data.users.length); setOnlineCount(r.data.online_count || 0); setLoading(false) }
   const loadTeam     = async () => { setTeamLoading(true); try { const r = await axios.get(`${API}/api/v1/admin/team`); setTeam(r.data.admins) } catch (e) {} finally { setTeamLoading(false) } }
   const searchForPromotion = async () => {
     if (!teamSearch.trim()) { setTeamSearchResults([]); return }
