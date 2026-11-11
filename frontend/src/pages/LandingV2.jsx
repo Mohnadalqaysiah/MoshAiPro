@@ -14,7 +14,7 @@ import useSEO from '../hooks/useSEO'
 import useFAQSchema from '../hooks/useFAQSchema'
 import useTrialLimits from '../hooks/useTrialLimits'
 import PublicChatBot from '../components/PublicChatBot'
-import { DEMO, TICKER, BLOG, COND_KEYS, TXT, HERO_SCENE, RR } from '../components/landing/landingV2Text'
+import { DEMO, TICKER, BLOG, FEATURED, COND_KEYS, TXT, HERO_SCENE, RR } from '../components/landing/landingV2Text'
 import '../styles/landing-v2.css'
 import { SAVINGS_RE } from '../utils/planSavings'
 
@@ -68,7 +68,14 @@ export default function LandingV2() {
   const X = RR[isAr ? 'ar' : 'en']
   const navigate = useNavigate()
   const trial = useTrialLimits()
-  const fmt = (s) => (s || '').replace('{n}', trial.analyses).replace('{m}', trial.chat)
+  // (2026-11-11) صيغة الجمع بالعربي: 3–10 "تحليلات"، 11 فأكثر "تحليلاً" (كان "12 تحليلات"). العدد حي من الإعدادات.
+  const nA = Number(trial.analyses) || 0
+  const few = nA >= 3 && nA <= 10
+  const an = isAr ? (nA === 1 ? 'تحليل مجاني واحد' : nA === 2 ? 'تحليلان مجانيان' : `${nA} ${few ? 'تحليلات مجانية' : 'تحليلاً مجانياً'}`)
+                  : `${nA} free ${nA === 1 ? 'analysis' : 'analyses'}`
+  const a = isAr ? (nA === 1 ? 'تحليل واحد' : nA === 2 ? 'تحليلان' : `${nA} ${few ? 'تحليلات' : 'تحليلاً'}`)
+                 : `${nA} ${nA === 1 ? 'analysis' : 'analyses'}`
+  const fmt = (s) => (s || '').replace('{an}', an).replace('{a}', a).replace('{n}', trial.analyses).replace('{m}', trial.chat)
   const p = (path) => (isAr ? path : `/en${path}`)
   const rootRef = useRef(null)
 
@@ -258,7 +265,7 @@ export default function LandingV2() {
                 <Link to={user ? '/dashboard' : '/register'} className="btn btn-mint">{user ? T.dashboard : fmt(T.heroCta)}<Arrow /></Link>
                 <a href="#engine" className="btn btn-line">{T.heroCta2}</a>
               </div>
-              <div className="hero-note">{T.notes.map((n) => <span key={n}><Check s={15} w={2.4} />{n}</span>)}</div>
+              <div className="hero-note">{[fmt(T.trialNote), ...T.notes].map((n) => <span key={n}><Check s={15} w={2.4} />{n}</span>)}</div>
             </div>
             {/* (2026-10-17) المشهد الجديد: دماغ AI يحلل شارت شموع ويصدر الإشارة — يرسم المراحل والقرار وإشعار تيليجرام بنفسه */}
             <Suspense fallback={<div className="hs-fallback" />}><HeroScene text={heroText} /></Suspense>
@@ -421,6 +428,33 @@ export default function LandingV2() {
           </div>
         </section>
 
+        {/* ── learn: مختارات المدونة (2026-11-11، طلب المالك) — بطاقات، والروابط التسعة القديمة باقية تحتها ── */}
+        <section className="s" id="learn" style={{ paddingTop: 0 }}>
+          <div className="wrap">
+            <div className="s-head qrv">
+              <span className="eyebrow">{T.learnEyebrow}</span>
+              <h2 className="h2">{T.learnH}</h2>
+              <p className="lead">{T.learnLead}</p>
+            </div>
+            <div className="posts qrv">
+              {FEATURED.map((p) => (
+                <Link key={p.slug} to={isAr ? `/blog/${p.slug}` : `/en/blog/${p.slug}`} className="post">
+                  <span className="post-cat">{isAr ? p.catAr : p.catEn}</span>
+                  <h3>{isAr ? p.ar : p.en}</h3>
+                  <p>{isAr ? p.sumAr : p.sumEn}</p>
+                  <span className="post-more">{T.learnRead}</span>
+                </Link>
+              ))}
+            </div>
+            <div className="chips qrv" style={{ marginTop: 20 }}>
+              {BLOG.filter((b) => !FEATURED.some((f) => f.slug === b.slug)).map((b) => <Link key={b.slug} to={isAr ? `/blog/${b.slug}` : `/en/blog/${b.slug}`}>{isAr ? b.ar : b.en}</Link>)}
+            </div>
+            <div style={{ marginTop: 24 }}>
+              <Link to={isAr ? '/blog' : '/en/blog'} className="btn btn-line">{T.learnAll}<Arrow /></Link>
+            </div>
+          </div>
+        </section>
+
         {/* ── reviews (حقيقية فقط) ── */}
         {showReviews && (
           <section className="s" id="reviews" style={{ paddingTop: 0 }}>
@@ -470,6 +504,13 @@ export default function LandingV2() {
               </div>
             </div>
           </section>
+        )}
+
+        {/* ── دعوة لسجل الأداء (2026-11-11) — بلا أي رقم؛ عربي فقط لأن /results عربي فقط ── */}
+        {isAr && (
+          <div className="wrap">
+            <p className="results-line qrv">{T.resultsLine} <Link to="/results">{T.resultsLink}<Arrow /></Link></p>
+          </div>
         )}
 
         {/* ── pricing ── */}
@@ -561,17 +602,6 @@ export default function LandingV2() {
                 </div>
               ))}
             </div>
-          </div>
-        </section>
-
-        {/* ── learn ── */}
-        <section className="s" style={{ paddingTop: 0 }}>
-          <div className="wrap">
-            <div className="s-head qrv" style={{ marginBottom: 24 }}>
-              <span className="eyebrow">{T.learnEyebrow}</span>
-              <h2 className="h2" style={{ fontSize: 'clamp(24px,3vw,34px)' }}>{T.learnH}</h2>
-            </div>
-            <div className="chips qrv">{BLOG.map((b) => <Link key={b.slug} to={isAr ? `/blog/${b.slug}` : `/en/blog/${b.slug}`}>{isAr ? b.ar : b.en}</Link>)}</div>
           </div>
         </section>
 

@@ -359,3 +359,16 @@
 .qx .earn-rows b{font-size:17px;color:#fff}
 .qx .calc-note{font-size:12px;color:var(--faint);line-height:1.8}
 @media (max-width:960px){.qx .refx{grid-template-columns:minmax(0,1fr)}}
+
+/* (2026-11-11) مختارات المدونة + سطر سجل الأداء */
+.qx .posts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+.qx .post{display:flex;flex-direction:column;gap:12px;padding:22px;border-radius:20px;background:var(--panel);border:1px solid var(--line);transition:border-color .2s,transform .2s;min-width:0}
+.qx .post:hover{border-color:var(--mint);transform:translateY(-3px)}
+.qx .post-cat{align-self:flex-start;font-size:12px;font-weight:600;color:var(--mint);padding:4px 10px;border-radius:999px;border:1px solid var(--line2);background:rgba(60,242,192,.06)}
+.qx .post h3{margin:0;font-size:17px;line-height:1.6;font-weight:700;color:var(--text)}
+.qx .post p{margin:0;font-size:14.5px;line-height:1.85;color:var(--muted);flex:1}
+.qx .post-more{font-size:14px;font-weight:600;color:var(--mint)}
+@media (max-width:1100px){.qx .posts{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:640px){.qx .posts{grid-template-columns:minmax(0,1fr)}}
+.qx .results-line{margin:0 0 56px;padding:18px 22px;border-radius:16px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--muted);font-size:15.5px;line-height:1.8}
+.qx .results-line a{color:var(--mint);font-weight:700;display:inline-flex;align-items:center;gap:6px}
