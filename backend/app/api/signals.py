@@ -220,6 +220,7 @@ async def analyze_market(
                 from app.services.weekend_policy import crypto_weekend_paused, record_shadow
                 from app.services.timeframe_pause import tf_paused, REASON as TF_PAUSE_REASON
                 from app.services.crypto_registry import is_trial as coin_trial, REASON as COIN_TRIAL_REASON
+                from app.services.market_pause import stocks_paused, REASON as STOCKS_PAUSE_REASON
                 from app.services import market_fingerprint
                 if crypto_weekend_paused(db, symbol):
                     _shid = record_shadow(db, source="web", symbol=symbol, timeframe=timeframe, signal_type=rec,
@@ -231,6 +232,12 @@ async def analyze_market(
                     _shid = record_shadow(db, source="web", symbol=symbol, timeframe=timeframe, signal_type=rec,
                                           entry=entry, sl=sl, tp1=tp1, tp2=levels.get("ladder_tp3") or tp2, confidence=conf, rr=rr,
                                           expires_at=expires_at, user_id=user.id, reason=COIN_TRIAL_REASON)
+                    market_fingerprint.schedule(analysis, symbol, timeframe, rec, shadow_id=_shid)
+                elif stocks_paused(db, symbol):
+                    # (2026-11-11، قرار المالك) الأسهم الأمريكية → ظل فقط، والمستخدم يرى تحليله — market_pause.py
+                    _shid = record_shadow(db, source="web", symbol=symbol, timeframe=timeframe, signal_type=rec,
+                                          entry=entry, sl=sl, tp1=tp1, tp2=levels.get("ladder_tp3") or tp2, confidence=conf, rr=rr,
+                                          expires_at=expires_at, user_id=user.id, reason=STOCKS_PAUSE_REASON)
                     market_fingerprint.schedule(analysis, symbol, timeframe, rec, shadow_id=_shid)
                 elif tf_paused(symbol, timeframe):
                     # (2026-11-07، قرار المالك) 15m عدا الذهب والمعادن → ظل فقط، والمستخدم يرى تحليله — timeframe_pause.py

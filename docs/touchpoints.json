@@ -37,6 +37,7 @@
         "backend/tests/test_15m_prefs_and_news.py",
         "backend/tests/test_new_coins.py",
         "backend/tests/test_timeframe_pause.py",
+        "backend/tests/test_us_stocks_pause.py",
         "frontend/src/components/TradingPreferencesPanel.jsx",
         "telegram-bot/bot.py"
       ],
@@ -283,7 +284,8 @@
         "backend/tests/test_new_coins.py",
         "backend/tests/test_shadow_levels.py",
         "backend/tests/test_shadow_stats.py",
-        "backend/tests/test_timeframe_pause.py"
+        "backend/tests/test_timeframe_pause.py",
+        "backend/tests/test_us_stocks_pause.py"
       ]
     },
     {
@@ -441,6 +443,26 @@
       "guard": "test_bot_reviews, test_result_share",
       "docs": [
         "DECISIONS.md (17/10 آراء المشتركين، 11/11)"
+      ]
+    },
+    {
+      "id": "us_stocks_pause",
+      "title": "إيقاف الأسهم الأمريكية الصامت (فئة stock)",
+      "note": "عند الإرجاع: PAUSE_US_STOCKS=0 أو حذف الإيقاف من المسارات الثلاثة (bot_analyze، signals.analyze_market، bot_save_alert_signal). قاعدة الإعادة (12) بـdiag_watch.",
+      "patterns": [
+        "market_pause|stocks_paused|US_STOCKS_PAUSE|PAUSE_US_STOCKS"
+      ],
+      "files": [
+        "backend/app/api/admin.py",
+        "backend/app/api/bot.py",
+        "backend/app/api/signals.py",
+        "backend/app/services/market_pause.py",
+        "backend/diag_watch.py",
+        "backend/tests/test_us_stocks_pause.py"
+      ],
+      "guard": "test_us_stocks_pause",
+      "docs": [
+        "DECISIONS.md (11/11 إيقاف الأسهم الأمريكية)"
       ]
     }
   ]

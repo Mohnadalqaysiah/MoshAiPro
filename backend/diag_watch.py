@@ -21,6 +21,8 @@
 (2026-11-09، المالك: "نبقيها لمدة اسبوع ومن ثم ندرسها ونقررها") عملات جديدة بالظل من 10/11 (crypto_registry.py):
   (11) لكل عملة على 1h و4h (فرص ظل مستقلة محسومة، NEW_COIN_TRIAL): ≥ 10 ← مرشّحة للفتح إن المتوسط ≥ +0.1R و≥ نصف الكريبتو
        الحي 1h/4h بنفس الفترة؛ سالبة ← لا تُفتح؛ بينهما أو أقل من 10 ← تمديد أسبوع. القراءة الأولى ~17/11. المالك يقرر.
+(2026-11-11، المالك: "نعم ايقاف صامت") الأسهم الأمريكية موقوفة بالظل من 12/11 (market_pause.py)، فالقاعدة (1) انتهى دورها:
+  (12) إعادة الأسهم الأمريكية: ≥ 20 فرصة ظل مستقلة محسومة (US_STOCKS_PAUSE)، مرشّحة للإعادة إن متوسطها ≥ +0.1R. المالك يقرر.
 
     docker exec moshapi_backend python diag_watch.py
 """
@@ -75,6 +77,13 @@ def rule_new_coin(rs, live_crypto, need=10):
     if a >= 0.1 and (b is None or a >= b / 2):
         return "candidate", "🟢 مرشّحة للفتح — تُعرض على المالك"
     return "extend", "🟡 موجبة دون الشرط — تمديد أسبوع"
+
+
+def rule_stocks_restore(rs, need=20):
+    """(12) الأسهم الأمريكية الموقوفة تعود إن صارت موجبة بما يكفي على عيّنة كافية."""
+    if len(rs) < need:
+        return "waiting", f"⏳ {len(rs)}/{need} — لا حكم، الإيقاف باقٍ"
+    return ("candidate", "🟢 مرشّحة للإعادة — تُعرض على المالك") if _avg(rs) >= 0.1 else ("ok", "⛔ لم تتحقق — الإيقاف باقٍ")
 
 
 def late_session(t) -> bool:
@@ -191,6 +200,11 @@ def main():
         print(f"      {sym:<8} {_fmt(rs)}\n               {rule_new_coin(rs, live_c)[1]}")
     rs15 = [s.r_multiple for s in reps if s.timeframe == "15m"]
     print(f"      (15m للاطلاع فقط — الكريبتو على 15m موقوف: {_fmt(rs15)})\n")
+    from app.services import market_pause as MP
+    rows = st.filter_scope(db.query(ShadowSignal).filter(ShadowSignal.reason == MP.REASON,
+                                                         ShadowSignal.created_at >= MP.PAUSE_START).all(), "clean")
+    rs = [s.r_multiple for s in st.representatives(rows) if s.outcome in st.DECIDED and s.r_multiple is not None]
+    print(f"(12) الأسهم الأمريكية الموقوفة بالظل (من {MP.PAUSE_START:%Y-%m-%d}) — {_fmt(rs)}\n      {rule_stocks_restore(rs)[1]}\n")
     print("⚠️ \"مرشّح\" = يُعرض على المالك. لا شيء يُطبَّق من هنا، والعتبات لا تُعدَّل بعد رؤية الأرقام.")
     db.close()
 
