@@ -9,6 +9,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotComm
 import econ_calendar   # (2026-11-09) مواعيد الأخبار الحقيقية
 import messages as M   # (2026-10-19) نصوص الرسائل الموحّدة (HTML) — راجع messages.py
 import review_flow as RF   # (2026-10-24) إرسال رأي من البوت بنص وصورة/فيديو
+import result_share_flow as RS   # (2026-11-11) "📸 شارك نتيجتك" — لقطة شاشة تصل المالك مباشرة
 import messages_en as ME   # (2026-10-24) نفس الرسائل بالإنجليزية لمن اختار الإنجليزية بحسابه
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler, ContextTypes, PollAnswerHandler, TypeHandler,
@@ -393,7 +394,9 @@ def kb_main(lang: str = "ar"):
             [InlineKeyboardButton("🎁 Referral points", callback_data="m_referral"),
              InlineKeyboardButton("❓ Help", callback_data="m_help")],
             [InlineKeyboardButton("🌐 Open dashboard", web_app=WebAppInfo(url=FRONTEND_URL))],
-            [InlineKeyboardButton("⭐ Send a review", callback_data="m_review"), ch_btn("en")],
+            [InlineKeyboardButton("⭐ Send a review", callback_data="m_review"),
+             InlineKeyboardButton("📸 Share your result", callback_data="m_share")],
+            [ch_btn("en")],
         ])
     return InlineKeyboardMarkup([
         # ── تحليل وإشارات ──
@@ -407,7 +410,9 @@ def kb_main(lang: str = "ar"):
          InlineKeyboardButton("❓ المساعدة",      callback_data="m_help")],
         # ── داشبورد ──
         [InlineKeyboardButton("🌐 فتح الداشبورد", web_app=WebAppInfo(url=FRONTEND_URL))],
-        [InlineKeyboardButton("⭐ أرسل رأيك", callback_data="m_review"), ch_btn()],
+        [InlineKeyboardButton("⭐ أرسل رأيك", callback_data="m_review"),
+         InlineKeyboardButton("📸 شارك نتيجتك", callback_data="m_share")],
+        [ch_btn()],
     ])
 
 
@@ -2492,6 +2497,52 @@ async def _mark_telegram_seen(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 # ─────────────────────── آراء العملاء من البوت (2026-10-24) ───────────────────────
 _rf = RF.ReviewFlow()
+_sf = RS.ShareFlow()   # (2026-11-11) شارك نتيجتك
+
+
+def _share_kb(lg: str, consent: bool = False):
+    cancel = [InlineKeyboardButton("❌ Cancel" if lg == "en" else "❌ إلغاء", callback_data="rs_cancel")]
+    if not consent:
+        return InlineKeyboardMarkup([cancel])
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(_t(lg, "✅ انشرها باسمي", "✅ Publish with my name"), callback_data="rs_c_name"),
+         InlineKeyboardButton(_t(lg, "🙈 بدون اسمي", "🙈 Without my name"), callback_data="rs_c_anon")],
+        [InlineKeyboardButton(_t(lg, "🔒 للفريق فقط", "🔒 Team only"), callback_data="rs_c_private")],
+        cancel])
+
+
+async def _share_start(message, user):
+    await ensure_lang(user)
+    lg = lang_for(user)
+    _rf.s.pop(user.id, None)                      # خطوتان مختلفتان لا تتداخلان
+    await message.reply_text(_sf.start(user.id, lg), parse_mode="HTML", reply_markup=_share_kb(lg))
+
+
+async def cmd_share(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/share — نفس زر "📸 شارك نتيجتك". متاح لأي مستخدم للبوت، مربوطاً أو لا."""
+    await _share_start(update.message, update.effective_user)
+
+
+async def on_share_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+    u, d = q.from_user, q.data
+    if d == "m_share":
+        await _share_start(q.message, u)
+        return
+    if d == "rs_cancel":
+        await q.message.reply_text(_sf.cancel(u.id))
+        return
+    lg = _sf.lang(u.id) if _sf.active(u.id) else lang_for(u)
+    payload = _sf.on_consent(u.id, d)
+    if not payload:
+        return
+    res = await _post("/api/v1/bot/result-share", json={
+        "telegram_id": str(u.id), "username": u.username or "", "name": u.full_name or u.first_name or "", **payload})
+    if res.get("ok"):
+        await q.message.reply_text(RS.EN["THANKS"] if lg == "en" else RS.THANKS, parse_mode="HTML")
+    else:
+        await q.message.reply_text(f"⚠️ {res.get('error') or _t(lg, 'تعذّر الإرسال — حاول بعد قليل.', 'Could not send — try again shortly.')}")
 _RV_CANCEL = [InlineKeyboardButton("❌ إلغاء", callback_data="rv_cancel")]
 
 
@@ -2508,6 +2559,7 @@ async def on_review_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     lg = _rf.lang(uid) if _rf.active(uid) else lang_for(q.from_user)
     _cancel = [InlineKeyboardButton("❌ Cancel" if lg == "en" else "❌ إلغاء", callback_data="rv_cancel")]
     if d == "m_review":
+        _sf.s.pop(uid, None)
         st = await _get("/api/v1/bot/review-status", {"telegram_id": str(uid)})
         if not st.get("linked"):
             await q.message.reply_text(_t(lg, "🔗 اربط حسابك بالمنصة أولاً لإرسال رأيك.", "🔗 Link your platform account first to send a review."),
@@ -2559,6 +2611,19 @@ async def on_review_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def on_review_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """نص أو صورة أو فيديو — يُعالج فقط إن كان المستخدم داخل خطوات الرأي؛ غير ذلك يُتجاهل كما كان."""
     msg, uid = update.message, update.effective_user.id if update.effective_user else None
+    if msg and uid is not None and _sf.active(uid):
+        # (2026-11-11) شارك نتيجتك: صورة، أو ملف صورة (لقطة غير مضغوطة)
+        doc = msg.document if msg.document and (msg.document.mime_type or "").startswith("image/") else None
+        if msg.photo or doc:
+            kind, fid = ("photo", msg.photo[-1].file_id) if msg.photo else ("document", doc.file_id)
+            ok, txt = _sf.on_image(uid, kind, fid, msg.caption or "")
+            if txt:
+                await msg.reply_text(txt, parse_mode="HTML", reply_markup=_share_kb(_sf.lang(uid), consent=ok))
+            return
+        hint = _sf.hint(uid)
+        if hint:
+            await msg.reply_text(hint)
+        return
     if not msg or uid is None or not _rf.active(uid):
         return
     step = _rf.step(uid)
@@ -2601,9 +2666,11 @@ def main():
     app.add_handler(CommandHandler("help",  cmd_help))
     app.add_handler(CommandHandler("challenge", cmd_challenge))
     app.add_handler(CommandHandler("settings", cmd_settings))
+    app.add_handler(CommandHandler("share", cmd_share))
     app.add_handler(CallbackQueryHandler(on_review_button, pattern=r"^(m_review|rv_)"))   # قبل المعالج العام
+    app.add_handler(CallbackQueryHandler(on_share_button, pattern=r"^(m_share|rs_)"))
     app.add_handler(CallbackQueryHandler(on_button))
-    app.add_handler(MessageHandler((filters.TEXT & ~filters.COMMAND) | filters.PHOTO | filters.VIDEO,
+    app.add_handler(MessageHandler((filters.TEXT & ~filters.COMMAND) | filters.PHOTO | filters.VIDEO | filters.Document.IMAGE,
                                    on_review_message))
     app.add_handler(PollAnswerHandler(on_poll_answer))
 
@@ -2621,6 +2688,7 @@ def main():
             BotCommand("menu",      "القائمة الرئيسية"),
             BotCommand("challenge", "تحدّي اليوم 🎯"),
             BotCommand("settings",  "تخصيص الأزواج والفريمات ⚙️"),
+            BotCommand("share",     "شارك نتيجتك 📸"),
             BotCommand("help",      "المساعدة وشرح الأوامر"),
         ]
         for scope in (BotCommandScopeDefault(), BotCommandScopeAllPrivateChats()):

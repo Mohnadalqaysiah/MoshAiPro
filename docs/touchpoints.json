@@ -418,6 +418,30 @@
         "telegram-bot/bot.py"
       ],
       "guard": "test_new_coins"
+    },
+    {
+      "id": "reviews_policy",
+      "title": "من يكتب الرأي وشارة \"مشترك موثّق\"",
+      "note": "منذ 11/11: أي صاحب حساب يكتب والمالك يعتمد. \"مشترك موثّق\" (source=member) لمن مضى على أول دفعة مقبولة له 7 أيام، وغيره \"مستخدم\" (user). تغيير القاعدة يمر على الخادم والبوت وصفحة الحساب ونصوص الرئيسية وتعليق القناة.",
+      "patterns": [
+        "_eligibility|MIN_DAYS_PAID|مشترك موثّق|Verified member|review-status|رأي مستخدم"
+      ],
+      "files": [
+        "backend/app/api/admin.py",
+        "backend/app/api/bot.py",
+        "backend/app/api/reviews.py",
+        "backend/app/models/review.py",
+        "backend/tests/test_bot_reviews.py",
+        "frontend/src/components/ReviewForm.jsx",
+        "frontend/src/components/ReviewsAdminPanel.jsx",
+        "frontend/src/components/landing/landingV2Text.js",
+        "frontend/src/pages/LandingV2.jsx",
+        "telegram-bot/bot.py"
+      ],
+      "guard": "test_bot_reviews, test_result_share",
+      "docs": [
+        "DECISIONS.md (17/10 آراء المشتركين، 11/11)"
+      ]
     }
   ]
 }

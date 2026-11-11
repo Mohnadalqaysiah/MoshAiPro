@@ -4312,7 +4312,7 @@ def _review_caption(r) -> str:
     import html as _html
     stars = "⭐" * int(r.rating or 0)
     who = _html.escape(r.display_name or "مشترك Qaffel")
-    badge = "رأي مشترك موثّق" if r.source == "member" else "رأي عميل"
+    badge = {"member": "رأي مشترك موثّق", "user": "رأي مستخدم"}.get(r.source, "رأي عميل")   # (2026-11-11) user = صاحب حساب غير مشترك موثّق
     lines = [f"{stars}  <b>{badge}</b>", "", f"«{_html.escape(r.text or '')}»", "", f"— {who}"]
     if r.admin_reply:
         lines += ["", f"💬 <i>رد الفريق: {_html.escape(r.admin_reply)}</i>"]

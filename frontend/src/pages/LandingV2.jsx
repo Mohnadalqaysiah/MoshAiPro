@@ -486,7 +486,9 @@ export default function LandingV2() {
                   <article key={r.id} className="review">
                     <header>
                       <span className="stars sm" role="img" aria-label={`${r.rating} / 5`}>{[1, 2, 3, 4, 5].map((k) => <i key={k} className={k <= r.rating ? 'on' : ''} />)}</span>
-                      {r.verified ? <span className="verified"><Check s={12} />{X.verified}</span> : <span className="via">{X.via.replace('{s}', r.source_note || '')}</span>}
+                      {r.verified ? <span className="verified"><Check s={12} />{X.verified}</span>
+                        : r.source === 'user' ? <span className="via">{X.user}</span>   /* (2026-11-11) صاحب حساب غير مشترك موثّق */
+                        : <span className="via">{X.via.replace('{s}', r.source_note || '')}</span>}
                     </header>
                     <blockquote>{r.text}</blockquote>
                     {r.admin_reply && <p className="reply"><b>{X.team}</b><br />{r.admin_reply}</p>}

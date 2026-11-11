@@ -97,10 +97,13 @@ def _submit(s, **kw):
     return upsert_bot_review(s, s.query(User).first(), **args)
 
 
-def test_eligibility_same_as_web():
-    assert "7 أيام" in _submit(_db(None))["error"]                       # لم يدفع
-    assert "بعد" in _submit(_db(3))["error"]                             # دفع قبل 3 أيام
-    assert _submit(_db(10))["ok"]
+def test_any_account_can_review_but_only_paid_7d_is_verified():
+    # (2026-11-11، المالك) أي صاحب حساب يكتب؛ "مشترك موثّق" يبقى لمن مضى على أول دفعة مقبولة له 7 أيام
+    for paid, source, anon in ((None, "user", "مستخدم Qaffel"), (3, "user", "مستخدم Qaffel"), (10, "member", "مشترك Qaffel")):
+        s = _db(paid)
+        assert _submit(s, anonymous=True)["ok"], paid
+        r = s.query(Review).first()
+        assert (r.source, r.status, r.display_name) == (source, "pending", anon), paid
 
 
 def test_saved_pending_with_media_and_names():

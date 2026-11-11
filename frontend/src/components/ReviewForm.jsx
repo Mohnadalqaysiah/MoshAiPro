@@ -1,5 +1,6 @@
 /**
- * ReviewForm (2026-10-17) — "اكتب رأيك" بصفحة الحساب (#review). متاح لمشترك مدفوع بعد 7 أيام من أول دفعة.
+ * ReviewForm (2026-10-17) — "اكتب رأيك" بصفحة الحساب (#review). منذ 2026-11-11 لأي صاحب حساب (طلب المالك)،
+ * والمالك يعتمد أو يرفض. المشترك المدفوع ≥7 أيام يظهر "مشترك موثّق"، وغيره "مستخدم".
  * الخادم يتحقق من الأهلية (POST /api/v1/reviews)؛ أي تعديل يعيد الرأي "بانتظار المراجعة".
  */
 import { useEffect, useState } from 'react'
@@ -47,9 +48,7 @@ export default function ReviewForm({ isAr }) {
       </h2>
       {!info.eligible && !rv ? (
         <p className="text-sm text-gray-400 leading-relaxed">
-          {info.reason === 'too_soon'
-            ? (isAr ? `يمكنك كتابة رأيك بعد ${info.days_left} يوم من اشتراكك، حتى يكون مبنياً على تجربة فعلية.` : `You can write a review in ${info.days_left} days, so it reflects real experience.`)
-            : (isAr ? 'كتابة الرأي متاحة للمشتركين بعد 7 أيام من أول اشتراك مدفوع.' : 'Reviews are open to members 7 days after their first paid subscription.')}
+          {isAr ? 'تعذّر التحميل — حدّث الصفحة وحاول مرة أخرى.' : 'Could not load — refresh the page and try again.'}
         </p>
       ) : (
         <form onSubmit={submit} className="space-y-4 mt-3">
