@@ -3,7 +3,7 @@ Mosh AI Pro v5 - Bot API
 Endpoints خاصة بالبوت (تتحقق من BOT_SECRET بدلاً من JWT المستخدم)
 """
 from datetime import datetime, timezone, timedelta   # (2026-10-25) timedelta كان مفقوداً ← إجابة التحدّي ترمي NameError
-from fastapi import APIRouter, Depends, HTTPException, Header, Body
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Header, Body
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from typing import Optional
@@ -1792,7 +1792,7 @@ def bot_review_status(
     _: bool = Depends(verify_bot),
     db: Session = Depends(get_db),
 ):
-    """(2026-10-24) هل يحق للمستخدم المرتبط إرسال رأي من البوت؟ (نفس شرط الموقع: مشترك مدفوع ≥7 أيام)."""
+    """(2026-10-24) هل يحق للمستخدم المرتبط إرسال رأي من البوت؟ (نفس شرط الموقع؛ منذ 11/11 أي صاحب حساب)."""
     from app.api.reviews import _eligibility
     from app.models.review import Review
     user = _get_linked_user(telegram_id, db)
@@ -1806,6 +1806,7 @@ def bot_review_status(
 
 @router.post("/reviews")
 def bot_submit_review(
+    background_tasks: BackgroundTasks,
     telegram_id: str = Body(..., embed=True),
     rating: int = Body(..., embed=True),
     text: str = Body(..., embed=True),
@@ -1817,11 +1818,25 @@ def bot_submit_review(
     db: Session = Depends(get_db),
 ):
     """(2026-10-24) رأي من البوت بنص وصورة/فيديو — يذهب لمراجعة الأدمن؛ عند الاعتماد يُنشر بالقناة (admin.py)."""
-    from app.api.reviews import upsert_bot_review
+    from app.api.reviews import notify_new_review, upsert_bot_review
     user = _get_linked_user(telegram_id, db)
     if not user:
         return {"ok": False, "error": "اربط حسابك أولاً"}
-    return upsert_bot_review(db, user, rating, text, media_type, media_file_id, anonymous, consent)
+    res = upsert_bot_review(db, user, rating, text, media_type, media_file_id, anonymous, consent)
+    if res.get("ok"):
+        background_tasks.add_task(notify_new_review, res["review_id"])
+    return res
+
+
+@router.post("/result-share")
+def bot_result_share(background_tasks: BackgroundTasks, data: dict = Body(...),
+                     _: bool = Depends(verify_bot), db: Session = Depends(get_db)):
+    """(2026-11-11، المالك) "شارك نتيجتك": لقطة شاشة من البوت تُحفظ وتصل المالك مباشرة على تيليجرام — services/result_shares.py."""
+    from app.services.result_shares import record_share, send_to_owner
+    res = record_share(db, data)
+    if res.get("ok"):
+        background_tasks.add_task(send_to_owner, res["id"])
+    return res
 
 
 @router.get("/user-stats")

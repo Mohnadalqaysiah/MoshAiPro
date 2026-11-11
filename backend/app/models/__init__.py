@@ -25,9 +25,11 @@ from app.models.signal_delivery import SignalDelivery
 from app.models.coupon import Coupon, CouponRedemption
 from app.models.funnel_event import FunnelEvent
 from app.models.bot_start import BotStart
+from app.models.result_share import ResultShare
 
 __all__ = [
     "BotStart",
+    "ResultShare",
     "User", "UserRole", "PlanType",
     "Payment", "PaymentStatus", "PaymentPlan",
     "MarketConfig",
