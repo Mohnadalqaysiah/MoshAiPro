@@ -344,6 +344,7 @@
         "backend/app/api/track_record.py",
         "backend/app/main.py",
         "backend/diag_expired_entered.py",
+        "backend/tests/test_home_featured.py",
         "backend/tests/test_track_record.py",
         "frontend/public/sitemap.xml",
         "frontend/scripts/prerender-blog.mjs",
