@@ -401,8 +401,12 @@ class MoshAIEngineV5:
 
             # ── السعر الفوري + تصحيح Futures→Spot للمعادن والعقود الآجلة ──
             try:
+                # (2026-11-12، #10330) آخر إغلاق من شموع المحرك قبل استبداله بالسعر الحي — للمعادن هو العقد الآجل الذي بُنيت منه
+                # المستويات، فهو مرجع الفارق الصحيح (كان يُجلب من yfinance .info الذي يفشل بـ404 فتخرج الإشارة بأسعار الآجل).
+                _futures_ref = analysis.get("current_price")
                 rt_price = smart_data.get_realtime_price_with_meta(symbol)
                 if rt_price:
+                    analysis["_futures_ref_price"] = _futures_ref
                     analysis["current_price"]    = rt_price["price"]
                     analysis["price_source"]     = rt_price["source"]
                     analysis["price_fetched_at"] = rt_price["fetched_at"]
@@ -419,6 +423,13 @@ class MoshAIEngineV5:
 
             except Exception as _pe:
                 logger.warning(f"   ⚠️ Could not fetch live price: {_pe}")
+
+            # (2026-11-12، #10330) صمام: إشارة معدن لم تُحوَّل مستوياتها للفوري بمرجع مؤكد لا تخرج — كانت تخرج بأسعار العقد الآجل
+            # (أعلى بعشرات الدولارات) فيراها العميل بأسعار لا وجود لها بـMT5، والرصد الفوري لا يجد دخولها.
+            if symbol.upper() in self._FUTURES_SPOT_SYMBOLS \
+                    and str(analysis.get("recommendation") or "").upper() in ("BUY", "SELL") \
+                    and not analysis.get("spot_basis_applied"):
+                analysis = self._reject_unconverted_metal(symbol, analysis)
 
             # ── [PRICE SOURCE] log — يساعد في مقارنة Telegram vs Chat ────────
             logger.info(
@@ -628,6 +639,22 @@ class MoshAIEngineV5:
         logger.warning(f"   ⚠️  _fetch_spot_price: all sources failed for {symbol}")
         return 0.0, "none"
 
+    def _reject_unconverted_metal(self, symbol: str, analysis: dict) -> dict:
+        """(2026-11-12، #10330) معدن بلا تحويل مؤكد للفوري ← WAIT بلا مستويات (نفس أسلوب _validate_price_freshness).
+        الإشارة بسعر خاطئ أسوأ من عدم الإشارة: لا تخرج، ولا تدخل الظل (السبب ليس من قواعد التعلّم)."""
+        logger.warning(f"🛑 SPOT_BASIS_UNAVAILABLE [{symbol}] {analysis.get('recommendation')} — "
+                       f"source={analysis.get('price_source')} — لا إشارة بأسعار العقد الآجل")
+        analysis["recommendation"] = "WAIT"
+        analysis["signal_type"] = "WAIT"
+        analysis["spot_basis_rejected"] = True
+        analysis["rejection_reason"] = ("SPOT_BASIS_UNAVAILABLE: تعذّر تحويل مستويات المعدن إلى السعر الفوري بمرجع مؤكد — "
+                                        "أعد طلب التحليل بعد قليل.")
+        analysis["levels"] = {}
+        analysis["entry_zones"] = []
+        analysis["stop_loss_zone"] = None
+        analysis["take_profit_zones"] = []
+        return analysis
+
     def _apply_spot_basis(self, symbol: str, analysis: dict) -> dict:
         """
         يُصحِّح فارق Futures-Spot لأسواق المعادن.
@@ -645,13 +672,16 @@ class MoshAIEngineV5:
             spot, spot_source = self._fetch_spot_price(symbol)
             if spot <= 0:
                 return analysis
+            # (2026-11-12، #10330) التقدير النظري ليس سعراً فورياً: قِيس 25.8$ والفعلي ~2$ — لا تحويل به (والصمام يمنع الإشارة)
+            if spot_source == "theoretical_carry":
+                logger.warning(f"   ⚠️  {symbol}: لا سعر فوري حقيقي (theoretical_carry) — لا تحويل، والإشارة تُمنع")
+                return analysis
 
-            # ── جلب سعر Futures مباشرة (GC=F) كمرجع ثابت ──────────────────
-            # لا نستخدم current_price لأنه قد يكون TV Spot بالفعل
+            # ── سعر Futures: من شموع المحرك نفسها أولاً (مرجع المستويات)، ثم yfinance احتياطاً ──
             _FUTURES_SYM = {"XAUUSD": "GC=F", "XAGUSD": "SI=F"}
             futures_sym = _FUTURES_SYM.get(symbol.upper())
-            futures = 0.0
-            if futures_sym:
+            futures = float(analysis.get("_futures_ref_price") or 0)
+            if futures <= 0 and futures_sym:
                 try:
                     import yfinance as _yf
                     _info = _yf.Ticker(futures_sym).info
@@ -673,6 +703,8 @@ class MoshAIEngineV5:
 
             # sanity check: الفارق يجب أن يكون معقولاً (0.01% – 4%)
             ratio = abs(basis) / futures
+            if ratio < 0.0001:
+                analysis["spot_basis_applied"] = True        # الفارق مهمل: المستويات على الفوري عملياً
             if ratio < 0.0001 or ratio > 0.04:
                 logger.info(f"   ⚠️  Basis out of range for {symbol}: {basis:+.2f} ({ratio*100:.2f}%) — skipped")
                 # تصحيح current_price على الأقل
@@ -688,6 +720,7 @@ class MoshAIEngineV5:
             analysis["current_price"]  = round(spot, 5)
             analysis["price_source"]   = spot_source   # tv_spot / theoretical_carry / etc.
             analysis["futures_basis"]  = round(basis, 2)
+            analysis["spot_basis_applied"] = True        # (2026-11-12) يقرؤه الصمام بعد التحويل
 
             def _shift(v):
                 return round(float(v) + basis, 5) if v else v
@@ -697,6 +730,12 @@ class MoshAIEngineV5:
             for k in ("entry", "entry_zone_min", "entry_zone_max", "stop_loss", "tp1", "tp2", "tp3", "ladder_tp3"):
                 if lvls.get(k):
                     lvls[k] = _shift(lvls[k])
+            # (2026-11-12) مستويات الإشارة المرفوضة (للظل) كانت تبقى بأسعار الآجل وتُقيَّم على شموع الفوري — نفس الإزاحة
+            pre = analysis.get("_pre_reject_levels")
+            if isinstance(pre, dict):
+                for k in ("entry", "entry_zone_min", "entry_zone_max", "stop_loss", "tp1", "tp2", "tp3", "ladder_tp3"):
+                    if pre.get(k):
+                        pre[k] = _shift(pre[k])
 
             # ── entry_zones / stop_loss_zone / take_profit_zones (legacy) ─
             if analysis.get("entry_zones"):
