@@ -162,7 +162,7 @@
     },
     {
       "id": "tp_ladder",
-      "title": "سلّم الأهداف (1R / 2.5R / بعيد)",
+      "title": "سلّم الأهداف (0.7R من 16/11 / 2.5R / بعيد)",
       "note": "المنطق في tp_ladder.py ومفتاح ladder_tp3. تغيير المسافات يمر على المحرك والرسائل والنتائج.",
       "patterns": [
         "ladder_tp3|tp_ladder|2\\.5 ?R"
@@ -180,6 +180,8 @@
         "backend/tests/test_target_ladder.py",
         "backend/tests/test_telegram_messages.py",
         "backend/tests/test_tp_ladder.py",
+        "frontend/src/components/landing/HeroScene.jsx",
+        "frontend/src/components/landing/landingV2Text.js",
         "frontend/src/pages/Dashboard.jsx",
         "frontend/src/pages/TrackRecord.jsx",
         "telegram-bot/bot.py",
@@ -483,6 +485,29 @@
       "guard": "test_fingerprint_coverage, test_quality_layer",
       "docs": [
         "DECISIONS.md (13/10 المنصة التي تتعلم، 12/11 طبقة الجودة)"
+      ]
+    },
+    {
+      "id": "tp1_distance",
+      "title": "مسافة الهدف الأول (1R حتى 15/11، ثم 0.7R) وتسميته \"تأمين\"",
+      "note": "المصدر: tp_ladder.tp1_cap_r (تحويل تلقائي 16/11 00:00 UTC؛ الرجوع TP1_CAP_R=1.0 بالبيئة). أي تغيير للمسافة يمر على: نصوص المقالات والرئيسية (الأمثلة والسؤال الشائع والمشهد)، وتسمية رسائل البوت، وDECISIONS. قوالب العملاء (strategy_checker) تبقى 1R عمداً.",
+      "patterns": [
+        "tp1_cap_r|TP1_CAP_R|TP1_07_FROM|0\\.7 من مسافة الوقف|0\\.7 of the stop distance|\\(تأمين\\)|\\(secure\\)"
+      ],
+      "files": [
+        "backend/app/services/ai_engine_v5.py",
+        "backend/app/services/tp_ladder.py",
+        "backend/tests/test_tp1_presentation.py",
+        "backend/tests/test_tp_ladder.py",
+        "frontend/src/components/landing/landingV2Text.js",
+        "frontend/src/data/blogPosts.js",
+        "telegram-bot/bot.py",
+        "telegram-bot/messages.py",
+        "telegram-bot/messages_en.py"
+      ],
+      "guard": "test_tp_ladder, test_tp1_presentation",
+      "docs": [
+        "DECISIONS.md (12/11 الهدف الأول 0.7R)"
       ]
     }
   ]

@@ -2360,7 +2360,12 @@ class MoshAIEngineV5:
     # يُطبَّق **بعد** كل البوابات: لا يغيّر أي قرار ولا عدد الإشارات ولا الدخول/الوقف — فقط TP1. الهدف
     # البعيد الأصلي يصبح TP2 (يبقى للمتابعة). risk_reward يُعرض حتى TP2 (كي لا تسقط شروط الحفظ RR≥1.2).
     # لا يمسّ أي إشارة سابقة (المالك: الإحصائيات الماضية لا تتغيّر).
-    TP1_CAP_R = 1.0
+    # (2026-11-12، المالك "نفذ") 0.7R من 16/11 00:00 UTC تلقائياً — tp_ladder.tp1_cap_r، DECISIONS 12/11. يسري على الظل
+    # المرفوض أيضاً (يمر من هنا) لتبقى مقارنته بالحي عادلة (ملاحظة 30/10). الرجوع: TP1_CAP_R=1.0 بالبيئة.
+    @property
+    def TP1_CAP_R(self) -> float:
+        from app.services.tp_ladder import tp1_cap_r
+        return tp1_cap_r()
 
     def _cap_tp1(self, analysis: dict, symbol: str, timeframe: str) -> dict:
         lv = analysis.get("levels") or {}
@@ -2371,28 +2376,29 @@ class MoshAIEngineV5:
         risk = abs(entry - sl)
         if not risk:
             return analysis
+        cap = self.TP1_CAP_R                                  # قيمة واحدة لكل استدعاء
         sgn = 1 if analysis.get("recommendation") == "BUY" else -1
-        if sgn * (tp1 - entry) / risk <= self.TP1_CAP_R:
+        if sgn * (tp1 - entry) / risk <= cap:
             return analysis                                   # الهدف أصلاً قريب — لا تغيير
         try:
             tp2 = float(lv.get("tp2") or tp1)
         except (TypeError, ValueError):
             tp2 = tp1
         far = tp2 if sgn * (tp2 - tp1) > 0 else tp1          # الأبعد بين TP1 وTP2 الأصليين
-        new_tp1 = round(entry + sgn * self.TP1_CAP_R * risk, 5)
+        new_tp1 = round(entry + sgn * cap * risk, 5)
         lv["tp1_original"] = tp1
         lv["tp1"] = new_tp1
         lv["tp2"] = round(far, 5)
         rr_tp2 = round(abs(far - entry) / risk, 2)
         lv["risk_reward"] = rr_tp2
-        lv["rr_tp1"] = self.TP1_CAP_R
+        lv["rr_tp1"] = cap
         analysis["risk_reward_ratio"] = rr_tp2
         tz = analysis.get("take_profit_zones")
         if isinstance(tz, list) and tz:
             analysis["take_profit_zones"] = [new_tp1, round(far, 5)] + list(tz[2:])
         analysis["levels"] = lv
         analysis["tp1_capped"] = True
-        logger.info(f"TP1_CAP [{symbol}/{timeframe}] TP1 {tp1} → {new_tp1} ({self.TP1_CAP_R}R), TP2 {far}")
+        logger.info(f"TP1_CAP [{symbol}/{timeframe}] TP1 {tp1} → {new_tp1} ({cap}R), TP2 {far}")
         return analysis
 
     # ── (2026-11-03) قياس صامت لإصلاح FVG بالمحرك — DECISIONS 03/11 ─────────────────────────────────────────

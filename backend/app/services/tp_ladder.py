@@ -19,11 +19,31 @@
 لصفقات حقيقية والسلّم معطّل (نشر 30/10). كل من يحفظ الهدف الثالث أو يعرضه يقرأ ladder_tp3 وحده.
 """
 import os
+from datetime import datetime, timezone
 from typing import Optional, Tuple
 
 from sqlalchemy import and_
 
 LADDER_TP2_R = 2.5
+
+# (2026-11-12، قرار المالك "نفذ") الهدف الأول 0.7R من بداية W47 — DECISIONS 12/11. قراءة مبكرة (31/10–12/11، 202 صفقة):
+# مجموع +73.3R ← +80.3R، ربح 48% ← 54%، أفضل بالأسبوعين. قراءة 28/11 الرسمية فحص بعدي: إن فشلت شروطها يُرجع لـ1R.
+TP1_07_FROM = datetime(2026, 11, 16, tzinfo=timezone.utc)
+
+
+def tp1_cap_r(now=None) -> float:
+    """مسافة سقف الهدف الأول بمضاعف الوقف: 1R حتى 16/11 00:00 UTC ثم 0.7R تلقائياً (لا يلزم نشر بتلك اللحظة).
+    TP1_CAP_R بالبيئة يفرض قيمة (بين 0.3 و2) — الرجوع الفوري: TP1_CAP_R=1.0 بـbackend/.env.prod ثم إعادة تشغيل الخادم."""
+    env = os.getenv("TP1_CAP_R", "").strip()
+    if env:
+        try:
+            v = float(env)
+            if 0.3 <= v <= 2.0:
+                return v
+        except ValueError:
+            pass
+    now = now or datetime.now(timezone.utc)
+    return 0.7 if now >= TP1_07_FROM else 1.0
 
 
 def ladder_enabled() -> bool:

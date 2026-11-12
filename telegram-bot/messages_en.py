@@ -57,13 +57,17 @@ def signal_full(s: dict, mname: str, tf_label: str, conf: float) -> str:
         "",
         f"▫️ Entry     <code>{fmt_price(entry)}</code>",
         f"🛑 Stop      <code>{fmt_price(sl)}</code>   <i>−1R</i>",
-        f"🎯 TP1       <code>{fmt_price(tp1)}</code>   <i>{fmt_r(r1)}</i>",
+        # (2026-11-12) TP1 is a protective target (0.7R from 11-16) — labelled by its role; R:R shown to TP2
+        f"🔒 TP1 (secure)  <code>{fmt_price(tp1)}</code>   <i>{fmt_r(r1)}</i>",
     ]
-    if tp2 and float(tp2) != float(tp1 or 0):
+    has_tp2 = bool(tp2) and float(tp2) != float(tp1 or 0)
+    if has_tp2:
         lines.append(f"{'🎯' if tp3 else '🏁'} TP2       <code>{fmt_price(tp2)}</code>   <i>{fmt_r(r2)}</i>")
     if tp3:
         lines.append(f"🏁 TP3       <code>{fmt_price(tp3)}</code>   <i>{fmt_r(r_of(entry, sl, tp3, buy))}</i>")
-    lines += ["", "🛡 At TP1, move your stop to entry to lock the trade."]
+    if has_tp2 and r2 is not None and r2 > 0:
+        lines.append(f"📐 Risk/reward to TP2: <b>1:{r2:.1f}</b>")
+    lines += ["", "🛡 At TP1, take partial profit and move your stop to entry — the trade becomes risk-free."]
     if s.get("expires_at"):
         lines.append(_deadline(s["expires_at"]))
     lines += ["", DISCLAIMER, CHANNEL_LINE]

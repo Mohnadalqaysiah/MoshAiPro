@@ -185,10 +185,50 @@ def test_engine_splits_and_keeps_everything_else():
     assert lv["risk_reward"] == 6.0 and a["take_profit_zones"][:3] == [101.0, 102.5, 106.0]
 
 
+def _with_cap(value, fn):
+    old = os.environ.get("TP1_CAP_R")
+    os.environ["TP1_CAP_R"] = value
+    try:
+        return fn()
+    finally:
+        if old is None:
+            os.environ.pop("TP1_CAP_R", None)
+        else:
+            os.environ["TP1_CAP_R"] = old
+
+
 def test_engine_after_cap_tp1():
-    a = _analysis(tp1=104.0, tp2=106.0)
-    a = ENGINE._apply_tp_ladder(ENGINE._cap_tp1(a, "BTCUSD", "1h"), "BTCUSD", "1h")
+    def run():
+        a = _analysis(tp1=104.0, tp2=106.0)
+        return ENGINE._apply_tp_ladder(ENGINE._cap_tp1(a, "BTCUSD", "1h"), "BTCUSD", "1h")
+    a = _with_cap("1.0", run)                                                   # ثابت بالاختبار لا بتاريخ اليوم
     assert (a["levels"]["tp1"], a["levels"]["tp2"], a["levels"]["tp3"]) == (101.0, 102.5, 106.0)
+    a = _with_cap("0.7", run)                                                   # (12/11) 0.7R: الثاني والبعيد كما هما
+    assert (a["levels"]["tp1"], a["levels"]["tp2"], a["levels"]["tp3"]) == (100.7, 102.5, 106.0)
+    assert a["levels"]["rr_tp1"] == 0.7 and a["levels"]["tp1_original"] == 104.0
+
+
+def test_tp1_cap_switches_on_date_and_env_overrides():
+    from app.services.tp_ladder import TP1_07_FROM, tp1_cap_r
+    old = os.environ.pop("TP1_CAP_R", None)
+    try:
+        assert tp1_cap_r(TP1_07_FROM - timedelta(seconds=1)) == 1.0             # حتى الأحد 15/11 23:59:59 UTC
+        assert tp1_cap_r(TP1_07_FROM) == 0.7                                    # من بداية W47
+        os.environ["TP1_CAP_R"] = "1.0"
+        assert tp1_cap_r(TP1_07_FROM + timedelta(days=3)) == 1.0                # الرجوع الفوري بالبيئة
+        for bad in ("abc", "0.1", "5"):
+            os.environ["TP1_CAP_R"] = bad
+            assert tp1_cap_r(TP1_07_FROM) == 0.7                                # قيمة غير صالحة تُتجاهل
+    finally:
+        os.environ.pop("TP1_CAP_R", None)
+        if old is not None:
+            os.environ["TP1_CAP_R"] = old
+    assert TP1_07_FROM.weekday() == 0 and TP1_07_FROM.hour == 0               # بداية أسبوع ISO نظيفة
+
+
+def test_near_target_untouched_by_lower_cap():
+    a = _with_cap("0.7", lambda: ENGINE._cap_tp1(_analysis(tp1=100.5, tp2=103.0), "BTCUSD", "1h"))
+    assert a["levels"]["tp1"] == 100.5 and "tp1_capped" not in a                 # هدف أقرب من 0.7R يبقى كما هو
 
 
 def test_engine_near_target_and_switch_off():

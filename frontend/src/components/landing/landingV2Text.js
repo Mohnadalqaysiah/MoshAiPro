@@ -4,35 +4,35 @@
 
 export const DEMO = {
   ar: [
-    { sym: 'XAUUSD', name: 'الذهب', kind: 'buy', lv: ['4,158.0 – 4,161.5', '4,149.0', '4,170.5', '4,192.0'],
+    { sym: 'XAUUSD', name: 'الذهب', kind: 'buy', lv: ['4,158.0 – 4,161.5', '4,149.0', '4,167.3', '4,186.6'],
       pts: '0,40 27,46 54,42 81,62 108,70 135,82 162,77 189,66 216,59 243,63 270,52 297,46 324,40 351,33 378,28 400,25',
       checks: [['اتجاه 4H صاعد', 1], ['Order Block', 1], ['FVG', 1], ['اكتساح سيولة', 1]],
-      agent: 'الاتجاه على 4H صاعد بعد كسر هيكل (BOS)، والسعر عاد إلى Order Block في منطقة Discount على 1H مع فجوة FVG غير مغلقة، بعد اكتساح سيولة القيعان. الوقف تحت 4,149 لأن كسره يلغي الفكرة، والهدف الأول على نفس مسافة الوقف.' },
-    { sym: 'BTCUSD', name: 'البيتكوين', kind: 'sell', lv: ['81,250 – 81,450', '81,900', '80,800', '79,700'],
+      agent: 'الاتجاه على 4H صاعد بعد كسر هيكل (BOS)، والسعر عاد إلى Order Block في منطقة Discount على 1H مع فجوة FVG غير مغلقة، بعد اكتساح سيولة القيعان. الوقف تحت 4,149 لأن كسره يلغي الفكرة، والهدف الأول هدف تأمين على 0.7 من مسافة الوقف.' },
+    { sym: 'BTCUSD', name: 'البيتكوين', kind: 'sell', lv: ['81,250 – 81,450', '81,900', '80,965', '79,975'],
       pts: '0,86 27,80 54,84 81,62 108,54 135,42 162,48 189,58 216,56 243,68 270,72 297,78 324,84 351,90 378,94 400,96',
       checks: [['CHoCH هابط 4H', 1], ['منطقة Premium', 1], ['Order Block', 1], ['FVG', 1]],
       agent: 'على 4H ظهر CHoCH هابط والسعر الآن في منطقة Premium. على 1H يوجد Order Block بيعي قرب 81,400 مع FVG فوقه. الوقف فوق 81,900.' },
     { sym: 'EURUSD', name: 'يورو/دولار', kind: 'wait', lv: [], pts: '',
       checks: [['اتجاه 4H', 0], ['Order Block', 1], ['FVG', 1], ['اكتساح سيولة', 0]],
       agent: 'لا أنصح بالدخول الآن. الإطار 1H يميل للشراء، لكن 4H ما زال هابطاً ولم يكسر آخر قمة. هذا تعارض مع الإطار الأعلى، لذلك القرار انتظار. سأنبهك على تيليجرام إذا اكتمل الإعداد.' },
-    { sym: 'XAGUSD', name: 'الفضة', kind: 'sell', lv: ['59.30 – 59.40', '59.75', '58.95', '58.25'],
+    { sym: 'XAGUSD', name: 'الفضة', kind: 'sell', lv: ['59.30 – 59.40', '59.75', '59.07', '58.35'],
       pts: '0,30 27,34 54,28 81,40 108,52 135,48 162,58 189,66 216,62 243,72 270,76 297,74 324,82 351,86 378,90 400,92',
       checks: [['اتجاه 4H هابط', 1], ['BOS هابط 1H', 1], ['FVG', 1], ['منطقة Premium', 1]],
       agent: 'الفضة هابطة على 4H، وعلى 1H كسرت هيكلاً هابطاً وعادت لفجوة FVG في منطقة Premium. الوقف فوق 59.75.' },
   ],
   en: [
-    { sym: 'XAUUSD', name: 'Gold', kind: 'buy', lv: ['4,158.0 – 4,161.5', '4,149.0', '4,170.5', '4,192.0'],
+    { sym: 'XAUUSD', name: 'Gold', kind: 'buy', lv: ['4,158.0 – 4,161.5', '4,149.0', '4,167.3', '4,186.6'],
       pts: '0,40 27,46 54,42 81,62 108,70 135,82 162,77 189,66 216,59 243,63 270,52 297,46 324,40 351,33 378,28 400,25',
       checks: [['4H uptrend', 1], ['Order Block', 1], ['FVG', 1], ['Liquidity sweep', 1]],
-      agent: 'The 4H trend is up after a break of structure (BOS), and price returned to a 1H Order Block in the Discount zone with an open FVG, right after sweeping the lows. The stop sits below 4,149 because a break there kills the idea; TP1 is one stop-distance away.' },
-    { sym: 'BTCUSD', name: 'Bitcoin', kind: 'sell', lv: ['81,250 – 81,450', '81,900', '80,800', '79,700'],
+      agent: 'The 4H trend is up after a break of structure (BOS), and price returned to a 1H Order Block in the Discount zone with an open FVG, right after sweeping the lows. The stop sits below 4,149 because a break there kills the idea; TP1 is a protective target at 0.7 of the stop distance.' },
+    { sym: 'BTCUSD', name: 'Bitcoin', kind: 'sell', lv: ['81,250 – 81,450', '81,900', '80,965', '79,975'],
       pts: '0,86 27,80 54,84 81,62 108,54 135,42 162,48 189,58 216,56 243,68 270,72 297,78 324,84 351,90 378,94 400,96',
       checks: [['4H bearish CHoCH', 1], ['Premium zone', 1], ['Order Block', 1], ['FVG', 1]],
       agent: 'A bearish CHoCH printed on 4H and price is in the Premium zone. On 1H there is a bearish Order Block near 81,400 with an FVG above it. Stop above 81,900.' },
     { sym: 'EURUSD', name: 'Euro/Dollar', kind: 'wait', lv: [], pts: '',
       checks: [['4H trend', 0], ['Order Block', 1], ['FVG', 1], ['Liquidity sweep', 0]],
       agent: "I wouldn't enter now. 1H leans bullish, but 4H is still bearish and hasn't broken its last high. That conflicts with the higher timeframe, so the decision is wait. I'll alert you on Telegram if the setup completes." },
-    { sym: 'XAGUSD', name: 'Silver', kind: 'sell', lv: ['59.30 – 59.40', '59.75', '58.95', '58.25'],
+    { sym: 'XAGUSD', name: 'Silver', kind: 'sell', lv: ['59.30 – 59.40', '59.75', '59.07', '58.35'],
       pts: '0,30 27,34 54,28 81,40 108,52 135,48 162,58 189,66 216,62 243,72 270,76 297,74 324,82 351,86 378,90 400,92',
       checks: [['4H downtrend', 1], ['1H bearish BOS', 1], ['FVG', 1], ['Premium zone', 1]],
       agent: 'Silver is bearish on 4H; on 1H it broke structure down and retraced into an FVG in the Premium zone. Stop above 59.75.' },
@@ -133,6 +133,7 @@ export const TXT = {
     faq: [
       ['هل الإشارات مضمونة الربح؟', 'لا. لا توجد أي إشارة مضمونة. Qaffel أداة تحليل فني تساعدك على قرار أوضح، والتداول ينطوي على مخاطر عالية قد تؤدي لخسارة رأس المال. استخدم وقف الخسارة دائماً.'],
       ['متى تُحسب الإشارة رابحة؟', 'عند بلوغ الهدف الأول، وتُحسب بأعلى هدف بلغته. إدارة الصفقة بعد الهدف الأول حسب خطتك. وإذا عادت الصفقة للدخول بعد رسالة التأمين تُحسب "تأمين" بلا ربح ولا خسارة.'],
+      ['لماذا الهدف الأول أقرب من الوقف؟', 'الهدف الأول هدف تأمين على 0.7 من مسافة الوقف. قسناه على صفقاتنا الفعلية: صفقات كثيرة تقترب من الهدف ثم تعود، والهدف الأقرب يحوّل جزءاً منها من خسارة إلى ربح. عنده تأخذ جزءاً من الربح وتنقل الوقف لنقطة الدخول فتصبح الصفقة بلا مخاطرة، والربح الأكبر في الهدف الثاني (2.5 ضعف الوقف) والثالث.'],
       ['ما الأسواق المدعومة؟', 'الذهب والفضة والبلاتين والنحاس، والنفط والغاز، والعملات الرقمية الرئيسية، وأزواج الفوركس، والمؤشرات الأمريكية، وأسهم أمريكية، وأسهم خليجية مثل أرامكو والراجحي وإعمار. إشارات العملات الرقمية تتوقف يومي السبت والأحد.'],
       ['كيف يعمل ربط تيليجرام؟', 'بعد التسجيل تظهر لك خطوة "ربط تيليجرام"، أو تجدها في لوحة التحكم: تفتح @Qaffelbot وتضغط Start فيرتبط حسابك، ومن الكمبيوتر تمسح رمز QR بجوالك. بعدها تصل الإشارات والتنبيهات إلى هاتفك.'],
       ['هل يتجدد الاشتراك تلقائياً؟', 'لا. الاشتراك غير ملزم، وينتهي تلقائياً بنهاية مدته.'],
@@ -193,6 +194,7 @@ export const TXT = {
     faq: [
       ['Are the signals guaranteed to profit?', 'No. No signal is guaranteed. Qaffel is a technical-analysis tool that helps you decide more clearly; trading carries high risk and can lose capital. Always use a stop loss.'],
       ['When does a signal count as a win?', 'When it reaches Target 1, and it counts at the highest target it reached. Managing the trade after Target 1 is up to your plan. If the trade returns to entry after the breakeven alert, it counts as "breakeven" — neither win nor loss.'],
+      ['Why is the first target closer than the stop?', 'Target 1 is a protective target at 0.7 of the stop distance. Measured on our real trades, many setups come close to the target and then reverse; the closer target turns part of them from losses into wins. At Target 1 you take partial profit and move your stop to entry so the trade becomes risk-free; the bigger gains are at Target 2 (2.5x the stop) and Target 3.'],
       ['Which markets are supported?', 'Gold, silver, platinum and copper, oil and gas, major cryptocurrencies, forex pairs, US indices, US stocks, and Gulf stocks such as Aramco, Al Rajhi and Emaar. Crypto signals pause on Saturdays and Sundays.'],
       ['How does the Telegram link work?', 'After you sign up you get a "Link Telegram" step, also in your dashboard: it opens @Qaffelbot, you press Start and your account is linked. On a computer, scan the QR code with your phone. Signals and alerts then reach your phone.'],
       ['Does the subscription auto-renew?', 'No. Subscriptions are non-binding and end automatically at the end of their term.'],
@@ -209,13 +211,13 @@ export const TXT = {
 }
 
 // (2026-10-17) نصوص مشهد الـHero (HeroScene). مصطلحات ICT بالإنجليزية في اللغتين. بلا درجة A+ (المنصة لا تحفظها).
-// R:R حتى الهدف الثاني، والهدف الأول على 1R كما في المنصة.
+// R:R حتى الهدف الثاني (2.5R)، والهدف الأول تأمين على 0.7R — كما في المنصة من 16/11 (DECISIONS 12/11).
 export const HERO_SCENE = {
   ar: {
     steps: ['بيانات السوق', 'رصد ICT', 'تقييم الذكاء الاصطناعي', 'الإشارة'],
     labels: { sweep: 'اكتساح سيولة', ob: 'Order Block', fvg: 'FVG', bos: 'كسر هيكل BOS', ai: 'الذكاء الاصطناعي',
       tp2: 'هدف 2', tp1: 'هدف 1', entry: 'دخول', sl: 'وقف' },
-    side: '▲ شراء', symbol: 'XAUUSD · 1H', grade: '', rr: 'R:R 1:3.6',
+    side: '▲ شراء', symbol: 'XAUUSD · 1H', grade: '', rr: 'R:R 1:2.5',
     toastTitle: '@Qaffelbot', toastText: 'إشارة جديدة · XAUUSD شراء',
     note: 'محاكاة توضيحية لطريقة عمل المحرك، وليست توصية.',
   },
@@ -223,7 +225,7 @@ export const HERO_SCENE = {
     steps: ['Market data', 'ICT detection', 'AI review', 'Signal'],
     labels: { sweep: 'Liquidity sweep', ob: 'Order Block', fvg: 'FVG', bos: 'BOS', ai: 'AI',
       tp2: 'TP2', tp1: 'TP1', entry: 'Entry', sl: 'Stop' },
-    side: '▲ Buy', symbol: 'XAUUSD · 1H', grade: '', rr: 'R:R 1:3.6',
+    side: '▲ Buy', symbol: 'XAUUSD · 1H', grade: '', rr: 'R:R 1:2.5',
     toastTitle: '@Qaffelbot', toastText: 'New signal · XAUUSD buy',
     note: 'Illustrative simulation of how the engine works — not a recommendation.',
   },
