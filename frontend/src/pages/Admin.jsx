@@ -344,6 +344,16 @@ function UserModal({ user: u, onClose, onUpdate }) {
             {(u.notify_timeframes || []).length > 0 && (
               <p className="text-[11px] text-gray-500 mt-1.5">الفريم: {u.notify_timeframes.join(', ')}</p>
             )}
+            {/* (2026-11-12) كل ما يحجب الإشارة عنه بنظرة واحدة — لماذا لم تصله: diag_delivery.py برقم الإشارة */}
+            <p className="text-[11px] text-gray-500 mt-1.5">
+              حد الثقة: {u.notify_min_confidence ? `${u.notify_min_confidence}% فأعلى فقط` : 'كل الإشارات (بلا حد)'}
+              {(u.notify_timeframes || []).length === 0 && ' · كل الفريمات'}
+            </p>
+            <p className={`text-[11px] mt-1 ${!u.telegram_id ? 'text-amber-400' : u.telegram_blocked_at ? 'text-red-400' : 'text-gray-500'}`}>
+              تيليجرام: {!u.telegram_id ? 'غير مربوط — لا تصله إشارات البوت'
+                : u.telegram_blocked_at ? `حظر البوت منذ ${new Date(u.telegram_blocked_at).toLocaleDateString('ar-EG')} — لا تصله الرسائل`
+                : 'مربوط'}
+            </p>
           </div>
           </>
           )}
