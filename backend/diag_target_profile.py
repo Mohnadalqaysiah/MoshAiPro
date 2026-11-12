@@ -16,7 +16,10 @@
 لا يكتب شيئاً.
 
     docker cp backend/diag_target_profile.py moshapi_backend:/app/
-    docker exec moshapi_backend python diag_target_profile.py [أيام=14] [أساليب مثل CFLMO] 2>/dev/null
+    docker exec moshapi_backend python diag_target_profile.py [أيام=14 أو تاريخ YYYY-MM-DD] [أساليب مثل CFLMO] 2>/dev/null
+
+القراءة الرسمية لقاعدة 0.7R (يوم 2026-11-28 أو بعده):
+    docker exec -i moshapi_backend python - 2026-10-31 OP < backend/diag_target_profile.py 2>/dev/null
 """
 import sys, asyncio
 sys.path.insert(0, "/app")
@@ -30,7 +33,50 @@ from app.models.signal import Signal, SignalStatus
 from app.services.decision_grouping import group_unique_decisions, merge_reissued
 
 TRUSTED_FROM = datetime(2026, 9, 16, tzinfo=timezone.utc)
-DAYS = int(sys.argv[1]) if len(sys.argv) > 1 else 14
+
+
+def _parse_since(arg):
+    """(2026-11-12) أول وسيط: عدد أيام، أو تاريخ YYYY-MM-DD (لقاعدة 0.7R: الصفقات بعد تفعيل السلّم وحدها)."""
+    try:
+        return datetime.strptime(arg, "%Y-%m-%d").replace(tzinfo=timezone.utc), None
+    except (TypeError, ValueError):
+        pass
+    try:
+        return None, int(arg)
+    except (TypeError, ValueError):
+        return None, 14
+
+
+SINCE_DATE, DAYS = _parse_since(sys.argv[1] if len(sys.argv) > 1 else "14")
+
+# (2026-11-12) قاعدة 0.7R المسجّلة 30/10 (DECISIONS): بعد 4 أسابيع من تفعيل السلّم، على الصفقات بعده وحدها، يُعرض P (0.7R ثم 2.5R
+# ثم البعيد) على المالك إن فاق O (1R ثم 2.5R ثم البعيد) بالمجموع، وفي أغلب الأسابيع، وبنسبة ربح أعلى بـ5 نقاط على الأقل.
+# تعريف تشغيلي مُضاف قبل القراءة: "الأسبوع" = أسبوع ISO فيه ≥ 10 قرارات، و"أغلب" = أكثر من نصفها.
+LADDER_LIVE = datetime(2026, 10, 31, tzinfo=timezone.utc)
+RULE_07_DATE = LADDER_LIVE + timedelta(weeks=4)
+RULE_07_MIN_WEEK = 10
+
+
+def rule_07(res):
+    """res: (أسلوب، فئة، أسبوع، يوم، R). يُرجع الشروط الثلاثة والحكم، أو None إن غاب O أو P."""
+    o = [x for x in res if x[0] == "O"]
+    p = [x for x in res if x[0] == "P"]
+    if not o or not p:
+        return None
+
+    def wr(xs):
+        return sum(1 for x in xs if x[4] > 0.001) / len(xs) * 100
+
+    weeks = sorted({x[2] for x in o})
+    counted = [w for w in weeks if sum(1 for x in o if x[2] == w) >= RULE_07_MIN_WEEK]
+    better = [w for w in counted if sum(x[4] for x in p if x[2] == w) > sum(x[4] for x in o if x[2] == w)]
+    out = {"tot_o": sum(x[4] for x in o), "tot_p": sum(x[4] for x in p), "wr_o": wr(o), "wr_p": wr(p),
+           "weeks": len(counted), "better": len(better)}
+    out["c_total"] = out["tot_p"] > out["tot_o"]
+    out["c_weeks"] = bool(counted) and len(better) > len(counted) / 2
+    out["c_wr"] = out["wr_p"] - out["wr_o"] >= 5
+    out["pass"] = out["c_total"] and out["c_weeks"] and out["c_wr"]
+    return out
 SPOT_TV = {"XAUUSD", "XAGUSD"}
 NAMES = {"crypto": "كريبتو", "forex": "فوركس", "commodity": "معادن وطاقة", "index": "مؤشرات"}
 PROFILES = [("A", "كما هو اليوم"), ("B", "هدف 1R كامل"), ("C", "نصف عند 1R + تعادل + الباقي TP2"),
@@ -211,7 +257,7 @@ def run(rows, created, end_ts, entry, sl, tp1, tp2, is_buy, profile):
 
 async def main():
     db = SessionLocal()
-    since = max(TRUSTED_FROM, datetime.now(timezone.utc) - timedelta(days=DAYS))
+    since = SINCE_DATE or max(TRUSTED_FROM, datetime.now(timezone.utc) - timedelta(days=DAYS))
     cat = {r[0].upper(): (r[1] or "?") for r in db.query(MarketConfig.symbol, MarketConfig.category).all()}
     rows = db.query(Signal).filter(
         Signal.status.in_([SignalStatus.TP1_HIT, SignalStatus.TP2_HIT, SignalStatus.SL_HIT, SignalStatus.EXPIRED]),
@@ -297,6 +343,19 @@ async def main():
 
     if skipped:
         print(f"\n⚠️ بلا شموع (لم تُحسب): {', '.join(skipped)}")
+
+    v = rule_07(res)
+    if v:
+        mark = lambda ok: "✅" if ok else "❌"
+        print("\n══ قاعدة 0.7R المسجّلة (30/10): P مقابل O ══")
+        print(f"  المجموع: O {v['tot_o']:+.1f}R ← P {v['tot_p']:+.1f}R  {mark(v['c_total'])}")
+        print(f"  الأسابيع (≥ {RULE_07_MIN_WEEK} قرارات): P أفضل في {v['better']} من {v['weeks']}  {mark(v['c_weeks'])}")
+        print(f"  نسبة الربح: O {v['wr_o']:.0f}% ← P {v['wr_p']:.0f}% (فرق {v['wr_p'] - v['wr_o']:+.0f} نقطة، المطلوب ≥ 5)  {mark(v['c_wr'])}")
+        official = since == LADDER_LIVE and datetime.now(timezone.utc) >= RULE_07_DATE
+        if official:
+            print("  الحكم: " + ("🟢 تحققت — يُعرض 0.7R على المالك" if v["pass"] else "⛔ لم تتحقق — يبقى 1R"))
+        else:
+            print(f"  ⚠️ قراءة غير رسمية (الرسمية: من {LADDER_LIVE:%Y-%m-%d} وبعد {RULE_07_DATE:%Y-%m-%d}) — مؤشر لا حكم.")
     print("⚠️ محاكاة على الماضي لا وعد بالمستقبل. الصفقات المفتوحة أو التي لم يتفعّل دخولها مستبعدة من كل الأساليب.")
 
 
