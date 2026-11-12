@@ -2000,7 +2000,9 @@ async def monitor_watchlists(app: Application):
                             continue  # ما فيه مستويات كاملة — ما نقدر نتحقق أو نتتبّع الصفقة
 
                         try:
-                            save_res = await _post("/api/v1/bot/save-alert-signal", params={
+                            save_res = await _post("/api/v1/bot/save-alert-signal",
+                                                   # (2026-11-12) لقطة بصمة السوق من التحليل نفسه — تُحفظ بصف التنبيه
+                                                   json={"fp": data.get("_fp") or {}}, params={
                                 "telegram_id": str(uid_),
                                 "symbol":      symbol,
                                 "timeframe":   tf,

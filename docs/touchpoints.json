@@ -280,6 +280,7 @@
         "backend/diag_crypto_weekend.py",
         "backend/diag_review.py",
         "backend/diag_shadow_signals.py",
+        "backend/tests/test_fingerprint_coverage.py",
         "backend/tests/test_fvg_shadow.py",
         "backend/tests/test_new_coins.py",
         "backend/tests/test_shadow_levels.py",
@@ -301,6 +302,7 @@
         "backend/app/api/signals.py",
         "backend/app/services/ai_engine_v5.py",
         "backend/app/services/weekend_policy.py",
+        "backend/tests/test_fingerprint_coverage.py",
         "backend/tests/test_shadow_levels.py"
       ]
     },
@@ -463,6 +465,24 @@
       "guard": "test_us_stocks_pause",
       "docs": [
         "DECISIONS.md (11/11 إيقاف الأسهم الأمريكية)"
+      ]
+    },
+    {
+      "id": "fingerprint_capture",
+      "title": "مواضع التقاط بصمة السوق (طبقة الجودة)",
+      "note": "كل مسار يحفظ إشارة أو صفقة ظل يجب أن يلتقط البصمة (market_fingerprint.schedule). فجوة 12/11: صفوف المراقبة والظل المرفوض كانت بلا بصمة (117 من 659). مسار حفظ جديد = موضع التقاط جديد هنا.",
+      "patterns": [
+        "market_fingerprint\\.(schedule|capture|from_analysis)|\"_fp\"|data\\.get\\(\"_fp\"\\)"
+      ],
+      "files": [
+        "backend/app/api/bot.py",
+        "backend/app/api/signals.py",
+        "backend/tests/test_fingerprint_coverage.py",
+        "telegram-bot/bot.py"
+      ],
+      "guard": "test_fingerprint_coverage, test_quality_layer",
+      "docs": [
+        "DECISIONS.md (13/10 المنصة التي تتعلم، 12/11 طبقة الجودة)"
       ]
     }
   ]
