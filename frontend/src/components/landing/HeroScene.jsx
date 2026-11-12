@@ -9,6 +9,7 @@
 // - كل النصوص تأتي من prop اسمه `text` (ضعها في LangContext بالعربية والإنجليزية)
 // (2026-10-17، Qaffel) تعديلان على نسخة الحزمة: الدرجة A+ لا تُعرض إن كانت فارغة (المنصة لا تحفظ درجة للإشارة)،
 // والهدف الأول على 1R من الدخول (سياسة المنصة منذ 14/10) بدل 2.2R — الشموع نفسها لم تُمسّ.
+// (2026-11-12) الهدف الأول 0.7R والثاني 2.5R كما في المنصة من 16/11 (DECISIONS 12/11).
 import { useEffect, useRef, useState } from 'react'
 import './HeroScene.css'
 
@@ -18,7 +19,7 @@ const DEFAULT_TEXT = {
     sweep: 'اكتساح سيولة', ob: 'Order Block', fvg: 'FVG', bos: 'كسر هيكل BOS', ai: 'الذكاء الاصطناعي',
     tp2: 'هدف 2', tp1: 'هدف 1', entry: 'دخول', sl: 'وقف',
   },
-  side: '▲ شراء', symbol: 'XAUUSD · 1H', grade: '', rr: 'R:R 1:3.6',
+  side: '▲ شراء', symbol: 'XAUUSD · 1H', grade: '', rr: 'R:R 1:2.5',
   toastTitle: '@Qaffelbot', toastText: 'إشارة جديدة · XAUUSD شراء',
   note: 'محاكاة توضيحية لطريقة عمل المحرك، وليست توصية.',
 }
@@ -150,8 +151,8 @@ export default function HeroScene({ text = DEFAULT_TEXT, className = '' }) {
       hline(X(swingI), X(30) + 0.25, Y(swingHigh), 0xdde5f2, scanAt(X(30)) + 0.35, true, 0.85)
       zone(X(34) - 0.1, XEND, Y(5.95), Y(6.15), GOLD, 0.5, SIG, 0.9)
       hline(X(34), XEND, Y(5.35), CORAL, SIG + 0.25)
-      hline(X(34), XEND, Y(6.75), MINT, SIG + 0.45)   // TP1 = 1R
-      hline(X(34), XEND, Y(8.6), MINT, SIG + 0.65)
+      hline(X(34), XEND, Y(6.54), MINT, SIG + 0.45)   // TP1 = 0.7R
+      hline(X(34), XEND, Y(7.8), MINT, SIG + 0.65)    // TP2 = 2.5R
 
       const ring = new THREE.Mesh(keep(new THREE.TorusGeometry(0.3, 0.025, 12, 48)), keep(new THREE.MeshBasicMaterial({ color: CORAL, transparent: true, opacity: 0 })))
       ring.position.set(X(26), Y(3.6), 0); scene.add(ring)
@@ -234,8 +235,8 @@ export default function HeroScene({ text = DEFAULT_TEXT, className = '' }) {
         fvg: { p: [X(29) + 0.9, Y(6.05) + 0.05, 0], from: scanAt(X(30)) },
         bos: { p: [(X(swingI) + X(30)) / 2, Y(swingHigh) + 0.08, 0], from: scanAt(X(30)) + 0.35 },
         ai: { p: [brain.position.x, brain.position.y + 2.25, brain.position.z], from: 0, always: true },
-        tp2: { p: [XEND, Y(8.6), 0], from: SIG + 0.65 },
-        tp1: { p: [XEND, Y(6.75), 0], from: SIG + 0.45 },
+        tp2: { p: [XEND, Y(7.8), 0], from: SIG + 0.65 },
+        tp1: { p: [XEND, Y(6.54), 0], from: SIG + 0.45 },
         entry: { p: [XEND, Y(6.05), 0], from: SIG },
         sl: { p: [XEND, Y(5.35), 0], from: SIG + 0.25 },
       }

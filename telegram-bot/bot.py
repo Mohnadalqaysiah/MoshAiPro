@@ -524,7 +524,7 @@ def fmt_analysis_en(data: dict, symbol: str, timeframe: str) -> str:
     elif entry_v:
         msg += f"🎯 Entry:  `{_fmt_price(entry_v)}`\n"
     if sl:  msg += f"🛑 Stop:   `{_fmt_price(sl)}`\n"
-    if tp1: msg += f"✅ TP1:    `{_fmt_price(tp1)}`\n"
+    if tp1: msg += f"🔒 TP1 (secure): `{_fmt_price(tp1)}`\n"
     if tp2: msg += f"✅ TP2:    `{_fmt_price(tp2)}`\n"
     if lvls.get("ladder_tp3"): msg += f"✅ TP3:    `{_fmt_price(lvls['ladder_tp3'])}`\n"
     if rr:  msg += f"⚖️ R/R:    `{float(rr):.2f}x`\n"
@@ -601,7 +601,7 @@ def fmt_analysis(data: dict, symbol: str, timeframe: str) -> str:
     elif entry_v:
         msg += f"🎯 دخول:  `{_fmt_price(entry_v)}`\n"
     if sl:  msg += f"🛑 وقف:   `{_fmt_price(sl)}`\n"
-    if tp1: msg += f"✅ هدف 1: `{_fmt_price(tp1)}`\n"
+    if tp1: msg += f"🔒 هدف 1 (تأمين): `{_fmt_price(tp1)}`\n"   # (2026-11-12) هدف تأمين — DECISIONS 12/11
     if tp2: msg += f"✅ هدف 2: `{_fmt_price(tp2)}`\n"
     if lvls.get("ladder_tp3"): msg += f"✅ هدف 3: `{_fmt_price(lvls['ladder_tp3'])}`\n"
     if rr:  msg += f"⚖️ R/R:   `{float(rr):.2f}x`\n"
@@ -684,7 +684,7 @@ def fmt_new_signal(s: dict) -> str:
         f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"🎯 دخول:  `{entry}`\n"
         f"🛑 وقف:   `{sl}`\n"
-        f"✅ هدف 1: `{tp1}`\n"
+        f"🔒 هدف 1 (تأمين): `{tp1}`\n"
         f"✅ هدف 2: `{tp2}`\n"
         + (f"✅ هدف 3: `{_fmt_price(s['take_profit_3'])}`\n" if s.get("take_profit_3") else "")
     )

@@ -140,13 +140,17 @@ def signal_full(s: dict, mname: str, tf_label: str, conf: float) -> str:
         "",
         f"▫️ الدخول      <code>{fmt_price(entry)}</code>",
         f"🛑 الوقف        <code>{fmt_price(sl)}</code>   <i>−1R</i>",
-        f"🎯 الهدف 1    <code>{fmt_price(tp1)}</code>   <i>{fmt_r(r1)}</i>",
+        # (2026-11-12) الهدف 1 هدف تأمين (0.7R من 16/11) — يُسمّى بوظيفته، والعائد يُعرض حتى الهدف 2 (DECISIONS 12/11)
+        f"🔒 الهدف 1 (تأمين)  <code>{fmt_price(tp1)}</code>   <i>{fmt_r(r1)}</i>",
     ]
-    if tp2 and float(tp2) != float(tp1 or 0):
+    has_tp2 = bool(tp2) and float(tp2) != float(tp1 or 0)
+    if has_tp2:
         lines.append(f"{'🎯' if tp3 else '🏁'} الهدف 2    <code>{fmt_price(tp2)}</code>   <i>{fmt_r(r2)}</i>")
     if tp3:
         lines.append(f"🏁 الهدف 3    <code>{fmt_price(tp3)}</code>   <i>{fmt_r(r_of(entry, sl, tp3, buy))}</i>")
-    lines += ["", "🛡 عند الهدف 1 انقل الوقف لنقطة الدخول لتأمين الصفقة."]
+    if has_tp2 and r2 is not None and r2 > 0:
+        lines.append(f"📐 العائد للمخاطرة حتى الهدف 2: <b>1:{r2:.1f}</b>")
+    lines += ["", "🛡 عند الهدف 1 خذ جزءاً من الربح وانقل الوقف لنقطة الدخول — تصبح الصفقة بلا مخاطرة."]
     if s.get("expires_at"):
         lines.append(_deadline(s["expires_at"]))
     if s.get("trade_type_warning"):
