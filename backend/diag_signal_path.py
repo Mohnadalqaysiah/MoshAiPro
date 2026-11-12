@@ -21,12 +21,19 @@ def _utc(d):
 
 
 def walk(rows, created, expires, entry, sl, tp1, tp2, tp3, is_buy):
-    """rows: (ts UTC، أعلى، أدنى). يعيد ملخص المسار بنفس قاعدة لمس الدخول (lo <= entry <= hi)."""
+    """rows: (ts UTC، أعلى، أدنى). يعيد ملخص المسار بنفس قاعدة لمس الدخول (lo <= entry <= hi).
+    near/far: أقرب ما وصله السعر للدخول قبل لمسه، وأبعد حركة لصالح الصفقة بالمدة كلها (لما لا يُلمس الدخول)."""
     entry_ts, best, best_ts, worst, worst_ts, first = None, None, None, None, None, {}
+    near, near_ts, far = None, None, None
     for ts, hi, lo in rows:
         if ts < created or (expires and ts > expires):
             continue
         if entry_ts is None:
+            gap = 0.0 if lo <= entry <= hi else min(abs(hi - entry), abs(lo - entry))
+            if near is None or gap < near:
+                near, near_ts = gap, ts
+            fav = lo if not is_buy else hi
+            far = fav if far is None or (fav < far if not is_buy else fav > far) else far
             if not (lo <= entry <= hi):
                 continue
             entry_ts = ts
@@ -40,7 +47,8 @@ def walk(rows, created, expires, entry, sl, tp1, tp2, tp3, is_buy):
                 hit = (hi >= lvl if is_buy else lo <= lvl) if good else (lo <= lvl if is_buy else hi >= lvl)
                 if hit:
                     first[name] = ts
-    return {"entry_ts": entry_ts, "best": best, "best_ts": best_ts, "worst": worst, "worst_ts": worst_ts, "first": first}
+    return {"entry_ts": entry_ts, "best": best, "best_ts": best_ts, "worst": worst, "worst_ts": worst_ts, "first": first,
+            "near": near, "near_ts": near_ts, "far": far}
 
 
 def _print(name, res, entry, sl, tp1, is_buy):
@@ -50,6 +58,9 @@ def _print(name, res, entry, sl, tp1, is_buy):
         return
     if res["entry_ts"] is None:
         print("  الدخول لم يُلمس ضمن المدة — الصفقة لم تُفتح")
+        if res.get("near") is not None:
+            print(f"  أقرب ما وصله السعر للدخول: {res['near']:.2f}$ عند {res['near_ts']:%m-%d %H:%M} UTC")
+            print(f"  أبعد سعر لصالح الصفقة بالمدة: {res['far']:.2f} (الهدف 1 {tp1:.2f})")
         return
     risk = abs(entry - sl)
     to_r = (lambda p: (p - entry) / risk) if is_buy else (lambda p: (entry - p) / risk)
