@@ -247,6 +247,7 @@
         "backend/app/api/bot.py",
         "backend/app/models/user.py",
         "backend/app/services/link_reminder.py",
+        "backend/app/services/recommended_prefs.py",
         "backend/app/services/web_push_broadcaster.py",
         "backend/diag_delivery.py",
         "backend/diag_prefs.py",
@@ -254,6 +255,7 @@
         "backend/tests/test_15m_prefs_and_news.py",
         "backend/tests/test_delivery_diag.py",
         "backend/tests/test_link_funnel.py",
+        "backend/tests/test_recommended_prefs.py",
         "backend/tests/test_telegram_messages.py",
         "frontend/src/components/TradingPreferencesPanel.jsx",
         "frontend/src/components/WatchlistQuickCard.jsx",
@@ -530,6 +532,26 @@
       "guard": "test_spot_basis",
       "docs": [
         "DECISIONS.md (12/11 إشارة #10330)"
+      ]
+    },
+    {
+      "id": "recommended_prefs",
+      "title": "الإعداد الموصى به للعميل (كل الأسواق والفريمات، بلا حد ثقة) ونص النصيحة",
+      "note": "القيم في recommended_prefs.RECOMMENDED (مصدر واحد للموقع والبوت). نص النصيحة مكرّر بالموقع (TradingPreferencesPanel.jsx) والبوت (RECOMMENDED_TIP_AR/EN) وأرقامه من diag_pref_profiles.py — إعادة القياس تعني تحديث النصين معاً.",
+      "patterns": [
+        "recommended_prefs|RECOMMENDED_TIP|apply-recommended|preferences/recommended|الإعداد الموصى به|Recommended setup"
+      ],
+      "files": [
+        "backend/app/api/auth.py",
+        "backend/app/api/bot.py",
+        "backend/app/services/recommended_prefs.py",
+        "backend/tests/test_recommended_prefs.py",
+        "frontend/src/components/TradingPreferencesPanel.jsx",
+        "telegram-bot/bot.py"
+      ],
+      "guard": "test_recommended_prefs",
+      "docs": [
+        "DECISIONS.md (12/11 الإعداد الموصى به)"
       ]
     }
   ]

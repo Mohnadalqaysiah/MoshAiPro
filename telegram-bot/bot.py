@@ -271,6 +271,31 @@ async def _post(path: str, json=None, params: dict = None, timeout: int = 15) ->
     return {}
 
 
+# (2026-11-12) نصيحة "الإعداد الموصى به" — نفس نص لوحة التخصيص بالموقع (TradingPreferencesPanel.jsx)؛ المصدر diag_pref_profiles.py
+RECOMMENDED_TIP_AR = (
+    "✨ *الإعداد الموصى به — من نتائج منصتنا الفعلية*\n━━━━━━━━━━━━━━━━━━━━━━\n"
+    "1️⃣ *استقبل كل الأسواق وكل الفريمات.* منذ 14 أكتوبر، المشترك الذي استقبل كل الإشارات حقق أعلى مجموع؛ "
+    "واختيار فريم واحد قلّل المجموع بنحو الثلث أو أكثر.\n\n"
+    "2️⃣ *لا تضع حداً أدنى للثقة.* نسبة الثقة لا ترتّب الربح عندنا: إشارات 60-64% كانت أفضل من 65-69%، "
+    "وحد 65% كان سيحجب أكثر من نصف المجموع.\n\n"
+    "3️⃣ *ما يثبت ضعفه نوقفه نحن من المصدر.* لا تحتاج أن تفلتر بنفسك.\n\n"
+    "4️⃣ *تحكّم بالمخاطرة بحجم اللوت لا بعدد الإشارات.* مخاطرة ثابتة 1-2% لكل صفقة؛ "
+    "وإن كانت الإشارات كثيرة عليك أوقف سوقاً لا تتداوله من الزر تحت الإشارة.\n\n"
+    "_نتائج سابقة لا تضمن المستقبل. القرار لك._"
+)
+RECOMMENDED_TIP_EN = (
+    "✨ *Recommended setup — from our actual results*\n━━━━━━━━━━━━━━━━━━━━━━\n"
+    "1️⃣ *Receive every market and timeframe.* Since Oct 14, the subscriber who received every signal had the highest "
+    "total; a single timeframe cut it by about a third or more.\n\n"
+    "2️⃣ *Do not set a minimum confidence.* Confidence does not rank profit here: 60-64% signals did better than "
+    "65-69%, and a 65% minimum would have hidden over half the total.\n\n"
+    "3️⃣ *We pause what proves weak at the source.* No need to filter yourself.\n\n"
+    "4️⃣ *Control risk with lot size, not signal count.* A fixed 1-2% risk per trade; if signals are too many, "
+    "mute a market you do not trade from the button under the signal.\n\n"
+    "_Past results do not guarantee the future. Your choice._"
+)
+
+
 async def _load_wl_from_db(uid: int, telegram_id: str):
     """يحمّل إعدادات المراقبة من DB إلى الذاكرة"""
     d = await _get("/api/v1/bot/watchlist", {"telegram_id": telegram_id})
@@ -1401,8 +1426,38 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 [InlineKeyboardButton(_t(lg, "🔔 تبديل الإشعارات", "🔔 Toggle notifications"), callback_data="cfg_notif")],
                 [InlineKeyboardButton(_t(lg, "⏱ تغيير الإطار الزمني", "⏱ Change timeframe"), callback_data="cfg_tf")],
                 [InlineKeyboardButton(_t(lg, "🎯 تغيير الحد الأدنى", "🎯 Change minimum"), callback_data="cfg_conf")],
+                [InlineKeyboardButton(_t(lg, "✨ الإعداد الموصى به", "✨ Recommended setup"), callback_data="cfg_recommended")],
                 [back_btn(lg)],
             ]),
+        )
+        return
+
+    # (2026-11-12) "الإعداد الموصى به" — نفس recommended_prefs.apply بالموقع (DECISIONS.md 12/11)
+    if d == "cfg_recommended":
+        await q.edit_message_text(
+            _t(lg, RECOMMENDED_TIP_AR, RECOMMENDED_TIP_EN), parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton(_t(lg, "✅ طبّقه الآن", "✅ Apply now"), callback_data="cfg_recommended_apply")],
+                [InlineKeyboardButton(_t(lg, "⬅️ الإعدادات", "⬅️ Settings"), callback_data="m_settings")],
+            ]),
+        )
+        return
+
+    if d == "cfg_recommended_apply":
+        r = await _post("/api/v1/bot/apply-recommended", params={"telegram_id": tgid})
+        if not r.get("success"):
+            await q.answer(_t(lg, "تعذّر التطبيق — اربط حسابك أولاً", "Could not apply — link your account first"), show_alert=True)
+            return
+        _wl_symbols[uid] = set()
+        _wl_conf[uid] = 0
+        _wl_notif[uid] = True
+        await q.edit_message_text(
+            _t(lg, "✅ *تم* — ستصلك كل الإشارات من الآن: كل الأسواق، كل الفريمات، بأي نسبة ثقة.\n"
+                   "تقدر توقف سوقاً لا تتداوله من الزر تحت الإشارة.",
+               "✅ *Done* — you now receive every signal: all markets, all timeframes, any confidence.\n"
+               "Mute a market you do not trade from the button under the signal."),
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(_t(lg, "⬅️ الإعدادات", "⬅️ Settings"), callback_data="m_settings")]]),
         )
         return
 
@@ -1421,7 +1476,9 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if d == "cfg_conf":
         await q.edit_message_text(
-            _t(lg, "🎯 *اختر الحد الأدنى للثقة:*\n(أعلى = إشارات أقل لكن أقوى)", "🎯 *Choose the minimum confidence:*\n(higher = fewer but stronger signals)"),
+            # (2026-11-12) كان "(أعلى = إشارات أقل لكن أقوى)" — diag_pref_profiles: الثقة لا ترتّب الربح (DECISIONS.md 12/11)
+            _t(lg, "🎯 *اختر الحد الأدنى للثقة:*\n(أعلى = إشارات أقل، لا أقوى — نتائجنا: الموصى به كل النسب ✨)",
+                   "🎯 *Choose the minimum confidence:*\n(higher = fewer signals, not stronger — our results: any confidence is recommended ✨)"),
             parse_mode="Markdown", reply_markup=kb_conf_select(lg),
         )
         return

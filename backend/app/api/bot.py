@@ -2118,3 +2118,17 @@ def bot_save_watchlist(
     user.notifications_enabled  = notifications_enabled
     db.commit()
     return {"success": True}
+
+
+@router.post("/apply-recommended")
+def bot_apply_recommended(telegram_id: str, _: bool = Depends(verify_bot), db: Session = Depends(get_db)):
+    """(2026-11-12) زر "✨ الإعداد الموصى به" بالبوت — نفس recommended_prefs.apply التي يستخدمها الموقع."""
+    from app.services import recommended_prefs
+    user = _get_linked_user(telegram_id, db)
+    if not user:
+        raise HTTPException(404, "User not linked")
+    before = recommended_prefs.deviations(user)
+    recommended_prefs.apply(user)
+    db.commit()
+    logger.info(f"✨ recommended prefs applied (bot): user={user.id} كان يختلف بـ{before or 'لا شيء'}")
+    return {"success": True, "was": before}

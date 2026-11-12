@@ -998,6 +998,17 @@ def update_preferences(
     return {"success": True}
 
 
+@router.post("/preferences/recommended")
+def apply_recommended_preferences(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """(2026-11-12) زر "الإعداد الموصى به" — recommended_prefs.py. بضغطة العميل نفسه فقط."""
+    from app.services import recommended_prefs
+    before = recommended_prefs.deviations(user)
+    recommended_prefs.apply(user)
+    db.commit()
+    logger.info(f"✨ recommended prefs applied: user={user.id} كان يختلف بـ{before or 'لا شيء'}")
+    return {"success": True, "was": before, **recommended_prefs.RECOMMENDED}
+
+
 
 # ─── حذف الحساب من العميل (2026-10-16، قرار المالك — DECISIONS.md 16/10) ─────────────────────────
 class DeleteAccountIn(BaseModel):

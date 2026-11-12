@@ -107,6 +107,27 @@ export default function TradingPreferencesPanel() {
     } finally { setLoading('') }
   }
 
+  // (2026-11-12) "الإعداد الموصى به" — backend/app/services/recommended_prefs.py (DECISIONS.md 12/11).
+  // الانحراف يُحسب من المحفوظ (user) لا من المسودة: التنبيه عن ما يصل العميل فعلاً الآن.
+  const savedTfs  = (user?.notify_timeframes || []).filter(t => t !== 'all')
+  const savedConf = user?.notify_min_confidence || 0
+  const savedWl   = user?.notify_watchlist || []
+  const savedOff  = user?.notifications_enabled === false
+  const deviates  = savedConf > 0 || savedTfs.length > 0 || savedWl.length > 0 || savedOff
+  const [recMsg, setRecMsg] = useState(null)
+  const applyRecommended = async () => {
+    setLoading('rec'); setRecMsg(null)
+    try {
+      await axios.post(`${API}/api/v1/auth/preferences/recommended`)
+      setPrefs(p => ({ ...p, notify_watchlist: markets.map(m => m.symbol), notify_timeframes: ['all'],
+                       notify_min_confidence: 0, notifications_enabled: true }))
+      await refreshUser?.().catch(() => {})
+      setRecMsg({ type: 'ok', text: isAr ? 'تم — ستصلك كل الإشارات من الآن' : 'Done — you will now receive every signal' })
+    } catch (err) {
+      setRecMsg({ type: 'err', text: err.response?.data?.detail || 'Error' })
+    } finally { setLoading('') }
+  }
+
   const toggleWatchlist = (m) => {
     setPrefs(p => ({
       ...p,
@@ -236,6 +257,68 @@ export default function TradingPreferencesPanel() {
         <h2 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
           <Bell size={16} className="text-blue-400" /> {isAr ? 'إعدادات إشعارات التيليجرام' : 'Telegram Notification Preferences'}
         </h2>
+        {/* (2026-11-12) الإعداد الموصى به — نصيحة من نتائج المنصة + زر تطبيق (recommended_prefs.py) */}
+        <div className="mb-5 rounded-xl border border-emerald-700/40 bg-emerald-900/10 p-4">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="text-sm font-semibold text-white">
+              ✨ {isAr ? 'الإعداد الموصى به — من نتائج منصتنا الفعلية' : 'Recommended setup — from our actual results'}
+            </div>
+            {deviates ? (
+              <button type="button" onClick={applyRecommended} disabled={loading === 'rec'}
+                className="text-xs px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-medium transition">
+                {loading === 'rec' ? (isAr ? 'جاري التطبيق...' : 'Applying...') : (isAr ? 'طبّق الإعداد الموصى به' : 'Apply recommended setup')}
+              </button>
+            ) : (
+              <span className="text-xs px-2.5 py-1 rounded-lg bg-emerald-900/40 text-emerald-300">
+                ✓ {isAr ? 'إعدادك هو الموصى به' : 'You are on the recommended setup'}
+              </span>
+            )}
+          </div>
+          <ol className="mt-3 space-y-2 text-xs text-gray-300 leading-relaxed list-decimal ps-5">
+            <li>
+              <b className="text-white">{isAr ? 'استقبل كل الأسواق وكل الفريمات.' : 'Receive every market and timeframe.'}</b>{' '}
+              {isAr
+                ? 'منذ 14 أكتوبر، المشترك الذي استقبل كل الإشارات حقق أعلى مجموع؛ واختيار فريم واحد قلّل المجموع بنحو الثلث أو أكثر.'
+                : 'Since Oct 14, the subscriber who received every signal had the highest total; a single timeframe cut it by about a third or more.'}
+            </li>
+            <li>
+              <b className="text-white">{isAr ? 'لا تضع حداً أدنى للثقة.' : 'Do not set a minimum confidence.'}</b>{' '}
+              {isAr
+                ? 'نسبة الثقة لا ترتّب الربح عندنا: إشارات 60-64% كانت أفضل من 65-69%، وحد 65% كان سيحجب أكثر من نصف المجموع.'
+                : 'Confidence does not rank profit here: 60-64% signals did better than 65-69%, and a 65% minimum would have hidden over half the total.'}
+            </li>
+            <li>
+              <b className="text-white">{isAr ? 'ما يثبت ضعفه نوقفه نحن من المصدر.' : 'We pause what proves weak at the source.'}</b>{' '}
+              {isAr
+                ? 'لا تحتاج أن تفلتر بنفسك — ما يصلك اجتاز فحوصنا ومراقبتنا الأسبوعية.'
+                : 'No need to filter yourself — what reaches you passed our checks and weekly monitoring.'}
+            </li>
+            <li>
+              <b className="text-white">{isAr ? 'تحكّم بالمخاطرة بحجم اللوت لا بعدد الإشارات.' : 'Control risk with lot size, not signal count.'}</b>{' '}
+              {isAr
+                ? 'مخاطرة ثابتة 1-2% لكل صفقة (الحاسبة أعلاه). إن كانت الإشارات كثيرة عليك، أوقف سوقاً لا تتداوله من زر تحت الإشارة.'
+                : 'A fixed 1-2% risk per trade (calculator above). If signals are too many, mute a market you do not trade from the button under the signal.'}
+            </li>
+          </ol>
+          {deviates && (
+            <div className="mt-3 rounded-lg border border-amber-700/40 bg-amber-900/10 px-3 py-2 text-xs text-amber-300 leading-relaxed">
+              {isAr ? 'إعدادك الحالي يحجب عنك جزءاً من الإشارات: ' : 'Your current setup hides part of the signals: '}
+              {[
+                savedOff && (isAr ? 'الإشعارات متوقفة' : 'notifications are off'),
+                savedConf > 0 && (isAr ? `حد ثقة ${savedConf}%` : `${savedConf}% minimum confidence`),
+                savedTfs.length > 0 && (isAr ? `فريم ${savedTfs.map(t => TF_LABEL[t]?.ar || t).join(' و')} فقط`
+                                              : `${savedTfs.map(t => TF_LABEL[t]?.en || t).join(' & ')} only`),
+                savedWl.length > 0 && (isAr ? `${savedWl.length} سوقاً فقط` : `${savedWl.length} markets only`),
+              ].filter(Boolean).join(isAr ? '، ' : ', ')}.
+            </div>
+          )}
+          <p className="mt-2 text-[11px] text-gray-500">
+            {isAr ? 'نتائج سابقة لا تضمن المستقبل. القرار لك ويمكنك التخصيص بالأسفل بأي وقت.'
+                  : 'Past results do not guarantee the future. Your choice — customize below any time.'}
+          </p>
+          <Msg msg={recMsg} />
+        </div>
+
         <form onSubmit={savePrefs} className="space-y-5">
           <div className="flex items-center justify-between">
             <span className="text-sm text-gray-300">{isAr ? 'تفعيل الإشعارات' : 'Enable Notifications'}</span>
