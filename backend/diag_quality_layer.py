@@ -34,7 +34,7 @@ GROUP_SHARE = 0.6   # نسبة الأسواق التي يجب أن يتكرر ف
 SHADOW_MIN = 30     # أقل عدد بالظل لعرض المقارنة
 
 CAT = ["market_state", "market_regime", "volatility", "tightening", "ltf_mode", "htf_structure", "htf_pd_zone",
-       "pd_zone", "wyckoff", "kill_zone", "momentum", "displacement", "range_trap"]
+       "pd_zone", "wyckoff", "kill_zone", "momentum", "displacement", "range_trap", "relaxed"]
 DERIVED = ["group", "side", "timeframe", "session", "weekday", "with_h4_trend", "h4_trend", "htf_with", "ltf_with",
            "mom_with", "btc_with"]
 NUM_GLOBAL = ["confidence", "rr", "momentum_score", "pd_pct"]          # مقياس واحد لكل الأسواق
@@ -44,7 +44,7 @@ NAMES = {
     "market_state": "حالة السوق", "market_regime": "نظام السوق", "volatility": "التقلب", "tightening": "تضييق المعايرة",
     "ltf_mode": "نمط الفريم الأصغر", "htf_structure": "هيكل الفريم الأكبر", "htf_pd_zone": "منطقة الفريم الأكبر",
     "pd_zone": "منطقة الخصم/العلاوة", "wyckoff": "مرحلة وايكوف", "kill_zone": "الكيلزون", "momentum": "قوة الزخم",
-    "displacement": "اندفاع سعري", "range_trap": "فخ النطاق", "group": "السوق", "side": "الاتجاه", "timeframe": "الفريم",
+    "displacement": "اندفاع سعري", "range_trap": "فخ النطاق", "relaxed": "صفقة مخفَّفة (بيع بمنطقة خصم)", "group": "السوق", "side": "الاتجاه", "timeframe": "الفريم",
     "session": "الجلسة", "weekday": "اليوم", "with_h4_trend": "مع اتجاه 4 ساعات", "h4_trend": "اتجاه 4 ساعات",
     "htf_with": "اتجاه الفريم الأكبر", "ltf_with": "اتجاه الفريم الأصغر", "mom_with": "اتجاه الزخم",
     "btc_with": "اتجاه البيتكوين (للكريبتو)", "confidence": "الثقة", "rr": "العائد/المخاطرة", "momentum_score": "درجة الزخم",
@@ -307,6 +307,122 @@ def load_shadow(db):
     return out, len(reps)
 
 
+# ─── وضع إعادة البناء ─────────────────────────────────────────────────────
+# (2026-11-12) أول تشغيل: 117 من 659 قراراً فقط ببصمة — صفوف المراقبة والظل المرفوض كانت بلا بصمة (أُصلح للأمام
+# بنفس اليوم). لا ننتظر أسابيع: قياسات 4 ساعات تُعاد من الشموع **المغلقة قبل لحظة الإشارة فقط** (نفس حساب
+# market_fingerprint._trend_metrics حرفياً، ولا شيء من المستقبل)، ومع خصائص الإشارة المحفوظة بصفها (الثقة، العائد/المخاطرة،
+# وايكوف، الخصم/العلاوة، الكيلزون، التخفيف). ما يحسبه المحرك وحده (حالة السوق، التقلب، الزخم…) لا يُعاد بناؤه.
+MIN_COVERAGE = 0.7   # أقل من هذا من القرارات ببصمة محفوظة ← وضع إعادة البناء
+
+
+def h4_series(df):
+    """(أوقات إغلاق شموع 4h بـUTC، الإغلاق، EMA50). EMA بلا adjust سببية: قيمتها عند أي شمعة = حسابها على المقطع حتى تلك
+    الشمعة، فتساوي _trend_metrics على الشموع المغلقة حتى t."""
+    import pandas as pd
+    if df is None or len(df) == 0 or "close" not in df.columns:
+        return None
+    col = next((c for c in ("datetime", "time", "timestamp", "date") if c in df.columns), None)
+    times = pd.to_datetime(df[col] if col else df.index)
+    times = pd.DatetimeIndex(times)
+    times = times.tz_convert("UTC") if times.tz is not None else times.tz_localize("UTC")
+    close = pd.to_numeric(df["close"], errors="coerce").astype(float)
+    ema = close.ewm(span=50, adjust=False).mean()
+    ends = [(t + pd.Timedelta(hours=4)).to_pydatetime() for t in times]
+    return ends, [float(x) for x in close.values], [float(x) for x in ema.values]
+
+
+def h4_metrics_at(series, t):
+    """نفس market_fingerprint._trend_metrics على الشموع التي أُغلقت حتى t فقط."""
+    import bisect
+    if not series:
+        return {}
+    ends, close, ema = series
+    j = bisect.bisect_right(ends, t) - 1
+    if j + 1 < 56:
+        return {}
+    px, e_now, e_then = close[j], ema[j], ema[j - 5]
+    label = "UP" if px > e_now and e_now > e_then else "DOWN" if px < e_now and e_now < e_then else "FLAT"
+    ret_24h = (px / close[j - 6] - 1) * 100 if j + 1 > 7 else None
+    return {"trend": label, "dist_ema_pct": round((px / e_now - 1) * 100, 3),
+            "ema_slope_pct": round((e_now / e_then - 1) * 100, 3),
+            "ret_24h_pct": round(ret_24h, 3) if ret_24h is not None else None}
+
+
+async def _fetch_series(symbols):
+    import asyncio
+    from app.services.smart_data import smart_data
+    sem, out = asyncio.Semaphore(4), {}
+
+    async def one(sym):
+        async with sem:
+            try:
+                out[sym] = h4_series(await smart_data.get_ohlcv(sym, "4h", bars=2000))
+            except Exception:
+                out[sym] = None
+
+    await asyncio.gather(*(one(s) for s in symbols))
+    return out
+
+
+def recon_features(t, side, fields, series, btc_series, is_crypto):
+    f = {"hour_utc": t.hour, "weekday": t.weekday(), **fields}
+    f["h4"] = h4_metrics_at(series, t)
+    if f["h4"].get("trend") in ("UP", "DOWN"):
+        f["with_h4_trend"] = (f["h4"]["trend"] == "UP") == ((side or "").upper() == "BUY")
+    if is_crypto:
+        f["is_crypto"] = True
+        f["btc_h4"] = h4_metrics_at(btc_series, t)
+    return f
+
+
+def load_reconstructed(db, fetch=None):
+    """كل القرارات المغلقة وكل الظل المحسوم (بلا شرط بصمة) بخصائص معاد بناؤها. fetch قابل للاستبدال بالاختبار."""
+    import asyncio
+    from app.models.market_config import MarketConfig
+    from app.models.shadow_signal import ShadowSignal
+    from app.models.signal import Signal
+    from app.services import shadow_stats as st
+    from app.services.weekly_markets import closed_decisions, market_group
+
+    decs = [d for d in closed_decisions(db, TRAIN_START) if d["status"] != "BREAKEVEN"]
+    sig = {}
+    ids = [d["id"] for d in decs]
+    for i in range(0, len(ids), 1000):
+        for s in db.query(Signal.id, Signal.wyckoff_phase, Signal.premium_discount, Signal.killzone, Signal.ai_confidence,
+                          Signal.risk_reward_ratio, Signal.relaxed_rule).filter(Signal.id.in_(ids[i:i + 1000])).all():
+            sig[s.id] = s
+    rows = [s for s in db.query(ShadowSignal).filter(ShadowSignal.created_at >= TRAIN_START).all()
+            if not (s.reason or "").startswith(("tpl:", "FVG_FIX"))]
+    by_reason = defaultdict(list)
+    for s in st.filter_scope(rows, "clean"):
+        by_reason[s.reason].append(s)
+    reps = [s for rs in by_reason.values() for s in st.representatives(rs)
+            if s.outcome in st.DECIDED and s.r_multiple is not None]
+
+    symbols = {d["market"] for d in decs} | {(s.market or "").upper() for s in reps} | {"BTCUSD"}
+    series = (fetch or (lambda syms: asyncio.run(_fetch_series(syms))))(sorted(symbols))
+    btc = series.get("BTCUSD")
+
+    live = []
+    for d in decs:
+        s = sig.get(d["id"])
+        fields = {} if s is None else {"wyckoff": s.wyckoff_phase, "pd_zone": s.premium_discount, "kill_zone": s.killzone,
+                                       "confidence": s.ai_confidence, "rr": s.risk_reward_ratio,
+                                       "relaxed": bool(s.relaxed_rule)}
+        f = recon_features(d["created_at"], d["side"], fields, series.get(d["market"]), btc, d["group"] == "crypto")
+        live.append(record(d["created_at"], d["group"], d["r"], f, d["side"], d["timeframe"]))
+    cat = {r[0].upper(): (r[1] or "") for r in db.query(MarketConfig.symbol, MarketConfig.category).all()}
+    shadow = []
+    for s in reps:
+        m, t = (s.market or "").upper(), _utc(s.created_at)
+        g = market_group(m, cat.get(m, ""))
+        f = recon_features(t, s.signal_type, {"confidence": s.ai_confidence, "rr": s.risk_reward_ratio},
+                           series.get(m), btc, g == "crypto")
+        shadow.append(record(t, g, s.r_multiple, f, s.signal_type, s.timeframe))
+    with_h4 = sum(1 for r in live if r["cat"]["h4_trend"] != "—")
+    return live, len(decs), with_h4, shadow
+
+
 # ─── التقرير ───────────────────────────────────────────────────────────────
 def _pct(x):
     return "  —  " if x is None else f"{x:4.0f}%"
@@ -336,12 +452,19 @@ def _line(c):
                c["n_te"], _pct(c["wr_te"]), _pp(c["d_te"]), ar_te, c["k"], c["m"], shadow, verdict))
 
 
-def report(live, n_decs, missing, shadow, n_sh_total, now):
+def report(live, n_decs, missing, shadow, n_sh_total, now, mode="stored"):
     train = [r for r in live if r["t"] < SPLIT]
     test = [r for r in live if r["t"] >= SPLIT]
     print(f"طبقة الجودة — المرحلة 1 (قراءة فقط) — حتى {now:%Y-%m-%d %H:%M} UTC\n")
-    print(f"القرارات المغلقة منذ {TRAIN_START:%Y-%m-%d}: {n_decs} — ببصمة {len(live)} (بلا بصمة {missing})")
-    print(f"صفقات الظل المحسومة (فرص مستقلة): {n_sh_total} — ببصمة {len(shadow)}\n")
+    if mode == "reconstructed":
+        print("الوضع: إعادة بناء — قياسات 4 ساعات من الشموع المغلقة قبل لحظة كل إشارة (لا شيء من المستقبل)، مع خصائص")
+        print("الإشارة المحفوظة (الثقة، العائد/المخاطرة، وايكوف، الخصم/العلاوة، الكيلزون، التخفيف) والوقت والسوق والفريم.")
+        print("ما يحسبه المحرك وحده (حالة السوق، التقلب، الزخم…) غير متاح بهذا الوضع.\n")
+        print(f"القرارات المغلقة منذ {TRAIN_START:%Y-%m-%d}: {n_decs} — بقياسات 4 ساعات {n_decs - missing}")
+        print(f"صفقات الظل المحسومة (فرص مستقلة): {n_sh_total}\n")
+    else:
+        print(f"القرارات المغلقة منذ {TRAIN_START:%Y-%m-%d}: {n_decs} — ببصمة {len(live)} (بلا بصمة {missing})")
+        print(f"صفقات الظل المحسومة (فرص مستقلة): {n_sh_total} — ببصمة {len(shadow)}\n")
     if len(train) < 100 or len(test) < 40:
         print(f"⚠️ البيانات قليلة (تعلّم {len(train)}، اختبار {len(test)}) — أعد التشغيل لاحقاً.")
         return
@@ -407,10 +530,16 @@ def main():
     db = SessionLocal()
     try:
         live, n_decs, missing = load_live(db)
-        shadow, n_sh_total = load_shadow(db)
+        mode = "stored"
+        if n_decs and len(live) < MIN_COVERAGE * n_decs:
+            print(f"البصمة المحفوظة تغطي {len(live)} من {n_decs} قراراً فقط ← وضع إعادة البناء (جلب شموع 4 ساعات، دقيقة تقريباً)…\n")
+            live, n_decs, with_h4, shadow = load_reconstructed(db)
+            missing, n_sh_total, mode = n_decs - with_h4, len(shadow), "reconstructed"
+        else:
+            shadow, n_sh_total = load_shadow(db)
     finally:
         db.close()
-    report(live, n_decs, missing, shadow, n_sh_total, datetime.now(timezone.utc))
+    report(live, n_decs, missing, shadow, n_sh_total, datetime.now(timezone.utc), mode)
 
 
 if __name__ == "__main__":

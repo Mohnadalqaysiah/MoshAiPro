@@ -92,21 +92,48 @@ async def _h4(symbol: str) -> dict:
         return {}
 
 
-def schedule(analysis: dict, symbol: str, timeframe: str, signal_type: str,
-             signal_id: Optional[int] = None, shadow_id: Optional[int] = None) -> None:
+FP_KEYS = ("market_state", "market_regime", "volatility", "atr_pct", "tightening", "ltf_trend", "ltf_mode", "htf_tf",
+           "htf_trend", "htf_structure", "htf_pd_zone", "pd_zone", "pd_pct", "wyckoff", "kill_zone", "momentum",
+           "momentum_score", "momentum_dir", "displacement", "range_trap", "confidence", "rr", "price")
+
+
+def sanitize(fp) -> dict:
+    """(2026-11-12) لقطة جاهزة وصلت من خارج المحرك (البوت يعيدها مع تنبيه المراقبة): المفاتيح المعروفة وقيم بسيطة فقط."""
+    if not isinstance(fp, dict):
+        return {}
+    return {k: (fp.get(k) if isinstance(fp.get(k), (str, int, float, bool)) else None) for k in FP_KEYS}
+
+
+def schedule(analysis: Optional[dict], symbol: str, timeframe: str, signal_type: str,
+             signal_id: Optional[int] = None, shadow_id: Optional[int] = None, snapshot: Optional[dict] = None):
     """يلتقط البصمة بالخلفية (جلسة DB خاصة) — لا يؤخر رد التحليل ولا حفظ الإشارة.
-    ما حسبه المحرك يُنسخ الآن (لحظة الإشارة)، وشموع 4h تُجلب بالخلفية خلال ثوانٍ."""
+    ما حسبه المحرك يُنسخ الآن (لحظة الإشارة)، وشموع 4h تُجلب بالخلفية خلال ثوانٍ.
+    snapshot: لقطة جاهزة بدل قاموس التحليل (مسار المراقبة: التحليل حدث بطلب سابق).
+    (2026-11-12) من مسار متزامن (دالة FastAPI عادية تعمل بخيط بلا حلقة أحداث) تُلتقط بخيط مستقل —
+    كان get_running_loop يرمي فتسقط البصمة بصمت. يُرجع المهمة أو الخيط (للاختبارات)، أو None."""
     if not (signal_id or shadow_id):
-        return
+        return None
     try:
         import asyncio
-        snap = from_analysis(analysis)
-        t = asyncio.get_running_loop().create_task(
-            _capture_own_session(snap, symbol, timeframe, signal_type, signal_id, shadow_id))
-        _pending.add(t)                    # مرجع حتى لا تُجمع المهمة قبل انتهائها
-        t.add_done_callback(_pending.discard)
+        import threading
+        snap = sanitize(snapshot) if snapshot is not None else from_analysis(analysis)
+        args = (snap, symbol, timeframe, signal_type, signal_id, shadow_id)
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        if loop is not None:
+            t = loop.create_task(_capture_own_session(*args))
+            _pending.add(t)                    # مرجع حتى لا تُجمع المهمة قبل انتهائها
+            t.add_done_callback(_pending.discard)
+            return t
+        th = threading.Thread(target=lambda: asyncio.run(_capture_own_session(*args)), daemon=True,
+                              name=f"fingerprint-{symbol}")
+        th.start()
+        return th
     except Exception as e:
         logger.warning(f"fingerprint schedule {symbol}: {e}")
+        return None
 
 
 async def _capture_own_session(snap, symbol, timeframe, signal_type, signal_id, shadow_id):

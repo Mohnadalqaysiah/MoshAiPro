@@ -369,11 +369,15 @@ async def bot_analyze(
                     from app.services.weekend_policy import record_shadow
                     _capped = mosh_ai_engine_v5._cap_tp1({"recommendation": _pre, "levels": _lv}, symbol, timeframe)["levels"]
                     _hrs = {"1m": 2, "5m": 4, "15m": 3, "30m": 12, "1h": 24, "4h": 72, "1d": 168}.get(timeframe, 24)
-                    record_shadow(db, source="rejected", reason=_why, symbol=symbol, timeframe=timeframe,
-                                  signal_type=_pre, entry=_capped["entry"], sl=_capped["stop_loss"],
-                                  tp1=_capped["tp1"], tp2=_capped.get("tp2"), confidence=None,
-                                  rr=_capped.get("risk_reward"),
-                                  expires_at=datetime.now(timezone.utc) + timedelta(hours=_hrs))
+                    _shid = record_shadow(db, source="rejected", reason=_why, symbol=symbol, timeframe=timeframe,
+                                          signal_type=_pre, entry=_capped["entry"], sl=_capped["stop_loss"],
+                                          tp1=_capped["tp1"], tp2=_capped.get("tp2"), confidence=None,
+                                          rr=_capped.get("risk_reward"),
+                                          expires_at=datetime.now(timezone.utc) + timedelta(hours=_hrs))
+                    # (2026-11-12) بصمة الظل المرفوض — أغلب الظل، وكان بلا بصمة (18 من 2496). لا يمسّ القرار.
+                    if _shid:
+                        from app.services import market_fingerprint
+                        market_fingerprint.schedule(analysis, symbol, timeframe, _pre, shadow_id=_shid)
         except Exception as _rs:
             logger.warning(f"rejected-shadow {symbol}/{timeframe}: {_rs}")
 
@@ -403,6 +407,15 @@ async def bot_analyze_multi_tf(
     tfs = [t.strip() for t in timeframes.split(",") if t.strip()]
     try:
         results = await mosh_ai_engine_v5.analyze_market_multi_tf(symbol=symbol, timeframes=tfs)
+        # (2026-11-12) لقطة بصمة السوق مع كل فريم — البوت يعيدها مع save-alert-signal فتُحفظ بصف المراقبة
+        # (طلب منفصل قد يصل عاملاً آخر، فلا ذاكرة مشتركة). كانت صفوف المراقبة بلا بصمة: 117 من 659 قراراً فقط.
+        from app.services import market_fingerprint
+        for _a in (results or {}).values():
+            if isinstance(_a, dict):
+                try:
+                    _a["_fp"] = market_fingerprint.from_analysis(_a)
+                except Exception:
+                    pass
         return {"success": True, "data": results}
     except Exception as e:
         logger.error(f"Bot analyze-multi-tf error: {e}")
@@ -1939,6 +1952,7 @@ def bot_save_alert_signal(
     premium_discount: Optional[str] = None,
     killzone: Optional[str] = None,
     relaxed_rule: Optional[str] = None,       # (2026-10-24) من analysis["relaxed_rule"] — relax_policy.py
+    fp: Optional[dict] = Body(None, embed=True),   # (2026-11-12) لقطة البصمة من analyze-multi-tf (JSON)
     _: bool = Depends(verify_bot),
     db: Session = Depends(get_db),
 ):
@@ -2054,6 +2068,20 @@ def bot_save_alert_signal(
     db.commit()
     db.refresh(sig)
     logger.info(f"💾 Alert signal saved: {symbol}/{timeframe} {signal_type} entry={entry:.5f} user={user.id}")
+
+    # (2026-11-12) بصمة السوق لصف المراقبة — كانت غير مغطاة (طبقة الجودة 12/11). اللقطة يرسلها البوت دائماً (ولو فارغة)؛
+    # الاستدعاء المباشر بلا لقطة (الاختبارات) لا يلتقط. ما ينقص اللقطة يُكمَّل من حقول التنبيه نفسها.
+    if isinstance(fp, dict):
+        try:
+            from app.services import market_fingerprint
+            _snap = market_fingerprint.sanitize(fp)
+            for _k, _v in (("wyckoff", wyckoff_phase), ("pd_zone", premium_discount), ("kill_zone", killzone),
+                           ("confidence", confidence), ("rr", rr)):
+                if _snap.get(_k) is None and _v not in (None, ""):
+                    _snap[_k] = _v
+            market_fingerprint.schedule(None, symbol, timeframe, signal_type, signal_id=sig.id, snapshot=_snap)
+        except Exception as _fe:
+            logger.warning(f"fingerprint alert {symbol}/{timeframe}: {_fe}")
 
     # (2026-09-27) استطلاع الميزات: "تحذير عند أكثر من صفقة مرتبطة مفتوحة
     # بنفس الوقت" (10 أصوات، أعلى طلب مع عداد الانتهاء). التعريف المعتمد:

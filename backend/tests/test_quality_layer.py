@@ -146,6 +146,66 @@ def test_loaders_link_fingerprints_to_decisions_and_shadow():
     assert (n_total, len(shadow)) == (1, 1) and shadow[0]["r"] == -1.0
 
 
+def _h4_df(n=200, spike_from=None):
+    import pandas as pd
+    t0 = datetime(2026, 9, 1, tzinfo=UTC)
+    closes = [100 + i * 0.1 + (5 * ((i // 7) % 2)) for i in range(n)]
+    if spike_from is not None:
+        closes = [c * (3 if i >= spike_from else 1) for i, c in enumerate(closes)]
+    return pd.DataFrame({"datetime": [t0 + timedelta(hours=4 * i) for i in range(n)], "close": closes})
+
+
+def test_reconstructed_h4_equals_live_formula_and_never_peeks():
+    from app.services import market_fingerprint as MF
+    df = _h4_df()
+    series = Q.h4_series(df)
+    for j in (55, 80, 150, 199):
+        t = df["datetime"][j] + timedelta(hours=4, minutes=1)                  # بعد إغلاق الشمعة j بدقيقة
+        assert Q.h4_metrics_at(series, t) == MF._trend_metrics(df.iloc[:j + 1]), j
+    assert Q.h4_metrics_at(series, df["datetime"][54] + timedelta(hours=4)) == {}   # أقل من 56 شمعة: لا قياس
+    spiked = Q.h4_series(_h4_df(spike_from=120))
+    t = _h4_df()["datetime"][119] + timedelta(hours=7)                        # الشمعة 120 لم تُغلق بعد عند t
+    assert Q.h4_metrics_at(spiked, t) == Q.h4_metrics_at(series, t)            # القفزة اللاحقة لا تتسرب للماضي
+
+
+def test_reconstructed_loader_builds_features_for_every_decision():
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from app.database import Base
+    from app.models.market_config import MarketConfig
+    from app.models.shadow_signal import ShadowSignal
+    from app.models.signal import Signal, SignalStatus, SignalType
+    from app.models.user import User
+
+    eng = create_engine("sqlite://")
+    Base.metadata.create_all(eng, tables=[User.__table__, Signal.__table__, ShadowSignal.__table__, MarketConfig.__table__])
+    s = sessionmaker(bind=eng)()
+    s.add(User(id=1, email="a@x.com", password_hash="x"))
+    s.add(MarketConfig(symbol="ETHUSD", display_name="ETH", category="crypto"))
+    t = datetime(2026, 10, 20, 9, 30, tzinfo=UTC)
+    s.add(Signal(id=1, user_id=1, market="ETHUSD", timeframe="1h", signal_type=SignalType.BUY, status=SignalStatus.TP1_HIT,
+                 entry_price=100.0, stop_loss=99.0, take_profit_1=101.0, take_profit_2=102.5, current_price=101.0,
+                 ai_confidence=72, risk_reward_ratio=2.5, killzone="London", premium_discount="discount",
+                 wyckoff_phase="markup", relaxed_rule=None, broadcast_sent=True, created_at=t,
+                 expires_at=t + timedelta(hours=24)))
+    s.add(ShadowSignal(id=5, source="rejected", reason="HTF_CONFLICT_REJECTED", market="ETHUSD", timeframe="1h",
+                       signal_type="SELL", entry_price=100.0, stop_loss=101.0, take_profit_1=99.0, status="CLOSED",
+                       outcome="SL_HIT", r_multiple=-1.0, risk_reward_ratio=2.0, levels_version=1, created_at=t))
+    s.commit()
+    rising = Q.h4_series(_h4_df())                                             # صاعد: الشراء مع الاتجاه
+    asked = []
+    live, n_decs, with_h4, shadow = Q.load_reconstructed(
+        s, fetch=lambda syms: asked.append(syms) or {"ETHUSD": rising, "BTCUSD": rising})
+    assert "BTCUSD" in asked[0] and "ETHUSD" in asked[0]
+    assert (n_decs, len(live), with_h4, len(shadow)) == (1, 1, 1, 1)
+    c = live[0]["cat"]
+    assert (c["kill_zone"], c["pd_zone"], c["wyckoff"], c["relaxed"]) == ("LONDON", "DISCOUNT", "MARKUP", "لا")
+    assert c["with_h4_trend"] == "نعم" and c["btc_with"] == "مع الصفقة" and c["session"] == "لندن 07-12"
+    assert live[0]["num"]["confidence"] == 72 and live[0]["win"]
+    sc = shadow[0]["cat"]
+    assert sc["with_h4_trend"] == "لا" and sc["btc_with"] == "ضد الصفقة" and not shadow[0]["win"]
+
+
 def test_report_runs_end_to_end_on_synthetic():
     import contextlib
     import io
