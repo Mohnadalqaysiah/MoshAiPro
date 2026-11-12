@@ -356,7 +356,9 @@ async def bot_analyze(
         try:
             _pre = analysis.get("_pre_reject_rec")
             _why = str(analysis.get("rejection_reason") or "")
-            if _pre in ("BUY", "SELL") and _why.startswith(_LEARN_REJECTIONS) \
+            # (2026-11-12، #10330) ذهب/فضة بلا تحويل مؤكد للفوري: مستوياتها بأسعار الآجل وتُقيَّم على الفوري — لا تُسجَّل
+            _metal_unconverted = symbol.upper() in mosh_ai_engine_v5._FUTURES_SPOT_SYMBOLS and not analysis.get("spot_basis_applied")
+            if _pre in ("BUY", "SELL") and _why.startswith(_LEARN_REJECTIONS) and not _metal_unconverted \
                     and signal_user_id is not None and _smart_data.is_market_open(symbol):
                 # (2026-10-18) نفس فحص الجهة الحي (_institutional_gate Rule 6) قبل سقف TP1 — بنفس ترتيب المسار الحي.
                 # مستويات بُنيت لاتجاه غير اتجاه الرفض تُرفض ولا تُحفظ (راجع app/services/shadow_levels.py).

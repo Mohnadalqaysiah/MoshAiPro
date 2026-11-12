@@ -177,6 +177,7 @@
         "backend/app/services/weekly_markets.py",
         "backend/diag_target_profile.py",
         "backend/tests/test_fvg_shadow.py",
+        "backend/tests/test_spot_basis.py",
         "backend/tests/test_target_ladder.py",
         "backend/tests/test_telegram_messages.py",
         "backend/tests/test_tp_ladder.py",
@@ -508,6 +509,27 @@
       "guard": "test_tp_ladder, test_tp1_presentation",
       "docs": [
         "DECISIONS.md (12/11 الهدف الأول 0.7R)"
+      ]
+    },
+    {
+      "id": "metal_spot_basis",
+      "title": "تحويل مستويات الذهب والفضة من العقد الآجل إلى الفوري",
+      "note": "شموع المحرك للمعادن عقود آجلة (GC=F/SI=F) والعميل والرصد على الفوري. التحويل _apply_spot_basis بمرجع شموع المحرك؛ بلا سعر فوري حقيقي (theoretical_carry) أو بفارق غير معقول ← الصمام يمنع الإشارة ولا يُسجَّل ظلها. #10330 خرجت بأسعار الآجل.",
+      "patterns": [
+        "_apply_spot_basis|_FUTURES_SPOT_SYMBOLS|spot_basis_applied|_SPOT_ADJUSTED|SPOT_BASIS_UNAVAILABLE|_futures_ref_price"
+      ],
+      "files": [
+        "backend/app/api/admin.py",
+        "backend/app/api/bot.py",
+        "backend/app/services/ai_engine_v5.py",
+        "backend/diagnose_metals_reference.py",
+        "backend/diagnose_symbol_excursion.py",
+        "backend/simulate_risk_configs.py",
+        "backend/tests/test_spot_basis.py"
+      ],
+      "guard": "test_spot_basis",
+      "docs": [
+        "DECISIONS.md (12/11 إشارة #10330)"
       ]
     }
   ]
