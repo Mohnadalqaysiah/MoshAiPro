@@ -206,6 +206,20 @@ def test_reconstructed_loader_builds_features_for_every_decision():
     assert sc["with_h4_trend"] == "لا" and sc["btc_with"] == "ضد الصفقة" and not shadow[0]["win"]
 
 
+def test_rule_13_frozen_grade_and_thresholds():
+    import diag_watch as W
+    t = datetime(2026, 11, 14, 22, 30, tzinfo=UTC)
+    assert W.quality_grade(t, "markdown") == "C"                               # الجلسة المتأخرة + MARKDOWN
+    assert W.quality_grade(t.replace(hour=20), "MARKDOWN") == "B"
+    assert W.quality_grade(t.replace(hour=21, minute=0), None) == "B"          # 21:00 داخل النافذة
+    assert W.quality_grade(t.replace(hour=0), "MARKUP") == "A"
+    a = [1.0] * 55 + [-1.0] * 45                                               # A: ربح 55%
+    assert W.rule_quality(a, [-1.0] * 29)[0] == "waiting"
+    assert W.rule_quality(a, [1.0] * 13 + [-1.0] * 17)[0] == "candidate"        # 43% (≤ 47%) ومتوسط −0.13R
+    assert W.rule_quality(a, [1.0] * 15 + [-1.0] * 15)[0] == "ok"              # 50% > 47%: لا تفصل كفاية
+    assert W.rule_quality(a, [2.5] * 13 + [-1.0] * 17)[0] == "ok"              # ربح أقل لكن متوسط موجب: لا يُحكم ضدها
+
+
 def test_report_runs_end_to_end_on_synthetic():
     import contextlib
     import io

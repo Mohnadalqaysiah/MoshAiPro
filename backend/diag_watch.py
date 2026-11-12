@@ -23,6 +23,10 @@
        الحي 1h/4h بنفس الفترة؛ سالبة ← لا تُفتح؛ بينهما أو أقل من 10 ← تمديد أسبوع. القراءة الأولى ~17/11. المالك يقرر.
 (2026-11-11، المالك: "نعم ايقاف صامت") الأسهم الأمريكية موقوفة بالظل من 12/11 (market_pause.py)، فالقاعدة (1) انتهى دورها:
   (12) إعادة الأسهم الأمريكية: ≥ 20 فرصة ظل مستقلة محسومة (US_STOCKS_PAUSE)، مرشّحة للإعادة إن متوسطها ≥ +0.1R. المالك يقرر.
+(2026-11-12، طبقة الجودة المرحلة 2 — مسجّلة بعد قراءة diag_quality_layer وقبل أي بيانات جديدة؛ تُحسب على القرارات من 13/11 وحدها)
+  (13) درجة الجودة: علامتا ضعف مجمّدتان — ساعة الإنشاء 21–24 UTC، ومرحلة وايكوف MARKDOWN. A بلا علامة، B واحدة، C اثنتان.
+       ≥ 30 قراراً في B+C ← مرشّحة (لعرض الدرجة أو خيار "A فقط" أو إيقاف C، بقرار المالك) إن ربح B+C ≤ ربح A − 8 نقاط **و** متوسط
+       B+C ≤ 0R؛ وإلا "لم تتحقق". أقل من 30 ← تمديد. لا تُضاف علامة ولا تُعدَّل عتبة بعد رؤية أي رقم جديد.
 
     docker exec moshapi_backend python diag_watch.py
 """
@@ -32,6 +36,26 @@ WATCH_START = datetime(2026, 10, 28, tzinfo=timezone.utc)
 GBPJPY_START = datetime(2026, 10, 31, tzinfo=timezone.utc)
 TP1_CAP_START = datetime(2026, 10, 14, tzinfo=timezone.utc)
 RULES_7_8_START = datetime(2026, 11, 7, tzinfo=timezone.utc)
+QUALITY_START = datetime(2026, 11, 13, tzinfo=timezone.utc)     # (13) بيانات أمامية فقط — بعد تسجيل العلامتين
+
+
+def quality_grade(created_at, wyckoff_phase) -> str:
+    """(13) العلامتان مجمّدتان كما خرجتا من diag_quality_layer (12/11): جلسة 21–24 UTC، ووايكوف MARKDOWN."""
+    marks = int(21 <= created_at.astimezone(timezone.utc).hour <= 23) + int((wyckoff_phase or "").upper() == "MARKDOWN")
+    return "A" if marks == 0 else "B" if marks == 1 else "C"
+
+
+def rule_quality(a_rs, bc_rs, need=30):
+    """(13) هل تفصل الدرجة على قرارات لم تُرَ؟ ربح = R > 0."""
+    if len(bc_rs) < need:
+        return "waiting", f"⏳ B+C {len(bc_rs)}/{need} — لا حكم، تمديد"
+    if not a_rs:
+        return "waiting", "⏳ لا قرارات A للمقارنة"
+    wa = sum(r > 0 for r in a_rs) / len(a_rs) * 100
+    wb = sum(r > 0 for r in bc_rs) / len(bc_rs) * 100
+    if wb <= wa - 8 and _avg(bc_rs) <= 0:
+        return "candidate", f"🟢 تحققت (ربح A {wa:.0f}% مقابل B+C {wb:.0f}%) — تُعرض على المالك"
+    return "ok", f"⛔ لم تتحقق (ربح A {wa:.0f}% مقابل B+C {wb:.0f}%، متوسط B+C {_avg(bc_rs):+.2f}R)"
 
 
 def _aware(d):
@@ -205,6 +229,15 @@ def main():
                                                          ShadowSignal.created_at >= MP.PAUSE_START).all(), "clean")
     rs = [s.r_multiple for s in st.representatives(rows) if s.outcome in st.DECIDED and s.r_multiple is not None]
     print(f"(12) الأسهم الأمريكية الموقوفة بالظل (من {MP.PAUSE_START:%Y-%m-%d}) — {_fmt(rs)}\n      {rule_stocks_restore(rs)[1]}\n")
+    qd = [d for d in decs if d["created_at"] >= QUALITY_START]
+    wy = {s.id: s.wyckoff_phase for s in db.query(Signal.id, Signal.wyckoff_phase).filter(Signal.id.in_([d["id"] for d in qd]))} \
+        if qd else {}
+    by = {"A": [], "B": [], "C": []}
+    for d in qd:
+        by[quality_grade(d["created_at"], wy.get(d["id"]))].append(d["r"])
+    bc = by["B"] + by["C"]
+    print(f"(13) درجة الجودة (من {QUALITY_START:%Y-%m-%d}) — A: {_fmt(by['A'])}\n      B: {_fmt(by['B'])} | C: {_fmt(by['C'])}"
+          f"\n      {rule_quality(by['A'], bc)[1]}\n")
     print("⚠️ \"مرشّح\" = يُعرض على المالك. لا شيء يُطبَّق من هنا، والعتبات لا تُعدَّل بعد رؤية الأرقام.")
     db.close()
 
