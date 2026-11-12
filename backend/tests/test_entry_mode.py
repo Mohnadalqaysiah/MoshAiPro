@@ -57,6 +57,23 @@ def test_same_accounting_stop_first_and_highest_target_locks():
     assert D.simulate(expiry, T0, NOW + timedelta(days=1), 100.0, 99.0, tps, True, "limit", NOW)[1] == "open"
 
 
+def _res(group, week, rl, rm, sl="traded", sm="traded"):
+    return (group.upper(), group, (2026, week), rl, sl, rm, sm)
+
+
+def test_forward_rule_all_four_needed():
+    good = [_res("forex", 47, 0.5, 0.8) for _ in range(16)] + [_res("forex", 48, 0.4, 0.6) for _ in range(16)] + \
+           [_res("crypto", 47, 0.5, 0.4) for _ in range(16)]                       # الكريبتو أسوأ: سوق واحد مسموح
+    v = D.rule_entry(good)
+    assert v["c_total"] and v["c_weeks"] and v["c_groups"] and v["c_avg"] and v["pass"]
+    assert v["worse_groups"] == ["crypto"]
+    two_worse = good + [_res("metals", 48, 0.9, 0.1) for _ in range(16)]           # سوقان أسوأ ← لا
+    assert not D.rule_entry(two_worse)["c_groups"]
+    one_week = [_res("forex", 47, 0.2, 0.9) for _ in range(20)] + [_res("forex", 48, 0.5, 0.4) for _ in range(20)]
+    assert not D.rule_entry(one_week)["c_weeks"] and not D.rule_entry(one_week)["pass"]   # أسبوع واحد لا يكفي
+    assert D.rule_entry([_res("forex", 45, 0.5, 0.8)]) is None                    # خارج W47/W48 لا يُحتسب
+
+
 if __name__ == "__main__":
     n = 0
     for name, fn in list(globals().items()):

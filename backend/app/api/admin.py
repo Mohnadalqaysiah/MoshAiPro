@@ -2291,6 +2291,9 @@ def _user_info(u: User) -> dict:
         "notify_watchlist":      u.notify_watchlist or [],
         "notify_timeframes":     u.notify_timeframes or ([u.notify_timeframe] if u.notify_timeframe else []),
         "notifications_enabled": bool(u.notifications_enabled),
+        # (2026-11-12، سؤال المالك "كيف اعرف شو العميل عامل اعداداته ونسبة الثقة") — حد الثقة وحظر البوت يحجبان الإشارة أيضاً
+        "notify_min_confidence": u.notify_min_confidence if u.notify_min_confidence is not None else 0,
+        "telegram_blocked_at":   u.telegram_blocked_at.isoformat() if u.telegram_blocked_at else None,
         "pwa_installed_at":      u.pwa_installed_at.isoformat() if u.pwa_installed_at else None,
     }
 

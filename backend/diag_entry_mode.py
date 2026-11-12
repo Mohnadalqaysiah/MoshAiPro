@@ -86,6 +86,44 @@ def simulate(rows, created, end_ts, entry, sl, tps, is_buy, mode, now=None):
     return sgn * (float(path[-1][3]) - e) / risk, "traded"
 
 
+# (2026-11-12، المالك: "نعم") شرط مسجّل قبل أي بيانات أمامية — الاستكشاف (14/10–12/11، 784 قراراً): معلّق +251.3R 50% ← سوق +298.7R 48%،
+# أفضل بالفوركس والمعادن والذهب وأسوأ بالكريبتو والطاقة، وأسوأ بوضوح في W44. يُعرض "الدخول بسعر السوق" على المالك إن تحققت الأربعة
+# على قرارات W47 وW48 (16/11–29/11): (1) مجموع أعلى (2) أفضل بالأسبوعين كليهما (3) ليس أسوأ في أكثر من سوق واحد من الأسواق التي
+# فيها ≥ 15 صفقة بالطريقتين (4) متوسط أعلى أو مساوٍ. المحاسبة والأهداف واحدة للطريقتين (0.7R من 16/11 للاثنتين).
+FWD_START = datetime(2026, 11, 16, tzinfo=timezone.utc)
+FWD_END = datetime(2026, 11, 30, tzinfo=timezone.utc)
+FWD_WEEKS = ((2026, 47), (2026, 48))
+FWD_MIN_GROUP = 15
+
+
+def rule_entry(res):
+    """res: (رمز، مجموعة، أسبوع، R معلّق، حالته، R سوق، حالته). يعيد الشروط الأربعة والحكم، أو None بلا بيانات."""
+    rows = [x for x in res if tuple(x[2]) in FWD_WEEKS]
+    lim = [x[3] for x in rows if x[4] == "traded"]
+    mkt = [x[5] for x in rows if x[6] == "traded"]
+    if not lim or not mkt:
+        return None
+    weeks_better = [w for w in FWD_WEEKS
+                    if sum(x[5] for x in rows if tuple(x[2]) == w and x[6] == "traded")
+                    > sum(x[3] for x in rows if tuple(x[2]) == w and x[4] == "traded")]
+    worse_groups, counted = [], 0
+    for g in sorted({x[1] for x in rows}):
+        a = [x[3] for x in rows if x[1] == g and x[4] == "traded"]
+        b = [x[5] for x in rows if x[1] == g and x[6] == "traded"]
+        if len(a) >= FWD_MIN_GROUP and len(b) >= FWD_MIN_GROUP:
+            counted += 1
+            if sum(b) < sum(a):
+                worse_groups.append(g)
+    out = {"tot_l": sum(lim), "tot_m": sum(mkt), "avg_l": sum(lim) / len(lim), "avg_m": sum(mkt) / len(mkt),
+           "weeks_better": len(weeks_better), "worse_groups": worse_groups, "groups_counted": counted}
+    out["c_total"] = out["tot_m"] > out["tot_l"]
+    out["c_weeks"] = len(weeks_better) == len(FWD_WEEKS)
+    out["c_groups"] = len(worse_groups) <= 1
+    out["c_avg"] = out["avg_m"] >= out["avg_l"]
+    out["pass"] = out["c_total"] and out["c_weeks"] and out["c_groups"] and out["c_avg"]
+    return out
+
+
 def _line(name, rs):
     if not rs:
         return f"  {name:<34} —"
@@ -173,7 +211,25 @@ async def main(start):
         print(f"  W{w[1]}: معلّق {len(a):>3} {sum(a):+6.1f}R  ←  سوق {len(b):>3} {sum(b):+6.1f}R")
     if skipped:
         print(f"\n⚠️ بلا شموع: {', '.join(skipped)}")
-    print("\n⚠️ استكشاف لا قرار: إن بدا السوق أفضل، يُسجَّل شرط قبول ثم يُقاس أسبوعين أماميين قبل أي تغيير بحساب النتائج.")
+
+    if start == FWD_START:
+        v = rule_entry(res)
+        print("\n══ الشرط المسجّل 12/11: الدخول بسعر السوق (W47 وW48) ══")
+        if v is None:
+            print("  لا قرارات بعد.")
+        else:
+            mark = lambda ok: "✅" if ok else "❌"
+            print(f"  المجموع: معلّق {v['tot_l']:+.1f}R ← سوق {v['tot_m']:+.1f}R  {mark(v['c_total'])}")
+            print(f"  الأسبوعان: السوق أفضل في {v['weeks_better']} من 2  {mark(v['c_weeks'])}")
+            print(f"  الأسواق (≥ {FWD_MIN_GROUP} صفقة): أسوأ في {len(v['worse_groups'])} من {v['groups_counted']}"
+                  f"{' (' + '، '.join(v['worse_groups']) + ')' if v['worse_groups'] else ''}  {mark(v['c_groups'])}")
+            print(f"  المتوسط: معلّق {v['avg_l']:+.2f}R ← سوق {v['avg_m']:+.2f}R  {mark(v['c_avg'])}")
+            if datetime.now(timezone.utc) >= FWD_END:
+                print("  الحكم: " + ("🟢 تحققت — يُعرض على المالك" if v["pass"] else "⛔ لم تتحقق — يبقى الأمر المعلّق"))
+            else:
+                print(f"  ⚠️ قبل {FWD_END:%Y-%m-%d} — مؤشر لا حكم.")
+    else:
+        print("\n⚠️ استكشاف لا قرار. القراءة الرسمية للشرط المسجّل: بتاريخ 2026-11-16 بعد 2026-11-30.")
 
 
 if __name__ == "__main__":
