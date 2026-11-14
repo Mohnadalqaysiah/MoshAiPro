@@ -12,6 +12,7 @@ import StrategyStatsPanel from '../components/StrategyStatsPanel'
 import WeeklyMarketsPanel from '../components/WeeklyMarketsPanel'
 import ShadowSignalsPanel from '../components/ShadowSignalsPanel'
 import ReviewsAdminPanel from '../components/ReviewsAdminPanel'
+import BotPollsPanel from '../components/BotPollsPanel'
 import useSiteSettings from '../hooks/useSiteSettings'
 import {
   Users, CreditCard, BarChart2, CheckCircle, XCircle, Clock,
@@ -1271,6 +1272,7 @@ export default function Admin() {
     { key:'funnel',     icon:Filter,        label:'مسار الاشتراك' },
     { key:'affiliate',  icon:TrendUp,       label:'الأفلييت' },
     { key:'messages',   icon:Send,          label:'رسائل تيليجرام' },
+    { key:'polls',      icon:BarChart2,     label:'تصويت تيليجرام' },
     { key:'email',      icon:Mail,          label:'البريد' },
     { key:'settings',   icon:Settings,      label:'الإعدادات' },
     { key:'diagnostic', icon:AlertTriangle, label:'تشخيص النظام' },
@@ -4240,6 +4242,7 @@ export default function Admin() {
           {tab === 'weekly' && <WeeklyMarketsPanel />}
           {tab === 'shadow' && <ShadowSignalsPanel />}
           {tab === 'reviews' && <ReviewsAdminPanel />}
+          {tab === 'polls' && <BotPollsPanel />}
 
           {tab === 'diagnostic' && <DiagnosticPanel />}
 

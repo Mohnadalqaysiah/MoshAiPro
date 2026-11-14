@@ -26,8 +26,10 @@ from app.models.coupon import Coupon, CouponRedemption
 from app.models.funnel_event import FunnelEvent
 from app.models.bot_start import BotStart
 from app.models.result_share import ResultShare
+from app.models.bot_poll import BotPoll, BotPollMessage, BotPollAnswer
 
 __all__ = [
+    "BotPoll", "BotPollMessage", "BotPollAnswer",
     "BotStart",
     "ResultShare",
     "User", "UserRole", "PlanType",

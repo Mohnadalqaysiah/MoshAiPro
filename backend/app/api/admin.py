@@ -4400,3 +4400,86 @@ def admin_import_review(data: ReviewImportIn, admin: User = Depends(get_admin_us
     clear_cache()
     logger.info(f"⭐ Imported review #{r.id} by admin {admin.id} (source={note})")
     return {"success": True, "id": r.id}
+
+
+# ─── تصويت تيليجرام من البوت (2026-11-14، المالك: "بدنا نرسل تصويت جماعي بالبوت") — services/bot_polls.py ───
+class BotPollIn(BaseModel):
+    question: str
+    options: list
+    allows_multiple: bool = False
+    audience: str = "paid"
+
+
+@router.get("/bot-polls")
+def list_bot_polls(admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    from app.models.bot_poll import BotPoll
+    from app.services import bot_polls as BP
+    polls = db.query(BotPoll).order_by(BotPoll.id.desc()).limit(50).all()
+    counts = {a: len(BP.audience_users(db, a)) for a in BP.AUDIENCES}
+    return {"polls": [BP.poll_dict(p) for p in polls], "audience_counts": counts}
+
+
+@router.post("/bot-polls")
+def create_bot_poll(data: BotPollIn, admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    from app.models.bot_poll import BotPoll
+    from app.services import bot_polls as BP
+    if data.audience not in BP.AUDIENCES:
+        raise HTTPException(400, f"audience: {' | '.join(BP.AUDIENCES)}")
+    try:
+        q, opts = BP.validate(data.question, data.options)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    p = BotPoll(question=q, options=opts, allows_multiple=data.allows_multiple, audience=data.audience, created_by=admin.id)
+    db.add(p)
+    db.commit()
+    db.refresh(p)
+    return BP.poll_dict(p)
+
+
+@router.post("/bot-polls/{poll_id}/test")
+def test_bot_poll(poll_id: int, admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    from app.models.bot_poll import BotPoll
+    from app.services import bot_polls as BP
+    p = db.query(BotPoll).get(poll_id)
+    if not p:
+        raise HTTPException(404, "غير موجود")
+    token = _get_bot_token(db)
+    if not token:
+        raise HTTPException(400, "TELEGRAM_BOT_TOKEN غير مضبوط")
+    ok, err = BP.send_test(db, p, admin, token)
+    return {"ok": ok, "message": "✅ وصلك التصويت على تيليجرام (إجابتك لا تُحتسب)" if ok else f"❌ فشلت التجربة: {err}"}
+
+
+@router.post("/bot-polls/{poll_id}/send")
+def send_bot_poll(poll_id: int, background: BackgroundTasks, admin: User = Depends(get_admin_user),
+                  db: Session = Depends(get_db)):
+    """يُرسل مرة واحدة فقط — sent_at يمنع الإرسال المكرر لنفس التصويت."""
+    from app.models.bot_poll import BotPoll
+    from app.services import bot_polls as BP
+    p = db.query(BotPoll).get(poll_id)
+    if not p:
+        raise HTTPException(404, "غير موجود")
+    if p.sent_at:
+        raise HTTPException(409, "أُرسل هذا التصويت من قبل — أنشئ تصويتاً جديداً")
+    token = _get_bot_token(db)
+    if not token:
+        raise HTTPException(400, "TELEGRAM_BOT_TOKEN غير مضبوط")
+    n = len(BP.audience_users(db, p.audience))
+    if n == 0:
+        raise HTTPException(400, "لا مستلمين لهذا الجمهور")
+    p.sent_at = datetime.now(timezone.utc)
+    p.total = n
+    db.commit()
+    background.add_task(BP.send_task, p.id, token)
+    logger.info(f"📊 admin {admin.id} sent bot poll #{p.id} → {n} ({p.audience})")
+    return {"message": f"⏳ جاري إرسال التصويت إلى {n} مستلم — النتائج تظهر هنا مع وصول الإجابات", "total": n}
+
+
+@router.get("/bot-polls/{poll_id}")
+def bot_poll_results(poll_id: int, admin: User = Depends(get_admin_user), db: Session = Depends(get_db)):
+    from app.models.bot_poll import BotPoll
+    from app.services import bot_polls as BP
+    p = db.query(BotPoll).get(poll_id)
+    if not p:
+        raise HTTPException(404, "غير موجود")
+    return {**BP.poll_dict(p), **BP.results(db, p)}

@@ -2145,3 +2145,11 @@ def bot_apply_recommended(telegram_id: str, preset: Optional[str] = None, _: boo
     db.commit()
     logger.info(f"✨ preset {key} applied (bot): user={user.id} كان {before}")
     return {"success": True, "preset": key, "symbols": syms[key]}
+
+
+@router.post("/poll-answer")
+def bot_poll_answer(data: dict = Body(...), _: bool = Depends(verify_bot), db: Session = Depends(get_db)):
+    """(2026-11-14) إجابة تصويت تيليجرام — services/bot_polls.record_answer. {"survey": False} ← البوت يعاملها كتحدّي اليوم."""
+    from app.services import bot_polls
+    return bot_polls.record_answer(db, str(data.get("poll_id") or ""), str(data.get("telegram_id") or ""),
+                                   data.get("option_ids") or [])

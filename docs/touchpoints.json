@@ -246,6 +246,7 @@
         "backend/app/api/auth.py",
         "backend/app/api/bot.py",
         "backend/app/models/user.py",
+        "backend/app/services/bot_polls.py",
         "backend/app/services/link_reminder.py",
         "backend/app/services/recommended_prefs.py",
         "backend/app/services/web_push_broadcaster.py",

@@ -1949,7 +1949,25 @@ async def cmd_challenge(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def on_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     pa = update.poll_answer
-    if not pa or not pa.option_ids:
+    if not pa:
+        return
+    # (2026-11-14) تصويت الإدارة (services/bot_polls.py) قبل تحدّي اليوم — وإلا سُجّلت إجابته كإجابة تحدٍّ (الفولباك تحت
+    # يعتبر أي تصويت مجهول تحدّي اليوم). يشمل سحب التصويت (option_ids فارغة).
+    if pa.poll_id not in _POLL_CHALLENGE:
+        try:
+            r = await _post("/api/v1/bot/poll-answer",
+                            json={"poll_id": pa.poll_id, "telegram_id": str(pa.user.id), "option_ids": list(pa.option_ids or [])})
+        except Exception as e:
+            logger.warning(f"poll answer: {e}")
+            r = {}
+        if r.get("survey"):
+            if r.get("thanks"):
+                try:
+                    await context.bot.send_message(chat_id=pa.user.id, text=r["thanks"])
+                except Exception:
+                    pass
+            return
+    if not pa.option_ids:
         return
     cid = _POLL_CHALLENGE.get(pa.poll_id) or datetime.now(timezone.utc).strftime("%Y-%m-%d")
     try:
