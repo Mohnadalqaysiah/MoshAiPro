@@ -998,15 +998,27 @@ def update_preferences(
     return {"success": True}
 
 
-@router.post("/preferences/recommended")
-def apply_recommended_preferences(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """(2026-11-12) زر "الإعداد الموصى به" — recommended_prefs.py. بضغطة العميل نفسه فقط."""
+@router.get("/preferences/presets")
+def get_preference_presets(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """(2026-11-14) باقات التخصص بأرقامها الحية (آخر 30 يوماً) + باقة العميل الحالية — recommended_prefs.py."""
     from app.services import recommended_prefs
-    before = recommended_prefs.deviations(user)
-    recommended_prefs.apply(user)
+    return recommended_prefs.presets_payload(db, user)
+
+
+@router.post("/preferences/recommended")
+def apply_recommended_preferences(preset: str = Query(None), user: User = Depends(get_current_user),
+                                  db: Session = Depends(get_db)):
+    """(2026-11-12) زر "الإعداد الموصى به"؛ (2026-11-14) يأخذ باقة (metals / crypto / all). بضغطة العميل نفسه فقط."""
+    from app.services import recommended_prefs as RP
+    key = preset or RP.RECOMMENDED_PRESET
+    if key not in RP.PRESET_KEYS:
+        raise HTTPException(400, f"preset: {' | '.join(RP.PRESET_KEYS)}")
+    syms = RP.preset_symbols(db)
+    before = (RP.current_preset(user, syms), RP.deviations(user))
+    RP.apply(user, syms[key])
     db.commit()
-    logger.info(f"✨ recommended prefs applied: user={user.id} كان يختلف بـ{before or 'لا شيء'}")
-    return {"success": True, "was": before, **recommended_prefs.RECOMMENDED}
+    logger.info(f"✨ preset {key} applied: user={user.id} كان {before}")
+    return {"success": True, "preset": key, "was": before[0]}
 
 
 

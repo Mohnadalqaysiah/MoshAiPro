@@ -2120,15 +2120,28 @@ def bot_save_watchlist(
     return {"success": True}
 
 
-@router.post("/apply-recommended")
-def bot_apply_recommended(telegram_id: str, _: bool = Depends(verify_bot), db: Session = Depends(get_db)):
-    """(2026-11-12) زر "✨ الإعداد الموصى به" بالبوت — نفس recommended_prefs.apply التي يستخدمها الموقع."""
+@router.get("/presets")
+def bot_presets(telegram_id: str, _: bool = Depends(verify_bot), db: Session = Depends(get_db)):
+    """(2026-11-14) باقات التخصص بأرقامها الحية للبوت — نفس recommended_prefs.presets_payload بالموقع."""
     from app.services import recommended_prefs
+    user = _get_linked_user(telegram_id, db)
+    return {"linked": bool(user), **recommended_prefs.presets_payload(db, user)}
+
+
+@router.post("/apply-recommended")
+def bot_apply_recommended(telegram_id: str, preset: Optional[str] = None, _: bool = Depends(verify_bot),
+                          db: Session = Depends(get_db)):
+    """(2026-11-12) زر "✨ الإعداد الموصى به" بالبوت؛ (2026-11-14) يأخذ باقة — نفس recommended_prefs بالموقع."""
+    from app.services import recommended_prefs as RP
     user = _get_linked_user(telegram_id, db)
     if not user:
         raise HTTPException(404, "User not linked")
-    before = recommended_prefs.deviations(user)
-    recommended_prefs.apply(user)
+    key = preset or RP.RECOMMENDED_PRESET
+    if key not in RP.PRESET_KEYS:
+        raise HTTPException(400, f"preset: {' | '.join(RP.PRESET_KEYS)}")
+    syms = RP.preset_symbols(db)
+    before = RP.current_preset(user, syms)
+    RP.apply(user, syms[key])
     db.commit()
-    logger.info(f"✨ recommended prefs applied (bot): user={user.id} كان يختلف بـ{before or 'لا شيء'}")
-    return {"success": True, "was": before}
+    logger.info(f"✨ preset {key} applied (bot): user={user.id} كان {before}")
+    return {"success": True, "preset": key, "symbols": syms[key]}

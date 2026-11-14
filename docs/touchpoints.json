@@ -536,22 +536,25 @@
     },
     {
       "id": "recommended_prefs",
-      "title": "الإعداد الموصى به للعميل (كل الأسواق والفريمات، بلا حد ثقة) ونص النصيحة",
-      "note": "القيم في recommended_prefs.RECOMMENDED (مصدر واحد للموقع والبوت). نص النصيحة مكرّر بالموقع (TradingPreferencesPanel.jsx) والبوت (RECOMMENDED_TIP_AR/EN) وأرقامه من diag_pref_profiles.py — إعادة القياس تعني تحديث النصين معاً.",
+      "title": "باقات التخصص (الذهب والمعادن الموصى بها / الكريبتو / كل الأسواق) ونص النصيحة",
+      "note": "الباقات وأرقامها الحية في recommended_prefs.py (مصدر واحد للموقع والبوت، آخر 30 يوماً، بكاش ساعة) ومقاييسها في client_experience.py. أسماء الباقات مكرّرة: PRESET_TEXT بالموقع وPRESET_NAMES بالبوت. نص النصيحة مكرّر بالموقع (TradingPreferencesPanel.jsx) والبوت (RECOMMENDED_TIP_AR/EN): نصيحة المخاطرة (1% للباقات، 0.25-0.5% لكل الأسواق) وقياس الثقة 12/11 — تغيير أي منها في المكانين معاً.",
       "patterns": [
-        "recommended_prefs|RECOMMENDED_TIP|apply-recommended|preferences/recommended|الإعداد الموصى به|Recommended setup"
+        "recommended_prefs|RECOMMENDED_TIP|RECOMMENDED_PRESET|PRESET_NAMES|PRESET_TEXT|apply-recommended|preferences/recommended|preferences/presets|/bot/presets|الإعداد الموصى به|Recommended setup|اختر باقتك|Pick your package"
       ],
       "files": [
         "backend/app/api/auth.py",
         "backend/app/api/bot.py",
+        "backend/app/services/client_experience.py",
         "backend/app/services/recommended_prefs.py",
+        "backend/diag_client_experience.py",
         "backend/tests/test_recommended_prefs.py",
         "frontend/src/components/TradingPreferencesPanel.jsx",
+        "frontend/src/pages/Pricing.jsx",
         "telegram-bot/bot.py"
       ],
       "guard": "test_recommended_prefs",
       "docs": [
-        "DECISIONS.md (12/11 الإعداد الموصى به)"
+        "DECISIONS.md (12/11 الإعداد الموصى به؛ 14/11 باقات التخصص)"
       ]
     }
   ]

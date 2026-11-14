@@ -27,6 +27,9 @@
   (13) درجة الجودة: علامتا ضعف مجمّدتان — ساعة الإنشاء 21–24 UTC، ومرحلة وايكوف MARKDOWN. A بلا علامة، B واحدة، C اثنتان.
        ≥ 30 قراراً في B+C ← مرشّحة (لعرض الدرجة أو خيار "A فقط" أو إيقاف C، بقرار المالك) إن ربح B+C ≤ ربح A − 8 نقاط **و** متوسط
        B+C ≤ 0R؛ وإلا "لم تتحقق". أقل من 30 ← تمديد. لا تُضاف علامة ولا تُعدَّل عتبة بعد رؤية أي رقم جديد.
+(2026-11-14، المالك: "نفذ" — بعد diag_client_experience: الخليج 39 قراراً +0.04R؛ رأينا أرقامه فيُحكم على الجديد من 15/11)
+  (14) الأسهم الخليجية (group=gulf): ≥ 30 قراراً جديداً، مرشّحة لإيقاف تجريبي صامت إن المتوسط < −0.3R **و**سالب بالنصفين
+       (نفس عتبات (1) و(6)). لا منع قبل ذلك — المراقبة أولاً. المالك يقرر.
 
     docker exec moshapi_backend python diag_watch.py
 """
@@ -37,6 +40,7 @@ GBPJPY_START = datetime(2026, 10, 31, tzinfo=timezone.utc)
 TP1_CAP_START = datetime(2026, 10, 14, tzinfo=timezone.utc)
 RULES_7_8_START = datetime(2026, 11, 7, tzinfo=timezone.utc)
 QUALITY_START = datetime(2026, 11, 13, tzinfo=timezone.utc)     # (13) بيانات أمامية فقط — بعد تسجيل العلامتين
+GULF_START = datetime(2026, 11, 15, tzinfo=timezone.utc)        # (14) بعد قراءة 14/11
 
 
 def quality_grade(created_at, wyckoff_phase) -> str:
@@ -238,6 +242,9 @@ def main():
     bc = by["B"] + by["C"]
     print(f"(13) درجة الجودة (من {QUALITY_START:%Y-%m-%d}) — A: {_fmt(by['A'])}\n      B: {_fmt(by['B'])} | C: {_fmt(by['C'])}"
           f"\n      {rule_quality(by['A'], bc)[1]}\n")
+    gulf = sorted((d for d in decs if d["group"] == "gulf" and d["created_at"] >= GULF_START), key=lambda d: d["created_at"])
+    rs = [d["r"] for d in gulf]
+    print(f"(14) الأسهم الخليجية (من {GULF_START:%Y-%m-%d}) — {_fmt(rs)}\n      {rule_tp2(rs)[1]}\n")
     print("⚠️ \"مرشّح\" = يُعرض على المالك. لا شيء يُطبَّق من هنا، والعتبات لا تُعدَّل بعد رؤية الأرقام.")
     db.close()
 

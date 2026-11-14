@@ -271,29 +271,56 @@ async def _post(path: str, json=None, params: dict = None, timeout: int = 15) ->
     return {}
 
 
-# (2026-11-12) نصيحة "الإعداد الموصى به" — نفس نص لوحة التخصيص بالموقع (TradingPreferencesPanel.jsx)؛ المصدر diag_pref_profiles.py
+# (2026-11-12) "الإعداد الموصى به" ← (2026-11-14) باقات التخصص — recommended_prefs.py (مصدر الباقات والأرقام الحية)؛
+# نفس النصيحة بلوحة التخصيص بالموقع (TradingPreferencesPanel.jsx). الأرقام من /bot/presets لا مكتوبة هنا.
+PRESET_NAMES = {
+    "metals": ("🥇 الذهب والمعادن", "🥇 Gold & metals"),
+    "crypto": ("🪙 الكريبتو", "🪙 Crypto"),
+    "all":    ("📊 كل الأسواق", "📊 All markets"),
+}
 RECOMMENDED_TIP_AR = (
-    "✨ *الإعداد الموصى به — من نتائج منصتنا الفعلية*\n━━━━━━━━━━━━━━━━━━━━━━\n"
-    "1️⃣ *استقبل كل الأسواق وكل الفريمات.* منذ 14 أكتوبر، المشترك الذي استقبل كل الإشارات حقق أعلى مجموع؛ "
-    "واختيار فريم واحد قلّل المجموع بنحو الثلث أو أكثر.\n\n"
-    "2️⃣ *لا تضع حداً أدنى للثقة.* نسبة الثقة لا ترتّب الربح عندنا: إشارات 60-64% كانت أفضل من 65-69%، "
-    "وحد 65% كان سيحجب أكثر من نصف المجموع.\n\n"
-    "3️⃣ *ما يثبت ضعفه نوقفه نحن من المصدر.* لا تحتاج أن تفلتر بنفسك.\n\n"
-    "4️⃣ *تحكّم بالمخاطرة بحجم اللوت لا بعدد الإشارات.* مخاطرة ثابتة 1-2% لكل صفقة؛ "
-    "وإن كانت الإشارات كثيرة عليك أوقف سوقاً لا تتداوله من الزر تحت الإشارة.\n\n"
+    "💡 *نصيحة من نتائجنا:*\n"
+    "1️⃣ خذ *كل* إشارات باقتك لا بعضها — الأرقام أعلاه لمن أخذها كلها.\n"
+    "2️⃣ لا تضع حداً أدنى للثقة ولا تحصر الفريم — الثقة لا ترتّب الربح عندنا (قياس 12/11).\n"
+    "3️⃣ ما يثبت ضعفه نوقفه نحن من المصدر.\n"
+    "4️⃣ مخاطرة ثابتة لكل صفقة: نحو 1% مع الذهب والمعادن أو الكريبتو، و0.25-0.5% فقط مع كل الأسواق "
+    "(أسوأ يوم مرّ علينا خسر نحو 10 أضعاف مخاطرة الصفقة).\n\n"
     "_نتائج سابقة لا تضمن المستقبل. القرار لك._"
 )
 RECOMMENDED_TIP_EN = (
-    "✨ *Recommended setup — from our actual results*\n━━━━━━━━━━━━━━━━━━━━━━\n"
-    "1️⃣ *Receive every market and timeframe.* Since Oct 14, the subscriber who received every signal had the highest "
-    "total; a single timeframe cut it by about a third or more.\n\n"
-    "2️⃣ *Do not set a minimum confidence.* Confidence does not rank profit here: 60-64% signals did better than "
-    "65-69%, and a 65% minimum would have hidden over half the total.\n\n"
-    "3️⃣ *We pause what proves weak at the source.* No need to filter yourself.\n\n"
-    "4️⃣ *Control risk with lot size, not signal count.* A fixed 1-2% risk per trade; if signals are too many, "
-    "mute a market you do not trade from the button under the signal.\n\n"
+    "💡 *Tips from our results:*\n"
+    "1️⃣ Take *every* signal in your package, not some — the figures above assume all of them.\n"
+    "2️⃣ No minimum confidence, no timeframe limit — confidence does not rank profit here (Nov 12 study).\n"
+    "3️⃣ We pause what proves weak at the source.\n"
+    "4️⃣ Fixed risk per trade: about 1% with gold & metals or crypto, only 0.25-0.5% with all markets "
+    "(our worst day lost about 10× the per-trade risk).\n\n"
     "_Past results do not guarantee the future. Your choice._"
 )
+
+
+def presets_text(data: dict, lg: str) -> str:
+    """رسالة الباقات بأرقامها الحية من /bot/presets."""
+    en = lg == "en"
+    out = ["✨ *Pick your package — from our actual results*" if en else "✨ *اختر باقتك — من نتائج منصتنا الفعلية*",
+           "━━━━━━━━━━━━━━━━━━━━━━"]
+    for p in data.get("presets", []):
+        name = PRESET_NAMES.get(p["key"], (p["key"], p["key"]))[1 if en else 0]
+        tag = ""
+        if p["key"] == data.get("recommended"):
+            tag += " ⭐ Recommended" if en else " ⭐ الموصى به"
+        if p["key"] == data.get("current"):
+            tag += " ✓ yours" if en else " ✓ باقتك"
+        st = p.get("stats")
+        if st:
+            line = (f"~{st['per_day']} signals/day · winners {st['win']}% · positive days {st['pos_days']}%" if en else
+                    f"نحو {st['per_day']} إشارة يومياً · الرابحة {st['win']}% · أيام رابحة {st['pos_days']}%")
+        else:
+            line = "not enough data yet" if en else "لا أرقام كافية بعد"
+        out.append(f"*{name}*{tag}\n{line}")
+    out.append((f"_Last {data.get('window_days', 30)} days, every signal in the package, before spread._" if en else
+                f"_آخر {data.get('window_days', 30)} يوماً، لمن أخذ كل إشارات الباقة، قبل السبريد._"))
+    return "\n\n".join(out) + "\n\n" + (RECOMMENDED_TIP_EN if en else RECOMMENDED_TIP_AR)
+
 
 
 async def _load_wl_from_db(uid: int, telegram_id: str):
@@ -1426,36 +1453,42 @@ async def on_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 [InlineKeyboardButton(_t(lg, "🔔 تبديل الإشعارات", "🔔 Toggle notifications"), callback_data="cfg_notif")],
                 [InlineKeyboardButton(_t(lg, "⏱ تغيير الإطار الزمني", "⏱ Change timeframe"), callback_data="cfg_tf")],
                 [InlineKeyboardButton(_t(lg, "🎯 تغيير الحد الأدنى", "🎯 Change minimum"), callback_data="cfg_conf")],
-                [InlineKeyboardButton(_t(lg, "✨ الإعداد الموصى به", "✨ Recommended setup"), callback_data="cfg_recommended")],
+                [InlineKeyboardButton(_t(lg, "✨ اختر باقتك (الموصى به)", "✨ Pick your package (recommended)"), callback_data="cfg_recommended")],
                 [back_btn(lg)],
             ]),
         )
         return
 
-    # (2026-11-12) "الإعداد الموصى به" — نفس recommended_prefs.apply بالموقع (DECISIONS.md 12/11)
-    if d == "cfg_recommended":
-        await q.edit_message_text(
-            _t(lg, RECOMMENDED_TIP_AR, RECOMMENDED_TIP_EN), parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton(_t(lg, "✅ طبّقه الآن", "✅ Apply now"), callback_data="cfg_recommended_apply")],
-                [InlineKeyboardButton(_t(lg, "⬅️ الإعدادات", "⬅️ Settings"), callback_data="m_settings")],
-            ]),
-        )
+    # (2026-11-12) "الإعداد الموصى به" ← (2026-11-14) باقات التخصص — recommended_prefs.py (DECISIONS.md 14/11)
+    if d in ("cfg_recommended", "cfg_recommended_apply"):     # الثاني: زر قديم من رسالة 12/11 ← يعرض الباقات
+        data = await _get("/api/v1/bot/presets", {"telegram_id": tgid})
+        if not data.get("linked"):
+            await q.answer(_t(lg, "اربط حسابك أولاً من المنصة", "Link your account from the platform first"), show_alert=True)
+            return
+        rows = []
+        for p in data.get("presets", []):
+            nm = PRESET_NAMES.get(p["key"], (p["key"], p["key"]))
+            star = " ⭐" if p["key"] == data.get("recommended") else ""
+            rows.append([InlineKeyboardButton(_t(lg, nm[0], nm[1]) + star, callback_data=f"cfg_rec_{p['key']}")])
+        rows.append([InlineKeyboardButton(_t(lg, "⬅️ الإعدادات", "⬅️ Settings"), callback_data="m_settings")])
+        await q.edit_message_text(presets_text(data, lg), parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(rows))
         return
 
-    if d == "cfg_recommended_apply":
-        r = await _post("/api/v1/bot/apply-recommended", params={"telegram_id": tgid})
+    if d.startswith("cfg_rec_"):
+        key = d[len("cfg_rec_"):]
+        r = await _post("/api/v1/bot/apply-recommended", params={"telegram_id": tgid, "preset": key})
         if not r.get("success"):
             await q.answer(_t(lg, "تعذّر التطبيق — اربط حسابك أولاً", "Could not apply — link your account first"), show_alert=True)
             return
-        _wl_symbols[uid] = set()
+        _wl_symbols[uid] = {x.upper() for x in r.get("symbols", [])} & _VALID_SYMBOLS
         _wl_conf[uid] = 0
         _wl_notif[uid] = True
+        nm = PRESET_NAMES.get(key, (key, key))
         await q.edit_message_text(
-            _t(lg, "✅ *تم* — ستصلك كل الإشارات من الآن: كل الأسواق، كل الفريمات، بأي نسبة ثقة.\n"
-                   "تقدر توقف سوقاً لا تتداوله من الزر تحت الإشارة.",
-               "✅ *Done* — you now receive every signal: all markets, all timeframes, any confidence.\n"
-               "Mute a market you do not trade from the button under the signal."),
+            _t(lg, f"✅ *تم* — باقتك الآن: *{nm[0]}*، كل الفريمات، بأي نسبة ثقة.\n"
+                   "خذ كل إشاراتها، وتقدر تغيّرها بأي وقت من ⚙️ الإعدادات.",
+               f"✅ *Done* — your package: *{nm[1]}*, all timeframes, any confidence.\n"
+               "Take all its signals; change it any time from ⚙️ Settings."),
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(_t(lg, "⬅️ الإعدادات", "⬅️ Settings"), callback_data="m_settings")]]),
         )

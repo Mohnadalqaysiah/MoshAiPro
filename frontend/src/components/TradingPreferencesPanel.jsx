@@ -13,6 +13,15 @@ const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 // (2026-11-09) 15m موقوف (timeframe_pause.py) فلا يُعرض للاختيار؛ يُعاد إلى القائمة حين يُعاد الفريم (migrate_15m_prefs.py --restore)
 const TIMEFRAMES = ['1h', '4h']
 const TF_LABEL = { '15m': { ar: '15 دقيقة', en: '15 min' }, '1h': { ar: 'ساعة', en: '1 hour' }, '4h': { ar: '4 ساعات', en: '4 hours' } }
+// (2026-11-14) باقات التخصص — المفاتيح من recommended_prefs.PRESETS (نفس أسماء البوت: PRESET_NAMES)
+const PRESET_TEXT = {
+  metals: { icon: '🥇', ar: 'الذهب والمعادن', en: 'Gold & metals',
+            sub_ar: 'عدد تقدر تتابعه كله', sub_en: 'A number you can follow in full' },
+  crypto: { icon: '🪙', ar: 'الكريبتو', en: 'Crypto',
+            sub_ar: 'لمن يتابع أكثر خلال اليوم', sub_en: 'For those who follow more during the day' },
+  all:    { icon: '📊', ar: 'كل الأسواق', en: 'All markets',
+            sub_ar: 'للمتفرغ — مخاطرة أصغر لكل صفقة', sub_en: 'Full-time — smaller risk per trade' },
+}
 
 // (2026-10-09) مستخرج من Profile.jsx — كان "إدارة رأس المال + حاسبة اللوت"
 // و"تفضيلات الإشعارات" (الأزواج/الفريمات/الثقة) موجودين بصفحة /profile
@@ -107,22 +116,26 @@ export default function TradingPreferencesPanel() {
     } finally { setLoading('') }
   }
 
-  // (2026-11-12) "الإعداد الموصى به" — backend/app/services/recommended_prefs.py (DECISIONS.md 12/11).
-  // الانحراف يُحسب من المحفوظ (user) لا من المسودة: التنبيه عن ما يصل العميل فعلاً الآن.
+  // (2026-11-12) "الإعداد الموصى به" ← (2026-11-14) باقات التخصص — backend/app/services/recommended_prefs.py (DECISIONS.md 14/11).
+  // الأرقام حية من السيرفر (آخر 30 يوماً) لا مكتوبة هنا. الانحراف من المحفوظ (user) لا من المسودة: عن ما يصل العميل الآن.
   const savedTfs  = (user?.notify_timeframes || []).filter(t => t !== 'all')
   const savedConf = user?.notify_min_confidence || 0
-  const savedWl   = user?.notify_watchlist || []
   const savedOff  = user?.notifications_enabled === false
-  const deviates  = savedConf > 0 || savedTfs.length > 0 || savedWl.length > 0 || savedOff
+  const deviates  = savedConf > 0 || savedTfs.length > 0 || savedOff
+  const [presets, setPresets] = useState(null)
   const [recMsg, setRecMsg] = useState(null)
-  const applyRecommended = async () => {
-    setLoading('rec'); setRecMsg(null)
+  const loadPresets = () => axios.get(`${API}/api/v1/auth/preferences/presets`).then(r => setPresets(r.data)).catch(() => {})
+  useEffect(() => { loadPresets() }, [])
+  const applyPreset = async (key) => {
+    setLoading('rec:' + key); setRecMsg(null)
     try {
-      await axios.post(`${API}/api/v1/auth/preferences/recommended`)
-      setPrefs(p => ({ ...p, notify_watchlist: markets.map(m => m.symbol), notify_timeframes: ['all'],
-                       notify_min_confidence: 0, notifications_enabled: true }))
+      const r = await axios.post(`${API}/api/v1/auth/preferences/recommended`, null, { params: { preset: key } })
+      const syms = presets?.presets?.find(p => p.key === key)?.symbols || []
+      setPrefs(p => ({ ...p, notify_watchlist: key === 'all' || !syms.length ? markets.map(m => m.symbol) : syms,
+                       notify_timeframes: ['all'], notify_min_confidence: 0, notifications_enabled: true }))
       await refreshUser?.().catch(() => {})
-      setRecMsg({ type: 'ok', text: isAr ? 'تم — ستصلك كل الإشارات من الآن' : 'Done — you will now receive every signal' })
+      loadPresets()
+      setRecMsg({ type: 'ok', text: isAr ? `تم — باقتك الآن: ${PRESET_TEXT[r.data.preset]?.ar}` : `Done — your package: ${PRESET_TEXT[r.data.preset]?.en}` })
     } catch (err) {
       setRecMsg({ type: 'err', text: err.response?.data?.detail || 'Error' })
     } finally { setLoading('') }
@@ -257,35 +270,86 @@ export default function TradingPreferencesPanel() {
         <h2 className="text-base font-semibold text-white mb-4 flex items-center gap-2">
           <Bell size={16} className="text-blue-400" /> {isAr ? 'إعدادات إشعارات التيليجرام' : 'Telegram Notification Preferences'}
         </h2>
-        {/* (2026-11-12) الإعداد الموصى به — نصيحة من نتائج المنصة + زر تطبيق (recommended_prefs.py) */}
+        {/* (2026-11-12) الإعداد الموصى به ← (2026-11-14) باقات التخصص: نصيحة مرتّبة + 3 باقات بأرقام حية (recommended_prefs.py) */}
         <div className="mb-5 rounded-xl border border-emerald-700/40 bg-emerald-900/10 p-4">
-          <div className="flex items-start justify-between gap-3 flex-wrap">
-            <div className="text-sm font-semibold text-white">
-              ✨ {isAr ? 'الإعداد الموصى به — من نتائج منصتنا الفعلية' : 'Recommended setup — from our actual results'}
-            </div>
-            {deviates ? (
-              <button type="button" onClick={applyRecommended} disabled={loading === 'rec'}
-                className="text-xs px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-medium transition">
-                {loading === 'rec' ? (isAr ? 'جاري التطبيق...' : 'Applying...') : (isAr ? 'طبّق الإعداد الموصى به' : 'Apply recommended setup')}
-              </button>
-            ) : (
-              <span className="text-xs px-2.5 py-1 rounded-lg bg-emerald-900/40 text-emerald-300">
-                ✓ {isAr ? 'إعدادك هو الموصى به' : 'You are on the recommended setup'}
-              </span>
-            )}
+          <div className="text-sm font-semibold text-white">
+            ✨ {isAr ? 'اختر باقتك — من نتائج منصتنا الفعلية' : 'Pick your package — from our actual results'}
           </div>
+          <p className="mt-1 text-xs text-gray-400 leading-relaxed">
+            {(() => {
+              const allPerDay = presets?.presets?.find(p => p.key === 'all')?.stats?.per_day
+              const many = allPerDay ? (isAr ? `نحو ${Math.round(allPerDay)} إشارة يومياً` : `about ${Math.round(allPerDay)} signals a day`)
+                                     : (isAr ? 'إشارات كثيرة يومياً' : 'many signals a day')
+              return isAr
+                ? `المنصة تُصدر ${many} على كل الأسواق، ولا أحد يتابعها كلها. اختر باقة تقدر تأخذ كل إشاراتها.`
+                : `The platform issues ${many} across all markets, and nobody follows them all. Pick a package you can take in full.`
+            })()}
+          </p>
+
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            {(presets?.presets || []).map(p => {
+              const t = PRESET_TEXT[p.key]
+              if (!t) return null
+              const s = p.stats
+              const isCurrent = presets?.current === p.key
+              const isRec = presets?.recommended === p.key
+              return (
+                <div key={p.key}
+                  className={`rounded-lg border p-3 flex flex-col gap-2 ${isRec ? 'border-emerald-500/60 bg-emerald-900/20' : 'border-gray-700 bg-gray-900/40'}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-semibold text-white">{t.icon} {isAr ? t.ar : t.en}</span>
+                    {isRec && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-600 text-white whitespace-nowrap">
+                        {isAr ? 'الموصى به' : 'Recommended'}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-gray-400">{isAr ? t.sub_ar : t.sub_en}</div>
+                  {s ? (
+                    <div className="text-xs text-gray-300 leading-relaxed">
+                      <div>{isAr ? `نحو ${s.per_day} إشارة يومياً` : `About ${s.per_day} signals a day`}</div>
+                      <div>{isAr ? `الرابحة: ${s.win}% من الصفقات` : `Winners: ${s.win}% of trades`}</div>
+                      <div>{isAr ? `أيام انتهت رابحة: ${s.pos_days}%` : `Days that ended positive: ${s.pos_days}%`}</div>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-gray-500">{isAr ? 'لا أرقام كافية بعد' : 'Not enough data yet'}</div>
+                  )}
+                  {isCurrent && !deviates ? (
+                    <span className="mt-auto text-xs text-center px-2.5 py-1.5 rounded-lg bg-emerald-900/40 text-emerald-300">
+                      ✓ {isAr ? 'باقتك الحالية' : 'Your current package'}
+                    </span>
+                  ) : (
+                    <button type="button" onClick={() => applyPreset(p.key)} disabled={loading.startsWith('rec')}
+                      className={`mt-auto text-xs px-3 py-1.5 rounded-lg font-medium transition disabled:opacity-50 ${
+                        isRec ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-100'}`}>
+                      {loading === 'rec:' + p.key ? (isAr ? 'جاري التطبيق...' : 'Applying...') : (isAr ? 'اختر هذه الباقة' : 'Choose this package')}
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          {presets && (
+            <p className="mt-2 text-[11px] text-gray-500">
+              {isAr
+                ? `الأرقام لآخر ${presets.window_days} يوماً لمن أخذ كل إشارات الباقة، قبل السبريد، وتتحدّث تلقائياً.`
+                : `Figures cover the last ${presets.window_days} days for someone taking every signal in the package, before spread, updated automatically.`}
+              {presets.current === 'custom' && (isAr ? ' إعدادك الحالي تخصيص خاص.' : ' Your current setup is custom.')}
+            </p>
+          )}
+
           <ol className="mt-3 space-y-2 text-xs text-gray-300 leading-relaxed list-decimal ps-5">
             <li>
-              <b className="text-white">{isAr ? 'استقبل كل الأسواق وكل الفريمات.' : 'Receive every market and timeframe.'}</b>{' '}
+              <b className="text-white">{isAr ? 'خذ كل إشارات باقتك، لا بعضها.' : 'Take every signal in your package, not some.'}</b>{' '}
               {isAr
-                ? 'منذ 14 أكتوبر، المشترك الذي استقبل كل الإشارات حقق أعلى مجموع؛ واختيار فريم واحد قلّل المجموع بنحو الثلث أو أكثر.'
-                : 'Since Oct 14, the subscriber who received every signal had the highest total; a single timeframe cut it by about a third or more.'}
+                ? 'الأرقام أعلاه لمن أخذ كل إشارات الباقة. انتقاء بعض إشارات كل الأسواق نتيجته شيء آخر.'
+                : 'The figures above are for someone taking every signal. Picking a few signals from all markets is a different result.'}
             </li>
             <li>
-              <b className="text-white">{isAr ? 'لا تضع حداً أدنى للثقة.' : 'Do not set a minimum confidence.'}</b>{' '}
+              <b className="text-white">{isAr ? 'لا تضع حداً أدنى للثقة، ولا تحصر الفريم.' : 'Do not set a minimum confidence or limit the timeframe.'}</b>{' '}
               {isAr
-                ? 'نسبة الثقة لا ترتّب الربح عندنا: إشارات 60-64% كانت أفضل من 65-69%، وحد 65% كان سيحجب أكثر من نصف المجموع.'
-                : 'Confidence does not rank profit here: 60-64% signals did better than 65-69%, and a 65% minimum would have hidden over half the total.'}
+                ? 'نسبة الثقة لا ترتّب الربح عندنا (قياس 12/11: إشارات 60-64% كانت أفضل من 65-69%)، وحد 65% كان سيحجب أكثر من نصف المجموع.'
+                : 'Confidence does not rank profit here (Nov 12 study: 60-64% signals did better than 65-69%), and a 65% minimum would have hidden over half the total.'}
             </li>
             <li>
               <b className="text-white">{isAr ? 'ما يثبت ضعفه نوقفه نحن من المصدر.' : 'We pause what proves weak at the source.'}</b>{' '}
@@ -294,22 +358,22 @@ export default function TradingPreferencesPanel() {
                 : 'No need to filter yourself — what reaches you passed our checks and weekly monitoring.'}
             </li>
             <li>
-              <b className="text-white">{isAr ? 'تحكّم بالمخاطرة بحجم اللوت لا بعدد الإشارات.' : 'Control risk with lot size, not signal count.'}</b>{' '}
+              <b className="text-white">{isAr ? 'مخاطرة ثابتة لكل صفقة، بحجم يناسب باقتك.' : 'A fixed risk per trade, sized to your package.'}</b>{' '}
               {isAr
-                ? 'مخاطرة ثابتة 1-2% لكل صفقة (الحاسبة أعلاه). إن كانت الإشارات كثيرة عليك، أوقف سوقاً لا تتداوله من زر تحت الإشارة.'
-                : 'A fixed 1-2% risk per trade (calculator above). If signals are too many, mute a market you do not trade from the button under the signal.'}
+                ? 'نحو 1% مع الذهب والمعادن أو الكريبتو، و0.25-0.5% فقط إن أخذت كل الأسواق: إشارات اليوم الواحد قد تصل 20، وأسوأ يوم مرّ علينا خسر نحو 10 أضعاف مخاطرة الصفقة. استخدم الحاسبة أعلاه.'
+                : 'About 1% with gold & metals or crypto, and only 0.25-0.5% if you take all markets: a single day can bring 20 signals, and our worst day lost about 10× the per-trade risk. Use the calculator above.'}
             </li>
           </ol>
           {deviates && (
             <div className="mt-3 rounded-lg border border-amber-700/40 bg-amber-900/10 px-3 py-2 text-xs text-amber-300 leading-relaxed">
-              {isAr ? 'إعدادك الحالي يحجب عنك جزءاً من الإشارات: ' : 'Your current setup hides part of the signals: '}
+              {isAr ? 'إعدادك الحالي يحجب عنك جزءاً من إشارات باقتك: ' : 'Your current setup hides part of your package signals: '}
               {[
                 savedOff && (isAr ? 'الإشعارات متوقفة' : 'notifications are off'),
                 savedConf > 0 && (isAr ? `حد ثقة ${savedConf}%` : `${savedConf}% minimum confidence`),
                 savedTfs.length > 0 && (isAr ? `فريم ${savedTfs.map(t => TF_LABEL[t]?.ar || t).join(' و')} فقط`
                                               : `${savedTfs.map(t => TF_LABEL[t]?.en || t).join(' & ')} only`),
-                savedWl.length > 0 && (isAr ? `${savedWl.length} سوقاً فقط` : `${savedWl.length} markets only`),
               ].filter(Boolean).join(isAr ? '، ' : ', ')}.
+              {isAr ? ' اختيار أي باقة يزيل ذلك.' : ' Choosing any package clears this.'}
             </div>
           )}
           <p className="mt-2 text-[11px] text-gray-500">

@@ -62,25 +62,7 @@ def clusters(decs, window=CLUSTER_WINDOW):
     return out
 
 
-def experience(decs, days):
-    n = len(decs)
-    if not n:
-        return None
-    rs = [d["r"] for d in decs]
-    by_day = defaultdict(float)
-    sl_day = defaultdict(int)
-    for d in decs:
-        by_day[d["created_at"].date()] += d["r"]
-        if d["r"] < 0:
-            sl_day[d["created_at"].date()] += 1
-    streak = best = 0
-    for r in rs:
-        streak = streak + 1 if r < 0 else 0
-        best = max(best, streak)
-    neg_days = sum(1 for v in by_day.values() if v < 0)
-    return {"n": n, "per_day": n / days, "win": 100 * sum(r > 0 for r in rs) / n, "tot": sum(rs), "avg": sum(rs) / n,
-            "worst_day": min(by_day.values()), "neg_days": 100 * neg_days / len(by_day),
-            "sl_day": sum(sl_day.values()) / days, "max_sl_day": max(sl_day.values(), default=0), "streak": best}
+from app.services.client_experience import experience  # noqa: E402 — مشتركة مع أرقام الباقات (recommended_prefs)
 
 
 def main():
