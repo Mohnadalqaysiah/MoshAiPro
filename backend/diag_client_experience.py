@@ -104,6 +104,19 @@ def main():
         print(f"  {name:<24} {e['n']:>4} {e['per_day']:>6.1f} {e['win']:>4.0f}% {e['tot']:>+7.1f}R {e['avg']:>+6.2f}R "
               f"{e['worst_day']:>+7.1f}R {e['neg_days']:>8.0f}% {e['sl_day']:>8.1f} {e['max_sl_day']:>11} {e['streak']:>10}")
 
+    # (2026-11-14، بعد القراءة الأولى) التخصص بسوق بدل التخفيف بالوقت: لكل مجموعة ما يعيشه من يتداولها وحدها
+    print(f"\nمن يتداول مجموعة واحدة فقط (كل إشاراتها):")
+    print(f"  {'المجموعة':<24} {'عدد':>4} {'باليوم':>6} {'نجاح':>5} {'المجموع':>8} {'المتوسط':>7} {'أسوأ يوم':>8} "
+          f"{'أيام سالبة':>9} {'❌ باليوم':>8} {'أقصى ❌ بيوم':>11} {'أطول سلسلة':>10}")
+    groups = defaultdict(list)
+    for d in decs:
+        groups[d["group"]].append(d)
+    for g, ds in sorted(groups.items(), key=lambda kv: -sum(x["r"] for x in kv[1])):
+        e = experience(ds, days)
+        print(f"  {g:<24} {e['n']:>4} {e['per_day']:>6.1f} {e['win']:>4.0f}% {e['tot']:>+7.1f}R {e['avg']:>+6.2f}R "
+              f"{e['worst_day']:>+7.1f}R {e['neg_days']:>8.0f}% {e['sl_day']:>8.1f} {e['max_sl_day']:>11} {e['streak']:>10}")
+    print("  (أيام سالبة = من الأيام التي فيها إشارة لهذه المجموعة)")
+
     cl = clusters(decs)
     print(f"\nالتكدّسات (≥ 3 صفقات بنفس المجموعة والاتجاه خلال 4 ساعات): {len(cl)}، "
           f"فيها {sum(c[2] for c in cl)} صفقة من {len(decs)}، مجموعها {sum(c[3] for c in cl):+.1f}R")
